@@ -84,8 +84,9 @@ async function tratarPedido(form) {
   } catch (erro) {
     mostrarAviso(`Não foi possível registrar: ${erro.message}`);
     console.error(erro);
-    botao.disabled = false;
-    botao.textContent = "Marcar como tratado";
+    // O item pode já ter sido resolvido/alterado por fora mesmo quando a chamada
+    // retorna erro -- recarrega a lista pra não deixar um item preso na tela.
+    await atualizarTudo();
   }
 }
 

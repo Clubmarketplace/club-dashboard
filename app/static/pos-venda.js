@@ -88,8 +88,11 @@ async function enviarResposta(form) {
   } catch (erro) {
     mostrarAviso(`Não foi possível enviar essa resposta: ${erro.message}`);
     console.error(erro);
-    botao.disabled = false;
-    botao.textContent = "Enviar resposta";
+    // O servidor pode já ter resolvido o item por fora (ex.: pergunta respondida
+    // por outro canal no Mercado Livre) mesmo quando a chamada retorna erro --
+    // por isso sempre recarrega a fila aqui, senão o item some do banco mas
+    // continua preso na tela.
+    await atualizarTudo();
   }
 }
 

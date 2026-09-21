@@ -85,24 +85,17 @@ async function enviarResposta(form) {
     });
     if (!resposta.ok) {
       const erro = await resposta.json().catch(() => ({}));
-      // status 409 = a pergunta já foi respondida por fora (assistente
-      // nativo do ML ou o vendedor direto) -- o servidor JÁ atualizou o
-      // status dela pra "respondida_externamente" antes de recusar o
-      // envio, então precisamos recarregar a lista mesmo com erro, senão
-      // o card fica preso na tela mostrando "Aguardando resposta" errado.
-      if (resposta.status === 409) {
-        mostrarAviso(erro.detail || "Essa pergunta já foi respondida por outro canal.");
-        await atualizarTudo();
-        return;
-      }
       throw new Error(erro.detail || `status ${resposta.status}`);
     }
     await atualizarTudo();
   } catch (erro) {
     mostrarAviso(`Não foi possível enviar essa resposta: ${erro.message}`);
     console.error(erro);
-    botao.disabled = false;
-    botao.textContent = "Enviar resposta";
+    // O servidor pode já ter resolvido o item por fora (ex.: pergunta respondida
+    // por outro canal no Mercado Livre) mesmo quando a chamada retorna erro --
+    // por isso sempre recarrega a fila aqui, senão o item some do banco mas
+    // continua preso na tela.
+    await atualizarTudo();
   }
 }
 
