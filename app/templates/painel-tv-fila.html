@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Fila de Ação (TV)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#0b0f14; --panel:#12181f; --panel-2:#161e27; --line:#22303c;
+    --text:#eef3f7; --text-dim:#8ea0b0;
+    --amber:#f0a93d; --amber-dim:#6b5326;
+    --green:#38c98c;
+    --red:#e8615a; --red-dim:#3a1f1e;
+    font-family:"Space Grotesk", sans-serif;
+  }
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; padding:28px 32px; }
+  .mono { font-family:"IBM Plex Mono", monospace; }
+
+  header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:18px; flex-wrap:wrap; gap:14px; }
+  .marca { display:flex; align-items:center; gap:12px; }
+  .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  h1 { margin:0; font-size:22px; font-weight:600; }
+  .subtitulo { color:var(--text-dim); font-size:13.5px; margin-top:2px; }
+  .relogio { font-size:15px; color:var(--text-dim); text-align:right; }
+  .relogio .hora { font-size:26px; color:var(--text); display:block; }
+
+  .resumo { display:flex; gap:14px; margin-bottom:18px; }
+  .resumo .item { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 20px; flex:1; text-align:center; }
+  .resumo .item .valor { font-size:28px; font-weight:600; }
+  .resumo .item .rotulo { font-size:12px; color:var(--text-dim); margin-top:2px; }
+  .resumo .item.critico .valor { color:var(--red); }
+  .resumo .item.atencao .valor { color:var(--amber); }
+
+  .termometro-bloco { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin-bottom:16px; }
+  .termometro-cabecalho { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px; }
+  .termometro-cabecalho h2 { font-size:13px; font-weight:600; margin:0; color:var(--text-dim); }
+  .termometro-legenda { display:flex; gap:14px; font-size:11px; color:var(--text-dim); }
+  .termometro-legenda span { display:flex; align-items:center; gap:5px; }
+  .termometro-legenda .ponto { width:8px; height:8px; border-radius:50%; display:inline-block; }
+  #termometro { display:flex; flex-wrap:wrap; gap:6px; }
+  .term-conta {
+    width:34px; height:34px; border-radius:8px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:10px; font-weight:700; color:#0b0f14;
+    cursor:default; position:relative;
+  }
+  .term-conta.leve { background:#f6d999; }
+  .term-conta.atencao { background:var(--amber); }
+  .term-conta.critico { background:var(--red); color:#fff; }
+  .term-conta:hover::after {
+    content: attr(data-tip);
+    position:absolute; bottom:110%; left:50%; transform:translateX(-50%);
+    background:#000; color:#fff; font-size:11px; font-weight:400;
+    padding:4px 8px; border-radius:6px; white-space:nowrap; z-index:5;
+  }
+
+  .barra-controles { display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; gap:12px; flex-wrap:wrap; }
+  #busca-conta {
+    flex:1; max-width:320px; padding:10px 14px; border-radius:9px;
+    border:1px solid var(--line); background:var(--panel-2); color:var(--text);
+    font-family:"Space Grotesk", sans-serif; font-size:13.5px;
+  }
+  #busca-conta::placeholder { color:var(--text-dim); }
+  .status-atualizacao { font-size:12px; color:var(--text-dim); display:flex; align-items:center; gap:6px; }
+  .status-atualizacao .ponto-vivo { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pisca 1.6s infinite; }
+  @keyframes pisca { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+
+  #fila { display:flex; flex-direction:column; gap:10px; }
+  .item-fila {
+    background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--line);
+    border-radius:10px; padding:16px 20px;
+    display:flex; justify-content:space-between; align-items:center; gap:16px;
+  }
+  .item-fila.atencao { border-left-color:var(--amber); }
+  .item-fila.critico { border-left-color:var(--red); background:linear-gradient(90deg, var(--red-dim), var(--panel) 40%); }
+  .if-esquerda { display:flex; flex-direction:column; gap:4px; min-width:0; }
+  .if-conta { font-size:13px; color:var(--text-dim); font-weight:600; text-transform:uppercase; letter-spacing:.02em; }
+  .if-texto { font-size:17px; }
+  .if-sku { font-size:11.5px; color:var(--text-dim); }
+  .if-direita { display:flex; align-items:center; gap:20px; flex-shrink:0; }
+  .if-tempo { font-family:"IBM Plex Mono", monospace; font-size:22px; font-weight:600; text-align:right; }
+  .if-tempo.atencao { color:var(--amber); }
+  .if-tempo.critico { color:var(--red); }
+  .if-tempo .rotulo-tempo { display:block; font-size:10px; color:var(--text-dim); font-weight:400; text-transform:uppercase; }
+
+  .vazio { text-align:center; padding:60px 20px; color:var(--text-dim); }
+  .vazio .emoji { font-size:40px; margin-bottom:10px; }
+  .erro-conexao { color:var(--red); text-align:center; padding:14px; font-size:13px; }
+
+  .rodape-nota { margin-top:20px; font-size:11.5px; color:var(--text-dim); text-align:center; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <div class="icone">C</div>
+    <div>
+      <h1>Fila de Ação — Pré-venda</h1>
+      <div class="subtitulo">Todas as contas, ordenado pela espera mais longa primeiro</div>
+    </div>
+  </div>
+  <div class="relogio">
+    <span class="hora mono" id="relogio-hora">--:--:--</span>
+  </div>
+</header>
+
+<div id="aviso-erro"></div>
+
+<div class="resumo">
+  <div class="item"><div class="valor mono" id="res-total">—</div><div class="rotulo">Esperando resposta</div></div>
+  <div class="item atencao"><div class="valor mono" id="res-atencao">—</div><div class="rotulo">Entre 15–30 min</div></div>
+  <div class="item critico"><div class="valor mono" id="res-critico">—</div><div class="rotulo">Mais de 30 min</div></div>
+</div>
+
+<div class="termometro-bloco">
+  <div class="termometro-cabecalho">
+    <h2>Termômetro por conta — quem tem pendência agora</h2>
+    <div class="termometro-legenda">
+      <span><span class="ponto" style="background:#f6d999;"></span> até 15 min</span>
+      <span><span class="ponto" style="background:var(--amber);"></span> 15–30 min</span>
+      <span><span class="ponto" style="background:var(--red);"></span> +30 min</span>
+    </div>
+  </div>
+  <div id="termometro"></div>
+</div>
+
+<div class="barra-controles">
+  <input type="text" id="busca-conta" placeholder="Buscar por nome da conta..." />
+  <div class="status-atualizacao"><span class="ponto-vivo"></span> Atualizado há <span id="segundos-atualizacao">0</span>s</div>
+</div>
+
+<div id="fila"></div>
+
+<div class="rodape-nota">Dados reais — clique não responde daqui; use a tela /pre-venda pra responder de verdade.</div>
+
+<script>
+  function atualizarRelogio() {
+    document.getElementById("relogio-hora").textContent =
+      new Date().toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+  }
+  setInterval(atualizarRelogio, 1000);
+  atualizarRelogio();
+
+  function formatarTempo(ms) {
+    const min = Math.floor(ms / 60000);
+    if (min < 1) return "agora";
+    if (min < 60) return min + " min";
+    return Math.floor(min / 60) + "h" + (min % 60).toString().padStart(2, "0") + "min";
+  }
+
+  // As datas vêm do banco em UTC "cru" (sem indicador de fuso). Sem
+  // isso, o navegador entenderia como horário local e o cálculo de
+  // tempo de espera ficaria errado pelo valor do fuso horário local.
+  function parseDataUTC(isoString) {
+    if (!isoString) return new Date();
+    return new Date(isoString.endsWith("Z") ? isoString : isoString + "Z");
+  }
+
+  function classeUrgencia(min) {
+    return min > 30 ? "critico" : min > 15 ? "atencao" : "leve";
+  }
+
+  let termoBusca = "";
+  document.getElementById("busca-conta").addEventListener("input", (e) => {
+    termoBusca = e.target.value.trim().toLowerCase();
+    renderizarLista(ultimaFila);
+  });
+
+  let ultimaFila = [];
+
+  async function carregarFila() {
+    const resposta = await fetch("/api/pre-venda/fila");
+    if (!resposta.ok) throw new Error("status " + resposta.status);
+    return resposta.json();
+  }
+
+  function renderizarTermometro(fila) {
+    const termo = document.getElementById("termometro");
+    if (fila.length === 0) {
+      termo.innerHTML = '<span style="color:var(--text-dim); font-size:13px;">Nenhuma conta com pendência agora. 🎉</span>';
+      return;
+    }
+    const porConta = {};
+    fila.forEach(item => {
+      const min = (Date.now() - parseDataUTC(item.recebida_em)) / 60000;
+      if (!porConta[item.conta]) porConta[item.conta] = { min: 0, qtd: 0 };
+      porConta[item.conta].min = Math.max(porConta[item.conta].min, min);
+      porConta[item.conta].qtd++;
+    });
+    const ordenado = Object.entries(porConta).sort((a, b) => b[1].min - a[1].min);
+    termo.innerHTML = ordenado.map(([nome, info]) => {
+      const iniciais = nome.split(" ").map(p => p[0]).slice(0, 2).join("").toUpperCase();
+      return `<div class="term-conta ${classeUrgencia(info.min)}" data-tip="${nome} — ${info.qtd} pendente(s), ${formatarTempo(info.min * 60000)}">${iniciais}</div>`;
+    }).join("");
+  }
+
+  function renderizarLista(fila) {
+    const container = document.getElementById("fila");
+    const filtrada = termoBusca
+      ? fila.filter(item => item.conta.toLowerCase().includes(termoBusca))
+      : fila;
+
+    if (filtrada.length === 0) {
+      container.innerHTML = termoBusca
+        ? `<div class="vazio">Nenhuma conta encontrada pra "${termoBusca}".</div>`
+        : '<div class="vazio"><div class="emoji">🎉</div>Nenhuma pergunta esperando resposta.</div>';
+      return;
+    }
+
+    container.innerHTML = filtrada.map(item => {
+      const espera = Date.now() - parseDataUTC(item.recebida_em);
+      const min = espera / 60000;
+      const classe = min > 30 ? "critico" : min > 15 ? "atencao" : "";
+      return `<div class="item-fila ${classe}">
+        <div class="if-esquerda">
+          <span class="if-conta">${item.conta}</span>
+          <span class="if-texto">${item.texto}</span>
+          ${item.sku ? `<span class="if-sku">SKU: ${item.sku}</span>` : ""}
+        </div>
+        <div class="if-direita">
+          <div class="if-tempo ${classe}"><span class="rotulo-tempo">Esperando</span>${formatarTempo(espera)}</div>
+        </div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderizarResumo(fila) {
+    let atencao = 0, critico = 0;
+    fila.forEach(item => {
+      const min = (Date.now() - parseDataUTC(item.recebida_em)) / 60000;
+      if (min > 30) critico++; else if (min > 15) atencao++;
+    });
+    document.getElementById("res-total").textContent = fila.length;
+    document.getElementById("res-atencao").textContent = atencao;
+    document.getElementById("res-critico").textContent = critico;
+  }
+
+  let segundosDesdeAtualizacao = 0;
+  setInterval(() => {
+    segundosDesdeAtualizacao++;
+    document.getElementById("segundos-atualizacao").textContent = segundosDesdeAtualizacao;
+  }, 1000);
+
+  async function atualizar() {
+    try {
+      const fila = await carregarFila();
+      fila.sort((a, b) => parseDataUTC(a.recebida_em) - parseDataUTC(b.recebida_em));
+      ultimaFila = fila;
+      document.getElementById("aviso-erro").innerHTML = "";
+      renderizarResumo(fila);
+      renderizarTermometro(fila);
+      renderizarLista(fila);
+      segundosDesdeAtualizacao = 0;
+    } catch (erro) {
+      document.getElementById("aviso-erro").innerHTML =
+        '<div class="erro-conexao">Não consegui atualizar os dados agora — tentando de novo em instantes.</div>';
+      console.error(erro);
+    }
+  }
+
+  atualizar();
+  setInterval(atualizar, 8000);
+  // Recalcula os tempos de espera a cada segundo, sem esperar o próximo fetch
+  setInterval(() => { renderizarResumo(ultimaFila); renderizarTermometro(ultimaFila); renderizarLista(ultimaFila); }, 15000);
+</script>
+
+</body>
+</html>

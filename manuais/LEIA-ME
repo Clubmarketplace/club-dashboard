@@ -1,0 +1,18 @@
+Coloque aqui um arquivo por SKU, nomeado EXATAMENTE como o SKU:
+
+  LP320-220V.pdf
+  LP320-220V.txt   (também aceito, se preferir digitar em vez de PDF)
+
+O nome do arquivo (sem a extensão) é o SKU que o sistema vai casar
+com o anúncio no Mercado Livre. Formatos aceitos: .pdf, .txt, .md
+
+Depois de adicionar ou atualizar um arquivo aqui, rode:
+
+  venv\Scripts\python.exe -m app.importar_manuais
+
+Isso lê tudo que estiver nesta pasta e cadastra/atualiza no banco.
+
+IMPORTANTE: este arquivo se chama "LEIA-ME" SEM extensão de
+propósito -- se ele terminasse em .txt, .md ou .pdf, o importador ia
+tentar cadastrar ele como se "LEIA-ME" fosse um SKU de verdade. Não
+renomeie ele adicionando uma dessas extensões.

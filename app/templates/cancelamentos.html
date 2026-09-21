@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Cancelamentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css" />
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <span class="cmx-marca-icone">C</span>
+        <span class="cmx-marca-texto">Club Marketplace</span>
+      </div>
+      <nav class="cmx-nav">
+        <span class="cmx-nav-secao">Operação</span>
+        <a class="cmx-nav-item" href="/">
+          Devoluções
+        </a>
+        <a class="cmx-nav-item" href="/pre-venda">
+          Pré-venda
+        </a>
+        <a class="cmx-nav-item" href="/manuais">
+          Manuais
+        </a>
+        <a class="cmx-nav-item" href="/pos-venda">
+          Pós-venda
+        </a>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/cancelamentos">
+          <span class="cmx-nav-dot"></span> Cancelamentos
+        </a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">
+          Contas conectadas
+        </a>
+        <span class="cmx-nav-secao">Diagnóstico</span>
+        <a class="cmx-nav-item" href="/eventos-webhook">
+          Eventos do Webhook
+        </a>
+        <a class="cmx-nav-item cmx-nav-item--em-breve" href="#" aria-disabled="true">
+          Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
+        </a>
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      <header class="cmx-topbar">
+        <div>
+          <h1>Cancelamentos</h1>
+          <p class="cmx-subtitulo">Todo pedido de cancelamento identificado -- 100% tratamento manual por enquanto, a IA só sugere o texto</p>
+        </div>
+      </header>
+
+      <main>
+        <section class="cmx-tabela-secao" style="margin-top: 0;">
+          <h2>Pendentes</h2>
+          <p class="cmx-grafico-nota" id="fila-aviso" style="display: none;"></p>
+          <div id="lista-pendentes"></div>
+        </section>
+
+        <section class="cmx-tabela-secao">
+          <h2>Já tratados</h2>
+          <table class="cmx-tabela" id="tabela-tratados">
+            <thead>
+              <tr>
+                <th>Conta</th>
+                <th>SKU</th>
+                <th>Pedido do cliente</th>
+                <th>O que foi decidido</th>
+                <th>Quando</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/cancelamentos.js"></script>
+</body>
+</html>

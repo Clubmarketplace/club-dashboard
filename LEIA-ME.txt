@@ -1,0 +1,68 @@
+CLUB MARKETPLACE — DASHBOARD
+Como instalar e rodar (Windows)
+
+Copie os 4 arquivos pra dentro da pasta principal do projeto (a mesma
+onde estão "app", "requirements.txt" e ".env" — hoje isso é
+C:\club-dashboard\club-dashboard):
+  - instalar.bat
+  - iniciar_dashboard.bat
+  - iniciar_com_ngrok.bat
+  - _preparar_ambiente.bat  (arquivo interno -- não precisa abrir esse,
+    os outros 3 chamam ele sozinhos)
+
+Qualquer um dos 3 arquivos principais que você clicar primeiro
+("instalar.bat", "iniciar_dashboard.bat" ou "iniciar_com_ngrok.bat")
+já confere e conserta o ambiente sozinho antes de continuar -- não
+precisa mais rodar "instalar.bat" antes dos outros por garantia.
+
+1) instalar.bat
+   Só confere/prepara o ambiente e para por aí (não abre nada).
+   Use quando quiser só validar que está tudo certo, sem já abrir o
+   dashboard.
+
+2) iniciar_dashboard.bat
+   Uso do dia a dia, só pra ver o painel (Devoluções, Pré-venda etc).
+   Prepara o ambiente sozinho se precisar, abre o backend numa janela
+   separada, espera de verdade o servidor responder na porta 8000
+   (não só um tempo fixo), e só então abre o navegador em
+   http://127.0.0.1:8000.
+   Se o servidor não subir em 20 segundos, avisa pra você olhar a
+   janela do Backend e copiar o erro que aparecer lá.
+
+3) iniciar_com_ngrok.bat
+   Use quando for testar de verdade com o Mercado Livre (perguntas
+   reais chegando via webhook). Abre backend E ngrok, cada um na sua
+   janela, com o domínio fixo já configurado
+   (frosty-clunky-audio.ngrok-free.dev). Precisa ter o ngrok instalado
+   e autenticado com o token da conta dedicada antes.
+
+Pra PARAR o sistema: feche a(s) janela(s) preta(s) que abriram
+("Backend" e, se for o caso, "ngrok"). Fechar só a janela onde você
+clicou pra iniciar não derruba nada — o servidor roda na janela dele.
+
+PROBLEMAS COMUNS:
+
+- "python não é reconhecido": Python não instalado ou não marcou
+  "Add python.exe to PATH" na instalação. Reinstale em python.org
+  marcando essa opção.
+
+- Instalação trava/falha no psycopg2-binary: não tem problema — esse
+  pacote só serve pra Postgres de produção. O _preparar_ambiente.bat
+  já instala os pacotes essenciais ANTES de tentar esse, então mesmo
+  se ele falhar, o resto já está instalado.
+
+- "ERR_CONNECTION_REFUSED" no navegador: o servidor não chegou a
+  subir. Olhe a janela "Club Marketplace - Backend" que abriu junto —
+  geralmente tem uma mensagem de erro logo no início explicando o
+  motivo (erro no .env, porta 8000 já em uso por outro programa,
+  etc.). Copie a mensagem e mande pra análise.
+
+- Erro tipo "did not find executable at ...python.exe": o venv foi
+  copiado de outro computador/usuário e está apontando pro Python de
+  lá, que não existe aqui. Qualquer um dos 3 arquivos principais
+  detecta isso sozinho agora e recria o venv do zero automaticamente
+  -- só rodar de novo.
+
+- Erro "... foi inesperado neste momento" ao rodar um .bat: isso era
+  um bug de parênteses dentro de texto de aviso, já corrigido nesta
+  versão. Se aparecer de novo, me avise com a linha exata do erro.

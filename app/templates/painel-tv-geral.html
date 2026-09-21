@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Visão Geral (TV)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#0b0f14; --panel:#12181f; --panel-2:#161e27; --line:#22303c;
+    --text:#eef3f7; --text-dim:#8ea0b0;
+    --amber:#f0a93d; --amber-dim:#6b5326;
+    --green:#38c98c; --green-dim:#1c4a3a;
+    --red:#e8615a; --red-dim:#4a2422;
+    --blue:#5aa9e6;
+    font-family:"Space Grotesk", sans-serif;
+  }
+  :root:not([data-theme="light"]) { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; padding:28px 32px; }
+  .mono { font-family:"IBM Plex Mono", monospace; }
+
+  header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap; gap:14px; }
+  .marca { display:flex; align-items:center; gap:12px; }
+  .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  h1 { margin:0; font-size:22px; font-weight:600; }
+  .subtitulo { color:var(--text-dim); font-size:13.5px; margin-top:2px; }
+  .relogio { font-size:15px; color:var(--text-dim); text-align:right; }
+  .relogio .hora { font-size:26px; color:var(--text); display:block; }
+
+  .status-geral {
+    display:flex; align-items:center; gap:16px;
+    background:var(--panel); border:1px solid var(--line); border-radius:14px;
+    padding:20px 24px; margin-bottom:20px;
+  }
+  .status-geral .bolha { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
+  .status-geral .bolha.ok { background:var(--green); box-shadow:0 0 16px rgba(56,201,140,.6); }
+  .status-geral .bolha.atencao { background:var(--amber); box-shadow:0 0 16px rgba(240,169,61,.6); }
+  .status-geral .bolha.critico { background:var(--red); box-shadow:0 0 16px rgba(232,97,90,.6); }
+  .status-geral .titulo { font-size:19px; font-weight:600; }
+  .status-geral .detalhe { font-size:13px; color:var(--text-dim); margin-top:2px; }
+
+  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
+  .kpi .rotulo { font-size:12px; color:var(--text-dim); }
+  .kpi .valor { font-size:30px; font-weight:600; margin-top:4px; }
+  .kpi .valor.ok { color:var(--green); }
+  .kpi .valor.humano { color:var(--amber); }
+  .kpi .valor.alerta { color:var(--red); }
+
+  .grid-principal { display:grid; grid-template-columns:1.3fr 1fr; gap:18px; }
+  .painel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
+  .painel h2 { font-size:14.5px; font-weight:600; margin:0 0 14px 0; }
+
+  #grafico { display:flex; align-items:flex-end; gap:6px; height:180px; padding-top:10px; }
+  .barra-hora { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .barra-hora .barra { width:100%; background:linear-gradient(to top, var(--blue), #3a7bb0); border-radius:4px 4px 0 0; min-height:2px; }
+  .barra-hora .rotulo-hora { font-size:9.5px; color:var(--text-dim); }
+
+  #ranking { display:flex; flex-direction:column; gap:10px; }
+  .linha-rank { display:grid; grid-template-columns:24px 1fr 70px 70px; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .linha-rank:last-child { border-bottom:none; }
+  .linha-rank .pos { color:var(--text-dim); font-size:12px; }
+  .linha-rank .nome { font-weight:600; }
+  .linha-rank .num { text-align:right; font-family:"IBM Plex Mono", monospace; font-size:13px; }
+  .linha-rank .num.tempo-critico { color:var(--red); }
+  .linha-rank .num.tempo-atencao { color:var(--amber); }
+  .cabecalho-rank { display:grid; grid-template-columns:24px 1fr 70px 70px; gap:10px; font-size:11px; color:var(--text-dim); padding-bottom:6px; border-bottom:1px solid var(--line); margin-bottom:4px; }
+  .cabecalho-rank .num { text-align:right; }
+
+  .rodape-nota { margin-top:20px; font-size:11.5px; color:var(--text-dim); text-align:center; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .ponto-vivo { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pisca 1.6s infinite; }
+  @keyframes pisca { 0%,100%{opacity:1;} 50%{opacity:.3;} }
+  .erro-conexao { color:var(--red); text-align:center; padding:14px; font-size:13px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="marca">
+    <div class="icone">C</div>
+    <div>
+      <h1>Visão Geral — Pré-venda</h1>
+      <div class="subtitulo">Saúde agregada de todas as contas</div>
+    </div>
+  </div>
+  <div class="relogio">
+    <span class="hora mono" id="relogio-hora">--:--:--</span>
+    <span id="relogio-data"></span>
+  </div>
+</header>
+
+<div id="aviso-erro"></div>
+
+<div class="status-geral">
+  <div class="bolha" id="bolha-status"></div>
+  <div>
+    <div class="titulo" id="titulo-status">Carregando...</div>
+    <div class="detalhe" id="detalhe-status"></div>
+  </div>
+</div>
+
+<div class="kpis">
+  <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor mono" id="kpi-total">—</div></div>
+  <div class="kpi"><div class="rotulo">Respondidas por IA</div><div class="valor ok mono" id="kpi-ia">—</div></div>
+  <div class="kpi"><div class="rotulo">Foram para humanos</div><div class="valor humano mono" id="kpi-humano">—</div></div>
+  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor alerta mono" id="kpi-pendente">—</div></div>
+  <div class="kpi"><div class="rotulo">Contas com atraso crítico</div><div class="valor alerta mono" id="kpi-criticas">—</div></div>
+</div>
+
+<div class="grid-principal">
+  <div class="painel">
+    <h2>Perguntas por hora (hoje)</h2>
+    <div id="grafico"></div>
+  </div>
+
+  <div class="painel">
+    <h2>Contas que precisam de atenção agora</h2>
+    <div class="cabecalho-rank"><span></span><span>Conta</span><span class="num">Pendentes</span><span class="num">Espera</span></div>
+    <div id="ranking"></div>
+  </div>
+</div>
+
+<div class="rodape-nota"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 8 segundos</div>
+
+<script>
+  function atualizarRelogio() {
+    const agora = new Date();
+    document.getElementById("relogio-hora").textContent =
+      agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+    document.getElementById("relogio-data").textContent =
+      agora.toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
+  }
+  setInterval(atualizarRelogio, 1000);
+  atualizarRelogio();
+
+  function formatarTempo(min) {
+    if (min < 1) return "< 1 min";
+    if (min < 60) return Math.round(min) + " min";
+    return Math.floor(min / 60) + "h" + Math.round(min % 60).toString().padStart(2, "0");
+  }
+
+  async function carregarDados() {
+    const resposta = await fetch("/api/pre-venda/painel-geral");
+    if (!resposta.ok) throw new Error("status " + resposta.status);
+    return resposta.json();
+  }
+
+  function renderizar(dados) {
+    const g = dados.geral;
+    document.getElementById("kpi-total").textContent = g.total_hoje;
+    document.getElementById("kpi-ia").textContent = g.total_hoje ? Math.round(g.ia / g.total_hoje * 100) + "%" : "—";
+    document.getElementById("kpi-humano").textContent = g.total_hoje ? Math.round(g.humano / g.total_hoje * 100) + "%" : "—";
+    document.getElementById("kpi-pendente").textContent = g.pendentes;
+    document.getElementById("kpi-criticas").textContent = g.contas_criticas;
+
+    const bolha = document.getElementById("bolha-status");
+    const titulo = document.getElementById("titulo-status");
+    const detalhe = document.getElementById("detalhe-status");
+    if (g.contas_criticas === 0 && g.pendentes < 15) {
+      bolha.className = "bolha ok";
+      titulo.textContent = "Sistema operando normal";
+      detalhe.textContent = g.pendentes + " pergunta(s) na fila humana, nenhuma com atraso crítico.";
+    } else if (g.contas_criticas > 0) {
+      bolha.className = "bolha critico";
+      titulo.textContent = "Atenção: " + g.contas_criticas + " conta(s) com espera crítica (+30 min)";
+      detalhe.textContent = "Verifique a Tela de Ação pra responder o quanto antes.";
+    } else {
+      bolha.className = "bolha atencao";
+      titulo.textContent = "Volume acima do normal";
+      detalhe.textContent = g.pendentes + " pergunta(s) esperando — nada crítico ainda, mas de olho.";
+    }
+
+    const ranking = document.getElementById("ranking");
+    const top = dados.ranking_pendencias.slice(0, 8);
+    if (top.length === 0) {
+      ranking.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:10px 0;">Nenhuma conta com pendência agora. 🎉</div>';
+    } else {
+      ranking.innerHTML = top.map((c, i) => {
+        const classe = c.maior_espera_min > 30 ? "tempo-critico" : c.maior_espera_min > 15 ? "tempo-atencao" : "";
+        return `<div class="linha-rank">
+          <span class="pos">${i + 1}</span>
+          <span class="nome">${c.conta}</span>
+          <span class="num">${c.pendentes}</span>
+          <span class="num ${classe}">${formatarTempo(c.maior_espera_min)}</span>
+        </div>`;
+      }).join("");
+    }
+
+    const maxQtd = Math.max(1, ...dados.por_hora.map(h => h.quantidade));
+    const grafico = document.getElementById("grafico");
+    grafico.innerHTML = dados.por_hora.map(h => {
+      const altura = Math.round((h.quantidade / maxQtd) * 160) || 2;
+      return `<div class="barra-hora"><div class="barra" style="height:${altura}px;"></div><span class="rotulo-hora">${h.hora}h</span></div>`;
+    }).join("");
+  }
+
+  async function atualizar() {
+    try {
+      const dados = await carregarDados();
+      document.getElementById("aviso-erro").innerHTML = "";
+      renderizar(dados);
+    } catch (erro) {
+      document.getElementById("aviso-erro").innerHTML =
+        '<div class="erro-conexao">Não consegui atualizar os dados agora — tentando de novo em instantes.</div>';
+      console.error(erro);
+    }
+  }
+
+  atualizar();
+  setInterval(atualizar, 8000);
+</script>
+
+</body>
+</html>
