@@ -67,6 +67,14 @@ body {
   flex-shrink: 0;
 }
 
+.cmx-marca-logo {
+  height: 34px;
+  width: auto;
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 5px 10px;
+}
+
 .cmx-marca-texto {
   font-weight: 600;
   font-size: 14.5px;

@@ -305,3 +305,37 @@ class SolicitacaoCancelamento(Base):
     # na plataforma. Enquanto nulo, o pedido aparece como "pendente".
     confirmado_por = Column(String, nullable=True)
     confirmado_em = Column(DateTime, nullable=True)
+
+
+class Usuario(Base):
+    """
+    Conta de acesso ao painel interno. Três papéis:
+      - "admin": acesso total, cria/reseta qualquer usuário (inclusive
+        outros admins e supervisores).
+      - "supervisor": acesso ao painel interno, cria/reseta só "seller".
+      - "seller": login mais restrito -- hoje usado pra acessar a tela
+        de solicitar cancelamento da própria conta.
+
+    Senha nunca é guardada em texto puro -- só o hash (ver app/auth.py).
+    No primeiro acesso, a pessoa usa um código temporário
+    (codigo_primeiro_acesso) em vez da senha; ao trocar pela senha
+    pessoal, esse código é apagado e precisa_trocar_senha vira False.
+    """
+
+    __tablename__ = "usuarios"
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario = Column(String, unique=True, index=True, nullable=False)
+    nome_exibicao = Column(String, nullable=False)
+    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "seller"
+    senha_hash = Column(String, nullable=True)  # nulo até o primeiro acesso ser concluído
+    codigo_primeiro_acesso = Column(String, nullable=True)
+    precisa_trocar_senha = Column(Boolean, default=True)
+    ativo = Column(Boolean, default=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    criado_por_usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
+
+    # Só usado quando papel == "seller" -- qual conta (ex: "Velasco")
+    # esse usuário representa. É o que filtra o que ele vê em
+    # /meus-cancelamentos e pré-preenche a conta no formulário público.
+    conta_vinculada = Column(String, nullable=True)

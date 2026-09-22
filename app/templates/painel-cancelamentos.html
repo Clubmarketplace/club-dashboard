@@ -80,8 +80,7 @@
   <div class="cmx-shell">
     <aside class="cmx-sidebar">
       <div class="cmx-marca">
-        <span class="cmx-marca-icone">C</span>
-        <span class="cmx-marca-texto">Club Marketplace</span>
+        <img class="cmx-marca-logo" src="/static/logo.png" alt="Club Marketplace" />
       </div>
       <nav class="cmx-nav">
         <span class="cmx-nav-secao">Operação</span>
@@ -100,8 +99,10 @@
         <span class="cmx-nav-secao">Solicitações manuais</span>
         <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
         <a class="cmx-nav-item cmx-nav-item--ativo" href="/solicitacoes-painel">
-          <span class="cmx-nav-dot"></span> Acompanhar solicitações
+          <span class="cmx-nav-dot"></span> Solicitações de Cancelamento
         </a>
+        <span class="cmx-nav-secao">Usuários</span>
+        <a class="cmx-nav-item" href="/usuarios/novo">Criar usuário</a>
       </nav>
     </aside>
 
@@ -143,7 +144,6 @@
       <h3>Confirmar cancelamento</h3>
       <p id="modal-detalhe"></p>
       <div class="cc-modal-erro" id="modal-erro"></div>
-      <input type="text" id="modal-nome" placeholder="Seu nome" autocomplete="off" />
       <div class="cc-modal-botoes">
         <button class="cc-modal-cancelar" id="modal-cancelar">Cancelar</button>
         <button class="cc-modal-confirmar" id="modal-confirmar">Confirmar</button>
@@ -259,17 +259,14 @@
     // --- Modal de confirmação ---
     const modalFundo = document.getElementById("modal-fundo");
     const modalDetalhe = document.getElementById("modal-detalhe");
-    const modalNome = document.getElementById("modal-nome");
     const modalErro = document.getElementById("modal-erro");
     let idPendenteConfirmacao = null;
 
     function abrirModalConfirmacao(id, conta, venda) {
       idPendenteConfirmacao = id;
       modalDetalhe.textContent = `Conta ${conta} — venda ${venda}. Confirme que já foi cancelado de verdade na plataforma.`;
-      modalNome.value = "";
       modalErro.style.display = "none";
       modalFundo.classList.add("aberto");
-      setTimeout(() => modalNome.focus(), 50);
     }
 
     function fecharModal() {
@@ -281,17 +278,12 @@
     modalFundo.addEventListener("click", (e) => { if (e.target === modalFundo) fecharModal(); });
 
     document.getElementById("modal-confirmar").addEventListener("click", async () => {
-      const nome = modalNome.value.trim();
-      if (!nome) {
-        modalErro.textContent = "Informe seu nome.";
-        modalErro.style.display = "block";
-        return;
-      }
       try {
+        // O nome de quem confirma vem da sessão de login no servidor
+        // -- não precisa (nem deve) ser digitado aqui.
         const resposta = await fetch(`/api/solicitacoes-cancelamento/${idPendenteConfirmacao}/confirmar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ nome }),
         });
         if (!resposta.ok) {
           const erro = await resposta.json().catch(() => ({}));

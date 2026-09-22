@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Meus Cancelamentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cmx-marinho:#12181f; --cmx-bg:#f6f7f9; --cmx-papel:#ffffff;
+      --cmx-texto:#1b2430; --cmx-texto-suave:#6b7684; --cmx-borda:#e4e7eb;
+      --cmx-azul:#2baff2; --cmx-azul-fundo:#e6f7ff;
+      --cmx-leve:#fdf3e3; --cmx-atencao:#d98e2f; --cmx-critico:#c1502e; --cmx-critico-fundo:#fbe9e3;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Inter",sans-serif; background:var(--cmx-bg); color:var(--cmx-texto); font-size:14.5px; }
+    header { background:#fff; border-bottom:1px solid var(--cmx-borda); padding:18px 32px; display:flex; align-items:center; justify-content:space-between; }
+    .marca { display:flex; align-items:center; gap:12px; }
+    .marca img { height:32px; }
+    .saudacao { font-size:13.5px; color:var(--cmx-texto-suave); }
+    .saudacao b { color:var(--cmx-texto); }
+    a.sair { font-size:12.5px; color:var(--cmx-texto-suave); text-decoration:none; margin-left:16px; }
+    a.sair:hover { text-decoration:underline; }
+
+    main { max-width:820px; margin:0 auto; padding:28px 24px 60px; }
+    .topo-pagina { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+    .topo-pagina h1 { font-size:20px; margin:0; }
+    .topo-pagina p { margin:2px 0 0; color:var(--cmx-texto-suave); font-size:13.5px; }
+    a.botao-nova {
+      background:var(--cmx-azul); color:#fff; text-decoration:none; font-weight:600; font-size:13.5px;
+      padding:10px 18px; border-radius:9px;
+    }
+    a.botao-nova:hover { background:#1c98d6; }
+
+    .resumo { display:flex; gap:12px; margin-bottom:20px; }
+    .resumo .item { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 18px; flex:1; text-align:center; }
+    .resumo .item .valor { font-size:24px; font-weight:700; }
+    .resumo .item .rotulo { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+
+    .lista-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:12px 18px; border-bottom:1px solid var(--cmx-borda); background:#fafbfc; }
+    tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
+    tbody tr:last-child td { border-bottom:none; }
+    .badge { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
+    .badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .badge.shopee { background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
+    .status-pendente { font-size:11.5px; font-weight:600; color:var(--cmx-atencao); background:var(--cmx-leve); padding:3px 9px; border-radius:999px; }
+    .status-confirmado { font-size:11.5px; color:#2f6f4f; }
+    .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
+    .vazio .emoji { font-size:36px; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="marca">
+      <img src="/static/logo.png" alt="Club Marketplace" />
+    </div>
+    <div class="saudacao">
+      Olá, <b>{{ usuario.nome_exibicao }}</b> ({{ usuario.conta_vinculada }})
+      <a class="sair" href="/logout">Sair</a>
+    </div>
+  </header>
+
+  <main>
+    <div class="topo-pagina">
+      <div>
+        <h1>Meus Cancelamentos</h1>
+        <p>Pedidos de cancelamento registrados pela sua conta</p>
+      </div>
+      <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
+    </div>
+
+    <div class="resumo">
+      <div class="item"><div class="valor">{{ solicitacoes|length }}</div><div class="rotulo">Total</div></div>
+      <div class="item"><div class="valor">{{ solicitacoes|selectattr("confirmado_por")|list|length }}</div><div class="rotulo">Confirmados</div></div>
+      <div class="item"><div class="valor">{{ solicitacoes|rejectattr("confirmado_por")|list|length }}</div><div class="rotulo">Pendentes</div></div>
+    </div>
+
+    <div class="lista-cartao">
+      {% if solicitacoes %}
+      <table>
+        <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for s in solicitacoes %}
+          <tr>
+            <td>{{ s.criado_em.strftime("%d/%m/%Y %H:%M") if s.criado_em else "-" }}</td>
+            <td><span class="badge {{ 'shopee' if s.plataforma == 'shopee' else 'ml' }}">{{ "Shopee" if s.plataforma == "shopee" else "Mercado Livre" }}</span></td>
+            <td>{{ s.numero_venda }}</td>
+            <td>{{ s.motivo }}</td>
+            <td>
+              {% if s.confirmado_por %}
+              <span class="status-confirmado">✓ Cancelado por {{ s.confirmado_por }}</span>
+              {% else %}
+              <span class="status-pendente">Pendente</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="vazio">
+        <div class="emoji">📋</div>
+        Nenhuma solicitação registrada ainda.<br />
+        <a class="botao-nova" style="display:inline-block; margin-top:14px;" href="/solicitar-cancelamento">+ Fazer a primeira solicitação</a>
+      </div>
+      {% endif %}
+    </div>
+  </main>
+</body>
+</html>

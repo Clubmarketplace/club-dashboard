@@ -47,3 +47,20 @@ MANUAIS_S3_BUCKET = os.getenv("MANUAIS_S3_BUCKET", "")
 # pré-venda (ex: tópico "orders_v2"), pra Central Financeira continuar
 # recebendo exatamente o que recebia antes -- ver app/routers/webhook_ml.py.
 GOOGLE_APPS_SCRIPT_WEBHOOK_URL = os.getenv("GOOGLE_APPS_SCRIPT_WEBHOOK_URL", "")
+
+# --- Login / sessão ---
+# Chave usada pra assinar o cookie de sessão (impede que alguém forje
+# um cookie válido sem conhecer essa chave). PRECISA ser definida no
+# Railway (Variables) em produção -- se não for definida, o sistema
+# gera uma aleatória a cada reinício, o que derruba todo mundo logado
+# sempre que o serviço reiniciar. Gere uma vez com:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "")
+
+# Usado só na primeira vez que o sistema sobe, pra criar o admin
+# inicial (bootstrap) -- sem isso, ninguém consegue logar nunca, já
+# que criar novos usuários exige estar logado como admin. Depois que
+# esse admin existir no banco, essas duas variáveis não fazem mais
+# nada (o sistema só cria se a tabela de usuários estiver vazia).
+ADMIN_USUARIO_INICIAL = os.getenv("ADMIN_USUARIO_INICIAL", "")
+ADMIN_SENHA_INICIAL = os.getenv("ADMIN_SENHA_INICIAL", "")

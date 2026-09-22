@@ -87,6 +87,9 @@
   <div id="tela-formulario">
     <h1>Solicitar cancelamento</h1>
     <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
+    {% if seller_logado %}
+    <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
+    {% endif %}
 
     <form id="form-cancelamento">
       <label>Plataforma</label>
@@ -102,7 +105,8 @@
       </div>
 
       <label for="conta">Conta</label>
-      <input type="text" id="conta" name="conta" placeholder="Ex: Velasco" required autocomplete="off" />
+      <input type="text" id="conta" name="conta" placeholder="Ex: Velasco" required autocomplete="off"
+        value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
 
       <div class="bloco-itens" id="bloco-itens"></div>
 

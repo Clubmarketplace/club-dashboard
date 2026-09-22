@@ -16,10 +16,11 @@ diferentes por venda).
 """
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
+from app import auth
 from app.database import get_db
 from app.models import SolicitacaoCancelamento
 
@@ -125,28 +126,25 @@ def listar_solicitacoes(db: Session = Depends(get_db), limite: int = 500):
     ]
 
 
-class ConfirmacaoCancelamento(BaseModel):
-    nome: str
-
-    @field_validator("nome")
-    @classmethod
-    def validar_nome(cls, valor: str) -> str:
-        valor = valor.strip()
-        if not valor:
-            raise ValueError("Informe o nome de quem confirmou.")
-        return valor
-
-
 @router.post("/{solicitacao_id}/confirmar")
-def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmacaoCancelamento, db: Session = Depends(get_db)):
-    """Marca um pedido como já cancelado de verdade na plataforma, registrando quem e quando."""
+def confirmar_solicitacao(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Marca um pedido como já cancelado de verdade na plataforma. Quem
+    confirmou é sempre a pessoa LOGADA no momento do clique (pego da
+    sessão, nunca digitado) -- evita erro de digitação e garante que
+    ninguém confirme em nome de outra pessoa.
+    """
+    usuario_logado = auth.usuario_atual(request, db)
+    if usuario_logado is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+
     solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
     if solicitacao is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
 
-    solicitacao.confirmado_por = corpo.nome
+    solicitacao.confirmado_por = usuario_logado.nome_exibicao
     solicitacao.confirmado_em = datetime.utcnow()
     db.commit()
     db.refresh(solicitacao)
