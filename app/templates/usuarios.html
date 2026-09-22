@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Club Marketplace — Usuários</title>
+  <title>Club Marketplace — Operadores</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -33,6 +33,26 @@
     .us-reset-codigo { font-family:monospace; font-size:20px; font-weight:700; letter-spacing:.04em; background:#fff; border:1.5px dashed #b9d4fb; border-radius:8px; padding:10px 16px; display:inline-block; margin:6px 0; }
     .us-reset-mensagem { background:#fff; border-radius:8px; padding:12px 14px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; margin-top:8px; }
     button.us-copiar-reset { margin-top:8px; padding:7px 14px; border-radius:7px; border:1px solid var(--cmx-borda); background:#fff; font-size:12.5px; font-weight:600; cursor:pointer; }
+
+    .us-topo-acoes { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--cmx-borda); flex-wrap:wrap; gap:12px; }
+    input#busca-usuario { width:100%; max-width:300px; padding:9px 13px; border-radius:8px; border:1.5px solid var(--cmx-borda); font-family:inherit; font-size:13.5px; }
+    button#botao-adicionar { padding:9px 16px; border-radius:8px; border:none; background:var(--cmx-marinho); color:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
+    button#botao-adicionar:hover { background:var(--cmx-marinho-suave); }
+
+    #painel-adicionar { display:none; background:#fafbfc; border-bottom:1px solid var(--cmx-borda); padding:22px 24px; }
+    #painel-adicionar.aberto { display:block; }
+    #painel-adicionar label { display:block; font-size:12.5px; font-weight:600; margin-bottom:6px; }
+    #painel-adicionar input[type="text"], #painel-adicionar select {
+      width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda);
+      font-family:inherit; font-size:13.5px; color:var(--cmx-texto); background:#fff;
+    }
+    #painel-adicionar input:focus, #painel-adicionar select:focus { outline:none; border-color:#2baff2; }
+    .pa-grade { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; align-items:end; }
+    .pa-campo-conta { display:none; }
+    .pa-campo-conta.visivel { display:block; }
+    .pa-dica { font-size:11px; color:var(--cmx-texto-suave); margin-top:4px; }
+    button.pa-criar { padding:10px 18px; border-radius:8px; border:none; background:var(--cmx-marinho); color:#fff; font-weight:600; font-size:13.5px; cursor:pointer; height:41px; }
+    .pa-erro { background:#fbe9e3; color:#c1502e; font-size:12.5px; padding:9px 13px; border-radius:8px; margin-bottom:14px; }
   </style>
 </head>
 <body>
@@ -57,10 +77,9 @@
         <span class="cmx-nav-secao">Solicitações manuais</span>
         <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
         <a class="cmx-nav-item" href="/solicitacoes-painel">Solicitações de Cancelamento</a>
-        <span class="cmx-nav-secao">Usuários</span>
-        <a class="cmx-nav-item" href="/usuarios/novo">Criar usuário</a>
+        <span class="cmx-nav-secao">Operadores</span>
         <a class="cmx-nav-item cmx-nav-item--ativo" href="/usuarios">
-          <span class="cmx-nav-dot"></span> Ver usuários
+          <span class="cmx-nav-dot"></span> Operadores
         </a>
       </nav>
     </aside>
@@ -91,12 +110,12 @@
 
       <header class="cmx-topbar">
         <div>
-          <h1>Usuários</h1>
+          <h1>Operadores</h1>
           <p class="cmx-subtitulo">
             {% if papel_logado == "admin" %}
-            Todos os usuários do sistema. Desativar impede o login, mas mantém todo o histórico.
+            Todos os operadores do sistema. Desativar impede o login, mas mantém todo o histórico.
             {% else %}
-            Usuários "seller" que você pode gerenciar. Desativar impede o login, mas mantém todo o histórico.
+            Operadores "seller" que você pode gerenciar. Desativar impede o login, mas mantém todo o histórico.
             {% endif %}
           </p>
         </div>
@@ -119,18 +138,71 @@ Use esse código uma vez só, pra criar sua senha nova.</div>
         </div>
         {% endif %}
 
+        {% if criar_sucesso %}
+        <div class="us-reset-banner">
+          <div class="titulo">✓ Operador criado: {{ criar_sucesso.nome_exibicao }}</div>
+          <div>Código de primeiro acesso:</div>
+          <div class="us-reset-codigo">{{ criar_sucesso.codigo }}</div>
+          <div class="us-reset-mensagem" id="mensagem-criar">Olá! Seu acesso ao Club Marketplace foi criado.
+
+Acesse: https://backend-production-f9196.up.railway.app/primeiro-acesso
+Usuário: {{ criar_sucesso.usuario }}
+Código de primeiro acesso: {{ criar_sucesso.codigo }}
+
+Use esse código uma vez só, pra criar sua senha pessoal.</div>
+          <button class="us-copiar-reset" onclick="navigator.clipboard.writeText(document.getElementById('mensagem-criar').textContent); this.textContent='✓ Copiado!'; setTimeout(() => this.textContent='📋 Copiar mensagem pra enviar', 2000);">📋 Copiar mensagem pra enviar</button>
+        </div>
+        {% endif %}
+
         <div class="us-cartao">
-          <div style="padding:16px 18px; border-bottom:1px solid var(--cmx-borda);">
-            <input type="text" id="busca-usuario" placeholder="Buscar por usuário ou nome..." autocomplete="off"
-              style="width:100%; max-width:340px; padding:9px 13px; border-radius:8px; border:1.5px solid var(--cmx-borda); font-family:inherit; font-size:13.5px;" />
+          <div class="us-topo-acoes">
+            <input type="text" id="busca-usuario" placeholder="Buscar por usuário ou nome..." autocomplete="off" />
+            <button id="botao-adicionar" onclick="document.getElementById('painel-adicionar').classList.toggle('aberto')">+ Adicionar operador</button>
           </div>
+
+          <div id="painel-adicionar">
+            {% if erro_criar %}
+            <div class="pa-erro">{{ erro_criar }}</div>
+            {% endif %}
+            <form method="post" action="/usuarios/novo">
+              <div class="pa-grade">
+                <div>
+                  <label>Nome da pessoa</label>
+                  <input type="text" name="nome_exibicao" placeholder="Ex: Velasco, ou Maria Silva" required />
+                </div>
+                <div>
+                  <label>Usuário (login)</label>
+                  <input type="text" name="usuario" placeholder="Ex: velasco" required autocomplete="off" />
+                </div>
+                <div>
+                  <label>Perfil</label>
+                  <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
+                    {% if papel_logado == "admin" %}
+                    <option value="admin">Admin</option>
+                    <option value="supervisor">Supervisor</option>
+                    {% endif %}
+                    <option value="seller" selected>Seller</option>
+                  </select>
+                </div>
+                <div class="pa-campo-conta" id="bloco-conta">
+                  <label>Conta vinculada</label>
+                  <input type="text" name="conta_vinculada" id="campo-conta" placeholder="Ex: Velasco" />
+                </div>
+                <div>
+                  <button type="submit" class="pa-criar">Criar e gerar código</button>
+                </div>
+              </div>
+              <div class="pa-dica">Sem espaços no login — a pessoa vai digitar isso pra entrar. A conta vinculada é obrigatória pra "Seller" (é o que ela vê em "Meus Cancelamentos").</div>
+            </form>
+          </div>
+
           {% if usuarios %}
           <table class="us-tabela">
             <thead>
               <tr>
                 <th>Nome</th>
                 <th>Usuário</th>
-                <th>Papel</th>
+                <th>Perfil</th>
                 <th>Conta vinculada</th>
                 <th>Status</th>
                 <th>Ação</th>
@@ -154,6 +226,7 @@ Use esse código uma vez só, pra criar sua senha nova.</div>
                   {% if u.id == usuario_logado.id %}
                   <span style="font-size:12px; color:var(--cmx-texto-suave);">(você)</span>
                   {% else %}
+                  <a href="/usuarios/{{ u.id }}/editar" class="us-alternar" style="color:var(--cmx-texto); text-decoration:none; display:inline-block;">Editar</a>
                   {% if u.papel != "seller" %}
                   <form method="post" action="/usuarios/{{ u.id }}/resetar-senha" style="display:inline;" onsubmit="return confirm('Gerar um novo código de acesso pra {{ u.nome_exibicao }}? A senha atual dela deixa de funcionar.');">
                     <button type="submit" class="us-alternar resetar">Resetar senha</button>
@@ -171,19 +244,33 @@ Use esse código uma vez só, pra criar sua senha nova.</div>
             </tbody>
           </table>
           {% else %}
-          <div class="us-vazio">Nenhum usuário encontrado.</div>
+          <div class="us-vazio">Nenhum operador encontrado.</div>
           {% endif %}
         </div>
       </main>
     </div>
   </div>
+
   <script>
+    function alternarCampoConta() {
+      const select = document.getElementById("campo-papel");
+      const papel = select ? select.value : "seller";
+      const bloco = document.getElementById("bloco-conta");
+      bloco.classList.toggle("visivel", papel === "seller");
+      document.getElementById("campo-conta").required = (papel === "seller");
+    }
+    alternarCampoConta();
+
     document.getElementById("busca-usuario")?.addEventListener("input", (e) => {
       const termo = e.target.value.trim().toLowerCase();
       document.querySelectorAll("table.us-tabela tbody tr[data-busca]").forEach((linha) => {
         linha.style.display = linha.dataset.busca.includes(termo) ? "" : "none";
       });
     });
+
+    {% if erro_criar or criar_sucesso %}
+    document.getElementById("painel-adicionar").classList.add("aberto");
+    {% endif %}
   </script>
 </body>
 </html>
