@@ -3,7 +3,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -21,6 +21,7 @@ app.include_router(manuais.router)
 app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
+app.include_router(solicitacoes_cancelamento.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -56,6 +57,12 @@ def pagina_cancelamentos(request: Request):
     return templates.TemplateResponse(request=request, name="cancelamentos.html")
 
 
+@app.get("/cancelamentos-painel", response_class=HTMLResponse)
+def pagina_painel_cancelamentos(request: Request):
+    """Tela interna de acompanhamento dos pedidos de cancelamento, agrupada por conta."""
+    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html")
+
+
 @app.get("/eventos-webhook", response_class=HTMLResponse)
 def pagina_eventos_webhook(request: Request):
     return templates.TemplateResponse(request=request, name="eventos-webhook.html")
@@ -71,6 +78,18 @@ def pagina_painel_tv_geral(request: Request):
 def pagina_painel_tv_fila(request: Request):
     """Tela de TV 2 — fila de ação, só o que precisa de humano, cross-conta."""
     return templates.TemplateResponse(request=request, name="painel-tv-fila.html")
+
+
+@app.get("/solicitar-cancelamento", response_class=HTMLResponse)
+def pagina_solicitar_cancelamento(request: Request):
+    """Página pública (sem login) pra qualquer conta registrar manualmente um pedido de cancelamento."""
+    return templates.TemplateResponse(request=request, name="solicitar-cancelamento.html")
+
+
+@app.get("/solicitacoes-painel", response_class=HTMLResponse)
+def pagina_solicitacoes_painel(request: Request):
+    """Tela interna de acompanhamento das solicitações manuais de cancelamento, agrupada por conta."""
+    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html")
 
 
 @app.get("/api/saude")
