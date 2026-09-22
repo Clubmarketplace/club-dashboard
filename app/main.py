@@ -256,7 +256,7 @@ def pagina_meus_cancelamentos(request: Request):
         solicitacoes = (
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.conta == usuario.conta_vinculada)
-            .order_by(SolicitacaoCancelamento.criado_em.desc())
+            .order_by(SolicitacaoCancelamento.confirmado_por.is_(None).desc(), SolicitacaoCancelamento.criado_em.desc())
             .all()
         )
         return templates.TemplateResponse(
