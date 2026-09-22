@@ -227,11 +227,9 @@ Use esse código uma vez só, pra criar sua senha pessoal.</div>
                   <span style="font-size:12px; color:var(--cmx-texto-suave);">(você)</span>
                   {% else %}
                   <a href="/usuarios/{{ u.id }}/editar" class="us-alternar" style="color:var(--cmx-texto); text-decoration:none; display:inline-block;">Editar</a>
-                  {% if u.papel != "seller" %}
                   <form method="post" action="/usuarios/{{ u.id }}/resetar-senha" style="display:inline;" onsubmit="return confirm('Gerar um novo código de acesso pra {{ u.nome_exibicao }}? A senha atual dela deixa de funcionar.');">
                     <button type="submit" class="us-alternar resetar">Resetar senha</button>
                   </form>
-                  {% endif %}
                   <form method="post" action="/usuarios/{{ u.id }}/alternar-status" style="display:inline;" onsubmit="return confirm('{{ 'Desativar' if u.ativo else 'Reativar' }} {{ u.nome_exibicao }}?');">
                     <button type="submit" class="us-alternar {{ 'desativar' if u.ativo else 'reativar' }}">
                       {{ "Desativar" if u.ativo else "Reativar" }}
