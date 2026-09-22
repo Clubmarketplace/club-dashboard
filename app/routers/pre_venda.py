@@ -27,6 +27,17 @@ except Exception:  # ZoneInfoNotFoundError ou Python sem zoneinfo
     FUSO_BR = timezone(timedelta(hours=-3), "BRT")
 
 
+def _resolvida_por(p: Pergunta) -> str:
+    """Rótulo curto de quem resolveu a pergunta, pros painéis de TV."""
+    if p.camada_resolvida in CAMADAS_AUTOMATICAS:
+        return "IA"
+    if p.camada_resolvida == "manual":
+        return "Atendente"
+    if p.status == "respondida_externamente":
+        return "Por fora (ML/app)"
+    return "—"
+
+
 def _utc_para_br(data_utc_naive: datetime) -> datetime:
     """Converte um datetime UTC 'cru' (sem fuso, como vem do banco) pro horário de Brasília."""
     return data_utc_naive.replace(tzinfo=timezone.utc).astimezone(FUSO_BR)
@@ -234,6 +245,39 @@ def painel_geral(db: Session = Depends(get_db)):
         round(sum(tempos_humanos) / len(tempos_humanos), 1) if tempos_humanos else None
     )
 
+    # Contas que tiveram pergunta hoje -- os painéis mostram essas em
+    # verde ("em dia") quando não sobra nada pendente.
+    contas_hoje: dict[str, dict] = {}
+    for p in perguntas_hoje:
+        nome = p.conta.apelido if p.conta else "—"
+        registro = contas_hoje.setdefault(nome, {"conta": nome, "total_hoje": 0, "respondidas_hoje": 0})
+        registro["total_hoje"] += 1
+        if p.status in ("respondida", "respondida_externamente"):
+            registro["respondidas_hoje"] += 1
+
+    # Últimas perguntas resolvidas hoje (IA, atendente ou por fora), mais
+    # recentes primeiro -- aparecem em verde na lista dos painéis.
+    resolvidas_hoje = (
+        db.query(Pergunta)
+        .filter(Pergunta.status.in_(["respondida", "respondida_externamente"]))
+        .filter(Pergunta.respondida_em >= inicio_do_dia)
+        .order_by(Pergunta.respondida_em.desc())
+        .limit(30)
+        .all()
+    )
+    respondidas_recentes = [
+        {
+            "id": p.id,
+            "conta": p.conta.apelido if p.conta else "—",
+            "texto": p.texto,
+            "resposta": p.resposta_enviada,
+            "resolvida_por": _resolvida_por(p),
+            "recebida_em": p.recebida_em.isoformat() if p.recebida_em else None,
+            "respondida_em": p.respondida_em.isoformat() if p.respondida_em else None,
+        }
+        for p in resolvidas_hoje
+    ]
+
     return {
         "geral": {
             "total_hoje": total_hoje,
@@ -246,5 +290,7 @@ def painel_geral(db: Session = Depends(get_db)):
         },
         "hora_atual": agora_br.hour,
         "ranking_pendencias": ranking_pendencias,
+        "contas_hoje": sorted(contas_hoje.values(), key=lambda c: c["conta"].lower()),
+        "respondidas_recentes": respondidas_recentes,
         "por_hora": por_hora,
     }
