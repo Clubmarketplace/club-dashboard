@@ -143,9 +143,89 @@ body {
 
 /* ---------- Conteúdo principal ---------- */
 
+.cmx-barra-topo {
+  position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 30;
+  background: var(--cmx-marinho); display: flex; align-items: center; justify-content: space-between;
+  padding: 0 24px; box-shadow: 0 1px 0 rgba(0,0,0,.2);
+}
+.cmx-barra-topo-logo { height: 34px; width: auto; background: #fff; border-radius: 7px; padding: 5px 9px; }
+.cmx-avatar-bolinha {
+  width: 34px; height: 34px; border-radius: 50%; background: #2baff2; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  cursor: pointer;
+}
+.cmx-barra-topo-avatar-area { position: relative; }
+.cmx-barra-topo-avatar-area .cmx-menu-usuario-dropdown {
+  position: absolute; right: 0; top: calc(100% + 10px);
+  background: #fff; border: 1px solid var(--cmx-borda); border-radius: 10px;
+  box-shadow: 0 10px 30px -10px rgba(0,0,0,.3); min-width: 190px; overflow: hidden;
+}
+.cmx-shell { padding-top: 58px; }
+
 .cmx-conteudo {
   min-width: 0;
+  position: relative;
 }
+
+.cmx-menu-usuario {
+  position: absolute;
+  top: 22px;
+  right: 36px;
+  z-index: 15;
+}
+
+.cmx-menu-usuario-botao {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--cmx-borda);
+  background: #fff;
+}
+
+.cmx-menu-usuario-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #2baff2;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.cmx-menu-usuario-nome { font-size: 13px; font-weight: 600; line-height: 1.2; }
+.cmx-menu-usuario-papel { font-size: 11px; color: var(--cmx-texto-suave); line-height: 1.2; }
+
+.cmx-menu-usuario-dropdown {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  background: #fff;
+  border: 1px solid var(--cmx-borda);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .2);
+  min-width: 160px;
+  overflow: hidden;
+}
+
+.cmx-menu-usuario-dropdown.aberto { display: block; }
+
+.cmx-menu-usuario-dropdown a {
+  display: block;
+  padding: 11px 16px;
+  font-size: 13.5px;
+  color: #c1502e;
+  text-decoration: none;
+  font-weight: 600;
+}
+.cmx-menu-usuario-dropdown a:hover { background: #fbe9e3; }
 
 .cmx-topbar {
   display: flex;
