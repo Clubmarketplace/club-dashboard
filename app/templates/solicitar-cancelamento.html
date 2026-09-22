@@ -29,7 +29,8 @@
 
   .opcoes-plataforma { display:flex; gap:10px; }
   .opcao-plataforma {
-    flex:1; border:1.5px solid var(--line); border-radius:10px; padding:12px;
+    flex:1; min-width:0; border:1.5px solid var(--line); border-radius:10px; padding:12px;
+    display:flex; align-items:center; justify-content:center;
     text-align:center; cursor:pointer; font-weight:600; font-size:14px; color:var(--text-dim);
     transition:border-color .15s, background .15s, color .15s;
   }
