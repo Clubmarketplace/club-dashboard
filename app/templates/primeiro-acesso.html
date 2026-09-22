@@ -36,6 +36,14 @@
     width:100%; padding:13px 15px; border-radius:10px; border:1.5px solid var(--cmx-borda);
     font-family:inherit; font-size:15px; color:var(--cmx-texto); background:#fff;
   }
+  .campo-senha { position:relative; }
+  .campo-senha input { padding-right:44px; }
+  .botao-olho {
+    position:absolute; right:12px; top:50%; transform:translateY(-50%);
+    background:none; border:none; cursor:pointer; padding:4px; color:var(--cmx-texto-suave);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .botao-olho:hover { color:var(--cmx-texto); }
   input:focus { outline:none; border-color:var(--cmx-ambar); }
   button[type="submit"] {
     width:100%; margin-top:26px; padding:15px; border:none; border-radius:999px;
@@ -55,7 +63,7 @@
 <body>
 <div class="fundo">
   <div class="area-logo">
-    <img src="/static/logo.png" alt="Club Marketplace" style="width:220px; height:auto;" />
+    <img src="/static/logo.png?v=2" alt="Club Marketplace" style="width:220px; height:auto;" />
   </div>
 
   <div class="selo-topo"><span>Primeiro acesso</span></div>
@@ -72,11 +80,21 @@
     <input type="text" name="codigo" placeholder="Código enviado pelo supervisor" autocomplete="off" required />
 
     <label>Crie sua senha pessoal</label>
-    <input type="password" name="nova_senha" autocomplete="new-password" required minlength="8" />
+    <div class="campo-senha">
+      <input type="password" name="nova_senha" id="campo-nova-senha" autocomplete="new-password" required minlength="8" />
+      <button type="button" class="botao-olho" onclick="alternarSenha('campo-nova-senha', this)" aria-label="Mostrar senha">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
     <div class="dica">Mínimo 8 caracteres</div>
 
     <label>Confirme a senha</label>
-    <input type="password" name="confirmar_senha" autocomplete="new-password" required minlength="8" />
+    <div class="campo-senha">
+      <input type="password" name="confirmar_senha" id="campo-confirmar-senha" autocomplete="new-password" required minlength="8" />
+      <button type="button" class="botao-olho" onclick="alternarSenha('campo-confirmar-senha', this)" aria-label="Mostrar senha">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
 
     <button type="submit">Criar senha e entrar</button>
   </form>
@@ -87,5 +105,16 @@
 
   <div class="rodape-site">clubmarketplace.com.br</div>
 </div>
+  <script>
+    function alternarSenha(idCampo, botao) {
+      const campo = document.getElementById(idCampo);
+      const mostrando = campo.type === "text";
+      campo.type = mostrando ? "password" : "text";
+      botao.innerHTML = mostrando
+        ? '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+        : '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+      botao.setAttribute("aria-label", mostrando ? "Mostrar senha" : "Ocultar senha");
+    }
+  </script>
 </body>
 </html>
