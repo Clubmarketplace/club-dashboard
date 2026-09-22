@@ -55,8 +55,9 @@
 </head>
 <body>
   <header style="position:relative;">
-    <div class="marca">
-      <img src="/static/logo.png" alt="Club Marketplace" />
+    <div class="marca" style="flex-direction:column; align-items:flex-start; gap:2px;">
+      <img src="/static/logo.png?v=2" alt="Club Marketplace" />
+      <span style="font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave);">Conta: {{ usuario.conta_vinculada }}</span>
     </div>
     <div style="position:relative;">
       <div style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:6px 12px; border-radius:10px; border:1px solid var(--cmx-borda);" onclick="document.getElementById('mc-dropdown-usuario').classList.toggle('aberto')">
