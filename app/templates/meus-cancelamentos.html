@@ -54,15 +54,31 @@
   </style>
 </head>
 <body>
-  <header>
+  <header style="position:relative;">
     <div class="marca">
       <img src="/static/logo.png" alt="Club Marketplace" />
     </div>
-    <div class="saudacao">
-      Olá, <b>{{ usuario.nome_exibicao }}</b> ({{ usuario.conta_vinculada }})
-      <a class="sair" href="/logout">Sair</a>
+    <div style="position:relative;">
+      <div style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:6px 12px; border-radius:10px; border:1px solid var(--cmx-borda);" onclick="document.getElementById('mc-dropdown-usuario').classList.toggle('aberto')">
+        <div style="width:30px; height:30px; border-radius:50%; background:var(--cmx-azul); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;">{{ usuario.nome_exibicao[0]|upper }}</div>
+        <div>
+          <div style="font-size:13px; font-weight:600; line-height:1.2;">{{ usuario.nome_exibicao }}</div>
+          <div style="font-size:11px; color:var(--cmx-texto-suave); line-height:1.2;">{{ usuario.conta_vinculada }}</div>
+        </div>
+        <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+      </div>
+      <div id="mc-dropdown-usuario" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#fff; border:1px solid var(--cmx-borda); border-radius:10px; box-shadow:0 10px 30px -10px rgba(0,0,0,.2); min-width:160px; overflow:hidden; z-index:20;">
+        <a href="/logout" style="display:block; padding:11px 16px; font-size:13.5px; color:var(--cmx-critico); text-decoration:none; font-weight:600;">🚪 Sair</a>
+      </div>
     </div>
   </header>
+  <script>
+    document.addEventListener("click", function(e) {
+      var dropdown = document.getElementById("mc-dropdown-usuario");
+      if (dropdown && !e.target.closest("header")) dropdown.classList.remove("aberto");
+    });
+  </script>
+  <style>#mc-dropdown-usuario.aberto { display: block !important; }</style>
 
   <main>
     <div class="topo-pagina">

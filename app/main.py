@@ -3,7 +3,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal
-from app.models import Usuario, SolicitacaoCancelamento
+from datetime import datetime, timedelta
+from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
 
@@ -114,44 +115,105 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 @app.get("/", response_class=HTMLResponse)
-def pagina_inicial(request: Request):
-    return templates.TemplateResponse(request=request, name="dashboard.html")
+def pagina_dashboard(request: Request):
+    """
+    Dashboard — tela inicial, resumo geral. Só leitura, agrega números
+    de várias áreas (devoluções, pré-venda, cancelamentos) pra dar uma
+    visão rápida de "como está tudo" antes de entrar em cada tela
+    específica.
+    """
+    with SessionLocal() as db:
+        agora = datetime.utcnow()
+        usuario_logado = auth.usuario_atual(request, db)
+
+        # Devoluções (últimos 30 dias)
+        limite_30d = agora - timedelta(days=30)
+        devolucoes_30d = db.query(Devolucao).filter(Devolucao.data_criacao >= limite_30d).all()
+        devolucoes_total = len(devolucoes_30d)
+        devolucoes_impacto = sum((d.valor or 0) + (d.custo_frete_retorno or 0) for d in devolucoes_30d)
+
+        # Pré-venda de hoje
+        inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+        perguntas_hoje = db.query(Pergunta).filter(Pergunta.recebida_em >= inicio_do_dia).all()
+        pre_venda_total_hoje = len(perguntas_hoje)
+        camadas_automaticas = {"resposta_validada", "manual_sku_ia", "politica_geral"}
+        pre_venda_ia = sum(1 for p in perguntas_hoje if p.camada_resolvida in camadas_automaticas)
+        pre_venda_pct_ia = round(pre_venda_ia / pre_venda_total_hoje * 100) if pre_venda_total_hoje else 0
+
+        # Pendentes agora (qualquer dia, não só hoje)
+        pendentes = db.query(Pergunta).filter(Pergunta.status == "fila_humana").all()
+        pendentes_total = len(pendentes)
+        pendentes_criticas = sum(
+            1 for p in pendentes
+            if p.recebida_em and (agora - p.recebida_em).total_seconds() / 60 > 30
+        )
+
+        # Cancelamentos manuais desta semana (segunda a agora)
+        inicio_semana = (agora - timedelta(days=agora.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
+        cancelamentos_semana = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.criado_em >= inicio_semana).all()
+        cancelamentos_total = len(cancelamentos_semana)
+        cancelamentos_tratados = sum(1 for s in cancelamentos_semana if s.confirmado_por)
+
+        contexto = {
+            "devolucoes_total": devolucoes_total,
+            "devolucoes_impacto": devolucoes_impacto,
+            "pre_venda_total_hoje": pre_venda_total_hoje,
+            "pre_venda_pct_ia": pre_venda_pct_ia,
+            "pendentes_total": pendentes_total,
+            "pendentes_criticas": pendentes_criticas,
+            "cancelamentos_total": cancelamentos_total,
+            "cancelamentos_tratados": cancelamentos_tratados,
+            "usuario_logado": usuario_logado,
+        }
+
+    return templates.TemplateResponse(request=request, name="dashboard.html", context=contexto)
+
+
+def _usuario_logado(request: Request):
+    """Busca o usuário logado (ou None) pra exibir nome no rodapé do menu."""
+    with SessionLocal() as db:
+        return auth.usuario_atual(request, db)
+
+
+@app.get("/devolucoes", response_class=HTMLResponse)
+def pagina_devolucoes(request: Request):
+    return templates.TemplateResponse(request=request, name="devolucoes.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/contas", response_class=HTMLResponse)
 def pagina_contas(request: Request):
-    return templates.TemplateResponse(request=request, name="contas.html")
+    return templates.TemplateResponse(request=request, name="contas.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/pre-venda", response_class=HTMLResponse)
 def pagina_pre_venda(request: Request):
-    return templates.TemplateResponse(request=request, name="pre-venda.html")
+    return templates.TemplateResponse(request=request, name="pre-venda.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/manuais", response_class=HTMLResponse)
 def pagina_manuais(request: Request):
-    return templates.TemplateResponse(request=request, name="manuais.html")
+    return templates.TemplateResponse(request=request, name="manuais.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/pos-venda", response_class=HTMLResponse)
 def pagina_pos_venda(request: Request):
-    return templates.TemplateResponse(request=request, name="pos-venda.html")
+    return templates.TemplateResponse(request=request, name="pos-venda.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/cancelamentos", response_class=HTMLResponse)
 def pagina_cancelamentos(request: Request):
-    return templates.TemplateResponse(request=request, name="cancelamentos.html")
+    return templates.TemplateResponse(request=request, name="cancelamentos.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/cancelamentos-painel", response_class=HTMLResponse)
 def pagina_painel_cancelamentos(request: Request):
     """Tela interna de acompanhamento dos pedidos de cancelamento, agrupada por conta."""
-    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html")
+    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/eventos-webhook", response_class=HTMLResponse)
 def pagina_eventos_webhook(request: Request):
-    return templates.TemplateResponse(request=request, name="eventos-webhook.html")
+    return templates.TemplateResponse(request=request, name="eventos-webhook.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/painel-tv/geral", response_class=HTMLResponse)
@@ -213,7 +275,7 @@ def pagina_criar_usuario(request: Request):
         return templates.TemplateResponse(
             request=request,
             name="criar-usuario.html",
-            context={"papel_logado": usuario_logado.papel, "erro": None, "sucesso": None, "valores": None},
+            context={"papel_logado": usuario_logado.papel, "erro": None, "sucesso": None, "valores": None, "usuario_logado": usuario_logado},
         )
 
 
@@ -234,7 +296,7 @@ def criar_usuario(
         # outro valor mexendo no HTML -- a checagem de verdade é aqui,
         # no servidor, nunca só no <select> da tela.
         papeis_que_esse_criador_pode_atribuir = ("admin", "supervisor", "seller") if usuario_logado.papel == "admin" else ("seller",)
-        contexto_base = {"papel_logado": usuario_logado.papel, "sucesso": None}
+        contexto_base = {"papel_logado": usuario_logado.papel, "sucesso": None, "usuario_logado": usuario_logado}
         valores_preenchidos = {"usuario": usuario, "nome_exibicao": nome_exibicao, "papel": papel, "conta_vinculada": conta_vinculada}
 
         if papel not in papeis_que_esse_criador_pode_atribuir:
@@ -283,6 +345,7 @@ def criar_usuario(
                 "papel_logado": usuario_logado.papel,
                 "erro": None,
                 "valores": None,
+                "usuario_logado": usuario_logado,
                 "sucesso": {"usuario": novo_usuario.usuario, "nome_exibicao": novo_usuario.nome_exibicao, "papel": novo_usuario.papel, "codigo": codigo},
             },
         )
@@ -291,7 +354,7 @@ def criar_usuario(
 @app.get("/solicitacoes-painel", response_class=HTMLResponse)
 def pagina_solicitacoes_painel(request: Request):
     """Tela interna de acompanhamento das solicitações manuais de cancelamento, agrupada por conta."""
-    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html")
+    return templates.TemplateResponse(request=request, name="painel-cancelamentos.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/api/saude")
