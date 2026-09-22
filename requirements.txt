@@ -7,6 +7,9 @@ python-dotenv==1.0.1
 httpx==0.28.1
 anthropic
 pypdf
+# Base de fusos horários (horário de Brasília nos painéis). Algumas
+# imagens Linux enxutas não trazem, e o zoneinfo precisa dela.
+tzdata
 
 # Só necessário se um dia migrar os manuais pra um bucket S3 (AWS) --
 # ver MANUAIS_STORAGE no .env. Local com pasta no PC não precisa.
