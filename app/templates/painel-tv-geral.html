@@ -11,18 +11,20 @@
   :root {
     --bg:#0b0f14; --panel:#12181f; --panel-2:#161e27; --line:#22303c;
     --text:#eef3f7; --text-dim:#8ea0b0;
-    --amber:#f0a93d; --amber-dim:#6b5326;
-    --green:#38c98c; --green-dim:#1c4a3a;
-    --red:#e8615a; --red-dim:#4a2422;
-    --blue:#5aa9e6;
+    --amber:#f0a93d; --amber-dim:#3d2f14;
+    --green:#38c98c; --green-dim:#12301f;
+    --red:#e8615a; --red-dim:#3a1f1e;
+    --gray:#4a5866;
     font-family:"Space Grotesk", sans-serif;
   }
   :root:not([data-theme="light"]) { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; padding:28px 32px; }
+  html, body { height:100%; }
+  /* Tela inteira sem rolagem da página: só a lista da direita rola */
+  body { margin:0; background:var(--bg); color:var(--text); padding:24px 32px 14px; display:flex; flex-direction:column; overflow:hidden; }
   .mono { font-family:"IBM Plex Mono", monospace; }
 
-  header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:22px; flex-wrap:wrap; gap:14px; }
+  header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; gap:14px; }
   .marca { display:flex; align-items:center; gap:12px; }
   .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
   h1 { margin:0; font-size:22px; font-weight:600; }
@@ -30,50 +32,91 @@
   .relogio { font-size:15px; color:var(--text-dim); text-align:right; }
   .relogio .hora { font-size:26px; color:var(--text); display:block; }
 
-  .status-geral {
-    display:flex; align-items:center; gap:16px;
-    background:var(--panel); border:1px solid var(--line); border-radius:14px;
-    padding:20px 24px; margin-bottom:20px;
-  }
-  .status-geral .bolha { width:16px; height:16px; border-radius:50%; flex-shrink:0; }
-  .status-geral .bolha.ok { background:var(--green); box-shadow:0 0 16px rgba(56,201,140,.6); }
-  .status-geral .bolha.atencao { background:var(--amber); box-shadow:0 0 16px rgba(240,169,61,.6); }
-  .status-geral .bolha.critico { background:var(--red); box-shadow:0 0 16px rgba(232,97,90,.6); }
-  .status-geral .titulo { font-size:19px; font-weight:600; }
-  .status-geral .detalhe { font-size:13px; color:var(--text-dim); margin-top:2px; }
+  /* Faixa de alerta: só aparece quando há algo fora do normal */
+  .alerta { display:none; align-items:center; gap:14px; border-radius:12px; padding:12px 18px; margin-bottom:14px; border:1px solid; }
+  .alerta.critico { display:flex; background:var(--red-dim); border-color:var(--red); }
+  .alerta.atencao { display:flex; background:var(--amber-dim); border-color:var(--amber); }
+  .alerta .ponto { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
+  .alerta.critico .ponto { background:var(--red); animation:pisca 1.2s infinite; }
+  .alerta.atencao .ponto { background:var(--amber); }
+  .alerta .titulo { font-size:17px; font-weight:600; }
+  .alerta .detalhe { font-size:12.5px; color:var(--text-dim); }
 
-  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:14px; margin-bottom:20px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px 18px; }
-  .kpi .rotulo { font-size:12px; color:var(--text-dim); }
-  .kpi .valor { font-size:30px; font-weight:600; margin-top:4px; }
+  .grid-principal { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:18px; }
+  .coluna { display:flex; flex-direction:column; gap:16px; min-height:0; }
+  .painel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 20px; }
+  .painel h2 { font-size:14px; font-weight:600; margin:0; color:var(--text-dim); }
+  .painel-cabecalho { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap; }
+
+  /* ---------- Indicadores (3x2) ---------- */
+  .kpis { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 18px; }
+  .kpi .rotulo { font-size:12.5px; color:var(--text-dim); }
+  .kpi .valor { font-size:34px; font-weight:600; margin-top:4px; font-family:"IBM Plex Mono", monospace; }
   .kpi .valor.ok { color:var(--green); }
   .kpi .valor.humano { color:var(--amber); }
-  .kpi .valor.alerta { color:var(--red); }
+  .kpi .valor.alerta-num { color:var(--red); }
+  .kpi .sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
 
-  .grid-principal { display:grid; grid-template-columns:1.3fr 1fr; gap:18px; }
-  .painel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:18px 20px; }
-  .painel h2 { font-size:14.5px; font-weight:600; margin:0 0 14px 0; }
+  /* ---------- Gráfico empilhado por hora ---------- */
+  .painel-grafico { flex:1; min-height:0; display:flex; flex-direction:column; }
+  .legenda { display:flex; gap:14px; font-size:11.5px; color:var(--text-dim); }
+  .legenda span { display:flex; align-items:center; gap:5px; }
+  .legenda .q { width:10px; height:10px; border-radius:2px; display:inline-block; }
+  #grafico { flex:1; min-height:120px; display:flex; align-items:stretch; gap:5px; }
+  .hora-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; position:relative; }
+  .hora-col .pilha { flex:1; width:100%; display:flex; flex-direction:column-reverse; justify-content:flex-start; border-radius:4px 4px 0 0; }
+  .hora-col .seg { width:100%; transition:height .6s; }
+  .hora-col .seg:last-child { border-radius:4px 4px 0 0; }
+  .seg.ia { background:var(--green); } .seg.humano { background:var(--amber); }
+  .seg.pendente { background:var(--red); } .seg.outros { background:var(--gray); }
+  .hora-col .base { width:100%; height:2px; background:var(--line); }
+  .hora-col .rotulo-hora { font-size:10.5px; color:var(--text-dim); }
+  .hora-col .qtd { font-size:10.5px; color:var(--text-dim); font-family:"IBM Plex Mono", monospace; height:13px; }
+  .hora-col.futuro .rotulo-hora { opacity:.4; }
+  .hora-col.agora::before { content:""; position:absolute; top:14px; bottom:18px; left:-3px; right:-3px; border:1px dashed var(--text-dim); border-radius:6px; pointer-events:none; }
+  .hora-col.agora .rotulo-hora { color:var(--text); font-weight:700; }
 
-  #grafico { display:flex; align-items:flex-end; gap:6px; height:180px; padding-top:10px; }
-  .barra-hora { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .barra-hora .barra { width:100%; background:linear-gradient(to top, var(--blue), #3a7bb0); border-radius:4px 4px 0 0; min-height:2px; }
-  .barra-hora .rotulo-hora { font-size:9.5px; color:var(--text-dim); }
+  /* ---------- Coluna direita: bolhas + lista ---------- */
+  .painel-acao { flex:1; min-height:0; display:flex; flex-direction:column; }
+  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(84px, 5.6vw, 118px), 1fr)); gap:10px; max-height:36%; overflow:hidden; flex-shrink:0; }
+  .bolha {
+    aspect-ratio:1; border-radius:50%; border:3px solid;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
+    text-align:center; padding:8px;
+    transition:background-color .8s, border-color .8s, color .8s;
+  }
+  .bolha .b-nome { font-size:clamp(9.5px, .68vw, 12px); font-weight:700; line-height:1.15; text-transform:uppercase;
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
+  .bolha .b-tempo { font-family:"IBM Plex Mono", monospace; font-size:clamp(12px, .9vw, 16px); font-weight:600; }
+  .bolha .b-qtd { font-size:clamp(9px, .6vw, 11px); opacity:.85; }
+  .bolha.leve    { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
+  .bolha.atencao { background:var(--amber-dim); border-color:var(--amber); color:#fbe0b0; }
+  .bolha.critico { background:var(--red-dim);   border-color:var(--red);   color:#ffd0cc; animation:pulsar 1.8s ease-in-out infinite; }
+  @keyframes pulsar { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
+  .bolhas-mais { font-size:11.5px; color:var(--text-dim); text-align:right; margin-top:6px; min-height:14px; }
 
-  #ranking { display:flex; flex-direction:column; gap:10px; }
-  .linha-rank { display:grid; grid-template-columns:24px 1fr 70px 70px; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
-  .linha-rank:last-child { border-bottom:none; }
-  .linha-rank .pos { color:var(--text-dim); font-size:12px; }
-  .linha-rank .nome { font-weight:600; }
-  .linha-rank .num { text-align:right; font-family:"IBM Plex Mono", monospace; font-size:13px; }
-  .linha-rank .num.tempo-critico { color:var(--red); }
-  .linha-rank .num.tempo-atencao { color:var(--amber); }
-  .cabecalho-rank { display:grid; grid-template-columns:24px 1fr 70px 70px; gap:10px; font-size:11px; color:var(--text-dim); padding-bottom:6px; border-bottom:1px solid var(--line); margin-bottom:4px; }
-  .cabecalho-rank .num { text-align:right; }
+  .subtitulo-lista { font-size:13px; font-weight:600; color:var(--text-dim); margin:8px 0 8px; }
+  #lista { flex:1; min-height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:6px; }
+  #lista::-webkit-scrollbar { width:8px; }
+  #lista::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
+  .item-lista { flex-shrink:0; background:var(--panel-2); border-left:4px solid var(--green); border-radius:0 8px 8px 0; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .item-lista.atencao { border-left-color:var(--amber); }
+  .item-lista.critico { border-left-color:var(--red); }
+  .il-conta { font-size:11.5px; color:var(--text-dim); font-weight:600; text-transform:uppercase; }
+  .il-texto { font-size:14.5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .il-tempo { font-family:"IBM Plex Mono", monospace; font-size:16px; font-weight:600; white-space:nowrap; color:var(--green); }
+  .il-tempo.atencao { color:var(--amber); } .il-tempo.critico { color:var(--red); }
+  .vazio { color:var(--text-dim); font-size:13px; padding:10px 0; }
 
-  .rodape-nota { margin-top:20px; font-size:11.5px; color:var(--text-dim); text-align:center; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .rodape-nota { margin-top:12px; font-size:11.5px; color:var(--text-dim); text-align:center; display:flex; justify-content:center; align-items:center; gap:6px; }
   .ponto-vivo { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pisca 1.6s infinite; }
   @keyframes pisca { 0%,100%{opacity:1;} 50%{opacity:.3;} }
-  .erro-conexao { color:var(--red); text-align:center; padding:14px; font-size:13px; }
+  .erro-conexao { color:var(--red); text-align:center; padding:6px; font-size:13px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bolha.critico, .alerta.critico .ponto { animation:none; }
+  }
 </style>
 </head>
 <body>
@@ -94,123 +137,297 @@
 
 <div id="aviso-erro"></div>
 
-<div class="status-geral">
-  <div class="bolha" id="bolha-status"></div>
+<div class="alerta" id="alerta">
+  <div class="ponto"></div>
   <div>
-    <div class="titulo" id="titulo-status">Carregando...</div>
-    <div class="detalhe" id="detalhe-status"></div>
+    <div class="titulo" id="alerta-titulo"></div>
+    <div class="detalhe" id="alerta-detalhe"></div>
   </div>
-</div>
-
-<div class="kpis">
-  <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor mono" id="kpi-total">—</div></div>
-  <div class="kpi"><div class="rotulo">Respondidas por IA</div><div class="valor ok mono" id="kpi-ia">—</div></div>
-  <div class="kpi"><div class="rotulo">Foram para humanos</div><div class="valor humano mono" id="kpi-humano">—</div></div>
-  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor alerta mono" id="kpi-pendente">—</div></div>
-  <div class="kpi"><div class="rotulo">Contas com atraso crítico</div><div class="valor alerta mono" id="kpi-criticas">—</div></div>
 </div>
 
 <div class="grid-principal">
-  <div class="painel">
-    <h2>Perguntas por hora (hoje)</h2>
-    <div id="grafico"></div>
+  <!-- Esquerda: como está o dia -->
+  <div class="coluna">
+    <div class="kpis">
+      <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor" id="kpi-total">—</div></div>
+      <div class="kpi"><div class="rotulo">Respondidas por IA</div><div class="valor ok" id="kpi-ia">—</div><div class="sub" id="kpi-ia-sub"></div></div>
+      <div class="kpi"><div class="rotulo">Foram para humanos</div><div class="valor humano" id="kpi-humano">—</div><div class="sub" id="kpi-humano-sub"></div></div>
+      <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor alerta-num" id="kpi-pendente">—</div></div>
+      <div class="kpi"><div class="rotulo">Tempo médio humano</div><div class="valor" id="kpi-tempo">—</div><div class="sub">para responder, hoje</div></div>
+      <div class="kpi"><div class="rotulo">Contas críticas (+30 min)</div><div class="valor alerta-num" id="kpi-criticas">—</div></div>
+    </div>
+
+    <div class="painel painel-grafico">
+      <div class="painel-cabecalho">
+        <h2>Perguntas por hora — hoje</h2>
+        <div class="legenda">
+          <span><span class="q" style="background:var(--green);"></span> IA</span>
+          <span><span class="q" style="background:var(--amber);"></span> Humano</span>
+          <span><span class="q" style="background:var(--red);"></span> Pendente</span>
+          <span><span class="q" style="background:var(--gray);"></span> Outros</span>
+        </div>
+      </div>
+      <div id="grafico"></div>
+    </div>
   </div>
 
-  <div class="painel">
-    <h2>Contas que precisam de atenção agora</h2>
-    <div class="cabecalho-rank"><span></span><span>Conta</span><span class="num">Pendentes</span><span class="num">Espera</span></div>
-    <div id="ranking"></div>
+  <!-- Direita: o que precisa de ação -->
+  <div class="painel painel-acao">
+    <div class="painel-cabecalho">
+      <h2>Contas com pendência — ao vivo</h2>
+      <div class="legenda">
+        <span><span class="q" style="background:var(--green); border-radius:50%;"></span> até 15 min</span>
+        <span><span class="q" style="background:var(--amber); border-radius:50%;"></span> 15–30 min</span>
+        <span><span class="q" style="background:var(--red); border-radius:50%;"></span> +30 min</span>
+      </div>
+    </div>
+    <div id="bolhas"></div>
+    <div class="bolhas-mais" id="bolhas-mais"></div>
+    <div class="subtitulo-lista">Perguntas esperando resposta</div>
+    <div id="lista"></div>
   </div>
 </div>
 
-<div class="rodape-nota"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 8 segundos</div>
+<div class="rodape-nota"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 8 segundos · para responder use a tela /pre-venda</div>
 
 <script>
+  // ---------- Configuração ----------
+  const INTERVALO_BUSCA_MS = 8000;       // busca dados novos no servidor
+  const INTERVALO_TELA_MS = 1000;        // recalcula tempos e cores
+  const LIMITE_VOLUME_ALTO = 15;         // pendentes a partir disso = alerta amarelo
+  const ROLAGEM_AUTOMATICA = true;       // lista rola sozinha (TV sem mouse)
+  const VELOCIDADE_ROLAGEM = 0.4;        // pixels por quadro
+  const PAUSA_NAS_PONTAS_MS = 4000;
+  const PAUSA_APOS_INTERACAO_MS = 20000;
+  const FUSO = "America/Sao_Paulo";
+
+  // ---------- Utilitários ----------
+  function escaparHtml(texto) {
+    // Texto vem de clientes do Mercado Livre: nunca inserir cru no HTML
+    return String(texto ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+
+  // Datas vêm do banco em UTC "cru" (sem fuso): marcamos como UTC antes de usar
+  function parseDataUTC(isoString) {
+    if (!isoString) return new Date();
+    const temFuso = /([zZ]|[+-]\d{2}:?\d{2})$/.test(isoString);
+    const data = new Date(temFuso ? isoString : isoString + "Z");
+    return isNaN(data.getTime()) ? new Date() : data;
+  }
+
+  const minutosEsperando = item => Math.max(0, (Date.now() - parseDataUTC(item.recebida_em)) / 60000);
+
+  function formatarTempo(min) {
+    min = Math.floor(min);
+    if (min < 1) return "agora";
+    if (min < 60) return min + " min";
+    return Math.floor(min / 60) + "h" + (min % 60).toString().padStart(2, "0") + "min";
+  }
+
+  const classeUrgencia = min => (min > 30 ? "critico" : min > 15 ? "atencao" : "leve");
+  const pct = (parte, total) => (total ? Math.round((parte / total) * 100) + "%" : "—");
+  const setTexto = (id, valor) => { document.getElementById(id).textContent = valor; };
+
+  // ---------- Relógio (sempre horário de Brasília) ----------
   function atualizarRelogio() {
     const agora = new Date();
-    document.getElementById("relogio-hora").textContent =
-      agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
-    document.getElementById("relogio-data").textContent =
-      agora.toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric" });
+    setTexto("relogio-hora", agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit", timeZone:FUSO }));
+    setTexto("relogio-data", agora.toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric", timeZone:FUSO }));
   }
   setInterval(atualizarRelogio, 1000);
   atualizarRelogio();
 
-  function formatarTempo(min) {
-    if (min < 1) return "< 1 min";
-    if (min < 60) return Math.round(min) + " min";
-    return Math.floor(min / 60) + "h" + Math.round(min % 60).toString().padStart(2, "0");
+  // ---------- Estado ----------
+  let dadosGerais = null;   // /api/pre-venda/painel-geral
+  let fila = null;          // /api/pre-venda/fila (null = ainda não carregou / falhou)
+
+  // Agrupa a fila por conta (ignorando maiúscula/minúscula), pela pergunta mais antiga
+  function agruparPorConta(itens) {
+    const porConta = {};
+    itens.forEach(item => {
+      const chave = String(item.conta || "sem conta").trim().toLowerCase();
+      const min = minutosEsperando(item);
+      if (!porConta[chave]) porConta[chave] = { nome: item.conta || "Sem conta", min: 0, qtd: 0 };
+      porConta[chave].min = Math.max(porConta[chave].min, min);
+      porConta[chave].qtd++;
+    });
+    return Object.values(porConta).sort((a, b) => b.min - a.min);
   }
 
-  async function carregarDados() {
-    const resposta = await fetch("/api/pre-venda/painel-geral");
-    if (!resposta.ok) throw new Error("status " + resposta.status);
-    return resposta.json();
+  // ---------- Renderização ----------
+  function renderizarIndicadoresEAlerta() {
+    const g = dadosGerais ? dadosGerais.geral : null;
+    const contas = fila ? agruparPorConta(fila) : null;
+
+    // Pendentes e críticas: ao vivo pela fila; se ela falhar, usa o número do servidor
+    const pendentes = fila ? fila.length : (g ? g.pendentes : null);
+    const criticas = contas ? contas.filter(c => c.min > 30).length : (g ? g.contas_criticas : null);
+
+    if (g) {
+      setTexto("kpi-total", g.total_hoje);
+      setTexto("kpi-ia", pct(g.ia, g.total_hoje));
+      setTexto("kpi-ia-sub", g.total_hoje ? `${g.ia} de ${g.total_hoje}` : "");
+      setTexto("kpi-humano", pct(g.humano, g.total_hoje));
+      setTexto("kpi-humano-sub", g.total_hoje ? `${g.humano} de ${g.total_hoje}` : "");
+      setTexto("kpi-tempo", g.tempo_medio_humano_min == null ? "—" : formatarTempo(g.tempo_medio_humano_min));
+    }
+    setTexto("kpi-pendente", pendentes ?? "—");
+    setTexto("kpi-criticas", criticas ?? "—");
+
+    const alerta = document.getElementById("alerta");
+    if (criticas > 0) {
+      alerta.className = "alerta critico";
+      setTexto("alerta-titulo", `Atenção: ${criticas} conta(s) com espera crítica (+30 min)`);
+      setTexto("alerta-detalhe", "Responda pela tela de Pré-venda o quanto antes.");
+    } else if (pendentes >= LIMITE_VOLUME_ALTO) {
+      alerta.className = "alerta atencao";
+      setTexto("alerta-titulo", "Volume acima do normal");
+      setTexto("alerta-detalhe", `${pendentes} pergunta(s) esperando — nada crítico ainda, mas de olho.`);
+    } else {
+      alerta.className = "alerta"; // tudo normal: faixa some
+    }
   }
 
-  function renderizar(dados) {
-    const g = dados.geral;
-    document.getElementById("kpi-total").textContent = g.total_hoje;
-    document.getElementById("kpi-ia").textContent = g.total_hoje ? Math.round(g.ia / g.total_hoje * 100) + "%" : "—";
-    document.getElementById("kpi-humano").textContent = g.total_hoje ? Math.round(g.humano / g.total_hoje * 100) + "%" : "—";
-    document.getElementById("kpi-pendente").textContent = g.pendentes;
-    document.getElementById("kpi-criticas").textContent = g.contas_criticas;
+  function renderizarGrafico() {
+    if (!dadosGerais) return;
+    const horas = dadosGerais.por_hora || [];
+    const horaAtual = dadosGerais.hora_atual;
+    const maximo = Math.max(1, ...horas.map(h => h.quantidade || 0));
 
-    const bolha = document.getElementById("bolha-status");
-    const titulo = document.getElementById("titulo-status");
-    const detalhe = document.getElementById("detalhe-status");
-    if (g.contas_criticas === 0 && g.pendentes < 15) {
-      bolha.className = "bolha ok";
-      titulo.textContent = "Sistema operando normal";
-      detalhe.textContent = g.pendentes + " pergunta(s) na fila humana, nenhuma com atraso crítico.";
-    } else if (g.contas_criticas > 0) {
-      bolha.className = "bolha critico";
-      titulo.textContent = "Atenção: " + g.contas_criticas + " conta(s) com espera crítica (+30 min)";
-      detalhe.textContent = "Verifique a Tela de Ação pra responder o quanto antes.";
-    } else {
-      bolha.className = "bolha atencao";
-      titulo.textContent = "Volume acima do normal";
-      detalhe.textContent = g.pendentes + " pergunta(s) esperando — nada crítico ainda, mas de olho.";
-    }
+    document.getElementById("grafico").innerHTML = horas.map(h => {
+      const partes = [
+        ["ia", h.ia || 0], ["humano", h.humano || 0],
+        ["pendente", h.pendente || 0], ["outros", h.outros || 0],
+      ];
+      // Compatibilidade: se o servidor ainda não mandar o detalhamento, mostra o total como "outros"
+      const soma = partes.reduce((t, p) => t + p[1], 0);
+      if (soma === 0 && h.quantidade) partes[3][1] = h.quantidade;
 
-    const ranking = document.getElementById("ranking");
-    const top = dados.ranking_pendencias.slice(0, 8);
-    if (top.length === 0) {
-      ranking.innerHTML = '<div style="color:var(--text-dim); font-size:13px; padding:10px 0;">Nenhuma conta com pendência agora. 🎉</div>';
-    } else {
-      ranking.innerHTML = top.map((c, i) => {
-        const classe = c.maior_espera_min > 30 ? "tempo-critico" : c.maior_espera_min > 15 ? "tempo-atencao" : "";
-        return `<div class="linha-rank">
-          <span class="pos">${i + 1}</span>
-          <span class="nome">${c.conta}</span>
-          <span class="num">${c.pendentes}</span>
-          <span class="num ${classe}">${formatarTempo(c.maior_espera_min)}</span>
-        </div>`;
-      }).join("");
-    }
+      const classes = ["hora-col"];
+      if (horaAtual != null && h.hora === horaAtual) classes.push("agora");
+      if (horaAtual != null && h.hora > horaAtual) classes.push("futuro");
 
-    const maxQtd = Math.max(1, ...dados.por_hora.map(h => h.quantidade));
-    const grafico = document.getElementById("grafico");
-    grafico.innerHTML = dados.por_hora.map(h => {
-      const altura = Math.round((h.quantidade / maxQtd) * 160) || 2;
-      return `<div class="barra-hora"><div class="barra" style="height:${altura}px;"></div><span class="rotulo-hora">${h.hora}h</span></div>`;
+      // A pilha usa column-reverse: primeiro segmento fica embaixo
+      const segmentos = partes.filter(p => p[1] > 0)
+        .map(([tipo, v]) => `<div class="seg ${tipo}" style="height:${(v / maximo) * 100}%" title="${v} ${tipo}"></div>`).join("");
+      return `<div class="${classes.join(" ")}">
+        <span class="qtd">${h.quantidade || ""}</span>
+        <div class="pilha">${segmentos}</div>
+        <div class="base"></div>
+        <span class="rotulo-hora">${h.hora === horaAtual ? "agora" : h.hora + "h"}</span>
+      </div>`;
     }).join("");
   }
 
-  async function atualizar() {
-    try {
-      const dados = await carregarDados();
-      document.getElementById("aviso-erro").innerHTML = "";
-      renderizar(dados);
-    } catch (erro) {
-      document.getElementById("aviso-erro").innerHTML =
-        '<div class="erro-conexao">Não consegui atualizar os dados agora — tentando de novo em instantes.</div>';
-      console.error(erro);
+  function renderizarBolhasELista() {
+    const bolhas = document.getElementById("bolhas");
+    const mais = document.getElementById("bolhas-mais");
+    const lista = document.getElementById("lista");
+
+    if (fila === null) return; // sem dados ainda: mantém o que já está na tela
+    if (fila.length === 0) {
+      bolhas.innerHTML = '<div class="vazio" style="grid-column:1/-1;">Nenhuma conta com pendência agora. 🎉</div>';
+      mais.textContent = "";
+      lista.innerHTML = '<div class="vazio">Nenhuma pergunta esperando resposta.</div>';
+      return;
     }
+
+    bolhas.innerHTML = agruparPorConta(fila).map(c => `
+      <div class="bolha ${classeUrgencia(c.min)}" title="${escaparHtml(c.nome)} — ${c.qtd} pendente(s)">
+        <span class="b-nome">${escaparHtml(c.nome)}</span>
+        <span class="b-tempo">${formatarTempo(c.min).replace(" min", "min")}</span>
+        <span class="b-qtd">${c.qtd} ${c.qtd === 1 ? "pergunta" : "perguntas"}</span>
+      </div>`).join("");
+
+    // Conta quantas bolhas ficaram fora da área visível
+    requestAnimationFrame(() => {
+      const limite = bolhas.getBoundingClientRect().bottom;
+      const ocultas = Array.from(bolhas.children).filter(b => b.getBoundingClientRect().top >= limite - 1).length;
+      mais.textContent = ocultas > 0 ? `+${ocultas} conta(s) — todas aparecem na lista abaixo` : "";
+    });
+
+    const ordenada = [...fila].sort((a, b) => parseDataUTC(a.recebida_em) - parseDataUTC(b.recebida_em));
+    lista.innerHTML = ordenada.map(item => {
+      const min = minutosEsperando(item);
+      const classe = classeUrgencia(min);
+      return `<div class="item-lista ${classe}">
+        <div style="min-width:0;">
+          <div class="il-conta">${escaparHtml(item.conta)}</div>
+          <div class="il-texto">${escaparHtml(item.texto)}</div>
+        </div>
+        <div class="il-tempo ${classe}">${formatarTempo(min)}</div>
+      </div>`;
+    }).join("");
+  }
+
+  function renderizarTudo() {
+    renderizarIndicadoresEAlerta();
+    renderizarBolhasELista();
+  }
+
+  // ---------- Busca no servidor ----------
+  async function buscarJson(url) {
+    const resposta = await fetch(url, { cache: "no-store" });
+    if (!resposta.ok) throw new Error(url + " → status " + resposta.status);
+    return resposta.json();
+  }
+
+  async function atualizar() {
+    // As duas buscas são independentes: se uma falhar, a outra parte da tela continua viva
+    const [geral, filaNova] = await Promise.allSettled([
+      buscarJson("/api/pre-venda/painel-geral"),
+      buscarJson("/api/pre-venda/fila"),
+    ]);
+    const falhas = [];
+    if (geral.status === "fulfilled" && geral.value && geral.value.geral) dadosGerais = geral.value;
+    else { falhas.push("indicadores"); console.error(geral.reason); }
+    if (filaNova.status === "fulfilled" && Array.isArray(filaNova.value)) fila = filaNova.value;
+    else { falhas.push("fila"); console.error(filaNova.reason); }
+
+    document.getElementById("aviso-erro").innerHTML = falhas.length
+      ? `<div class="erro-conexao">Não consegui atualizar (${falhas.join(" e ")}) agora — mostrando os últimos dados, tentando de novo em instantes.</div>`
+      : "";
+    renderizarGrafico();
+    renderizarTudo();
   }
 
   atualizar();
-  setInterval(atualizar, 8000);
+  setInterval(atualizar, INTERVALO_BUSCA_MS);
+  setInterval(renderizarTudo, INTERVALO_TELA_MS); // tempos e cores sem esperar o próximo fetch
+
+  // ---------- Rolagem automática da lista ----------
+  (function iniciarRolagemAutomatica() {
+    if (!ROLAGEM_AUTOMATICA) return;
+    const lista = document.getElementById("lista");
+    let pausadoAte = Date.now() + PAUSA_NAS_PONTAS_MS;
+    let mouseEmCima = false;
+    let posicao = 0;
+
+    lista.addEventListener("mouseenter", () => { mouseEmCima = true; });
+    lista.addEventListener("mouseleave", () => { mouseEmCima = false; posicao = lista.scrollTop; });
+    ["wheel", "touchstart", "keydown"].forEach(ev =>
+      lista.addEventListener(ev, () => { pausadoAte = Date.now() + PAUSA_APOS_INTERACAO_MS; }, { passive: true }));
+
+    function passo() {
+      const agora = Date.now();
+      const maximo = lista.scrollHeight - lista.clientHeight;
+      if (maximo <= 2) {
+        posicao = 0;
+      } else if (!mouseEmCima && agora >= pausadoAte) {
+        if (Math.abs(posicao - lista.scrollTop) > 2) posicao = lista.scrollTop;
+        posicao += VELOCIDADE_ROLAGEM;
+        if (posicao >= maximo) {
+          lista.scrollTop = maximo;
+          pausadoAte = agora + PAUSA_NAS_PONTAS_MS * 2;
+          setTimeout(() => { lista.scrollTo({ top: 0, behavior: "smooth" }); posicao = 0; }, PAUSA_NAS_PONTAS_MS);
+        } else {
+          lista.scrollTop = posicao;
+        }
+      }
+      requestAnimationFrame(passo);
+    }
+    requestAnimationFrame(passo);
+  })();
 </script>
 
 </body>
