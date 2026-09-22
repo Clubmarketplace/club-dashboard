@@ -217,11 +217,15 @@
         return;
       }
 
-      // Agrupa por conta, ordenado pela conta com pedido mais recente primeiro
+      // Agrupa por conta (ignorando maiúscula/minúscula e espaços, pra
+      // "Velasco" e "velasco" não virarem grupos separados por engano),
+      // ordenado pela conta com pedido mais recente primeiro
       const porConta = {};
+      const nomeExibicaoPorChave = {};
       filtradas.forEach(s => {
-        if (!porConta[s.conta]) porConta[s.conta] = [];
-        porConta[s.conta].push(s);
+        const chave = s.conta.trim().toLowerCase();
+        if (!porConta[chave]) { porConta[chave] = []; nomeExibicaoPorChave[chave] = s.conta.trim(); }
+        porConta[chave].push(s);
       });
       const contasOrdenadas = Object.keys(porConta).sort((a, b) => {
         const maisRecenteA = Math.max(...porConta[a].map(s => parseDataUTC(s.criado_em).getTime()));
@@ -229,9 +233,10 @@
         return maisRecenteB - maisRecenteA;
       });
 
-      container.innerHTML = contasOrdenadas.map(conta => {
-        const itens = porConta[conta].sort((a, b) => parseDataUTC(b.criado_em) - parseDataUTC(a.criado_em));
-        const recolhido = gruposRecolhidos.has(conta) ? "recolhido" : "";
+      container.innerHTML = contasOrdenadas.map(chave => {
+        const conta = nomeExibicaoPorChave[chave];
+        const itens = porConta[chave].sort((a, b) => parseDataUTC(b.criado_em) - parseDataUTC(a.criado_em));
+        const recolhido = gruposRecolhidos.has(chave) ? "recolhido" : "";
         const linhas = itens.map(s => {
           const statusHtml = s.confirmado_por
             ? `<span class="cc-status-confirmado">✓ <b>${s.confirmado_por}</b><br>${formatarData(s.confirmado_em)}</span>`
@@ -248,7 +253,7 @@
         }).join("");
 
         return `
-          <div class="cc-grupo ${recolhido}" data-conta="${conta}">
+          <div class="cc-grupo ${recolhido}" data-conta="${chave}">
             <div class="cc-grupo-cabecalho">
               <span class="cc-grupo-nome">${conta} <span class="cc-grupo-contagem">${itens.length} pedido${itens.length > 1 ? "s" : ""}</span></span>
               <span class="cc-grupo-seta">▾</span>
