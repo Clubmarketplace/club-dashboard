@@ -76,22 +76,26 @@ function renderizarTabela(contas) {
 
   for (const conta of contas) {
     const linha = document.createElement("tr");
-    const botaoAcao = conta.conectada
+    const botaoDesconectar = conta.conectada
       ? `<button class="cmx-botao-link-perigo" data-desconectar="${conta.id}" data-apelido="${conta.apelido}">Desconectar</button>`
-      : "—";
+      : "";
+    const botaoExcluir = `<button class="cmx-botao-link-perigo" data-excluir="${conta.id}" data-apelido="${conta.apelido}" style="margin-left: 10px;">Excluir</button>`;
     linha.innerHTML = `
       <td>${conta.apelido}</td>
       <td>${montarSeloStatus(conta)}</td>
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
-      <td>${botaoAcao}</td>
+      <td>${botaoDesconectar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
   }
 
   corpo.querySelectorAll("[data-desconectar]").forEach((botao) => {
     botao.addEventListener("click", () => desconectarConta(botao));
+  });
+  corpo.querySelectorAll("[data-excluir]").forEach((botao) => {
+    botao.addEventListener("click", () => excluirConta(botao));
   });
 }
 
@@ -123,6 +127,36 @@ async function desconectarConta(botao) {
   }
 }
 
+async function excluirConta(botao) {
+  const contaId = botao.getAttribute("data-excluir");
+  const apelido = botao.getAttribute("data-apelido");
+
+  const confirmou = window.confirm(
+    `Excluir a conta "${apelido}" por completo?\n\n` +
+    `Diferente de "Desconectar", isso apaga o registro inteiro -- não dá pra desfazer. ` +
+    `Só funciona se essa conta nunca teve devolução ou ação registrada.`
+  );
+  if (!confirmou) return;
+
+  botao.disabled = true;
+  botao.textContent = "Excluindo...";
+
+  try {
+    const resposta = await fetch(`/auth/contas/${contaId}`, { method: "DELETE" });
+    if (!resposta.ok) {
+      const dados = await resposta.json().catch(() => null);
+      throw new Error(dados && dados.detail ? dados.detail : `Falha ao excluir (status ${resposta.status})`);
+    }
+    const contas = await carregarContas();
+    renderizarTabela(contas);
+  } catch (erro) {
+    mostrarAviso(erro.message || "Não foi possível excluir essa conta. Tente novamente.");
+    console.error(erro);
+    botao.disabled = false;
+    botao.textContent = "Excluir";
+  }
+}
+
 function mostrarAviso(mensagem) {
   const aviso = document.getElementById("conectar-aviso");
   aviso.textContent = mensagem;
@@ -146,20 +180,10 @@ async function inicializar() {
     console.error(erro);
   }
 
-  document.getElementById("form-conectar").addEventListener("submit", (evento) => {
-    evento.preventDefault();
-    const apelido = document.getElementById("input-apelido").value.trim();
-    if (!apelido) return;
-    // Redireciona pro fluxo de autorização do Mercado Livre. Quando o
-    // dono da conta autorizar, o Mercado Livre chama nosso /auth/callback
-    // e a conta passa a aparecer na lista acima automaticamente.
-    window.location.href = `/auth/conectar/${encodeURIComponent(apelido)}`;
-  });
-
-  document.getElementById("btn-gerar-link").addEventListener("click", async () => {
+  async function gerarLink() {
     const apelido = document.getElementById("input-apelido").value.trim();
     if (!apelido) {
-      mostrarAviso("Digite o apelido da conta antes de gerar o link.");
+      mostrarAviso("Digite o apelido da conta antes de conectar.");
       return;
     }
     try {
@@ -174,7 +198,17 @@ async function inicializar() {
       mostrarAviso("Não foi possível gerar o link. Verifique se o backend está rodando.");
       console.error(erro);
     }
+  }
+
+  // Form sem botão de submit visível, mas mantém o Enter no campo de
+  // texto funcionando -- previne o recarregamento padrão e reusa a
+  // mesma função do botão único.
+  document.getElementById("form-conectar").addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    gerarLink();
   });
+
+  document.getElementById("btn-gerar-link").addEventListener("click", gerarLink);
 
   document.getElementById("btn-copiar-link-gerado").addEventListener("click", async () => {
     const campo = document.getElementById("link-gerado-valor");
