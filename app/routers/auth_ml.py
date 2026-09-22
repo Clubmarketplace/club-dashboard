@@ -18,7 +18,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Conta, EmpresaPlanejada
+from app.models import Conta, EmpresaPlanejada, Devolucao, AcaoRegistrada
 from app.ml_client import (
     MLAuthError,
     montar_url_autorizacao,
@@ -252,3 +252,41 @@ def desconectar_conta(conta_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "desconectada", "apelido": conta.apelido}
+
+
+@router.delete("/contas/{conta_id}")
+def excluir_conta(conta_id: int, db: Session = Depends(get_db)):
+    """
+    Apaga uma conta cadastrada por completo -- id, apelido, tokens,
+    tudo. Diferente de "Desconectar" (que só limpa o token e mantém a
+    linha, preservando o histórico de devoluções/ações dela), isso
+    remove o registro inteiro. Serve pra casos como uma conta
+    duplicada ou criada com o ml_user_id errado por engano, que não
+    deveria continuar aparecendo na lista.
+
+    Por segurança, só permite excluir contas que nunca tiveram
+    devolução ou ação registrada -- se já existe histórico real
+    vinculado a essa conta, pede pra usar "Desconectar" em vez de
+    excluir, pra não apagar dado nenhum sem querer.
+    """
+    conta = db.query(Conta).filter(Conta.id == conta_id).first()
+    if conta is None:
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
+
+    tem_devolucoes = db.query(Devolucao).filter(Devolucao.conta_id == conta_id).first() is not None
+    tem_acoes = db.query(AcaoRegistrada).filter(AcaoRegistrada.conta_id == conta_id).first() is not None
+    if tem_devolucoes or tem_acoes:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f'A conta "{conta.apelido}" já tem histórico registrado (devoluções e/ou ações) -- '
+                f'excluir apagaria esses dados. Use "Desconectar" em vez disso: limpa o token, mas '
+                f'preserva o histórico.'
+            ),
+        )
+
+    apelido = conta.apelido
+    db.delete(conta)
+    db.commit()
+
+    return {"status": "excluida", "apelido": apelido}
