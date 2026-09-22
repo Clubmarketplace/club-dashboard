@@ -4,6 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal
 from datetime import datetime, timedelta
+from sqlalchemy import func
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
@@ -255,7 +256,7 @@ def pagina_meus_cancelamentos(request: Request):
 
         solicitacoes = (
             db.query(SolicitacaoCancelamento)
-            .filter(SolicitacaoCancelamento.conta == usuario.conta_vinculada)
+            .filter(func.lower(SolicitacaoCancelamento.conta) == usuario.conta_vinculada.strip().lower())
             .order_by(SolicitacaoCancelamento.confirmado_por.is_(None).desc(), SolicitacaoCancelamento.criado_em.desc())
             .all()
         )
