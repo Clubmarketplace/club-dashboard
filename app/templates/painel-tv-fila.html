@@ -13,6 +13,7 @@
     --text:#eef3f7; --text-dim:#8ea0b0;
     --amber:#f0a93d; --amber-dim:#3d2f14;
     --green:#38c98c; --green-dim:#12301f;
+    --blue:#5aa9e6; --blue-dim:#132a3d;
     --red:#e8615a; --red-dim:#3a1f1e;
     font-family:"Space Grotesk", sans-serif;
   }
@@ -37,6 +38,7 @@
   .resumo .item .rotulo { font-size:12px; color:var(--text-dim); margin-top:2px; }
   .resumo .item.critico .valor { color:var(--red); }
   .resumo .item.atencao .valor { color:var(--amber); }
+  .resumo .item.ok .valor { color:var(--green); }
 
   /* ---------- Bolhas por conta ---------- */
   .bolhas-bloco { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 18px; margin-bottom:14px; }
@@ -46,7 +48,7 @@
   .legenda span { display:flex; align-items:center; gap:5px; }
   .legenda .ponto { width:8px; height:8px; border-radius:50%; display:inline-block; }
   /* ~12 bolhas por linha numa TV Full HD; em telas menores se ajusta sozinho */
-  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(96px, 7.2vw, 150px), 1fr)); gap:12px; max-height:34vh; overflow:hidden; }
+  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(96px, 7.2vw, 150px), 1fr)); gap:12px; max-height:34vh; overflow:hidden; padding:6px; /* folga pro pulsar não ser cortado */ }
   .bolha {
     aspect-ratio:1; border-radius:50%; border:3px solid;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
@@ -57,7 +59,8 @@
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
   .bolha .b-tempo { font-family:"IBM Plex Mono", monospace; font-size:clamp(13px, 1.05vw, 19px); font-weight:600; }
   .bolha .b-qtd { font-size:clamp(9px, .65vw, 11.5px); opacity:.85; }
-  .bolha.leve    { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
+  .bolha.leve    { background:var(--blue-dim);  border-color:var(--blue);  color:#cfe6fa; }
+  .bolha.ok      { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
   .bolha.atencao { background:var(--amber-dim); border-color:var(--amber); color:#fbe0b0; }
   .bolha.critico { background:var(--red-dim);   border-color:var(--red);   color:#ffd0cc; animation:pulsar 1.8s ease-in-out infinite; }
   @keyframes pulsar { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
@@ -79,18 +82,24 @@
   #fila::-webkit-scrollbar { width:8px; }
   #fila::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
   .item-fila {
-    background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--green);
+    background:var(--panel); border:1px solid var(--line); border-left:5px solid var(--blue);
     border-radius:10px; padding:16px 20px; flex-shrink:0;
     display:flex; justify-content:space-between; align-items:center; gap:16px;
   }
   .item-fila.atencao { border-left-color:var(--amber); }
+  .item-fila.ok { border-left-color:var(--green); background:linear-gradient(90deg, var(--green-dim), var(--panel) 40%); }
+  .if-resposta { font-size:13.5px; color:var(--text-dim); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+  .separador-lista { flex-shrink:0; font-size:12px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin:10px 0 2px; display:flex; align-items:center; gap:10px; }
+  .separador-lista::after { content:""; flex:1; height:1px; background:var(--line); }
   .item-fila.critico { border-left-color:var(--red); background:linear-gradient(90deg, var(--red-dim), var(--panel) 40%); }
   .if-esquerda { display:flex; flex-direction:column; gap:4px; min-width:0; }
   .if-conta { font-size:13px; color:var(--text-dim); font-weight:600; text-transform:uppercase; letter-spacing:.02em; }
   .if-texto { font-size:17px; }
   .if-sku { font-size:11.5px; color:var(--text-dim); }
   .if-direita { display:flex; align-items:center; gap:20px; flex-shrink:0; }
-  .if-tempo { font-family:"IBM Plex Mono", monospace; font-size:22px; font-weight:600; text-align:right; color:var(--green); }
+  .if-tempo { font-family:"IBM Plex Mono", monospace; font-size:22px; font-weight:600; text-align:right; color:var(--blue); }
+  .if-tempo.ok { color:var(--green); font-size:18px; }
+  .if-tempo .sub-tempo { display:block; font-size:11px; color:var(--text-dim); font-weight:400; }
   .if-tempo.atencao { color:var(--amber); }
   .if-tempo.critico { color:var(--red); }
   .if-tempo .rotulo-tempo { display:block; font-size:10px; color:var(--text-dim); font-weight:400; text-transform:uppercase; }
@@ -127,15 +136,17 @@
   <div class="item"><div class="valor mono" id="res-total">—</div><div class="rotulo">Esperando resposta</div></div>
   <div class="item atencao"><div class="valor mono" id="res-atencao">—</div><div class="rotulo">Entre 15–30 min</div></div>
   <div class="item critico"><div class="valor mono" id="res-critico">—</div><div class="rotulo">Mais de 30 min</div></div>
+  <div class="item ok"><div class="valor mono" id="res-respondidas">—</div><div class="rotulo">Respondidas hoje</div></div>
 </div>
 
 <div class="bolhas-bloco">
   <div class="bolhas-cabecalho">
-    <h2>Contas com pendência agora</h2>
+    <h2>Contas de hoje — pendências e em dia</h2>
     <div class="legenda">
-      <span><span class="ponto" style="background:var(--green);"></span> até 15 min</span>
+      <span><span class="ponto" style="background:var(--blue);"></span> pendente até 15 min</span>
       <span><span class="ponto" style="background:var(--amber);"></span> 15–30 min</span>
       <span><span class="ponto" style="background:var(--red);"></span> +30 min</span>
+      <span><span class="ponto" style="background:var(--green);"></span> em dia</span>
     </div>
   </div>
   <div id="bolhas"></div>
@@ -200,6 +211,7 @@
 
   // ---------- Estado ----------
   let ultimaFila = [];
+  let dadosPainel = null; // /api/pre-venda/painel-geral: contas de hoje e respondidas recentes
   let termoBusca = "";
 
   document.getElementById("busca-conta").addEventListener("input", (e) => {
@@ -207,10 +219,36 @@
     renderizarTudo();
   });
 
-  function filaFiltrada() {
-    return termoBusca
-      ? ultimaFila.filter(item => String(item.conta || "").toLowerCase().includes(termoBusca))
-      : ultimaFila;
+  const casaBusca = item => !termoBusca || String(item.conta || "").toLowerCase().includes(termoBusca);
+  const filaFiltrada = () => ultimaFila.filter(casaBusca);
+
+  const FUSO = "America/Sao_Paulo";
+  const horaBR = iso => parseDataUTC(iso).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:FUSO });
+
+  // Contas com pergunta hoje e nada pendente = "em dia" (verde)
+  function contasEmDia(pendentesPorChave) {
+    const contas = (dadosPainel && dadosPainel.contas_hoje) || [];
+    return contas
+      .filter(c => casaBusca(c) && !pendentesPorChave.has(String(c.conta || "").trim().toLowerCase()))
+      .sort((a, b) => (b.respondidas_hoje || 0) - (a.respondidas_hoje || 0));
+  }
+
+  function respondidasFiltradas() {
+    return ((dadosPainel && dadosPainel.respondidas_recentes) || []).filter(casaBusca);
+  }
+
+  function htmlItemRespondida(r) {
+    const minutos = (parseDataUTC(r.respondida_em) - parseDataUTC(r.recebida_em)) / 60000;
+    return `<div class="item-fila ok">
+      <div class="if-esquerda">
+        <span class="if-conta">${escaparHtml(r.conta)}</span>
+        <span class="if-texto">${escaparHtml(r.texto)}</span>
+        ${r.resposta ? `<span class="if-resposta">↳ ${escaparHtml(r.resposta)}</span>` : ""}
+      </div>
+      <div class="if-direita">
+        <div class="if-tempo ok"><span class="rotulo-tempo">Respondida · ${escaparHtml(r.resolvida_por || "—")}</span>✓ ${horaBR(r.respondida_em)}<span class="sub-tempo">levou ${formatarTempo(Math.max(0, minutos))}</span></div>
+      </div>
+    </div>`;
   }
 
   // ---------- Renderização ----------
@@ -228,8 +266,10 @@
   function renderizarBolhas(fila) {
     const container = document.getElementById("bolhas");
     const aviso = document.getElementById("bolhas-mais");
+    const chavesPendentes = new Set(fila.map(i => String(i.conta || "sem conta").trim().toLowerCase()));
+    const emDia = contasEmDia(chavesPendentes);
 
-    if (fila.length === 0) {
+    if (fila.length === 0 && emDia.length === 0) {
       container.innerHTML = termoBusca
         ? `<span style="color:var(--text-dim); font-size:13px; grid-column:1/-1;">Nenhuma conta encontrada pra "${escaparHtml(termoBusca)}".</span>`
         : '<span style="color:var(--text-dim); font-size:13px; grid-column:1/-1;">Nenhuma conta com pendência agora. 🎉</span>';
@@ -253,6 +293,11 @@
         <span class="b-nome">${escaparHtml(info.nome)}</span>
         <span class="b-tempo">${formatarTempo(info.min).replace(" min", "min")}</span>
         <span class="b-qtd">${info.qtd} ${info.qtd === 1 ? "pergunta" : "perguntas"}</span>
+      </div>`).join("") + emDia.map(c => `
+      <div class="bolha ok" title="${escaparHtml(c.conta)} — em dia">
+        <span class="b-nome">${escaparHtml(c.conta)}</span>
+        <span class="b-tempo">✓ em dia</span>
+        <span class="b-qtd">${c.respondidas_hoje} ${c.respondidas_hoje === 1 ? "respondida" : "respondidas"}</span>
       </div>`).join("");
 
     // Se houver mais contas do que cabe no bloco, avisa quantas ficaram de fora
@@ -266,15 +311,23 @@
 
   function renderizarLista(fila) {
     const container = document.getElementById("fila");
+    const respondidas = respondidasFiltradas();
 
-    if (fila.length === 0) {
+    if (fila.length === 0 && respondidas.length === 0) {
       container.innerHTML = termoBusca
         ? `<div class="vazio">Nenhuma conta encontrada pra "${escaparHtml(termoBusca)}".</div>`
         : '<div class="vazio"><div class="emoji">🎉</div>Nenhuma pergunta esperando resposta.</div>';
       return;
     }
 
-    container.innerHTML = fila.map(item => {
+    const blocoRespondidas = respondidas.length
+      ? `<div class="separador-lista">✓ Respondidas hoje (últimas ${respondidas.length})</div>` + respondidas.map(htmlItemRespondida).join("")
+      : "";
+    const blocoPendentes = fila.length
+      ? ""
+      : '<div class="vazio" style="padding:14px;">🎉 Nenhuma pergunta esperando resposta.</div>';
+
+    container.innerHTML = blocoPendentes + fila.map(item => {
       const min = minutosEsperando(item);
       const classe = classeUrgencia(min);
       return `<div class="item-fila ${classe}">
@@ -287,12 +340,16 @@
           <div class="if-tempo ${classe}"><span class="rotulo-tempo">Esperando</span>${formatarTempo(min)}</div>
         </div>
       </div>`;
-    }).join("");
+    }).join("") + blocoRespondidas;
   }
 
   function renderizarTudo() {
     const fila = filaFiltrada();
     renderizarResumo(ultimaFila); // totais sempre de todas as contas
+    if (dadosPainel && dadosPainel.geral) {
+      const g = dadosPainel.geral;
+      document.getElementById("res-respondidas").textContent = (g.ia || 0) + (g.humano || 0) + (g.respondida_por_fora || 0);
+    }
     renderizarBolhas(fila);
     renderizarLista(fila);
   }
@@ -310,7 +367,17 @@
     return resposta.json();
   }
 
+  async function carregarPainel() {
+    const resposta = await fetch("/api/pre-venda/painel-geral", { cache: "no-store" });
+    if (!resposta.ok) throw new Error("painel status " + resposta.status);
+    return resposta.json();
+  }
+
   async function atualizar() {
+    // Respondidas/contas de hoje são um extra: se falhar, a fila continua funcionando
+    carregarPainel()
+      .then(d => { if (d && d.geral) { dadosPainel = d; renderizarTudo(); } })
+      .catch(e => console.error(e));
     try {
       const fila = await carregarFila();
       if (!Array.isArray(fila)) throw new Error("resposta inesperada");

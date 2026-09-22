@@ -15,6 +15,7 @@
     --green:#38c98c; --green-dim:#12301f;
     --red:#e8615a; --red-dim:#3a1f1e;
     --gray:#4a5866;
+    --blue:#5aa9e6; --blue-dim:#132a3d;
     font-family:"Space Grotesk", sans-serif;
   }
   :root:not([data-theme="light"]) { color-scheme: dark; }
@@ -79,7 +80,7 @@
 
   /* ---------- Coluna direita: bolhas + lista ---------- */
   .painel-acao { flex:1; min-height:0; display:flex; flex-direction:column; }
-  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(84px, 5.6vw, 118px), 1fr)); gap:10px; max-height:36%; overflow:hidden; flex-shrink:0; }
+  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(84px, 5.6vw, 118px), 1fr)); gap:10px; max-height:36%; overflow:hidden; flex-shrink:0; padding:6px; /* folga pro pulsar não ser cortado */ }
   .bolha {
     aspect-ratio:1; border-radius:50%; border:3px solid;
     display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
@@ -90,7 +91,8 @@
     display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
   .bolha .b-tempo { font-family:"IBM Plex Mono", monospace; font-size:clamp(12px, .9vw, 16px); font-weight:600; }
   .bolha .b-qtd { font-size:clamp(9px, .6vw, 11px); opacity:.85; }
-  .bolha.leve    { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
+  .bolha.leve    { background:var(--blue-dim);  border-color:var(--blue);  color:#cfe6fa; }
+  .bolha.ok      { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
   .bolha.atencao { background:var(--amber-dim); border-color:var(--amber); color:#fbe0b0; }
   .bolha.critico { background:var(--red-dim);   border-color:var(--red);   color:#ffd0cc; animation:pulsar 1.8s ease-in-out infinite; }
   @keyframes pulsar { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
@@ -100,12 +102,18 @@
   #lista { flex:1; min-height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:6px; }
   #lista::-webkit-scrollbar { width:8px; }
   #lista::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
-  .item-lista { flex-shrink:0; background:var(--panel-2); border-left:4px solid var(--green); border-radius:0 8px 8px 0; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
+  .item-lista { flex-shrink:0; background:var(--panel-2); border-left:4px solid var(--blue); border-radius:0 8px 8px 0; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
   .item-lista.atencao { border-left-color:var(--amber); }
   .item-lista.critico { border-left-color:var(--red); }
+  .item-lista.ok { border-left-color:var(--green); background:linear-gradient(90deg, var(--green-dim), var(--panel-2) 45%); }
+  .il-resposta { font-size:12.5px; color:var(--text-dim); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
+  .il-sub { display:block; font-size:10.5px; color:var(--text-dim); font-weight:400; text-align:right; }
+  .separador-lista { flex-shrink:0; font-size:11.5px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin:8px 0 0; display:flex; align-items:center; gap:10px; }
+  .separador-lista::after { content:""; flex:1; height:1px; background:var(--line); }
   .il-conta { font-size:11.5px; color:var(--text-dim); font-weight:600; text-transform:uppercase; }
   .il-texto { font-size:14.5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .il-tempo { font-family:"IBM Plex Mono", monospace; font-size:16px; font-weight:600; white-space:nowrap; color:var(--green); }
+  .il-tempo { font-family:"IBM Plex Mono", monospace; font-size:16px; font-weight:600; white-space:nowrap; color:var(--blue); text-align:right; }
+  .il-tempo.ok { color:var(--green); }
   .il-tempo.atencao { color:var(--amber); } .il-tempo.critico { color:var(--red); }
   .vazio { color:var(--text-dim); font-size:13px; padding:10px 0; }
 
@@ -174,16 +182,17 @@
   <!-- Direita: o que precisa de ação -->
   <div class="painel painel-acao">
     <div class="painel-cabecalho">
-      <h2>Contas com pendência — ao vivo</h2>
+      <h2>Contas de hoje — ao vivo</h2>
       <div class="legenda">
-        <span><span class="q" style="background:var(--green); border-radius:50%;"></span> até 15 min</span>
+        <span><span class="q" style="background:var(--blue); border-radius:50%;"></span> até 15 min</span>
         <span><span class="q" style="background:var(--amber); border-radius:50%;"></span> 15–30 min</span>
         <span><span class="q" style="background:var(--red); border-radius:50%;"></span> +30 min</span>
+        <span><span class="q" style="background:var(--green); border-radius:50%;"></span> em dia</span>
       </div>
     </div>
     <div id="bolhas"></div>
     <div class="bolhas-mais" id="bolhas-mais"></div>
-    <div class="subtitulo-lista">Perguntas esperando resposta</div>
+    <div class="subtitulo-lista">Perguntas esperando resposta e respondidas hoje</div>
     <div id="lista"></div>
   </div>
 </div>
@@ -252,6 +261,28 @@
       porConta[chave].qtd++;
     });
     return Object.values(porConta).sort((a, b) => b.min - a.min);
+  }
+
+  const horaBR = iso => parseDataUTC(iso).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:FUSO });
+
+  // Contas com pergunta hoje e nada pendente = "em dia" (verde)
+  function contasEmDia(chavesPendentes) {
+    const contas = (dadosGerais && dadosGerais.contas_hoje) || [];
+    return contas
+      .filter(c => !chavesPendentes.has(String(c.conta || "").trim().toLowerCase()))
+      .sort((a, b) => (b.respondidas_hoje || 0) - (a.respondidas_hoje || 0));
+  }
+
+  function htmlItemRespondida(r) {
+    const minutos = Math.max(0, (parseDataUTC(r.respondida_em) - parseDataUTC(r.recebida_em)) / 60000);
+    return `<div class="item-lista ok">
+      <div style="min-width:0;">
+        <div class="il-conta">${escaparHtml(r.conta)} · ${escaparHtml(r.resolvida_por || "—")}</div>
+        <div class="il-texto">${escaparHtml(r.texto)}</div>
+        ${r.resposta ? `<div class="il-resposta">↳ ${escaparHtml(r.resposta)}</div>` : ""}
+      </div>
+      <div class="il-tempo ok">✓ ${horaBR(r.respondida_em)}<span class="il-sub">levou ${formatarTempo(minutos)}</span></div>
+    </div>`;
   }
 
   // ---------- Renderização ----------
@@ -325,18 +356,24 @@
     const lista = document.getElementById("lista");
 
     if (fila === null) return; // sem dados ainda: mantém o que já está na tela
-    if (fila.length === 0) {
-      bolhas.innerHTML = '<div class="vazio" style="grid-column:1/-1;">Nenhuma conta com pendência agora. 🎉</div>';
-      mais.textContent = "";
-      lista.innerHTML = '<div class="vazio">Nenhuma pergunta esperando resposta.</div>';
-      return;
-    }
+    const chavesPendentes = new Set(fila.map(i => String(i.conta || "sem conta").trim().toLowerCase()));
+    const emDia = contasEmDia(chavesPendentes);
+    const respondidas = (dadosGerais && dadosGerais.respondidas_recentes) || [];
 
+    if (fila.length === 0 && emDia.length === 0) {
+      bolhas.innerHTML = '<div class="vazio" style="grid-column:1/-1;">Nenhuma pergunta hoje ainda.</div>';
+      mais.textContent = "";
+    } else {
     bolhas.innerHTML = agruparPorConta(fila).map(c => `
       <div class="bolha ${classeUrgencia(c.min)}" title="${escaparHtml(c.nome)} — ${c.qtd} pendente(s)">
         <span class="b-nome">${escaparHtml(c.nome)}</span>
         <span class="b-tempo">${formatarTempo(c.min).replace(" min", "min")}</span>
         <span class="b-qtd">${c.qtd} ${c.qtd === 1 ? "pergunta" : "perguntas"}</span>
+      </div>`).join("") + emDia.map(c => `
+      <div class="bolha ok" title="${escaparHtml(c.conta)} — em dia">
+        <span class="b-nome">${escaparHtml(c.conta)}</span>
+        <span class="b-tempo">✓ em dia</span>
+        <span class="b-qtd">${c.respondidas_hoje} ${c.respondidas_hoje === 1 ? "respondida" : "respondidas"}</span>
       </div>`).join("");
 
     // Conta quantas bolhas ficaram fora da área visível
@@ -345,9 +382,14 @@
       const ocultas = Array.from(bolhas.children).filter(b => b.getBoundingClientRect().top >= limite - 1).length;
       mais.textContent = ocultas > 0 ? `+${ocultas} conta(s) — todas aparecem na lista abaixo` : "";
     });
+    }
 
     const ordenada = [...fila].sort((a, b) => parseDataUTC(a.recebida_em) - parseDataUTC(b.recebida_em));
-    lista.innerHTML = ordenada.map(item => {
+    const semPendentes = fila.length ? "" : '<div class="vazio">🎉 Nenhuma pergunta esperando resposta.</div>';
+    const blocoRespondidas = respondidas.length
+      ? `<div class="separador-lista">✓ Respondidas hoje (últimas ${respondidas.length})</div>` + respondidas.map(htmlItemRespondida).join("")
+      : "";
+    lista.innerHTML = semPendentes + ordenada.map(item => {
       const min = minutosEsperando(item);
       const classe = classeUrgencia(min);
       return `<div class="item-lista ${classe}">
@@ -357,7 +399,7 @@
         </div>
         <div class="il-tempo ${classe}">${formatarTempo(min)}</div>
       </div>`;
-    }).join("");
+    }).join("") + blocoRespondidas;
   }
 
   function renderizarTudo() {
