@@ -29,9 +29,10 @@
 
   .opcoes-plataforma { display:flex; gap:10px; }
   .opcao-plataforma {
-    flex:1; min-width:0; border:1.5px solid var(--line); border-radius:10px; padding:12px;
+    flex:1; min-width:0; height:46px; box-sizing:border-box; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
     display:flex; align-items:center; justify-content:center;
-    text-align:center; cursor:pointer; font-weight:600; font-size:14px; color:var(--text-dim);
+    text-align:center; cursor:pointer; font-weight:600; font-size:13.5px; color:var(--text-dim);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     transition:border-color .15s, background .15s, color .15s;
   }
   .opcao-plataforma.selecionada { border-color:var(--amber); background:#fff7e8; color:var(--text); }
