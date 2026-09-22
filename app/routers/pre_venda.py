@@ -3,7 +3,7 @@ Endpoints da tela de Pré-venda: listar a fila (pendente/fila_humana),
 e permitir que um humano responda manualmente uma pergunta que caiu
 na fila.
 """
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -14,6 +14,22 @@ from app.models import Pergunta, Conta, AcaoRegistrada, RespostaValidadaSku
 from app.ml_client import MLAuthError, MLApiError, garantir_token_valido, buscar_pergunta, enviar_resposta
 
 router = APIRouter(prefix="/api/pre-venda", tags=["pré-venda"])
+
+# Fuso usado nas estatísticas "de hoje" e "por hora" do painel de TV.
+# O banco guarda tudo em UTC (datetime.utcnow); só a apresentação usa o
+# horário de Brasília. Se a base de fusos (tzdata) não estiver disponível
+# no servidor, cai pra UTC-3 fixo -- o Brasil não tem horário de verão
+# desde 2019, então o resultado é o mesmo.
+try:
+    from zoneinfo import ZoneInfo
+    FUSO_BR = ZoneInfo("America/Sao_Paulo")
+except Exception:  # ZoneInfoNotFoundError ou Python sem zoneinfo
+    FUSO_BR = timezone(timedelta(hours=-3), "BRT")
+
+
+def _utc_para_br(data_utc_naive: datetime) -> datetime:
+    """Converte um datetime UTC 'cru' (sem fuso, como vem do banco) pro horário de Brasília."""
+    return data_utc_naive.replace(tzinfo=timezone.utc).astimezone(FUSO_BR)
 
 # Camadas que respondem sozinhas (sem humano) — usado só pra classificar
 # estatística no painel de TV; não muda a lógica de decisão em si (essa
@@ -152,7 +168,11 @@ def painel_geral(db: Session = Depends(get_db)):
     (Mercado Livre, IA) — só consulta o banco local.
     """
     agora = datetime.utcnow()
-    inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
+    # "Hoje" começa à meia-noite de Brasília (antes começava à meia-noite
+    # UTC = 21h de Brasília, e os números zeravam no meio da noite).
+    agora_br = _utc_para_br(agora)
+    inicio_do_dia_br = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
+    inicio_do_dia = inicio_do_dia_br.astimezone(timezone.utc).replace(tzinfo=None)  # volta pra UTC cru, igual ao banco
 
     perguntas_hoje = (
         db.query(Pergunta)
@@ -181,12 +201,38 @@ def painel_geral(db: Session = Depends(get_db)):
     )[:20]
     contas_criticas = sum(1 for c in por_conta.values() if c["maior_espera_min"] > 30)
 
-    contagem_por_hora = {}
+    # Volume por hora (horário de Brasília), separado por desfecho pro
+    # gráfico empilhado: IA resolveu / humano respondeu / pendente / outros
+    # (respondida por fora ou ainda em processamento).
+    por_hora = [
+        {"hora": h, "quantidade": 0, "ia": 0, "humano": 0, "pendente": 0, "outros": 0}
+        for h in range(24)
+    ]
     for p in perguntas_hoje:
         if not p.recebida_em:
             continue
-        contagem_por_hora[p.recebida_em.hour] = contagem_por_hora.get(p.recebida_em.hour, 0) + 1
-    por_hora = [{"hora": h, "quantidade": contagem_por_hora.get(h, 0)} for h in range(24)]
+        linha = por_hora[_utc_para_br(p.recebida_em).hour]
+        linha["quantidade"] += 1
+        if p.camada_resolvida in CAMADAS_AUTOMATICAS:
+            linha["ia"] += 1
+        elif p.camada_resolvida == "manual":
+            linha["humano"] += 1
+        elif p.status == "fila_humana":
+            linha["pendente"] += 1
+        else:
+            linha["outros"] += 1
+
+    # Tempo médio que um humano levou pra responder (perguntas de hoje
+    # respondidas manualmente). None quando ainda não há nenhuma.
+    tempos_humanos = [
+        (p.respondida_em - p.recebida_em).total_seconds() / 60
+        for p in perguntas_hoje
+        if p.camada_resolvida == "manual" and p.respondida_em and p.recebida_em
+        and p.respondida_em >= p.recebida_em
+    ]
+    tempo_medio_humano_min = (
+        round(sum(tempos_humanos) / len(tempos_humanos), 1) if tempos_humanos else None
+    )
 
     return {
         "geral": {
@@ -196,7 +242,9 @@ def painel_geral(db: Session = Depends(get_db)):
             "respondida_por_fora": total_externo,
             "pendentes": len(pendentes),
             "contas_criticas": contas_criticas,
+            "tempo_medio_humano_min": tempo_medio_humano_min,
         },
+        "hora_atual": agora_br.hour,
         "ranking_pendencias": ranking_pendencias,
         "por_hora": por_hora,
     }
