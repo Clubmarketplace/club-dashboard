@@ -266,22 +266,28 @@ def pagina_meus_cancelamentos(request: Request):
         )
 
 
+def _listar_usuarios_visiveis(db, usuario_logado):
+    """Admin vê todos; supervisor só vê 'seller' -- mesma regra usada em criar/editar/resetar/desativar."""
+    query = db.query(Usuario)
+    if usuario_logado.papel == "supervisor":
+        query = query.filter(Usuario.papel == "seller")
+    return query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+
+
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_listar_usuarios(request: Request):
     """
     Lista os usuários -- admin vê todos, supervisor só vê os "seller"
     (mesma regra de quem cada um pode criar, aplicada aqui também pra
-    quem cada um pode desativar/reativar).
+    quem cada um pode desativar/reativar). O formulário de "Adicionar
+    operador" já vem embutido nessa mesma tela.
     """
     with SessionLocal() as db:
         usuario_logado = auth.usuario_atual(request, db)
         if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
 
-        query = db.query(Usuario)
-        if usuario_logado.papel == "supervisor":
-            query = query.filter(Usuario.papel == "seller")
-        usuarios = query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+        usuarios = _listar_usuarios_visiveis(db, usuario_logado)
 
         return templates.TemplateResponse(
             request=request,
@@ -365,17 +371,82 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
         )
 
 
-@app.get("/usuarios/novo", response_class=HTMLResponse)
-def pagina_criar_usuario(request: Request):
+@app.get("/usuarios/{usuario_id}/editar", response_class=HTMLResponse)
+def pagina_editar_usuario(usuario_id: int, request: Request):
     with SessionLocal() as db:
         usuario_logado = auth.usuario_atual(request, db)
         if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
+
+        alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if alvo is None:
+            return RedirectResponse("/usuarios", status_code=303)
+        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+            return RedirectResponse("/usuarios", status_code=303)
+
         return templates.TemplateResponse(
             request=request,
-            name="criar-usuario.html",
-            context={"papel_logado": usuario_logado.papel, "erro": None, "sucesso": None, "valores": None, "usuario_logado": usuario_logado},
+            name="editar-usuario.html",
+            context={"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "alvo": alvo, "erro": None},
         )
+
+
+@app.post("/usuarios/{usuario_id}/editar", response_class=HTMLResponse)
+def editar_usuario(
+    usuario_id: int,
+    request: Request,
+    nome_exibicao: str = Form(...),
+    papel: str = Form(...),
+    conta_vinculada: str = Form(""),
+):
+    with SessionLocal() as db:
+        usuario_logado = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+
+        alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if alvo is None:
+            return RedirectResponse("/usuarios", status_code=303)
+        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+            return RedirectResponse("/usuarios", status_code=303)
+
+        # Mesma regra de criar: supervisor só atribui "seller", mesmo
+        # que tentem forçar outro valor mexendo no HTML.
+        papeis_permitidos = ("admin", "supervisor", "seller") if usuario_logado.papel == "admin" else ("seller",)
+        contexto_erro = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "alvo": alvo}
+
+        if papel not in papeis_permitidos:
+            return templates.TemplateResponse(
+                request=request, name="editar-usuario.html", status_code=403,
+                context={**contexto_erro, "erro": "Você não tem permissão pra atribuir esse papel."},
+            )
+
+        nome_limpo = nome_exibicao.strip()
+        if not nome_limpo:
+            return templates.TemplateResponse(
+                request=request, name="editar-usuario.html", status_code=400,
+                context={**contexto_erro, "erro": "Informe o nome de exibição."},
+            )
+
+        conta_limpa = conta_vinculada.strip() or None
+        if papel == "seller" and not conta_limpa:
+            return templates.TemplateResponse(
+                request=request, name="editar-usuario.html", status_code=400,
+                context={**contexto_erro, "erro": "Informe a conta vinculada -- obrigatório pra usuários seller."},
+            )
+
+        alvo.nome_exibicao = nome_limpo
+        alvo.papel = papel
+        alvo.conta_vinculada = conta_limpa if papel == "seller" else None
+        db.commit()
+
+        return RedirectResponse("/usuarios", status_code=303)
+
+
+@app.get("/usuarios/novo", response_class=HTMLResponse)
+def pagina_criar_usuario_redirect(request: Request):
+    """O formulário de criar agora vive dentro de /usuarios -- esse endereço antigo só redireciona pra lá."""
+    return RedirectResponse("/usuarios", status_code=303)
 
 
 @app.post("/usuarios/novo", response_class=HTMLResponse)
@@ -395,33 +466,32 @@ def criar_usuario(
         # outro valor mexendo no HTML -- a checagem de verdade é aqui,
         # no servidor, nunca só no <select> da tela.
         papeis_que_esse_criador_pode_atribuir = ("admin", "supervisor", "seller") if usuario_logado.papel == "admin" else ("seller",)
-        contexto_base = {"papel_logado": usuario_logado.papel, "sucesso": None, "usuario_logado": usuario_logado}
-        valores_preenchidos = {"usuario": usuario, "nome_exibicao": nome_exibicao, "papel": papel, "conta_vinculada": conta_vinculada}
+        contexto_base = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "usuarios": _listar_usuarios_visiveis(db, usuario_logado)}
 
         if papel not in papeis_que_esse_criador_pode_atribuir:
             return templates.TemplateResponse(
-                request=request, name="criar-usuario.html", status_code=403,
-                context={**contexto_base, "erro": "Você não tem permissão pra criar esse papel.", "valores": valores_preenchidos},
+                request=request, name="usuarios.html", status_code=403,
+                context={**contexto_base, "erro_criar": "Você não tem permissão pra criar esse papel."},
             )
 
         usuario_normalizado = usuario.strip().lower()
         if not usuario_normalizado:
             return templates.TemplateResponse(
-                request=request, name="criar-usuario.html", status_code=400,
-                context={**contexto_base, "erro": "Informe o nome de usuário.", "valores": valores_preenchidos},
+                request=request, name="usuarios.html", status_code=400,
+                context={**contexto_base, "erro_criar": "Informe o nome de usuário."},
             )
 
         if db.query(Usuario).filter(Usuario.usuario == usuario_normalizado).first() is not None:
             return templates.TemplateResponse(
-                request=request, name="criar-usuario.html", status_code=400,
-                context={**contexto_base, "erro": f"Já existe um usuário com o login '{usuario_normalizado}'.", "valores": valores_preenchidos},
+                request=request, name="usuarios.html", status_code=400,
+                context={**contexto_base, "erro_criar": f"Já existe um usuário com o login '{usuario_normalizado}'."},
             )
 
         conta_vinculada_limpa = conta_vinculada.strip() or None
         if papel == "seller" and not conta_vinculada_limpa:
             return templates.TemplateResponse(
-                request=request, name="criar-usuario.html", status_code=400,
-                context={**contexto_base, "erro": "Informe a conta vinculada -- obrigatório pra usuários seller.", "valores": valores_preenchidos},
+                request=request, name="usuarios.html", status_code=400,
+                context={**contexto_base, "erro_criar": "Informe a conta vinculada -- obrigatório pra usuários seller."},
             )
 
         codigo = auth.gerar_codigo_primeiro_acesso()
@@ -439,13 +509,12 @@ def criar_usuario(
 
         return templates.TemplateResponse(
             request=request,
-            name="criar-usuario.html",
+            name="usuarios.html",
             context={
                 "papel_logado": usuario_logado.papel,
-                "erro": None,
-                "valores": None,
                 "usuario_logado": usuario_logado,
-                "sucesso": {"usuario": novo_usuario.usuario, "nome_exibicao": novo_usuario.nome_exibicao, "papel": novo_usuario.papel, "codigo": codigo},
+                "usuarios": _listar_usuarios_visiveis(db, usuario_logado),
+                "criar_sucesso": {"usuario": novo_usuario.usuario, "nome_exibicao": novo_usuario.nome_exibicao, "papel": novo_usuario.papel, "codigo": codigo},
             },
         )
 
