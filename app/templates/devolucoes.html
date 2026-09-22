@@ -8,30 +8,14 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <script src="/static/vendor/chart.umd.min.js"></script>
-  <link rel="stylesheet" href="/static/dashboard.css?v=4" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=6" />
 </head>
 <body>
-  <header class="cmx-barra-topo">
-    <img src="/static/logo.png" alt="Club Marketplace" class="cmx-barra-topo-logo" />
-    <div class="cmx-barra-topo-avatar-area">
-      {% if usuario_logado %}
-      <div class="cmx-avatar-bolinha" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
-      <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
-        <div style="padding:10px 16px; font-size:12.5px; color:var(--cmx-texto-suave); border-bottom:1px solid var(--cmx-borda);">{{ usuario_logado.nome_exibicao }} · {{ usuario_logado.papel }}</div>
-        <a href="/logout" style="display:block; padding:11px 16px; font-size:13.5px; color:#c1502e; text-decoration:none; font-weight:600;">🚪 Sair</a>
-      </div>
-      {% endif %}
-    </div>
-  </header>
-  <script>
-    document.addEventListener("click", function(e) {
-      var area = document.querySelector(".cmx-barra-topo-avatar-area");
-      var dropdown = document.getElementById("cmx-dropdown-usuario");
-      if (area && dropdown && !area.contains(e.target)) dropdown.classList.remove("aberto");
-    });
-  </script>
   <div class="cmx-shell">
     <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
       <nav class="cmx-nav">
         <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
         <span class="cmx-nav-secao">Operação</span>
@@ -81,7 +65,28 @@
     </aside>
 
     <div class="cmx-conteudo">
-      <header class="cmx-topbar">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}      <header class="cmx-topbar">
         <div>
           <h1>Devoluções</h1>
           <p class="cmx-subtitulo">Controle de devoluções e impacto financeiro por conta</p>
