@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Solicitações de Cancelamento</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css" />
+  <style>
+    .cc-kpis { display:flex; gap:14px; margin: 18px 0 22px; }
+    .cc-kpi { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 18px; flex:1; }
+    .cc-kpi .rotulo { font-size:12px; color:var(--cmx-texto-suave); }
+    .cc-kpi .valor { font-size:26px; font-weight:700; margin-top:2px; }
+
+    .cc-controles { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
+    .cc-controles input, .cc-controles select {
+      padding:9px 12px; border-radius:8px; border:1px solid var(--cmx-borda); font-family:inherit; font-size:13.5px; background:#fff; color:var(--cmx-texto);
+    }
+    .cc-controles input { flex:1; min-width:180px; max-width:260px; }
+    .cc-link-publico { margin-left:auto; font-size:12.5px; color:var(--cmx-texto-suave); background:#fff; border:1px solid var(--cmx-borda); padding:8px 12px; border-radius:8px; }
+    .cc-link-publico b { color:var(--cmx-texto); }
+
+    .cc-grupo { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; margin-bottom:14px; overflow:hidden; }
+    .cc-grupo-cabecalho {
+      display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
+      cursor:pointer; user-select:none;
+    }
+    .cc-grupo-cabecalho:hover { background:#fafbfc; }
+    .cc-grupo-nome { font-weight:700; font-size:15px; display:flex; align-items:center; gap:10px; }
+    .cc-grupo-contagem { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); background:#f1f3f5; padding:2px 9px; border-radius:999px; }
+    .cc-grupo-seta { font-size:12px; color:var(--cmx-texto-suave); transition: transform .15s; }
+    .cc-grupo.recolhido .cc-grupo-seta { transform: rotate(-90deg); }
+    .cc-grupo.recolhido .cc-grupo-tabela { display:none; }
+
+    table.cc-tabela { width:100%; border-collapse:collapse; font-size:13.5px; }
+    table.cc-tabela thead th { text-align:left; font-size:11.5px; color:var(--cmx-texto-suave); font-weight:600; padding:9px 18px; border-top:1px solid var(--cmx-borda); background:#fafbfc; }
+    table.cc-tabela tbody td { padding:11px 18px; border-top:1px solid var(--cmx-borda); vertical-align:top; }
+
+    .cc-badge { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
+    .cc-badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .cc-badge.shopee { background:#fdecec; color:#d64541; }
+
+    .cc-motivo { max-width:320px; }
+    .cc-data { white-space:nowrap; color:var(--cmx-texto-suave); font-size:12.5px; }
+    .cc-vazio { text-align:center; padding:40px 20px; color:var(--cmx-texto-suave); }
+    .cc-erro { color:#d64541; text-align:center; padding:14px; font-size:13px; }
+
+    .cc-status-pendente { font-size:11.5px; font-weight:600; color:#b56a1f; background:#fdf3e3; padding:3px 9px; border-radius:999px; }
+    .cc-status-confirmado { font-size:11.5px; color:#2f6f4f; }
+    .cc-status-confirmado b { font-weight:700; }
+    .cc-btn-confirmar {
+      font-size:12px; font-weight:600; color:#fff; background:var(--cmx-marinho);
+      border:none; border-radius:7px; padding:6px 12px; cursor:pointer; white-space:nowrap;
+    }
+    .cc-btn-confirmar:hover { background:var(--cmx-marinho-suave); }
+
+    .cc-modal-fundo {
+      display:none; position:fixed; inset:0; background:rgba(18,24,31,.45);
+      align-items:center; justify-content:center; z-index:50;
+    }
+    .cc-modal-fundo.aberto { display:flex; }
+    .cc-modal { background:#fff; border-radius:14px; padding:24px; width:100%; max-width:360px; box-shadow:0 12px 40px rgba(0,0,0,.2); }
+    .cc-modal h3 { margin:0 0 4px 0; font-size:16px; }
+    .cc-modal p { margin:0 0 16px 0; font-size:13px; color:var(--cmx-texto-suave); }
+    .cc-modal input {
+      width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda);
+      font-family:inherit; font-size:14px; margin-bottom:14px;
+    }
+    .cc-modal input:focus { outline:none; border-color:var(--cmx-ambar); }
+    .cc-modal-botoes { display:flex; gap:10px; }
+    .cc-modal-botoes button { flex:1; padding:10px; border-radius:8px; font-weight:600; font-size:13.5px; cursor:pointer; border:none; }
+    .cc-modal-cancelar { background:#f1f3f5; color:var(--cmx-texto); }
+    .cc-modal-confirmar { background:var(--cmx-marinho); color:#fff; }
+    .cc-modal-erro { color:#d64541; font-size:12px; margin:-8px 0 12px; display:none; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <span class="cmx-marca-icone">C</span>
+        <span class="cmx-marca-texto">Club Marketplace</span>
+      </div>
+      <nav class="cmx-nav">
+        <span class="cmx-nav-secao">Operação</span>
+        <a class="cmx-nav-item" href="/">Devoluções</a>
+        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
+        <a class="cmx-nav-item" href="/manuais">Manuais</a>
+        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
+        <a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
+        <span class="cmx-nav-secao">Diagnóstico</span>
+        <a class="cmx-nav-item" href="/eventos-webhook">Eventos do Webhook</a>
+        <span class="cmx-nav-secao">Painéis de TV</span>
+        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>
+        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">Painel da Fila</a>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
+        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/solicitacoes-painel">
+          <span class="cmx-nav-dot"></span> Acompanhar solicitações
+        </a>
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      <header class="cmx-topbar">
+        <div>
+          <h1>Solicitações de Cancelamento</h1>
+          <p class="cmx-subtitulo">Pedidos MANUAIS registrados pelas contas via link público, agrupados por conta (diferente da fila de IA em 'Cancelamentos')</p>
+        </div>
+      </header>
+
+      <main>
+        <div id="aviso-erro"></div>
+
+        <div class="cc-kpis">
+          <div class="cc-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div></div>
+          <div class="cc-kpi"><div class="rotulo">Contas com pedidos</div><div class="valor" id="kpi-contas">—</div></div>
+          <div class="cc-kpi"><div class="rotulo">Mercado Livre</div><div class="valor" id="kpi-ml">—</div></div>
+          <div class="cc-kpi"><div class="rotulo">Shopee</div><div class="valor" id="kpi-shopee">—</div></div>
+        </div>
+
+        <div class="cc-controles">
+          <input type="text" id="busca" placeholder="Buscar por conta ou nº da venda..." />
+          <select id="filtro-plataforma">
+            <option value="">Todas as plataformas</option>
+            <option value="mercado_livre">Mercado Livre</option>
+            <option value="shopee">Shopee</option>
+          </select>
+          <div class="cc-link-publico">Link público: <b>/solicitar-cancelamento</b></div>
+        </div>
+
+        <div id="grupos"></div>
+      </main>
+    </div>
+  </div>
+
+  <div class="cc-modal-fundo" id="modal-fundo">
+    <div class="cc-modal">
+      <h3>Confirmar cancelamento</h3>
+      <p id="modal-detalhe"></p>
+      <div class="cc-modal-erro" id="modal-erro"></div>
+      <input type="text" id="modal-nome" placeholder="Seu nome" autocomplete="off" />
+      <div class="cc-modal-botoes">
+        <button class="cc-modal-cancelar" id="modal-cancelar">Cancelar</button>
+        <button class="cc-modal-confirmar" id="modal-confirmar">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
+    let todasSolicitacoes = [];
+    let termoBusca = "";
+    let plataformaFiltro = "";
+    const gruposRecolhidos = new Set();
+
+    function parseDataUTC(iso) {
+      if (!iso) return new Date();
+      return new Date(iso.endsWith("Z") ? iso : iso + "Z");
+    }
+    function formatarData(iso) {
+      return parseDataUTC(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    async function carregar() {
+      const resposta = await fetch("/api/solicitacoes-cancelamento");
+      if (!resposta.ok) throw new Error("status " + resposta.status);
+      return resposta.json();
+    }
+
+    function renderizarKpis(lista) {
+      const contas = new Set(lista.map(s => s.conta));
+      document.getElementById("kpi-total").textContent = lista.length;
+      document.getElementById("kpi-contas").textContent = contas.size;
+      document.getElementById("kpi-ml").textContent = lista.filter(s => s.plataforma === "mercado_livre").length;
+      document.getElementById("kpi-shopee").textContent = lista.filter(s => s.plataforma === "shopee").length;
+    }
+
+    function renderizarGrupos() {
+      let filtradas = todasSolicitacoes;
+      if (plataformaFiltro) filtradas = filtradas.filter(s => s.plataforma === plataformaFiltro);
+      if (termoBusca) {
+        filtradas = filtradas.filter(s =>
+          s.conta.toLowerCase().includes(termoBusca) || s.numero_venda.toLowerCase().includes(termoBusca)
+        );
+      }
+
+      const container = document.getElementById("grupos");
+      if (filtradas.length === 0) {
+        container.innerHTML = '<div class="cc-vazio">Nenhuma solicitação encontrada.</div>';
+        return;
+      }
+
+      // Agrupa por conta, ordenado pela conta com pedido mais recente primeiro
+      const porConta = {};
+      filtradas.forEach(s => {
+        if (!porConta[s.conta]) porConta[s.conta] = [];
+        porConta[s.conta].push(s);
+      });
+      const contasOrdenadas = Object.keys(porConta).sort((a, b) => {
+        const maisRecenteA = Math.max(...porConta[a].map(s => parseDataUTC(s.criado_em).getTime()));
+        const maisRecenteB = Math.max(...porConta[b].map(s => parseDataUTC(s.criado_em).getTime()));
+        return maisRecenteB - maisRecenteA;
+      });
+
+      container.innerHTML = contasOrdenadas.map(conta => {
+        const itens = porConta[conta].sort((a, b) => parseDataUTC(b.criado_em) - parseDataUTC(a.criado_em));
+        const recolhido = gruposRecolhidos.has(conta) ? "recolhido" : "";
+        const linhas = itens.map(s => {
+          const statusHtml = s.confirmado_por
+            ? `<span class="cc-status-confirmado">✓ <b>${s.confirmado_por}</b><br>${formatarData(s.confirmado_em)}</span>`
+            : `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${s.conta}" data-venda="${s.numero_venda}">Confirmar</button>`;
+          return `
+          <tr>
+            <td class="cc-data">${formatarData(s.criado_em)}</td>
+            <td><span class="cc-badge ${s.plataforma === "shopee" ? "shopee" : "ml"}">${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}</span></td>
+            <td>${s.numero_venda}</td>
+            <td class="cc-motivo">${s.motivo}</td>
+            <td>${statusHtml}</td>
+          </tr>
+        `;
+        }).join("");
+
+        return `
+          <div class="cc-grupo ${recolhido}" data-conta="${conta}">
+            <div class="cc-grupo-cabecalho">
+              <span class="cc-grupo-nome">${conta} <span class="cc-grupo-contagem">${itens.length} pedido${itens.length > 1 ? "s" : ""}</span></span>
+              <span class="cc-grupo-seta">▾</span>
+            </div>
+            <div class="cc-grupo-tabela">
+              <table class="cc-tabela">
+                <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
+                <tbody>${linhas}</tbody>
+              </table>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      container.querySelectorAll(".cc-grupo-cabecalho").forEach(cabecalho => {
+        cabecalho.addEventListener("click", () => {
+          const grupo = cabecalho.closest(".cc-grupo");
+          const conta = grupo.dataset.conta;
+          grupo.classList.toggle("recolhido");
+          if (grupo.classList.contains("recolhido")) gruposRecolhidos.add(conta);
+          else gruposRecolhidos.delete(conta);
+        });
+      });
+
+      container.querySelectorAll(".cc-btn-confirmar").forEach(botao => {
+        botao.addEventListener("click", () => abrirModalConfirmacao(botao.dataset.id, botao.dataset.conta, botao.dataset.venda));
+      });
+    }
+
+    // --- Modal de confirmação ---
+    const modalFundo = document.getElementById("modal-fundo");
+    const modalDetalhe = document.getElementById("modal-detalhe");
+    const modalNome = document.getElementById("modal-nome");
+    const modalErro = document.getElementById("modal-erro");
+    let idPendenteConfirmacao = null;
+
+    function abrirModalConfirmacao(id, conta, venda) {
+      idPendenteConfirmacao = id;
+      modalDetalhe.textContent = `Conta ${conta} — venda ${venda}. Confirme que já foi cancelado de verdade na plataforma.`;
+      modalNome.value = "";
+      modalErro.style.display = "none";
+      modalFundo.classList.add("aberto");
+      setTimeout(() => modalNome.focus(), 50);
+    }
+
+    function fecharModal() {
+      modalFundo.classList.remove("aberto");
+      idPendenteConfirmacao = null;
+    }
+
+    document.getElementById("modal-cancelar").addEventListener("click", fecharModal);
+    modalFundo.addEventListener("click", (e) => { if (e.target === modalFundo) fecharModal(); });
+
+    document.getElementById("modal-confirmar").addEventListener("click", async () => {
+      const nome = modalNome.value.trim();
+      if (!nome) {
+        modalErro.textContent = "Informe seu nome.";
+        modalErro.style.display = "block";
+        return;
+      }
+      try {
+        const resposta = await fetch(`/api/solicitacoes-cancelamento/${idPendenteConfirmacao}/confirmar`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ nome }),
+        });
+        if (!resposta.ok) {
+          const erro = await resposta.json().catch(() => ({}));
+          throw new Error(erro.detail || "Não foi possível confirmar.");
+        }
+        fecharModal();
+        await atualizar();
+      } catch (erro) {
+        modalErro.textContent = erro.message;
+        modalErro.style.display = "block";
+      }
+    });
+
+    document.getElementById("busca").addEventListener("input", (e) => {
+      termoBusca = e.target.value.trim().toLowerCase();
+      renderizarGrupos();
+    });
+    document.getElementById("filtro-plataforma").addEventListener("change", (e) => {
+      plataformaFiltro = e.target.value;
+      renderizarGrupos();
+    });
+
+    async function atualizar() {
+      try {
+        todasSolicitacoes = await carregar();
+        document.getElementById("aviso-erro").innerHTML = "";
+        renderizarKpis(todasSolicitacoes);
+        renderizarGrupos();
+      } catch (erro) {
+        document.getElementById("aviso-erro").innerHTML = '<div class="cc-erro">Não foi possível carregar os dados agora.</div>';
+        console.error(erro);
+      }
+    }
+
+    atualizar();
+    setInterval(atualizar, 15000);
+  </script>
+</body>
+</html>

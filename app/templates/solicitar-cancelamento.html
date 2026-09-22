@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Solicitar Cancelamento (manual)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f4f6f8; --card:#ffffff; --line:#e2e6ea;
+    --text:#1b2430; --text-dim:#6b7684;
+    --amber:#f0a93d; --green:#1c9a63; --red:#d64541;
+    font-family:"Inter", sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; display:flex; justify-content:center; padding:40px 16px; }
+  .cartao { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:32px; max-width:480px; width:100%; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+  .marca { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+  .marca .icone { width:34px; height:34px; border-radius:9px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .marca span { font-weight:600; font-size:14.5px; }
+
+  h1 { font-size:19px; margin:0 0 4px 0; }
+  .subtitulo { font-size:13.5px; color:var(--text-dim); margin:0 0 26px 0; line-height:1.4; }
+
+  label { display:block; font-size:13px; font-weight:600; margin-bottom:7px; margin-top:18px; }
+  label:first-of-type { margin-top:0; }
+
+  .opcoes-plataforma { display:flex; gap:10px; }
+  .opcao-plataforma {
+    flex:1; border:1.5px solid var(--line); border-radius:10px; padding:12px;
+    text-align:center; cursor:pointer; font-weight:600; font-size:14px; color:var(--text-dim);
+    transition:border-color .15s, background .15s, color .15s;
+  }
+  .opcao-plataforma.selecionada { border-color:var(--amber); background:#fff7e8; color:var(--text); }
+  .opcao-plataforma input { display:none; }
+
+  input[type="text"], textarea {
+    width:100%; padding:11px 13px; border-radius:9px; border:1.5px solid var(--line);
+    font-family:inherit; font-size:14px; color:var(--text); background:#fff;
+  }
+  input[type="text"]:focus, textarea:focus { outline:none; border-color:var(--amber); }
+  textarea { resize:vertical; min-height:64px; }
+
+  .bloco-itens { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
+  .item-venda { border:1.5px dashed var(--line); border-radius:12px; padding:14px; position:relative; }
+  .item-venda .item-cabecalho { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .item-venda .item-numero { font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.03em; }
+  .btn-remover-item {
+    border:none; background:none; color:var(--red); font-size:12.5px; font-weight:600; cursor:pointer; padding:0;
+  }
+  .item-venda label { margin-top:10px; font-size:12.5px; }
+  .item-venda label:first-of-type { margin-top:0; }
+
+  .btn-adicionar {
+    margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px dashed var(--amber);
+    background:#fff7e8; color:#8a5a10; font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .btn-adicionar:hover { background:#ffefd0; }
+
+  button[type="submit"] {
+    width:100%; margin-top:24px; padding:13px; border:none; border-radius:10px;
+    background:#1b2430; color:#fff; font-weight:600; font-size:14.5px; cursor:pointer;
+  }
+  button[type="submit"]:hover { background:#2a3644; }
+  button[type="submit"]:disabled { background:#a9b2bb; cursor:default; }
+
+  .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
+  .aviso.erro { color:var(--red); }
+
+  .tela-sucesso { display:none; text-align:center; padding:20px 0; }
+  .tela-sucesso .check { width:56px; height:56px; border-radius:50%; background:#e7f7ee; color:var(--green); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 16px; }
+  .tela-sucesso h2 { font-size:18px; margin:0 0 6px 0; }
+  .tela-sucesso p { font-size:13.5px; color:var(--text-dim); margin:0 0 22px 0; }
+  .tela-sucesso button { padding:10px 20px; border-radius:9px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div class="cartao">
+  <div class="marca">
+    <div class="icone">C</div>
+    <span>Club Marketplace</span>
+  </div>
+
+  <div id="tela-formulario">
+    <h1>Solicitar cancelamento</h1>
+    <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
+
+    <form id="form-cancelamento">
+      <label>Plataforma</label>
+      <div class="opcoes-plataforma">
+        <label class="opcao-plataforma" id="opt-ml">
+          <input type="radio" name="plataforma" value="mercado_livre" required />
+          Mercado Livre
+        </label>
+        <label class="opcao-plataforma" id="opt-shopee">
+          <input type="radio" name="plataforma" value="shopee" required />
+          Shopee
+        </label>
+      </div>
+
+      <label for="conta">Conta</label>
+      <input type="text" id="conta" name="conta" placeholder="Ex: Velasco" required autocomplete="off" />
+
+      <div class="bloco-itens" id="bloco-itens"></div>
+
+      <button type="button" class="btn-adicionar" id="botao-adicionar">+ Adicionar outra venda</button>
+
+      <button type="submit" id="botao-enviar">Enviar solicitação</button>
+      <div class="aviso" id="aviso-erro" style="display:none;"></div>
+    </form>
+  </div>
+
+  <div class="tela-sucesso" id="tela-sucesso">
+    <div class="check">✓</div>
+    <h2>Solicitação registrada</h2>
+    <p id="texto-confirmacao"></p>
+    <button id="botao-nova">Registrar outra</button>
+  </div>
+</div>
+
+<script>
+  const opcoesPlataforma = document.querySelectorAll(".opcao-plataforma");
+  opcoesPlataforma.forEach(opcao => {
+    opcao.addEventListener("click", () => {
+      opcoesPlataforma.forEach(o => o.classList.remove("selecionada"));
+      opcao.classList.add("selecionada");
+      opcao.querySelector("input").checked = true;
+    });
+  });
+
+  const blocoItens = document.getElementById("bloco-itens");
+  let contadorItens = 0;
+
+  function criarBlocoItem() {
+    contadorItens++;
+    const div = document.createElement("div");
+    div.className = "item-venda";
+    div.dataset.item = contadorItens;
+    div.innerHTML = `
+      <div class="item-cabecalho">
+        <span class="item-numero">Venda</span>
+        <button type="button" class="btn-remover-item" style="display:none;">Remover</button>
+      </div>
+      <label>Número da venda</label>
+      <input type="text" class="campo-numero-venda" placeholder="Número do pedido" required autocomplete="off" />
+      <label>Motivo do cancelamento</label>
+      <textarea class="campo-motivo" placeholder="Ex: Etiqueta não foi gerada, CEP errado, sem estoque..." required></textarea>
+    `;
+    div.querySelector(".btn-remover-item").addEventListener("click", () => {
+      div.remove();
+      atualizarNumerosEBotoesRemover();
+    });
+    return div;
+  }
+
+  function atualizarNumerosEBotoesRemover() {
+    const itens = blocoItens.querySelectorAll(".item-venda");
+    itens.forEach((item, i) => {
+      item.querySelector(".item-numero").textContent = "Venda " + (i + 1);
+      item.querySelector(".btn-remover-item").style.display = itens.length > 1 ? "block" : "none";
+    });
+  }
+
+  function adicionarItem() {
+    blocoItens.appendChild(criarBlocoItem());
+    atualizarNumerosEBotoesRemover();
+  }
+
+  document.getElementById("botao-adicionar").addEventListener("click", adicionarItem);
+  adicionarItem(); // sempre começa com 1 item pronto pra preencher
+
+  const form = document.getElementById("form-cancelamento");
+  const botaoEnviar = document.getElementById("botao-enviar");
+  const avisoErro = document.getElementById("aviso-erro");
+
+  form.addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    avisoErro.style.display = "none";
+
+    const plataformaSelecionada = form.querySelector('input[name="plataforma"]:checked');
+    if (!plataformaSelecionada) {
+      avisoErro.textContent = "Escolha a plataforma (Mercado Livre ou Shopee).";
+      avisoErro.className = "aviso erro";
+      avisoErro.style.display = "block";
+      return;
+    }
+
+    const itens = Array.from(blocoItens.querySelectorAll(".item-venda")).map(div => ({
+      numero_venda: div.querySelector(".campo-numero-venda").value.trim(),
+      motivo: div.querySelector(".campo-motivo").value.trim(),
+    }));
+
+    const dados = {
+      plataforma: plataformaSelecionada.value,
+      conta: document.getElementById("conta").value.trim(),
+      itens,
+    };
+
+    botaoEnviar.disabled = true;
+    botaoEnviar.textContent = "Enviando...";
+
+    try {
+      const resposta = await fetch("/api/solicitacoes-cancelamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+      });
+
+      if (!resposta.ok) {
+        const erro = await resposta.json().catch(() => ({}));
+        const mensagem = Array.isArray(erro.detail)
+          ? erro.detail.map(d => d.msg).join(" ")
+          : (erro.detail || "Não foi possível registrar. Confira os campos e tente de novo.");
+        throw new Error(mensagem);
+      }
+
+      const resultado = await resposta.json();
+      const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
+      document.getElementById("texto-confirmacao").textContent =
+        `Conta ${dados.conta} — ${plural}.`;
+      document.getElementById("tela-formulario").style.display = "none";
+      document.getElementById("tela-sucesso").style.display = "block";
+    } catch (erro) {
+      avisoErro.textContent = erro.message;
+      avisoErro.className = "aviso erro";
+      avisoErro.style.display = "block";
+    } finally {
+      botaoEnviar.disabled = false;
+      botaoEnviar.textContent = "Enviar solicitação";
+    }
+  });
+
+  document.getElementById("botao-nova").addEventListener("click", () => {
+    form.reset();
+    opcoesPlataforma.forEach(o => o.classList.remove("selecionada"));
+    blocoItens.innerHTML = "";
+    contadorItens = 0;
+    adicionarItem();
+    document.getElementById("tela-sucesso").style.display = "none";
+    document.getElementById("tela-formulario").style.display = "block";
+  });
+</script>
+
+</body>
+</html>
