@@ -278,3 +278,30 @@ class EventoWebhook(Base):
     payload_bruto = Column(Text, nullable=True)  # o JSON cru da notificação, como veio
     resultado = Column(Text, nullable=True)  # o que o sistema respondeu/decidiu (status, erro, etc.)
     recebido_em = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class SolicitacaoCancelamento(Base):
+    """
+    Pedido de cancelamento registrado MANUALMENTE por uma conta, através
+    da página pública /solicitar-cancelamento (sem login — link único,
+    compartilhado com todas as ~100 contas). Diferente de
+    PedidoCancelamento (que é detectado pela IA dentro de mensagens de
+    pós-venda): aqui é a própria conta que pede o cancelamento por
+    motivo operacional (CEP errado, sem estoque, etiqueta não gerada,
+    etc.), não o cliente. A data é sempre preenchida pelo servidor,
+    nunca vem do formulário.
+    """
+
+    __tablename__ = "solicitacoes_cancelamento"
+
+    id = Column(Integer, primary_key=True, index=True)
+    plataforma = Column(String, nullable=False)  # "mercado_livre" | "shopee"
+    conta = Column(String, nullable=False)
+    numero_venda = Column(String, nullable=False)
+    motivo = Column(Text, nullable=False)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+
+    # Preenchidos só quando alguém confirma que já cancelou de verdade
+    # na plataforma. Enquanto nulo, o pedido aparece como "pendente".
+    confirmado_por = Column(String, nullable=True)
+    confirmado_em = Column(DateTime, nullable=True)
