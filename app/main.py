@@ -266,6 +266,105 @@ def pagina_meus_cancelamentos(request: Request):
         )
 
 
+@app.get("/usuarios", response_class=HTMLResponse)
+def pagina_listar_usuarios(request: Request):
+    """
+    Lista os usuários -- admin vê todos, supervisor só vê os "seller"
+    (mesma regra de quem cada um pode criar, aplicada aqui também pra
+    quem cada um pode desativar/reativar).
+    """
+    with SessionLocal() as db:
+        usuario_logado = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+
+        query = db.query(Usuario)
+        if usuario_logado.papel == "supervisor":
+            query = query.filter(Usuario.papel == "seller")
+        usuarios = query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="usuarios.html",
+            context={"papel_logado": usuario_logado.papel, "usuarios": usuarios, "usuario_logado": usuario_logado},
+        )
+
+
+@app.post("/usuarios/{usuario_id}/alternar-status")
+def alternar_status_usuario(usuario_id: int, request: Request):
+    """
+    Ativa/desativa um usuário (nunca apaga) -- desativado não consegue
+    mais logar, mas todo o histórico dele (cancelamentos confirmados,
+    por exemplo) continua intacto.
+    """
+    with SessionLocal() as db:
+        usuario_logado = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+
+        alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if alvo is None:
+            return RedirectResponse("/usuarios", status_code=303)
+
+        # Supervisor só mexe em seller; ninguém mexe na própria conta por aqui.
+        if alvo.id == usuario_logado.id:
+            return RedirectResponse("/usuarios", status_code=303)
+        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+            return RedirectResponse("/usuarios", status_code=303)
+
+        alvo.ativo = not alvo.ativo
+        db.commit()
+
+        return RedirectResponse("/usuarios", status_code=303)
+
+
+@app.post("/usuarios/{usuario_id}/resetar-senha", response_class=HTMLResponse)
+def resetar_senha_usuario(usuario_id: int, request: Request):
+    """
+    Reseta a senha de alguém gerando um NOVO código de primeiro acesso
+    -- reaproveita o mesmo fluxo de /primeiro-acesso. A senha antiga
+    para de funcionar assim que isso roda (senha_hash vira None).
+    """
+    with SessionLocal() as db:
+        usuario_logado = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+
+        alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+        if alvo is None:
+            return RedirectResponse("/usuarios", status_code=303)
+
+        # Supervisor só mexe em seller; mas reset de senha não existe
+        # pra seller de jeito nenhum (nem admin faz isso por aqui) --
+        # se um seller perder o acesso, o caminho é criar um usuário novo.
+        if alvo.papel == "seller":
+            return RedirectResponse("/usuarios", status_code=303)
+        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+            return RedirectResponse("/usuarios", status_code=303)
+
+        codigo = auth.gerar_codigo_primeiro_acesso()
+        alvo.senha_hash = None
+        alvo.codigo_primeiro_acesso = codigo
+        alvo.precisa_trocar_senha = True
+        db.commit()
+
+        query = db.query(Usuario)
+        if usuario_logado.papel == "supervisor":
+            query = query.filter(Usuario.papel == "seller")
+        usuarios = query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+
+        return templates.TemplateResponse(
+            request=request,
+            name="usuarios.html",
+            context={
+                "papel_logado": usuario_logado.papel,
+                "usuarios": usuarios,
+                "usuario_logado": usuario_logado,
+                "reset_sucesso": {"usuario": alvo.usuario, "nome_exibicao": alvo.nome_exibicao, "codigo": codigo},
+            },
+        )
+
+
 @app.get("/usuarios/novo", response_class=HTMLResponse)
 def pagina_criar_usuario(request: Request):
     with SessionLocal() as db:
