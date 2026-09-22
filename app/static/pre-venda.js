@@ -4,10 +4,22 @@
  * ou manual), pra acompanhamento.
  */
 
+/**
+ * O servidor grava as datas em UTC (datetime.utcnow) e envia sem fuso
+ * (ex: "2026-09-22T19:50:00"). Sem o "Z", o navegador interpreta como
+ * horário local e mostra 3h adiantado. Aqui marcamos como UTC quando não
+ * houver fuso e exibimos sempre no horário de Brasília.
+ */
 function formatarData(isoString) {
   if (!isoString) return "—";
-  const data = new Date(isoString);
-  return data.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const temFuso = /([zZ]|[+-]\d{2}:?\d{2})$/.test(isoString);
+  const data = new Date(temFuso ? isoString : isoString + "Z");
+  if (isNaN(data.getTime())) return "—"; // data inválida: não quebra a tela
+  return data.toLocaleString("pt-BR", {
+    dateStyle: "short",
+    timeStyle: "short",
+    timeZone: "America/Sao_Paulo",
+  });
 }
 
 function nomeDaCamada(camada) {
