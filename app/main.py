@@ -340,11 +340,7 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
         if alvo is None:
             return RedirectResponse("/usuarios", status_code=303)
 
-        # Supervisor só mexe em seller; mas reset de senha não existe
-        # pra seller de jeito nenhum (nem admin faz isso por aqui) --
-        # se um seller perder o acesso, o caminho é criar um usuário novo.
-        if alvo.papel == "seller":
-            return RedirectResponse("/usuarios", status_code=303)
+        # Mesma regra de escopo do desativar: supervisor só mexe em seller.
         if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
             return RedirectResponse("/usuarios", status_code=303)
 
