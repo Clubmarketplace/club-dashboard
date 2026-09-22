@@ -144,14 +144,14 @@ body {
 /* ---------- Conteúdo principal ---------- */
 
 .cmx-barra-topo {
-  position: fixed; top: 0; left: 0; right: 0; height: 58px; z-index: 30;
+  position: fixed; top: 0; left: 0; right: 0; height: 86px; z-index: 30;
   background: var(--cmx-marinho); display: flex; align-items: center; justify-content: space-between;
   padding: 0 24px; box-shadow: 0 1px 0 rgba(0,0,0,.2);
 }
-.cmx-barra-topo-logo { height: 34px; width: auto; background: #fff; border-radius: 7px; padding: 5px 9px; }
+.cmx-barra-topo-logo { height: 70px; width: auto; background: #fff; border-radius: 8px; padding: 7px 12px; }
 .cmx-avatar-bolinha {
-  width: 34px; height: 34px; border-radius: 50%; background: #2baff2; color: #fff;
-  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px;
+  width: 40px; height: 40px; border-radius: 50%; background: #2baff2; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px;
   cursor: pointer;
 }
 .cmx-barra-topo-avatar-area { position: relative; }
@@ -160,7 +160,7 @@ body {
   background: #fff; border: 1px solid var(--cmx-borda); border-radius: 10px;
   box-shadow: 0 10px 30px -10px rgba(0,0,0,.3); min-width: 190px; overflow: hidden;
 }
-.cmx-shell { padding-top: 58px; }
+.cmx-shell { }
 
 .cmx-conteudo {
   min-width: 0;
