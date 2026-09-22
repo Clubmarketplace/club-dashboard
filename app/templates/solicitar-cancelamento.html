@@ -80,8 +80,7 @@
 
 <div class="cartao">
   <div class="marca">
-    <div class="icone">C</div>
-    <span>Club Marketplace</span>
+    <img src="/static/logo.png?v=2" alt="Club Marketplace" style="height:32px; width:auto;" />
   </div>
 
   <div id="tela-formulario">
@@ -227,6 +226,16 @@
         `Conta ${dados.conta} — ${plural}.`;
       document.getElementById("tela-formulario").style.display = "none";
       document.getElementById("tela-sucesso").style.display = "block";
+
+      {% if seller_logado %}
+      // Seller logado: volta sozinho pra "Meus Cancelamentos" depois de mostrar a confirmação.
+      document.getElementById("botao-nova").style.display = "none";
+      const avisoVoltar = document.createElement("p");
+      avisoVoltar.style.cssText = "font-size:12.5px; color:var(--text-dim); margin-top:10px;";
+      avisoVoltar.textContent = "Voltando pra Meus Cancelamentos...";
+      document.getElementById("tela-sucesso").appendChild(avisoVoltar);
+      setTimeout(() => { window.location.href = "/meus-cancelamentos"; }, 1600);
+      {% endif %}
     } catch (erro) {
       avisoErro.textContent = erro.message;
       avisoErro.className = "aviso erro";
