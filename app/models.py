@@ -126,7 +126,6 @@ class Pergunta(Base):
     # pode ter um por variação). "" = anúncio lido e sem SKU; nulo = ainda
     # não lido (ou a leitura falhou) -- a ferramenta de preenchimento tenta de novo.
     skus_anuncio = Column(String, nullable=True)
-    titulo_anuncio = Column(String, nullable=True)  # nome do produto no anúncio, quando o ML deixa ler
     texto = Column(Text, nullable=False)
 
     # pendente -> ainda não processada | respondida -> alguém (camada
@@ -322,6 +321,13 @@ class SolicitacaoCancelamento(Base):
     # -- é por ele que tudo compara/agrupa, pra "Friaça" e "friaca" nunca
     # virarem duas contas. O campo "conta" guarda o nome de exibição.
     conta_chave = Column(String, nullable=True, index=True)
+
+    # Resultado quanto ao impacto na reputação -- preenchido pela
+    # PESSOA no momento de confirmar (Sem impacto / Com impacto /
+    # Aguardando confirmação do ML). O Mercado Livre não devolve essa
+    # informação por nenhuma API pública -- só confirma se pesou ou
+    # não na reputação através do atendimento deles (chat/WhatsApp).
+    resultado_impacto = Column(String, nullable=True)
 
 
 class Usuario(Base):

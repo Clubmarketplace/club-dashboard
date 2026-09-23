@@ -319,3 +319,53 @@ def enviar_resposta_claim(access_token: str, claim_id: str, texto: str) -> dict:
     if resposta.status_code not in (200, 201):
         raise MLApiError(f"Mercado Livre recusou a resposta (status {resposta.status_code}): {resposta.text}")
     return resposta.json()
+
+
+# ---------------------------------------------------------------------------
+# Verificação de cancelamento + reposição de estoque (solicitações manuais)
+# ---------------------------------------------------------------------------
+def buscar_pedido(access_token: str, order_id: str) -> dict:
+    """
+    Busca os dados completos de um pedido -- usado pra conferir se uma
+    solicitação de cancelamento manual já foi efetivada de verdade no
+    Mercado Livre. Inclui `status` (vira "cancelled" quando cancelado)
+    e `cancel_detail` (group/code/description/requested_by -- o motivo
+    e a classificação do cancelamento, preenchidos automaticamente
+    pelo Mercado Livre, sem precisar de nenhum atendimento).
+    """
+    return _get(f"/orders/{order_id}", access_token, "buscar o pedido")
+
+
+def repor_estoque_item(access_token: str, item_id: str, quantidade_a_somar: int, variation_id: str | None = None) -> dict:
+    """
+    Soma `quantidade_a_somar` ao estoque disponível de um anúncio (ou
+    de uma variação específica, quando o pedido tiver variation_id) --
+    usado pra repor o estoque automaticamente depois de confirmar que
+    uma venda foi cancelada. A API do Mercado Livre não tem um
+    "incrementar", só "definir o valor final" -- por isso lê o estoque
+    atual primeiro, pra não sobrescrever com um número errado se ele já
+    tiver mudado por outro motivo entre a leitura e a escrita.
+    """
+    item_atual = _get(f"/items/{item_id}", access_token, "buscar o anúncio pra repor estoque")
+
+    if variation_id:
+        variacoes = item_atual.get("variations") or []
+        variacao_atual = next((v for v in variacoes if str(v.get("id")) == str(variation_id)), None)
+        estoque_atual = (variacao_atual or {}).get("available_quantity", 0) or 0
+        payload = {"variations": [{"id": variation_id, "available_quantity": estoque_atual + quantidade_a_somar}]}
+    else:
+        estoque_atual = item_atual.get("available_quantity", 0) or 0
+        payload = {"available_quantity": estoque_atual + quantidade_a_somar}
+
+    try:
+        resposta = httpx.put(
+            f"{ML_API_BASE_URL}/items/{item_id}",
+            headers={"Authorization": f"Bearer {access_token}"},
+            json=payload,
+            timeout=15,
+        )
+    except httpx.RequestError as exc:
+        raise MLApiError(f"Falha de rede ao repor o estoque: {exc}") from exc
+    if resposta.status_code != 200:
+        raise MLApiError(f"Mercado Livre recusou a reposição de estoque (status {resposta.status_code}): {resposta.text}")
+    return resposta.json()

@@ -4,12 +4,14 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
 from datetime import datetime, timedelta, timezone
+import asyncio
 from sqlalchemy import func
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku
+from app.verificacao_cancelamento import loop_verificacao_cancelamentos
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -50,6 +52,18 @@ def bootstrap_admin_inicial():
 bootstrap_admin_inicial()
 
 app = FastAPI(title="Club Marketplace — Painel")
+
+
+@app.on_event("startup")
+async def _iniciar_verificacao_cancelamentos():
+    """
+    Liga o processo em segundo plano que confere sozinho, a cada 12
+    minutos, se as solicitações de cancelamento pendentes já foram
+    canceladas no Mercado Livre -- e repõe o estoque automaticamente
+    quando confirma. Só leitura até confirmar (sem risco de piorar
+    reputação ou mexer em dinheiro). Ver app/verificacao_cancelamento.py.
+    """
+    asyncio.create_task(loop_verificacao_cancelamentos())
 
 # --- Middleware de autenticação ---
 # Tudo exige login por padrão. As exceções abaixo são as páginas/APIs
