@@ -40,13 +40,13 @@ logger = logging.getLogger(__name__)
 _COLUNAS_ADICIONAIS = {
     "perguntas": {
         "skus_anuncio": "VARCHAR",
+        "titulo_anuncio": "VARCHAR",
     },
     "solicitacoes_cancelamento": {
         "origem": "VARCHAR",
         "solicitado_por": "VARCHAR",
         "galpao": "INTEGER",
         "conta_chave": "VARCHAR",
-        "resultado_impacto": "VARCHAR",
     },
 }
 
