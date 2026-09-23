@@ -582,8 +582,32 @@ main {
   .cmx-shell {
     grid-template-columns: 1fr;
   }
+  /* Celular / tela estreita: o menu vira uma gaveta que desliza da
+     esquerda, aberta pelo botão ☰ (criado por static/menu-celular.js). */
   .cmx-sidebar {
-    display: none;
+    position: fixed;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(280px, 84vw);
+    z-index: 60;
+    overflow-y: auto;
+    transform: translateX(-105%);
+    transition: transform .25s ease;
+    box-shadow: 8px 0 30px rgba(0, 0, 0, .25);
+  }
+  body.cmx-menu-aberto .cmx-sidebar {
+    transform: translateX(0);
+  }
+  body.cmx-menu-aberto {
+    overflow: hidden; /* a página de fundo não rola com o menu aberto */
+  }
+  .cmx-topbar {
+    padding-left: 72px !important; /* espaço pro botão ☰ */
+  }
+  .cmx-menu-usuario {
+    top: 14px;
+    right: 14px;
   }
   .cmx-hero {
     grid-template-columns: 1fr;
@@ -606,4 +630,64 @@ main {
     align-items: flex-start;
     gap: 14px;
   }
+}
+
+
+/* ---------- Menu no celular: botão ☰, fundo escurecido e botão ✕ ---------- */
+.cmx-botao-menu, .cmx-veu-menu, .cmx-fechar-menu { display: none; }
+
+@media (max-width: 980px) {
+  .cmx-botao-menu {
+    display: flex;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 55;
+    width: 44px;
+    height: 44px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    border: 1px solid var(--cmx-borda);
+    background: var(--cmx-papel);
+    color: var(--cmx-texto);
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, .08);
+  }
+  .cmx-veu-menu {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 58;
+    background: rgba(10, 15, 20, .45);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .25s ease;
+  }
+  body.cmx-menu-aberto .cmx-veu-menu {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .cmx-fechar-menu {
+    display: flex;
+    position: absolute;
+    top: 14px;
+    right: 12px;
+    width: 34px;
+    height: 34px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    background: transparent;
+    color: #cfd6de;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  .cmx-sidebar .cmx-marca { padding-right: 44px; } /* logo não fica embaixo do ✕ */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cmx-sidebar, .cmx-veu-menu { transition: none; }
 }
