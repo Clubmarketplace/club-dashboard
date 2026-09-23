@@ -581,14 +581,22 @@ def criar_usuario(
                 context={**contexto_base, "erro_criar": "Você não tem permissão pra criar esse papel."},
             )
 
-        usuario_normalizado = usuario.strip().lower()
+        # O login é guardado como foi digitado ("Josef"), mas na hora de
+        # entrar maiúsculas/minúsculas não importam (_buscar_usuario_por_login).
+        usuario_normalizado = usuario.strip()
         if not usuario_normalizado:
             return templates.TemplateResponse(
                 request=request, name="usuarios.html", status_code=400,
                 context={**contexto_base, "erro_criar": "Informe o nome de usuário."},
             )
+        if any(c.isspace() for c in usuario_normalizado):
+            return templates.TemplateResponse(
+                request=request, name="usuarios.html", status_code=400,
+                context={**contexto_base, "erro_criar": "O login não pode ter espaços."},
+            )
 
-        if db.query(Usuario).filter(Usuario.usuario == usuario_normalizado).first() is not None:
+        # "Josef" e "josef" seriam o mesmo login -- não deixa duplicar.
+        if db.query(Usuario).filter(func.lower(Usuario.usuario) == usuario_normalizado.lower()).first() is not None:
             return templates.TemplateResponse(
                 request=request, name="usuarios.html", status_code=400,
                 context={**contexto_base, "erro_criar": f"Já existe um usuário com o login '{usuario_normalizado}'."},
@@ -653,11 +661,33 @@ def pagina_login(request: Request):
     return templates.TemplateResponse(request=request, name="login.html", context={"erro": None})
 
 
+def _buscar_usuario_por_login(db, login: str):
+    """
+    Acha o usuário pelo login IGNORANDO maiúsculas/minúsculas ("Josef",
+    "josef" e "JOSEF" são a mesma pessoa). Só usuários ativos. Se por
+    acaso existirem dois que diferem só na caixa (cadastros antigos),
+    prefere o que bate exatamente com o digitado.
+    """
+    digitado = (login or "").strip()
+    if not digitado:
+        return None
+    candidatos = (
+        db.query(Usuario)
+        .filter(func.lower(Usuario.usuario) == digitado.lower(), Usuario.ativo.is_(True))
+        .order_by(Usuario.id)
+        .all()
+    )
+    for candidato in candidatos:
+        if candidato.usuario == digitado:
+            return candidato
+    return candidatos[0] if candidatos else None
+
+
 @app.post("/login")
 def fazer_login(request: Request, usuario: str = Form(...), senha: str = Form(...)):
     db = SessionLocal()
     try:
-        conta = db.query(Usuario).filter(Usuario.usuario == usuario.strip(), Usuario.ativo.is_(True)).first()
+        conta = _buscar_usuario_por_login(db, usuario)
 
         if conta is None or not conta.senha_hash:
             erro = "Usuário ou senha incorretos." if conta is None else "Essa conta ainda não concluiu o primeiro acesso — use o link 'Criar sua senha'."
@@ -705,7 +735,7 @@ def concluir_primeiro_acesso(
 
     db = SessionLocal()
     try:
-        conta = db.query(Usuario).filter(Usuario.usuario == usuario.strip(), Usuario.ativo.is_(True)).first()
+        conta = _buscar_usuario_por_login(db, usuario)
         codigo_confere = conta is not None and conta.codigo_primeiro_acesso and conta.codigo_primeiro_acesso.upper() == codigo.strip().upper()
 
         if not codigo_confere:
