@@ -21,3 +21,6 @@ tzdata
 # pacote pré-compilado pro Python usado no Railway, e tentam compilar
 # do zero (o que falha lá por falta de ferramenta de build).
 psycopg2-binary
+
+# Gera o relatório diário de cancelamentos em Excel (.xlsx)
+openpyxl
