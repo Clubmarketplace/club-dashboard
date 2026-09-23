@@ -113,12 +113,15 @@
             <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
               <option value="admin" {% if alvo.papel == "admin" %}selected{% endif %}>Admin</option>
               <option value="supervisor" {% if alvo.papel == "supervisor" %}selected{% endif %}>Supervisor</option>
+              <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
               <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
             </select>
             {% else %}
-            <input type="text" value="Seller" disabled />
-            <input type="hidden" name="papel" value="seller" />
-            <div class="eu-dica">Como supervisor, você só edita usuários seller.</div>
+            <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
+              <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
+              <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
+            </select>
+            <div class="eu-dica">Como supervisor, você edita atendentes e sellers.</div>
             {% endif %}
 
             <div class="eu-campo-conta" id="bloco-conta">
