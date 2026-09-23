@@ -104,6 +104,51 @@
   .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
   .aviso.erro { color:var(--red); }
 
+  /* ---------- Estrutura (vale pra todas as larguras) ---------- */
+  .topo-form { margin-bottom:18px; }
+  .topo-form .links-direita p { margin:0 0 6px; }
+  .linha-selecao { display:flex; flex-direction:column; }
+  .linha-selecao .grupo + .grupo { margin-top:18px; }
+  .cabecalho-vendas { display:none; }
+  .acoes-form { display:flex; flex-direction:column; }
+  .acoes-form .btn-adicionar { order:0; }
+  .acoes-form button[type="submit"] { order:1; }
+
+  /* ---------- Computador: formulário na horizontal, sem rolar ----------
+     Abaixo de 860px (celular/tablet em pé) fica tudo como antes: vertical. */
+  @media (min-width: 860px) {
+    body.modo-largo { padding:24px 16px; }
+    .modo-largo .cartao { max-width:1100px; padding:24px 28px; align-self:flex-start; } /* altura do conteúdo, sem esticar */
+    .modo-largo .marca { margin-bottom:12px; }
+
+    .modo-largo .topo-form { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:18px; }
+    .modo-largo .topo-form .subtitulo { margin:0; max-width:620px; }
+    .modo-largo .topo-form .links-direita { text-align:right; flex-shrink:0; }
+    .modo-largo .topo-form .links-direita p, .modo-largo .topo-form .logado-como { margin:0 0 4px !important; }
+
+    .modo-largo .linha-selecao { flex-direction:row; gap:16px; align-items:flex-end; }
+    .modo-largo .linha-selecao .grupo { flex:1; min-width:0; }
+    .modo-largo .linha-selecao .grupo.grupo-conta { flex:1.3; }
+    .modo-largo .linha-selecao .grupo + .grupo { margin-top:0; }
+    .modo-largo .campo-conta-caixa input[type="text"] { height:46px; }
+
+    /* Cada venda vira uma linha: nº | motivo | remover */
+    .modo-largo .cabecalho-vendas { display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,2fr) 70px; gap:10px;
+      font-size:12px; font-weight:600; color:var(--text-dim); margin:20px 0 6px; }
+    .modo-largo .bloco-itens { gap:8px; margin-top:0; }
+    .modo-largo .item-venda { display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,2fr) 70px; gap:10px; align-items:start;
+      border:none; padding:0; }
+    .modo-largo .item-venda .item-cabecalho { display:contents; }
+    .modo-largo .item-venda .item-numero { grid-column:1; grid-row:1; align-self:center; margin:0; }
+    .modo-largo .item-venda .btn-remover-item { grid-column:4; grid-row:1; align-self:center; justify-self:start; }
+    .modo-largo .item-venda label { display:none; }
+    .modo-largo .item-venda .campo-numero-venda { grid-column:2; grid-row:1; height:44px; }
+    .modo-largo .item-venda .campo-motivo { grid-column:3; grid-row:1; min-height:44px; height:44px; resize:none; overflow:hidden; line-height:1.4; }
+
+    .modo-largo .acoes-form { flex-direction:row; gap:12px; margin-top:14px; }
+    .modo-largo .acoes-form .btn-adicionar, .modo-largo .acoes-form button[type="submit"] { flex:1; margin-top:0; height:46px; padding:0 14px; }
+  }
+
   .tela-sucesso { display:none; text-align:center; padding:20px 0; }
   .tela-sucesso .check { width:56px; height:56px; border-radius:50%; background:#e7f7ee; color:var(--green); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 16px; }
   .tela-sucesso h2 { font-size:18px; margin:0 0 6px 0; }
@@ -111,7 +156,7 @@
   .tela-sucesso button { padding:10px 20px; border-radius:9px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
 </style>
 </head>
-<body>
+<body class="modo-largo"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
 
 <div class="cartao">
   <div class="marca">
@@ -119,25 +164,35 @@
   </div>
 
   <div id="tela-formulario">
-    <h1>Solicitar cancelamento</h1>
-    <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
-    {% if seller_logado %}
-    <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
-    {% endif %}
-    {% if logistica_logado %}
-    <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
-    <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
-    {% endif %}
+    <div class="topo-form">
+      <div>
+        <h1>Solicitar cancelamento</h1>
+        <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
+      </div>
+      <div class="links-direita">
+        {% if seller_logado %}
+        <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
+        {% endif %}
+        {% if logistica_logado %}
+        <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
+        <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
+        {% endif %}
+      </div>
+    </div>
 
     <form id="form-cancelamento">
+      <div class="linha-selecao">
       {% if logistica_logado %}
+      <div class="grupo">
       <label>Galpão</label>
       <div class="opcoes-galpao">
         <label class="opcao-galpao" data-galpao="1"><input type="radio" name="galpao" value="1" />Galpão 1</label>
         <label class="opcao-galpao" data-galpao="2"><input type="radio" name="galpao" value="2" />Galpão 2</label>
       </div>
+      </div>
       {% endif %}
 
+      <div class="grupo">
       <label>Plataforma</label>
       <div class="opcoes-plataforma">
         <label class="opcao-plataforma" id="opt-ml">
@@ -150,20 +205,28 @@
         </label>
       </div>
 
+      </div>
+
+      <div class="grupo grupo-conta">
       <label for="conta">Conta</label>
       <div class="campo-conta-caixa">
         <input type="text" id="conta" name="conta" placeholder="{% if logistica_logado %}Digite para buscar a conta (ex: vel){% else %}Ex: Velasco{% endif %}" required autocomplete="off"
           value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
         <div class="sugestoes-conta" id="sugestoes-conta"></div>
       </div>
+      </div>
+      </div>
+
+      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span>Motivo do cancelamento</span><span></span></div>
 
       <div class="bloco-itens" id="bloco-itens"></div>
 
-      <button type="button" class="btn-adicionar" id="botao-adicionar">+ Adicionar outra venda</button>
-
       <div class="aviso-caixa" id="aviso-caixa"></div>
 
-      <button type="submit" id="botao-enviar">Enviar solicitação</button>
+      <div class="acoes-form">
+        <button type="button" class="btn-adicionar" id="botao-adicionar">+ Adicionar outra venda</button>
+        <button type="submit" id="botao-enviar">Enviar solicitação</button>
+      </div>
       <div class="aviso" id="aviso-erro" style="display:none;"></div>
     </form>
   </div>
@@ -316,6 +379,13 @@
       <label>Motivo do cancelamento</label>
       <textarea class="campo-motivo" placeholder="Ex: Etiqueta não foi gerada, CEP errado, sem estoque..." required></textarea>
     `;
+    // No layout horizontal o motivo começa com 1 linha e cresce se precisar.
+    const motivo = div.querySelector(".campo-motivo");
+    motivo.addEventListener("input", () => {
+      if (!window.matchMedia("(min-width: 860px)").matches) return;
+      motivo.style.height = "44px";
+      motivo.style.height = Math.min(motivo.scrollHeight + 2, 140) + "px";
+    });
     div.querySelector(".btn-remover-item").addEventListener("click", () => {
       div.remove();
       atualizarNumerosEBotoesRemover();
