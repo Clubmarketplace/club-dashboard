@@ -19,10 +19,13 @@ Nome de conta: tudo que compara/agrupa/filtra usa a conta_chave (ver
 app/contas_util.py), pra "Friaça", "friaca" e "FRIAÇA" serem a mesma.
 """
 import re
+import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
 from pydantic import BaseModel, field_validator
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
@@ -58,6 +61,13 @@ FUSO_BR = timezone(timedelta(hours=-3))
 
 # Papéis que podem CONFIRMAR (quem pede não confirma: controle cruzado).
 PAPEIS_QUE_CONFIRMAM = ("admin", "supervisor", "atendente")
+
+RESULTADOS_IMPACTO_VALIDOS = {"sem_impacto", "com_impacto", "aguardando_confirmacao"}
+LABEL_RESULTADO_IMPACTO = {
+    "sem_impacto": "Sem impacto",
+    "com_impacto": "Com impacto",
+    "aguardando_confirmacao": "Aguardando confirmação do ML",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -172,6 +182,7 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "galpao": s.galpao,
         "galpao_nome": GALPOES.get(s.galpao, f"Galpão {s.galpao}") if s.galpao else None,
         "plataforma_nome": PLATAFORMAS.get(s.plataforma, s.plataforma),
+        "resultado_impacto": s.resultado_impacto,
     }
 
 
@@ -419,13 +430,29 @@ def buscar_solicitacoes(
 # ---------------------------------------------------------------------------
 # Confirmar
 # ---------------------------------------------------------------------------
+class ConfirmarSolicitacaoBody(BaseModel):
+    resultado_impacto: str
+
+    @field_validator("resultado_impacto")
+    @classmethod
+    def validar_resultado(cls, valor: str) -> str:
+        if valor not in RESULTADOS_IMPACTO_VALIDOS:
+            raise ValueError(f"resultado_impacto inválido. Use um de: {', '.join(RESULTADOS_IMPACTO_VALIDOS)}")
+        return valor
+
+
 @router.post("/{solicitacao_id}/confirmar")
-def confirmar_solicitacao(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, request: Request, db: Session = Depends(get_db)):
     """
     Marca um pedido como já cancelado de verdade na plataforma. Quem
     confirmou é sempre a pessoa LOGADA no momento do clique (pego da
     sessão, nunca digitado). Seller e logística não confirmam -- quem
     pede não é quem confirma.
+
+    corpo.resultado_impacto é OBRIGATÓRIO e sempre preenchido à mão:
+    o Mercado Livre não devolve essa informação por nenhuma API
+    pública -- só confirma se pesou ou não na reputação através do
+    atendimento deles (chat/WhatsApp, veja os botões de atalho na tela).
     """
     usuario_logado = auth.usuario_atual(request, db)
     if usuario_logado is None:
@@ -441,6 +468,7 @@ def confirmar_solicitacao(solicitacao_id: int, request: Request, db: Session = D
 
     solicitacao.confirmado_por = usuario_logado.nome_exibicao
     solicitacao.confirmado_em = datetime.utcnow()
+    solicitacao.resultado_impacto = corpo.resultado_impacto
     db.commit()
     db.refresh(solicitacao)
 
@@ -449,4 +477,131 @@ def confirmar_solicitacao(solicitacao_id: int, request: Request, db: Session = D
         "id": solicitacao.id,
         "confirmado_por": solicitacao.confirmado_por,
         "confirmado_em": solicitacao.confirmado_em.isoformat(),
+        "resultado_impacto": solicitacao.resultado_impacto,
     }
+
+
+@router.post("/{solicitacao_id}/verificar-status")
+def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Confere na hora (sem esperar o ciclo automático de até 12 min) se
+    essa solicitação pendente já foi cancelada no Mercado Livre --
+    útil pra testar uma solicitação específica. Ver
+    app/verificacao_cancelamento.py pra lógica completa.
+    """
+    usuario_logado = auth.usuario_atual(request, db)
+    if usuario_logado is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+
+    solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if solicitacao is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if solicitacao.confirmado_por:
+        raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
+    if solicitacao.plataforma != "mercado_livre":
+        raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
+
+    from app.verificacao_cancelamento import verificar_uma_solicitacao
+    confirmou = verificar_uma_solicitacao(solicitacao, db)
+    db.refresh(solicitacao)
+
+    return {
+        "confirmou": confirmou,
+        "mensagem": "Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre.",
+        "solicitacao": _serializar(solicitacao),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Relatório diário (Excel)
+# ---------------------------------------------------------------------------
+@router.get("/relatorio")
+def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Gera um Excel (.xlsx) de controle do dia: quantas solicitações
+    foram registradas, quantas foram tratadas (confirmadas) e o
+    resultado de reputação de cada uma tratada nesse dia -- pra
+    acompanhamento diário de quanto foi respondido.
+
+    `data` no formato AAAA-MM-DD (horário de Brasília); se omitido,
+    usa o dia de hoje.
+    """
+    if data:
+        try:
+            dia = datetime.strptime(data, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
+    else:
+        dia = datetime.now(FUSO_BR).replace(tzinfo=None)
+
+    inicio_dia = _inicio_do_dia_br_em_utc(dia)
+    fim_dia = _inicio_do_dia_br_em_utc(dia + timedelta(days=1))
+
+    tratadas_no_dia = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.confirmado_em >= inicio_dia, SolicitacaoCancelamento.confirmado_em < fim_dia)
+        .order_by(SolicitacaoCancelamento.confirmado_em.asc())
+        .all()
+    )
+    registradas_no_dia = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.criado_em >= inicio_dia, SolicitacaoCancelamento.criado_em < fim_dia)
+        .count()
+    )
+    pendentes_total = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.confirmado_por.is_(None)).count()
+
+    contagem_impacto = {"sem_impacto": 0, "com_impacto": 0, "aguardando_confirmacao": 0, "nao_informado": 0}
+    for s in tratadas_no_dia:
+        chave = s.resultado_impacto if s.resultado_impacto in RESULTADOS_IMPACTO_VALIDOS else "nao_informado"
+        contagem_impacto[chave] += 1
+
+    wb = Workbook()
+
+    resumo = wb.active
+    resumo.title = "Resumo"
+    resumo.append(["Relatório de cancelamentos -- Club Marketplace", dia.strftime("%d/%m/%Y")])
+    resumo.append([])
+    resumo.append(["Registradas no dia", registradas_no_dia])
+    resumo.append(["Tratadas no dia", len(tratadas_no_dia)])
+    resumo.append(["Pendentes agora (todas as datas)", pendentes_total])
+    resumo.append([])
+    resumo.append(["Resultado de reputação das tratadas no dia", ""])
+    resumo.append(["Sem impacto", contagem_impacto["sem_impacto"]])
+    resumo.append(["Com impacto", contagem_impacto["com_impacto"]])
+    resumo.append(["Aguardando confirmação do ML", contagem_impacto["aguardando_confirmacao"]])
+    resumo.append(["Não informado", contagem_impacto["nao_informado"]])
+    resumo.column_dimensions["A"].width = 40
+    resumo.column_dimensions["B"].width = 18
+
+    mapa_contas = _mapa_contas_conhecidas(db)
+    detalhe = wb.create_sheet("Detalhe do dia")
+    detalhe.append([
+        "Conta", "Plataforma", "Nº da venda", "Motivo", "Origem", "Confirmado por",
+        "Confirmado em", "Resultado (reputação)",
+    ])
+    for s in tratadas_no_dia:
+        info = _serializar(s, mapa_contas)
+        detalhe.append([
+            info["conta_nome"],
+            info["plataforma_nome"],
+            info["numero_venda"],
+            info["motivo"],
+            {"seller": "Seller", "logistica": info["galpao_nome"] or "Logística", "publico": "Link público"}.get(info["origem"], "Seller / link público"),
+            info["confirmado_por"],
+            datetime.fromisoformat(info["confirmado_em"]).strftime("%d/%m/%Y %H:%M") if info["confirmado_em"] else "",
+            LABEL_RESULTADO_IMPACTO.get(info["resultado_impacto"], "Não informado"),
+        ])
+    larguras = [18, 14, 18, 30, 18, 18, 18, 26]
+    for indice, largura in enumerate(larguras, start=1):
+        detalhe.column_dimensions[detalhe.cell(row=1, column=indice).column_letter].width = largura
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+
+    nome_arquivo = f"cancelamentos_{dia.strftime('%Y-%m-%d')}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
