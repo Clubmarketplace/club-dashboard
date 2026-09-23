@@ -39,6 +39,37 @@
   .opcao-plataforma#opt-ml.selecionada { border-color:#ffe600; background:#ffe600; color:#1a1206; }
   .opcao-plataforma#opt-shopee.selecionada { border-color:#ee4d2d; background:#ee4d2d; color:#fff; }
   .opcao-plataforma input { display:none; }
+  /* Os "botões" são <label>: zera a margem herdada da regra geral de label */
+  .opcoes-plataforma .opcao-plataforma, .opcoes-galpao .opcao-galpao { margin:0; }
+
+  /* Galpão (só perfil Logística) -- mesmo formato dos botões de plataforma */
+  .opcoes-galpao { display:flex; gap:10px; }
+  .opcao-galpao {
+    flex:1; min-width:0; height:46px; box-sizing:border-box; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer;
+    font-weight:600; font-size:13.5px; color:var(--text-dim); white-space:nowrap;
+    transition:border-color .15s, background .15s, color .15s;
+  }
+  .opcao-galpao.selecionada { border-color:#1b2430; background:#1b2430; color:#fff; }
+  .opcao-galpao input { display:none; }
+
+  /* Campo Conta com busca (Logística) */
+  .campo-conta-caixa { position:relative; }
+  .sugestoes-conta { display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5; background:#fff;
+    border:1.5px solid var(--line); border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,.08); max-height:240px; overflow-y:auto; }
+  .sugestoes-conta.aberta { display:block; }
+  .sugestao-conta { padding:9px 13px; font-size:13.5px; cursor:pointer; }
+  .sugestao-conta:hover, .sugestao-conta.ativa { background:#f4f6f8; }
+  .sugestao-conta.nova { color:#8a5a10; font-weight:600; border-top:1px solid var(--line); }
+
+  /* Caixa de aviso com ação (duplicidade / "você quis dizer") */
+  .aviso-caixa { display:none; margin-top:16px; padding:12px 14px; border-radius:10px; background:#fff7e8;
+    border:1.5px solid var(--amber); font-size:13px; line-height:1.45; }
+  .aviso-caixa ul { margin:6px 0 10px; padding-left:18px; }
+  .aviso-caixa .acoes { display:flex; gap:8px; flex-wrap:wrap; }
+  .aviso-caixa button { padding:8px 12px; border-radius:8px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:12.5px; cursor:pointer; }
+  .aviso-caixa button.principal { background:#1b2430; border-color:#1b2430; color:#fff; }
+  .logado-como { font-size:12.5px; color:var(--text-dim); margin:0 0 20px; }
 
   input[type="text"], textarea {
     width:100%; padding:11px 13px; border-radius:9px; border:1.5px solid var(--line);
@@ -93,8 +124,20 @@
     {% if seller_logado %}
     <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
     {% endif %}
+    {% if logistica_logado %}
+    <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
+    <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
+    {% endif %}
 
     <form id="form-cancelamento">
+      {% if logistica_logado %}
+      <label>Galpão</label>
+      <div class="opcoes-galpao">
+        <label class="opcao-galpao" data-galpao="1"><input type="radio" name="galpao" value="1" />Galpão 1</label>
+        <label class="opcao-galpao" data-galpao="2"><input type="radio" name="galpao" value="2" />Galpão 2</label>
+      </div>
+      {% endif %}
+
       <label>Plataforma</label>
       <div class="opcoes-plataforma">
         <label class="opcao-plataforma" id="opt-ml">
@@ -108,12 +151,17 @@
       </div>
 
       <label for="conta">Conta</label>
-      <input type="text" id="conta" name="conta" placeholder="Ex: Velasco" required autocomplete="off"
-        value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
+      <div class="campo-conta-caixa">
+        <input type="text" id="conta" name="conta" placeholder="{% if logistica_logado %}Digite para buscar a conta (ex: vel){% else %}Ex: Velasco{% endif %}" required autocomplete="off"
+          value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
+        <div class="sugestoes-conta" id="sugestoes-conta"></div>
+      </div>
 
       <div class="bloco-itens" id="bloco-itens"></div>
 
       <button type="button" class="btn-adicionar" id="botao-adicionar">+ Adicionar outra venda</button>
+
+      <div class="aviso-caixa" id="aviso-caixa"></div>
 
       <button type="submit" id="botao-enviar">Enviar solicitação</button>
       <div class="aviso" id="aviso-erro" style="display:none;"></div>
@@ -137,6 +185,118 @@
       opcao.querySelector("input").checked = true;
     });
   });
+
+  const MODO_LOGISTICA = {{ 'true' if logistica_logado else 'false' }};
+  const MODO_SELLER = {{ 'true' if seller_logado else 'false' }};
+  const NOME_USUARIO = {{ (nome_usuario or '') | tojson }};
+
+  function escaparHtml(t) {
+    return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+  // Mesma regra do servidor (app/contas_util.py): minúsculo, sem acento, sem espaço sobrando.
+  function chaveConta(nome) {
+    return String(nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  // ---------- Galpão (Logística): obrigatório, lembra o último usado neste aparelho ----------
+  const CHAVE_GALPAO_LOCAL = "club_galpao_ultimo";
+  const opcoesGalpao = document.querySelectorAll(".opcao-galpao");
+  function selecionarGalpao(valor) {
+    opcoesGalpao.forEach(o => {
+      const marcado = o.dataset.galpao === String(valor);
+      o.classList.toggle("selecionada", marcado);
+      o.querySelector("input").checked = marcado;
+    });
+  }
+  opcoesGalpao.forEach(o => o.addEventListener("click", () => {
+    selecionarGalpao(o.dataset.galpao);
+    try { localStorage.setItem(CHAVE_GALPAO_LOCAL, o.dataset.galpao); } catch (e) { /* navegador sem storage: segue sem lembrar */ }
+  }));
+  if (MODO_LOGISTICA) {
+    try { const ultimo = localStorage.getItem(CHAVE_GALPAO_LOCAL); if (ultimo === "1" || ultimo === "2") selecionarGalpao(ultimo); } catch (e) {}
+  }
+
+  // ---------- Conta com busca (Logística) ----------
+  let contasConhecidas = []; // [{chave, nome}]
+  const campoConta = document.getElementById("conta");
+  const caixaSugestoes = document.getElementById("sugestoes-conta");
+
+  async function carregarContas() {
+    try {
+      const r = await fetch("/api/solicitacoes-cancelamento/contas", { cache: "no-store" });
+      if (r.ok) contasConhecidas = await r.json();
+    } catch (e) { console.error("Não consegui carregar a lista de contas", e); }
+  }
+
+  function mostrarSugestoes() {
+    const termo = chaveConta(campoConta.value);
+    const achadas = contasConhecidas.filter(c => !termo || c.chave.includes(termo)).slice(0, 8);
+    const exata = contasConhecidas.some(c => c.chave === termo);
+    let html = achadas.map(c => `<div class="sugestao-conta" data-nome="${escaparHtml(c.nome)}">${escaparHtml(c.nome)}</div>`).join("");
+    if (termo && !exata) {
+      html += `<div class="sugestao-conta nova" data-nome="${escaparHtml(campoConta.value.trim())}">+ Usar nova conta: "${escaparHtml(campoConta.value.trim())}"</div>`;
+    }
+    caixaSugestoes.innerHTML = html;
+    caixaSugestoes.classList.toggle("aberta", !!html);
+  }
+
+  if (MODO_LOGISTICA) {
+    carregarContas();
+    campoConta.addEventListener("input", mostrarSugestoes);
+    campoConta.addEventListener("focus", mostrarSugestoes);
+    caixaSugestoes.addEventListener("mousedown", (e) => {
+      const item = e.target.closest(".sugestao-conta");
+      if (!item) return;
+      e.preventDefault();
+      campoConta.value = item.dataset.nome;
+      caixaSugestoes.classList.remove("aberta");
+    });
+    campoConta.addEventListener("blur", () => setTimeout(() => caixaSugestoes.classList.remove("aberta"), 150));
+  }
+
+  // Distância de edição simples -- pega "Vellasco" x "Velasco", "Velsaco" etc.
+  function distancia(a, b) {
+    const m = a.length, n = b.length;
+    if (Math.abs(m - n) > 3) return 99;
+    const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+    for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return d[m][n];
+  }
+  function contaParecida(nome) {
+    const chave = chaveConta(nome);
+    let melhor = null, melhorDist = 99;
+    contasConhecidas.forEach(c => {
+      const dist = distancia(chave, c.chave);
+      const contem = chave.length >= 4 && (c.chave.startsWith(chave) || chave.startsWith(c.chave));
+      const pontos = contem ? Math.min(dist, 1) : dist;
+      if (pontos < melhorDist) { melhorDist = pontos; melhor = c; }
+    });
+    return melhorDist <= 2 ? melhor : null;
+  }
+
+  const SUFIXOS_PLATAFORMA = ["mercado livre", "mercadolivre", "shopee", "meli", "ml"];
+  function sufixoPlataforma(nome) {
+    const chave = chaveConta(nome);
+    return SUFIXOS_PLATAFORMA.find(s => chave.endsWith(" " + s)) || null;
+  }
+
+  // ---------- Caixa de aviso com ações ----------
+  const avisoCaixa = document.getElementById("aviso-caixa");
+  function mostrarAvisoCaixa(html, acoes) {
+    avisoCaixa.innerHTML = html + `<div class="acoes">${acoes.map((a, i) => `<button type="button" class="${a.principal ? "principal" : ""}" data-i="${i}">${escaparHtml(a.texto)}</button>`).join("")}</div>`;
+    avisoCaixa.style.display = "block";
+    avisoCaixa.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { esconderAvisoCaixa(); acoes[+b.dataset.i].acao(); }));
+    avisoCaixa.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function esconderAvisoCaixa() { avisoCaixa.style.display = "none"; avisoCaixa.innerHTML = ""; }
+
+  function formatarDataBR(iso) {
+    if (!iso) return "";
+    const d = new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
+    return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+  }
 
   const blocoItens = document.getElementById("bloco-itens");
   let contadorItens = 0;
@@ -183,27 +343,72 @@
   const botaoEnviar = document.getElementById("botao-enviar");
   const avisoErro = document.getElementById("aviso-erro");
 
-  form.addEventListener("submit", async (evento) => {
+  function mostrarErro(msg) {
+    avisoErro.textContent = msg;
+    avisoErro.className = "aviso erro";
+    avisoErro.style.display = "block";
+  }
+
+  // Conta já decidida pelo usuário no "você quis dizer?" (pra não perguntar de novo)
+  let contaConfirmadaComoNova = null;
+
+  form.addEventListener("submit", (evento) => {
     evento.preventDefault();
+    enviar(false);
+  });
+
+  async function enviar(confirmarDuplicadas) {
     avisoErro.style.display = "none";
+    esconderAvisoCaixa();
+
+    let galpao = null;
+    if (MODO_LOGISTICA) {
+      const marcado = form.querySelector('input[name="galpao"]:checked');
+      if (!marcado) return mostrarErro("Escolha o galpão (1 ou 2).");
+      galpao = Number(marcado.value);
+    }
 
     const plataformaSelecionada = form.querySelector('input[name="plataforma"]:checked');
-    if (!plataformaSelecionada) {
-      avisoErro.textContent = "Escolha a plataforma (Mercado Livre ou Shopee).";
-      avisoErro.className = "aviso erro";
-      avisoErro.style.display = "block";
-      return;
-    }
+    if (!plataformaSelecionada) return mostrarErro("Escolha a plataforma (Mercado Livre ou Shopee).");
+
+    const contaDigitada = campoConta.value.trim();
+    if (!contaDigitada) return mostrarErro("Informe a conta.");
 
     const itens = Array.from(blocoItens.querySelectorAll(".item-venda")).map(div => ({
       numero_venda: div.querySelector(".campo-numero-venda").value.trim(),
       motivo: div.querySelector(".campo-motivo").value.trim(),
     }));
+    if (itens.some(i => !i.numero_venda || !i.motivo)) return mostrarErro("Preencha o número da venda e o motivo de todas as vendas.");
+
+    // --- Checagens de conta (só Logística; o seller tem a conta fixa) ---
+    if (MODO_LOGISTICA) {
+      const sufixo = sufixoPlataforma(contaDigitada);
+      if (sufixo) return mostrarErro(`Use só o nome da loja, sem "${sufixo.toUpperCase()}" -- a plataforma já é escolhida nos botões.`);
+
+      const chave = chaveConta(contaDigitada);
+      const exata = contasConhecidas.find(c => c.chave === chave);
+      if (exata) {
+        campoConta.value = exata.nome; // sempre o nome oficial
+      } else if (contaConfirmadaComoNova !== chave) {
+        const parecida = contaParecida(contaDigitada);
+        if (parecida) {
+          return mostrarAvisoCaixa(
+            `<b>Você quis dizer "${escaparHtml(parecida.nome)}"?</b><br>Não encontrei a conta "${escaparHtml(contaDigitada)}", mas existe uma parecida.`,
+            [
+              { texto: `Sim, usar ${parecida.nome}`, principal: true, acao: () => { campoConta.value = parecida.nome; enviar(confirmarDuplicadas); } },
+              { texto: "Não, é uma conta nova", acao: () => { contaConfirmadaComoNova = chave; enviar(confirmarDuplicadas); } },
+            ]
+          );
+        }
+      }
+    }
 
     const dados = {
       plataforma: plataformaSelecionada.value,
-      conta: document.getElementById("conta").value.trim(),
+      conta: campoConta.value.trim(),
       itens,
+      galpao,
+      confirmar_duplicadas: confirmarDuplicadas,
     };
 
     botaoEnviar.disabled = true;
@@ -216,39 +421,60 @@
         body: JSON.stringify(dados),
       });
 
+      if (resposta.status === 409) {
+        // Venda já solicitada antes: mostra quem/quando e deixa decidir.
+        const erro = await resposta.json().catch(() => ({}));
+        const dup = (erro.detail && erro.detail.duplicadas) || [];
+        const linhas = dup.map(d => {
+          const quem = d.galpao ? `Galpão ${d.galpao}${d.solicitado_por ? " · " + d.solicitado_por : ""}` : (d.solicitado_por || d.conta);
+          const status = d.confirmado_por ? ` — ✓ já cancelada por ${d.confirmado_por}` : " — pendente";
+          return `<li>Venda <b>${escaparHtml(d.numero_venda)}</b> (${escaparHtml(d.conta)}): pedida em ${formatarDataBR(d.criado_em)} por ${escaparHtml(quem)}${escaparHtml(status)}</li>`;
+        }).join("");
+        return mostrarAvisoCaixa(
+          `<b>Essa venda já tem solicitação de cancelamento.</b><ul>${linhas}</ul>Enviar de novo pode gerar pedido duplicado.`,
+          [
+            { texto: "Não enviar", principal: true, acao: () => {} },
+            { texto: "Enviar mesmo assim", acao: () => enviar(true) },
+          ]
+        );
+      }
+
       if (!resposta.ok) {
         const erro = await resposta.json().catch(() => ({}));
         const mensagem = Array.isArray(erro.detail)
           ? erro.detail.map(d => d.msg).join(" ")
-          : (erro.detail || "Não foi possível registrar. Confira os campos e tente de novo.");
+          : (typeof erro.detail === "string" ? erro.detail : "Não foi possível registrar. Confira os campos e tente de novo.");
         throw new Error(mensagem);
       }
 
       const resultado = await resposta.json();
       const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
-      document.getElementById("texto-confirmacao").textContent =
-        `Conta ${dados.conta} — ${plural}.`;
+      const textoConfirmacao = MODO_LOGISTICA
+        ? `Registrado no Galpão ${resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
+        : `Conta ${resultado.conta || dados.conta} — ${plural}.`;
+      document.getElementById("texto-confirmacao").textContent = textoConfirmacao;
       document.getElementById("tela-formulario").style.display = "none";
       document.getElementById("tela-sucesso").style.display = "block";
+      contaConfirmadaComoNova = null;
+      if (MODO_LOGISTICA) carregarContas(); // conta nova passa a aparecer na lista
 
-      {% if seller_logado %}
-      // Seller logado: volta sozinho pra "Meus Cancelamentos" depois de mostrar a confirmação.
-      document.getElementById("botao-nova").style.display = "none";
-      const avisoVoltar = document.createElement("p");
-      avisoVoltar.style.cssText = "font-size:12.5px; color:var(--text-dim); margin-top:10px;";
-      avisoVoltar.textContent = "Voltando pra Meus Cancelamentos...";
-      document.getElementById("tela-sucesso").appendChild(avisoVoltar);
-      setTimeout(() => { window.location.href = "/meus-cancelamentos"; }, 1600);
-      {% endif %}
+      const destino = MODO_SELLER ? "/meus-cancelamentos" : (MODO_LOGISTICA ? "/solicitacoes-galpao" : null);
+      if (destino) {
+        // Logado: volta sozinho pra tela de acompanhamento depois de mostrar a confirmação.
+        document.getElementById("botao-nova").style.display = "none";
+        const avisoVoltar = document.createElement("p");
+        avisoVoltar.style.cssText = "font-size:12.5px; color:var(--text-dim); margin-top:10px;";
+        avisoVoltar.textContent = MODO_SELLER ? "Voltando pra Meus Cancelamentos..." : "Voltando pras solicitações do galpão...";
+        document.getElementById("tela-sucesso").appendChild(avisoVoltar);
+        setTimeout(() => { window.location.href = destino; }, MODO_LOGISTICA ? 2400 : 1600);
+      }
     } catch (erro) {
-      avisoErro.textContent = erro.message;
-      avisoErro.className = "aviso erro";
-      avisoErro.style.display = "block";
+      mostrarErro(erro.message);
     } finally {
       botaoEnviar.disabled = false;
       botaoEnviar.textContent = "Enviar solicitação";
     }
-  });
+  }
 
   document.getElementById("botao-nova").addEventListener("click", () => {
     form.reset();

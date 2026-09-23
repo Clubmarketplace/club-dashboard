@@ -306,6 +306,18 @@ class SolicitacaoCancelamento(Base):
     confirmado_por = Column(String, nullable=True)
     confirmado_em = Column(DateTime, nullable=True)
 
+    # --- Origem da solicitação (colunas adicionadas depois; em bancos
+    # antigos são criadas por database.garantir_estrutura_atualizada) ---
+    # "seller" (logado), "logistica" (galpão) ou "publico" (link sem
+    # login). Nulo = registro antigo, de antes dessa informação existir.
+    origem = Column(String, nullable=True)
+    solicitado_por = Column(String, nullable=True)  # nome de quem estava logado
+    galpao = Column(Integer, nullable=True)  # 1 ou 2 -- só pra origem "logistica"
+    # Nome da conta normalizado (minúsculo, sem acento, sem espaço sobrando)
+    # -- é por ele que tudo compara/agrupa, pra "Friaça" e "friaca" nunca
+    # virarem duas contas. O campo "conta" guarda o nome de exibição.
+    conta_chave = Column(String, nullable=True, index=True)
+
 
 class Usuario(Base):
     """
@@ -327,7 +339,7 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     usuario = Column(String, unique=True, index=True, nullable=False)
     nome_exibicao = Column(String, nullable=False)
-    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "seller"
+    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "atendente" | "logistica" | "seller"
     senha_hash = Column(String, nullable=True)  # nulo até o primeiro acesso ser concluído
     codigo_primeiro_acesso = Column(String, nullable=True)
     precisa_trocar_senha = Column(Boolean, default=True)

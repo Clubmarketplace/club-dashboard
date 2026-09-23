@@ -114,14 +114,16 @@
               <option value="admin" {% if alvo.papel == "admin" %}selected{% endif %}>Admin</option>
               <option value="supervisor" {% if alvo.papel == "supervisor" %}selected{% endif %}>Supervisor</option>
               <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
+              <option value="logistica" {% if alvo.papel == "logistica" %}selected{% endif %}>Logística</option>
               <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
             </select>
             {% else %}
             <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
               <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
+              <option value="logistica" {% if alvo.papel == "logistica" %}selected{% endif %}>Logística</option>
               <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
             </select>
-            <div class="eu-dica">Como supervisor, você edita atendentes e sellers.</div>
+            <div class="eu-dica">Como supervisor, você edita atendentes, logística e sellers.</div>
             {% endif %}
 
             <div class="eu-campo-conta" id="bloco-conta">

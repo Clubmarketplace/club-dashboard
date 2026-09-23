@@ -74,6 +74,12 @@
     .cc-modal-cancelar { background:#f1f3f5; color:var(--cmx-texto); }
     .cc-modal-confirmar { background:var(--cmx-marinho); color:#fff; }
     .cc-modal-erro { color:#d64541; font-size:12px; margin:-8px 0 12px; display:none; }
+    .cc-origem { display:inline-block; font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
+    .cc-origem.logistica { background:#efe9fb; color:#6b46c1; }
+    .cc-origem.seller { background:#e6f0ea; color:#2f6f4f; }
+    .cc-origem.publico { background:#eef1f4; color:#6b7684; }
+    .cc-mais { display:block; margin:6px auto 0; padding:9px 18px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; font-weight:600; cursor:pointer; }
+    .cc-rodape-lista { text-align:center; font-size:12.5px; color:#6b7684; margin-top:8px; }
   </style>
 </head>
 <body>
@@ -147,17 +153,11 @@
           <div class="cc-kpi"><div class="rotulo">Shopee</div><div class="valor" id="kpi-shopee">—</div></div>
         </div>
 
-        <div class="cc-controles">
-          <input type="text" id="busca" placeholder="Buscar por conta ou nº da venda..." />
-          <select id="filtro-plataforma">
-            <option value="">Todas as plataformas</option>
-            <option value="mercado_livre">Mercado Livre</option>
-            <option value="shopee">Shopee</option>
-          </select>
-          <div class="cc-link-publico">Link público: <b>/solicitar-cancelamento</b></div>
-        </div>
+        <div id="barra-filtros"></div>
+        <div class="cc-rodape-lista" style="text-align:right; margin:-8px 0 10px;">Link público: <b>/solicitar-cancelamento</b></div>
 
         <div id="grupos"></div>
+        <div id="lista-rodape"></div>
       </main>
     </div>
   </div>
@@ -174,29 +174,45 @@
     </div>
   </div>
 
+  <script src="/static/solicitacoes-filtros.js?v=1"></script>
   <script>
     const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
     let todasSolicitacoes = [];
-    let termoBusca = "";
-    let plataformaFiltro = "";
+    let ultimaResposta = null;
     const gruposRecolhidos = new Set();
+
+    function escaparHtml(t) {
+      return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+
+    // De onde veio o pedido: galpão (quem e qual), seller ou link público.
+    function htmlOrigem(s) {
+      if (s.origem === "logistica") return `<span class="cc-origem logistica">🏭 Galpão ${s.galpao || "?"}${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "seller") return `<span class="cc-origem seller">👤 Seller${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "publico") return `<span class="cc-origem publico">🔗 Link público</span>`;
+      return `<span class="cc-origem publico">Seller / link público</span>`; // registros antigos
+    }
 
     function parseDataUTC(iso) {
       if (!iso) return new Date();
-      return new Date(iso.endsWith("Z") ? iso : iso + "Z");
+      return new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
     }
     function formatarData(iso) {
-      return parseDataUTC(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+      if (!iso) return "—";
+      return parseDataUTC(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
     }
 
-    async function carregar() {
-      const resposta = await fetch("/api/solicitacoes-cancelamento");
+    // Filtragem feita no servidor (paginada): os filtros vêm da barra.
+    async function carregar(params, pagina = 1) {
+      const qs = new URLSearchParams({ ...params, pagina, por_pagina: 300 });
+      const resposta = await fetch("/api/solicitacoes-cancelamento/busca?" + qs.toString(), { cache: "no-store" });
+      if (resposta.status === 401) { window.location.href = "/login"; return null; }
       if (!resposta.ok) throw new Error("status " + resposta.status);
       return resposta.json();
     }
 
     function renderizarKpis(lista) {
-      const contas = new Set(lista.map(s => s.conta));
+      const contas = new Set(lista.map(s => s.conta_chave || s.conta.trim().toLowerCase()));
       document.getElementById("kpi-total").textContent = lista.length;
       document.getElementById("kpi-contas").textContent = contas.size;
       document.getElementById("kpi-ml").textContent = lista.filter(s => s.plataforma === "mercado_livre").length;
@@ -204,17 +220,11 @@
     }
 
     function renderizarGrupos() {
-      let filtradas = todasSolicitacoes;
-      if (plataformaFiltro) filtradas = filtradas.filter(s => s.plataforma === plataformaFiltro);
-      if (termoBusca) {
-        filtradas = filtradas.filter(s =>
-          s.conta.toLowerCase().includes(termoBusca) || s.numero_venda.toLowerCase().includes(termoBusca)
-        );
-      }
+      const filtradas = todasSolicitacoes;
 
       const container = document.getElementById("grupos");
       if (filtradas.length === 0) {
-        container.innerHTML = '<div class="cc-vazio">Nenhuma solicitação encontrada.</div>';
+        container.innerHTML = '<div class="cc-vazio">Nenhuma solicitação com esses filtros.</div>';
         return;
       }
 
@@ -224,8 +234,8 @@
       const porConta = {};
       const nomeExibicaoPorChave = {};
       filtradas.forEach(s => {
-        const chave = s.conta.trim().toLowerCase();
-        if (!porConta[chave]) { porConta[chave] = []; nomeExibicaoPorChave[chave] = s.conta.trim(); }
+        const chave = s.conta_chave || s.conta.trim().toLowerCase();
+        if (!porConta[chave]) { porConta[chave] = []; nomeExibicaoPorChave[chave] = (s.conta_nome || s.conta).trim(); }
         porConta[chave].push(s);
       });
       const contasOrdenadas = Object.keys(porConta).sort((a, b) => {
@@ -240,14 +250,15 @@
         const recolhido = gruposRecolhidos.has(chave) ? "recolhido" : "";
         const linhas = itens.map(s => {
           const statusHtml = s.confirmado_por
-            ? `<span class="cc-status-confirmado">✓ <b>${s.confirmado_por}</b><br>${formatarData(s.confirmado_em)}</span>`
-            : `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${s.conta}" data-venda="${s.numero_venda}">Confirmar</button>`;
+            ? `<span class="cc-status-confirmado">✓ <b>${escaparHtml(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</span>`
+            : `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}">Confirmar</button>`;
           return `
           <tr>
             <td class="cc-data">${formatarData(s.criado_em)}</td>
             <td><span class="cc-badge ${s.plataforma === "shopee" ? "shopee" : "ml"}">${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}</span></td>
-            <td>${s.numero_venda}</td>
-            <td class="cc-motivo">${s.motivo}</td>
+            <td>${escaparHtml(s.numero_venda)}</td>
+            <td class="cc-motivo">${escaparHtml(s.motivo)}</td>
+            <td>${htmlOrigem(s)}</td>
             <td>${statusHtml}</td>
           </tr>
         `;
@@ -256,12 +267,12 @@
         return `
           <div class="cc-grupo ${recolhido}" data-conta="${chave}">
             <div class="cc-grupo-cabecalho">
-              <span class="cc-grupo-nome">${conta} <span class="cc-grupo-contagem">${itens.length} pedido${itens.length > 1 ? "s" : ""}</span></span>
+              <span class="cc-grupo-nome">${escaparHtml(conta)} <span class="cc-grupo-contagem">${itens.length} pedido${itens.length > 1 ? "s" : ""}</span></span>
               <span class="cc-grupo-seta">▾</span>
             </div>
             <div class="cc-grupo-tabela">
               <table class="cc-tabela">
-                <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
+                <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Origem</th><th>Status</th></tr></thead>
                 <tbody>${linhas}</tbody>
               </table>
             </div>
@@ -325,21 +336,50 @@
       }
     });
 
-    document.getElementById("busca").addEventListener("input", (e) => {
-      termoBusca = e.target.value.trim().toLowerCase();
-      renderizarGrupos();
-    });
-    document.getElementById("filtro-plataforma").addEventListener("change", (e) => {
-      plataformaFiltro = e.target.value;
-      renderizarGrupos();
+    // ---------- Barra de filtros + carga ----------
+    const barra = criarBarraFiltros({
+      container: document.getElementById("barra-filtros"),
+      mostrarOrigem: true,
+      onChange: () => atualizar(),
     });
 
+    function renderizarRodape() {
+      const r = ultimaResposta;
+      const rodape = document.getElementById("lista-rodape");
+      if (!r) { rodape.innerHTML = ""; return; }
+      const mostrando = todasSolicitacoes.length;
+      rodape.innerHTML = r.tem_mais
+        ? `<div class="cc-rodape-lista">Mostrando ${mostrando} de ${r.total_filtrado}</div><button class="cc-mais" id="carregar-mais">Carregar mais</button>`
+        : (mostrando ? `<div class="cc-rodape-lista">${mostrando} solicitação(ões)</div>` : "");
+      const botao = document.getElementById("carregar-mais");
+      if (botao) botao.addEventListener("click", async () => {
+        botao.disabled = true;
+        try {
+          const proxima = await carregar(barra.params(), r.pagina + 1);
+          if (!proxima) return;
+          todasSolicitacoes = todasSolicitacoes.concat(proxima.itens);
+          ultimaResposta = proxima;
+          renderizarKpis(todasSolicitacoes);
+          renderizarGrupos();
+          renderizarRodape();
+        } catch (e) { console.error(e); botao.disabled = false; }
+      });
+    }
+
+    let emAndamento = 0;
     async function atualizar() {
+      const minhaVez = ++emAndamento; // descarta respostas antigas se o filtro mudou no meio
       try {
-        todasSolicitacoes = await carregar();
+        const r = await carregar(barra.params());
+        if (!r || minhaVez !== emAndamento) return;
+        ultimaResposta = r;
+        todasSolicitacoes = r.itens;
         document.getElementById("aviso-erro").innerHTML = "";
+        barra.atualizarContadores(r.contadores);
+        barra.atualizarResumo(r.buscando_todo_historico);
         renderizarKpis(todasSolicitacoes);
         renderizarGrupos();
+        renderizarRodape();
       } catch (erro) {
         document.getElementById("aviso-erro").innerHTML = '<div class="cc-erro">Não foi possível carregar os dados agora.</div>';
         console.error(erro);
@@ -347,7 +387,11 @@
     }
 
     atualizar();
-    setInterval(atualizar, 15000);
+    // Atualiza sozinho, mas só a 1ª página (não desfaz um "carregar mais").
+    setInterval(() => {
+      const porPagina = (ultimaResposta && ultimaResposta.por_pagina) || 300;
+      if (todasSolicitacoes.length <= porPagina) atualizar();
+    }, 15000);
   </script>
 </body>
 </html>

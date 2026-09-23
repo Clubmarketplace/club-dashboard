@@ -106,7 +106,7 @@
         <tbody>
           {% for s in solicitacoes %}
           <tr>
-            <td>{{ s.criado_em.strftime("%d/%m/%Y %H:%M") if s.criado_em else "-" }}</td>
+            <td>{{ s.criado_em | hora_br }}</td>
             <td><span class="badge {{ 'shopee' if s.plataforma == 'shopee' else 'ml' }}">{{ "Shopee" if s.plataforma == "shopee" else "Mercado Livre" }}</span></td>
             <td>{{ s.numero_venda }}</td>
             <td>{{ s.motivo }}</td>

@@ -1,5 +1,7 @@
 import os
-from sqlalchemy import create_engine
+import logging
+
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Em produção, defina DATABASE_URL apontando pro Postgres (o Railway
@@ -27,3 +29,68 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+logger = logging.getLogger(__name__)
+
+# Colunas acrescentadas em tabelas que JÁ existiam. O create_all só cria
+# tabelas novas -- não adiciona coluna em tabela existente --, então
+# esta lista é aplicada na inicialização. Regras: só ADICIONAR (nunca
+# apagar/renomear), sempre aceitando nulo, e seguro rodar várias vezes.
+_COLUNAS_ADICIONAIS = {
+    "solicitacoes_cancelamento": {
+        "origem": "VARCHAR",
+        "solicitado_por": "VARCHAR",
+        "galpao": "INTEGER",
+        "conta_chave": "VARCHAR",
+    },
+}
+
+# Índices pra filtros/busca continuarem rápidos com o volume crescendo.
+_INDICES_ADICIONAIS = [
+    ("ix_solic_canc_criado_em", "solicitacoes_cancelamento", "criado_em"),
+    ("ix_solic_canc_numero_venda", "solicitacoes_cancelamento", "numero_venda"),
+    # mesmo nome que o SQLAlchemy dá ao index=True do modelo: em banco novo já
+    # existe (IF NOT EXISTS ignora); em banco antigo é criado aqui.
+    ("ix_solicitacoes_cancelamento_conta_chave", "solicitacoes_cancelamento", "conta_chave"),
+]
+
+
+def garantir_estrutura_atualizada() -> None:
+    """
+    Adiciona as colunas/índices novos se ainda não existirem e preenche
+    a conta_chave dos registros antigos. Chamada uma vez na subida do
+    sistema, logo depois do create_all. Se falhar, registra no log e
+    interrompe a subida -- melhor o deploy falhar (e o Railway manter a
+    versão anterior no ar) do que rodar com o banco pela metade.
+    """
+    try:
+        inspetor = inspect(engine)
+        with engine.begin() as conexao:
+            for tabela, colunas in _COLUNAS_ADICIONAIS.items():
+                if not inspetor.has_table(tabela):
+                    continue  # tabela nova: o create_all já criou completa
+                existentes = {c["name"] for c in inspetor.get_columns(tabela)}
+                for nome, tipo in colunas.items():
+                    if nome not in existentes:
+                        conexao.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}"))
+                        logger.info("Coluna adicionada: %s.%s", tabela, nome)
+            for nome_indice, tabela, coluna in _INDICES_ADICIONAIS:
+                conexao.execute(text(f"CREATE INDEX IF NOT EXISTS {nome_indice} ON {tabela} ({coluna})"))
+
+        # Preenche a chave dos registros antigos (só os que ainda não têm).
+        from app.contas_util import chave_conta  # import local: evita ciclo na carga
+        with engine.begin() as conexao:
+            pendentes = conexao.execute(
+                text("SELECT id, conta FROM solicitacoes_cancelamento WHERE conta_chave IS NULL")
+            ).fetchall()
+            for linha in pendentes:
+                conexao.execute(
+                    text("UPDATE solicitacoes_cancelamento SET conta_chave = :c WHERE id = :i"),
+                    {"c": chave_conta(linha.conta), "i": linha.id},
+                )
+            if pendentes:
+                logger.info("conta_chave preenchida em %d solicitações antigas", len(pendentes))
+    except Exception:
+        logger.exception("Falha ao atualizar a estrutura do banco")
+        raise

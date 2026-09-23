@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Solicitações do galpão</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --cmx-marinho:#12181f; --cmx-bg:#f6f7f9; --cmx-papel:#ffffff;
+      --cmx-texto:#1b2430; --cmx-texto-suave:#6b7684; --cmx-borda:#e4e7eb;
+      --cmx-azul:#2baff2; --cmx-azul-fundo:#e6f7ff;
+      --cmx-leve:#fdf3e3; --cmx-atencao:#d98e2f; --cmx-critico:#c1502e; --cmx-critico-fundo:#fbe9e3;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:"Inter",sans-serif; background:var(--cmx-bg); color:var(--cmx-texto); font-size:14.5px; }
+    header { background:#fff; border-bottom:1px solid var(--cmx-borda); padding:18px 32px; display:flex; align-items:center; justify-content:space-between; }
+    .marca { display:flex; align-items:center; gap:12px; }
+    .marca img { height:32px; }
+    .saudacao { font-size:13.5px; color:var(--cmx-texto-suave); }
+    .saudacao b { color:var(--cmx-texto); }
+    a.sair { font-size:12.5px; color:var(--cmx-texto-suave); text-decoration:none; margin-left:16px; }
+    a.sair:hover { text-decoration:underline; }
+
+    main { max-width:1100px; margin:0 auto; padding:28px 24px 60px; }
+    .topo-pagina { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
+    .topo-pagina h1 { font-size:20px; margin:0; }
+    .topo-pagina p { margin:2px 0 0; color:var(--cmx-texto-suave); font-size:13.5px; }
+    a.botao-nova {
+      background:var(--cmx-azul); color:#fff; text-decoration:none; font-weight:600; font-size:13.5px;
+      padding:10px 18px; border-radius:9px;
+    }
+    a.botao-nova:hover { background:#1c98d6; }
+
+    .resumo { display:flex; gap:12px; margin-bottom:20px; }
+    .resumo .item { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 18px; flex:1; text-align:center; }
+    .resumo .item .valor { font-size:24px; font-weight:700; }
+    .resumo .item .rotulo { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+
+    .lista-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; overflow:hidden; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:12px 18px; border-bottom:1px solid var(--cmx-borda); background:#fafbfc; }
+    tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
+    tbody tr:last-child td { border-bottom:none; }
+    .badge { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
+    .badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .badge.shopee { background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
+    .status-pendente { font-size:11.5px; font-weight:600; color:var(--cmx-atencao); background:var(--cmx-leve); padding:3px 9px; border-radius:999px; }
+    .status-confirmado { font-size:11.5px; color:#2f6f4f; }
+    .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
+    .vazio .emoji { font-size:36px; margin-bottom:10px; }
+    table { table-layout:auto; }
+    .galpao-tag { display:inline-block; font-size:11.5px; font-weight:700; background:#efe9fb; color:#6b46c1; padding:2px 7px; border-radius:6px; }
+    .quem { font-size:12px; color:var(--cmx-texto-suave); }
+    .nowrap { white-space:nowrap; }
+    .rodape-lista { text-align:center; font-size:12.5px; color:var(--cmx-texto-suave); margin-top:10px; }
+    .mais { display:block; margin:8px auto 0; padding:9px 18px; border-radius:9px; border:1px solid var(--cmx-borda); background:#fff; font-weight:600; cursor:pointer; }
+    .erro { color:var(--cmx-critico); text-align:center; font-size:13px; margin-bottom:10px; }
+    @media (max-width: 760px) { .lista-cartao { overflow-x:auto; } table { min-width:720px; } }
+  </style>
+</head>
+<body>
+  <header style="position:relative;">
+    <div class="marca">
+      <img src="/static/logo.png?v=2" alt="Club Marketplace" />
+    </div>
+    <div style="position:relative;">
+      <div style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:6px 12px; border-radius:10px; border:1px solid var(--cmx-borda);" onclick="document.getElementById('mc-dropdown-usuario').classList.toggle('aberto')">
+        <div style="width:30px; height:30px; border-radius:50%; background:var(--cmx-azul); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;">{{ usuario.nome_exibicao[0]|upper }}</div>
+        <div>
+          <div style="font-size:13px; font-weight:600; line-height:1.2;">{{ usuario.nome_exibicao }}</div>
+          <div style="font-size:11px; color:var(--cmx-texto-suave); line-height:1.2;">Logística</div>
+        </div>
+        <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+      </div>
+      <div id="mc-dropdown-usuario" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#fff; border:1px solid var(--cmx-borda); border-radius:10px; box-shadow:0 10px 30px -10px rgba(0,0,0,.2); min-width:160px; overflow:hidden; z-index:20;">
+        <a href="/logout" style="display:block; padding:11px 16px; font-size:13.5px; color:var(--cmx-critico); text-decoration:none; font-weight:600;">🚪 Sair</a>
+      </div>
+    </div>
+  </header>
+  <script>
+    document.addEventListener("click", function(e) {
+      var dropdown = document.getElementById("mc-dropdown-usuario");
+      if (dropdown && !e.target.closest("header")) dropdown.classList.remove("aberto");
+    });
+  </script>
+  <style>#mc-dropdown-usuario.aberto { display: block !important; }</style>
+
+  <div style="background:#fff; padding:10px 32px;">
+    <span style="font-size:15px; font-weight:700; color:var(--cmx-azul);">Logística — todas as contas</span>
+  </div>
+
+  <main>
+    <div class="topo-pagina">
+      <div>
+        <h1>Solicitações do galpão</h1>
+        <p>Pedidos de cancelamento registrados pelos galpões (todas as contas)</p>
+      </div>
+      <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
+    </div>
+
+    <div class="resumo">
+      <div class="item"><div class="valor" id="res-total">—</div><div class="rotulo">Total</div></div>
+      <div class="item"><div class="valor" id="res-confirmados">—</div><div class="rotulo">Confirmados</div></div>
+      <div class="item"><div class="valor" id="res-pendentes">—</div><div class="rotulo">Pendentes</div></div>
+    </div>
+
+    <div id="barra-filtros"></div>
+    <div id="aviso-erro"></div>
+
+    <div class="lista-cartao">
+      <table>
+        <thead>
+          <tr><th>Data</th><th>Conta</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Galpão</th><th>Status</th></tr>
+        </thead>
+        <tbody id="corpo-tabela"><tr><td colspan="7" class="vazio">Carregando...</td></tr></tbody>
+      </table>
+    </div>
+    <div id="lista-rodape"></div>
+  </main>
+
+  <script src="/static/solicitacoes-filtros.js?v=1"></script>
+  <script>
+    // Só leitura: o galpão acompanha, quem confirma é a equipe interna.
+    // O servidor já devolve apenas solicitações de origem "logística".
+    function escaparHtml(t) {
+      return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+    function formatarData(iso) {
+      if (!iso) return "-";
+      const d = new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
+      return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+    }
+
+    let itens = [];
+    let ultima = null;
+
+    const barra = criarBarraFiltros({
+      container: document.getElementById("barra-filtros"),
+      mostrarOrigem: false,
+      onChange: () => atualizar(),
+    });
+
+    async function carregar(params, pagina = 1) {
+      const qs = new URLSearchParams({ ...params, pagina, por_pagina: 100 });
+      const r = await fetch("/api/solicitacoes-cancelamento/busca?" + qs.toString(), { cache: "no-store" });
+      if (r.status === 401) { window.location.href = "/login"; return null; }
+      if (!r.ok) throw new Error("status " + r.status);
+      return r.json();
+    }
+
+    function linha(s) {
+      const plataforma = s.plataforma === "shopee"
+        ? '<span class="badge shopee">Shopee</span>'
+        : '<span class="badge ml">Mercado Livre</span>';
+      const status = s.confirmado_por
+        ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>`
+        : '<span class="status-pendente">Pendente</span>';
+      return `<tr>
+        <td class="nowrap">${formatarData(s.criado_em)}</td>
+        <td>${escaparHtml(s.conta_nome || s.conta)}</td>
+        <td>${plataforma}</td>
+        <td>${escaparHtml(s.numero_venda)}</td>
+        <td>${escaparHtml(s.motivo)}</td>
+        <td class="nowrap"><span class="galpao-tag">G${s.galpao || "?"}</span> <span class="quem">${escaparHtml(s.solicitado_por || "")}</span></td>
+        <td>${status}</td>
+      </tr>`;
+    }
+
+    function renderizar() {
+      const corpo = document.getElementById("corpo-tabela");
+      corpo.innerHTML = itens.length
+        ? itens.map(linha).join("")
+        : '<tr><td colspan="7" class="vazio"><div class="emoji">📭</div>Nenhuma solicitação com esses filtros.</td></tr>';
+
+      const rodape = document.getElementById("lista-rodape");
+      if (ultima && ultima.tem_mais) {
+        rodape.innerHTML = `<div class="rodape-lista">Mostrando ${itens.length} de ${ultima.total_filtrado}</div><button class="mais" id="carregar-mais">Carregar mais</button>`;
+        document.getElementById("carregar-mais").addEventListener("click", async (e) => {
+          e.target.disabled = true;
+          try {
+            const prox = await carregar(barra.params(), ultima.pagina + 1);
+            if (!prox) return;
+            itens = itens.concat(prox.itens); ultima = prox; renderizar();
+          } catch (err) { console.error(err); e.target.disabled = false; }
+        });
+      } else {
+        rodape.innerHTML = "";
+      }
+    }
+
+    let vez = 0;
+    async function atualizar() {
+      const minhaVez = ++vez;
+      try {
+        const r = await carregar(barra.params());
+        if (!r || minhaVez !== vez) return;
+        ultima = r; itens = r.itens;
+        document.getElementById("aviso-erro").innerHTML = "";
+        document.getElementById("res-total").textContent = r.contadores.total;
+        document.getElementById("res-confirmados").textContent = r.contadores.confirmados;
+        document.getElementById("res-pendentes").textContent = r.contadores.pendentes;
+        barra.atualizarContadores(r.contadores);
+        barra.atualizarResumo(r.buscando_todo_historico);
+        renderizar();
+      } catch (err) {
+        document.getElementById("aviso-erro").innerHTML = '<div class="erro">Não foi possível carregar agora -- tentando de novo em instantes.</div>';
+        console.error(err);
+      }
+    }
+
+    atualizar();
+    setInterval(() => { if (!ultima || itens.length <= ultima.por_pagina) atualizar(); }, 20000);
+  </script>
+</body>
+</html>

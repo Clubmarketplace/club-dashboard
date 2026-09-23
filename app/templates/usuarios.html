@@ -19,6 +19,7 @@
     .us-badge-papel.supervisor { background:#eaf1ff; color:#2f6fed; }
     .us-badge-papel.seller { background:#e6f0ea; color:#2f6f4f; }
     .us-badge-papel.atendente { background:#fff4e0; color:#a4640c; }
+    .us-badge-papel.logistica { background:#efe9fb; color:#6b46c1; }
     .us-status-ativo { font-size:12px; font-weight:600; color:#2f6f4f; }
     .us-status-inativo { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); }
     button.us-alternar { padding:7px 14px; border-radius:7px; border:1px solid var(--cmx-borda); background:#fff; font-size:12.5px; font-weight:600; cursor:pointer; }
@@ -116,7 +117,7 @@
             {% if papel_logado == "admin" %}
             Todos os operadores do sistema. Desativar impede o login, mas mantém todo o histórico.
             {% else %}
-            Atendentes e sellers que você pode gerenciar. Desativar impede o login, mas mantém todo o histórico.
+            Atendentes, logística e sellers que você pode gerenciar. Desativar impede o login, mas mantém todo o histórico.
             {% endif %}
           </p>
         </div>
@@ -183,6 +184,7 @@ Use esse código uma vez só, pra criar sua senha pessoal.</div>
                     <option value="supervisor">Supervisor</option>
                     {% endif %}
                     <option value="atendente">Atendente</option>
+                    <option value="logistica">Logística</option>
                     <option value="seller" selected>Seller</option>
                   </select>
                 </div>

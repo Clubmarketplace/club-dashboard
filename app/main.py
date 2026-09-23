@@ -2,17 +2,20 @@ from fastapi import FastAPI, Request, Form
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from app.database import Base, engine, SessionLocal
-from datetime import datetime, timedelta
+from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
+from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
+from app.contas_util import chave_conta
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
 # pra essa fase inicial).
 Base.metadata.create_all(bind=engine)
+# Colunas novas em tabelas que já existiam (o create_all não faz isso).
+garantir_estrutura_atualizada()
 
 
 def bootstrap_admin_inicial():
@@ -85,6 +88,17 @@ _AREAS = {
         "paginas": {"/solicitacoes-painel", "/api/solicitacoes-cancelamento"},
         "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
+    # Galpão: registrar (o formulário e o envio já são públicos) e
+    # acompanhar. Só endereços EXATOS -- de propósito, o /confirmar
+    # fica de fora (quem pede não confirma).
+    "logistica": {
+        "paginas": {
+            "/solicitacoes-galpao",
+            "/api/solicitacoes-cancelamento/busca",
+            "/api/solicitacoes-cancelamento/contas",
+        },
+        "prefixos_api": (),
+    },
 }
 
 # Perfis com acesso RESTRITO: só entram no que está listado aqui (lista
@@ -92,15 +106,20 @@ _AREAS = {
 # Admin e supervisor não aparecem aqui porque têm acesso amplo.
 _AREAS_POR_PAPEL = {
     "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento"),
+    "logistica": ("logistica",),
 }
-_PAGINA_INICIAL_POR_PAPEL = {"seller": "/meus-cancelamentos", "atendente": "/pre-venda"}
+_PAGINA_INICIAL_POR_PAPEL = {
+    "seller": "/meus-cancelamentos",
+    "atendente": "/pre-venda",
+    "logistica": "/solicitar-cancelamento",
+}
 
 # Quais perfis cada papel pode criar/editar/resetar/desativar. Usado em
 # TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
 # no servidor, nunca só no <select> da tela.
 PAPEIS_GERENCIAVEIS_POR = {
-    "admin": ("admin", "supervisor", "atendente", "seller"),
-    "supervisor": ("atendente", "seller"),
+    "admin": ("admin", "supervisor", "atendente", "logistica", "seller"),
+    "supervisor": ("atendente", "logistica", "seller"),
 }
 
 
@@ -172,6 +191,22 @@ app.include_router(solicitacoes_cancelamento.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+# O banco guarda datas em UTC "cru" (datetime.utcnow). Nas telas montadas
+# no servidor, sempre exibir no horário de Brasília (UTC-3 fixo -- sem
+# horário de verão desde 2019). Uso: {{ s.criado_em | hora_br }}
+_FUSO_BR = timezone(timedelta(hours=-3))
+
+
+def _hora_br(data, formato: str = "%d/%m/%Y %H:%M") -> str:
+    if not data:
+        return "-"
+    if data.tzinfo is None:
+        data = data.replace(tzinfo=timezone.utc)
+    return data.astimezone(_FUSO_BR).strftime(formato)
+
+
+templates.env.filters["hora_br"] = _hora_br
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -298,11 +333,30 @@ def pagina_solicitar_cancelamento(request: Request):
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         conta_pre_preenchida = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        logistica_logado = bool(usuario and usuario.papel == "logistica")
+        nome_usuario = usuario.nome_exibicao if usuario else None
     return templates.TemplateResponse(
         request=request,
         name="solicitar-cancelamento.html",
-        context={"conta_pre_preenchida": conta_pre_preenchida, "seller_logado": bool(conta_pre_preenchida)},
+        context={
+            "conta_pre_preenchida": conta_pre_preenchida,
+            "seller_logado": bool(conta_pre_preenchida),
+            "logistica_logado": logistica_logado,
+            "nome_usuario": nome_usuario,
+        },
     )
+
+
+@app.get("/solicitacoes-galpao", response_class=HTMLResponse)
+def pagina_solicitacoes_galpao(request: Request):
+    """Acompanhamento das solicitações feitas pelos galpões (perfil Logística)."""
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario, ("logistica", "admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+        return templates.TemplateResponse(
+            request=request, name="solicitacoes-galpao.html", context={"usuario": usuario},
+        )
 
 
 @app.get("/meus-cancelamentos", response_class=HTMLResponse)
@@ -315,7 +369,7 @@ def pagina_meus_cancelamentos(request: Request):
 
         solicitacoes = (
             db.query(SolicitacaoCancelamento)
-            .filter(func.lower(SolicitacaoCancelamento.conta) == usuario.conta_vinculada.strip().lower())
+            .filter(SolicitacaoCancelamento.conta_chave == chave_conta(usuario.conta_vinculada))
             .order_by(SolicitacaoCancelamento.confirmado_por.is_(None).desc(), SolicitacaoCancelamento.criado_em.desc())
             .all()
         )
