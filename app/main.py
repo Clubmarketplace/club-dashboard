@@ -78,13 +78,20 @@ _AREAS = {
     "pre_venda": {"paginas": {"/pre-venda"}, "prefixos_api": ("/api/pre-venda/",)},
     "pos_venda": {"paginas": {"/pos-venda"}, "prefixos_api": ("/api/pos-venda/",)},
     "paineis_tv": {"paginas": {"/painel-tv/geral", "/painel-tv/fila"}, "prefixos_api": ()},
+    # Acompanhar e confirmar as solicitações manuais de cancelamento.
+    # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
+    # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
+    "solicitacoes_cancelamento": {
+        "paginas": {"/solicitacoes-painel", "/api/solicitacoes-cancelamento"},
+        "prefixos_api": ("/api/solicitacoes-cancelamento/",),
+    },
 }
 
 # Perfis com acesso RESTRITO: só entram no que está listado aqui (lista
 # do que PODE -- tela nova nasce bloqueada pra eles até alguém liberar).
 # Admin e supervisor não aparecem aqui porque têm acesso amplo.
 _AREAS_POR_PAPEL = {
-    "atendente": ("pre_venda", "pos_venda", "paineis_tv"),
+    "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento"),
 }
 _PAGINA_INICIAL_POR_PAPEL = {"seller": "/meus-cancelamentos", "atendente": "/pre-venda"}
 
