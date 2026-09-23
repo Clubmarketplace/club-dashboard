@@ -122,6 +122,10 @@ class Pergunta(Base):
     ml_question_id = Column(String, unique=True, index=True, nullable=False)
     item_id = Column(String, index=True, nullable=True)  # MLB... do anúncio
     sku = Column(String, index=True, nullable=True)  # SELLER_SKU do item, quando existe
+    # Todos os SKUs do anúncio separados por vírgula (anúncio com variações
+    # pode ter um por variação). "" = anúncio lido e sem SKU; nulo = ainda
+    # não lido (ou a leitura falhou) -- a ferramenta de preenchimento tenta de novo.
+    skus_anuncio = Column(String, nullable=True)
     texto = Column(Text, nullable=False)
 
     # pendente -> ainda não processada | respondida -> alguém (camada

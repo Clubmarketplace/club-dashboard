@@ -12,6 +12,8 @@ ficar lendo stack trace.
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
 
+import logging
+
 import httpx
 
 from app.config import (
@@ -22,6 +24,8 @@ from app.config import (
     ML_TOKEN_URL,
     ML_API_BASE_URL,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class MLAuthError(Exception):
@@ -159,33 +163,100 @@ def buscar_pergunta(access_token: str, question_id: str) -> dict:
     return _get(f"/questions/{question_id}", access_token, "buscar a pergunta")
 
 
-def buscar_sku_do_item(access_token: str, item_id: str) -> str | None:
+# ---------------------------------------------------------------------------
+# Leitura do anúncio (SKU + título) -- UMA consulta, com memória rápida
+# ---------------------------------------------------------------------------
+# O SKU de um anúncio quase nunca muda: guarda o resultado por algumas
+# horas pra não consultar o ML de novo a cada pergunta no mesmo MLB.
+# Só guarda leituras bem-sucedidas (erro nunca fica "preso" na memória).
+_CACHE_ANUNCIO: dict[str, tuple[datetime, dict]] = {}
+_CACHE_VALIDADE = timedelta(hours=6)
+_CACHE_MAX_ITENS = 5000
+
+
+def _extrair_skus(item: dict) -> tuple[list[str], str]:
     """
-    Busca o SELLER_SKU cadastrado no anúncio, se existir. Nem todo
-    anúncio tem SKU preenchido — nesse caso devolve None, e o item_id
-    (MLB...) é usado como identificador substituto pelo chamador.
+    Procura o SKU nos três lugares onde o ML pode guardar:
+      1. atributo SELLER_SKU do anúncio
+      2. campo seller_custom_field do anúncio
+      3. dentro de cada VARIAÇÃO (cor, voltagem...): atributo SELLER_SKU
+         ou seller_custom_field da variação -- caso mais comum em anúncio
+         com variações, e que a versão antiga não lia.
+    Devolve (lista de SKUs sem repetição, onde foi achado).
     """
+    skus: list[str] = []
+    origem = "nenhum"
+
+    def add(valor, de_onde):
+        nonlocal origem
+        valor = (valor or "").strip() if isinstance(valor, str) else ""
+        if valor and valor not in skus:
+            skus.append(valor)
+            if origem == "nenhum":
+                origem = de_onde
+
+    for atributo in item.get("attributes") or []:
+        if atributo.get("id") == "SELLER_SKU":
+            add(atributo.get("value_name"), "atributo")
+    add(item.get("seller_custom_field"), "seller_custom_field")
+    for variacao in item.get("variations") or []:
+        for atributo in variacao.get("attributes") or []:
+            if atributo.get("id") == "SELLER_SKU":
+                add(atributo.get("value_name"), "variacao")
+        add(variacao.get("seller_custom_field"), "variacao")
+    return skus, origem
+
+
+def ler_dados_do_anuncio(access_token: str, item_id: str, usar_cache: bool = True) -> dict:
+    """
+    Lê o anúncio uma vez só e devolve:
+      {"titulo", "sku" (principal), "skus" (todos), "origem_sku", "erro"}
+    SKU principal: o do anúncio; se só existir nas variações, o primeiro
+    delas (todos ficam em "skus"). Nunca levanta erro -- em falha devolve
+    "erro" preenchido, pra quem chama registrar e seguir em frente.
+    """
+    vazio = {"titulo": None, "sku": None, "skus": [], "origem_sku": "nenhum", "erro": None, "nao_existe": False}
+    if not item_id:
+        return {**vazio, "erro": "pergunta sem item_id"}
+
+    agora = datetime.utcnow()
+    if usar_cache:
+        em_cache = _CACHE_ANUNCIO.get(item_id)
+        if em_cache and em_cache[0] > agora:
+            return em_cache[1]
+
     try:
-        item = _get(f"/items/{item_id}", access_token, "buscar o item")
-    except MLApiError:
-        return None
-    for atributo in item.get("attributes", []):
-        if atributo.get("id") == "SELLER_SKU" and atributo.get("value_name"):
-            return atributo["value_name"]
-    return None
+        # include_attributes=all traz os atributos DE CADA VARIAÇÃO (onde
+        # costuma estar o SELLER_SKU); sem ele a variação vem incompleta.
+        item = _get(f"/items/{item_id}?include_attributes=all", access_token, "buscar o anúncio")
+    except MLApiError as exc:
+        logger.warning("Não consegui ler o anúncio %s: %s", item_id, exc)
+        # 404 = anúncio excluído/inexistente: não adianta tentar de novo.
+        return {**vazio, "erro": str(exc)[:300], "nao_existe": "(status 404)" in str(exc)}
+
+    skus, origem = _extrair_skus(item)
+    dados = {
+        "titulo": item.get("title"),
+        "sku": skus[0] if skus else None,
+        "skus": skus,
+        "origem_sku": origem,
+        "erro": None,
+        "nao_existe": False,
+    }
+    if len(_CACHE_ANUNCIO) >= _CACHE_MAX_ITENS:
+        _CACHE_ANUNCIO.clear()  # simples e seguro: recomeça a memória
+    _CACHE_ANUNCIO[item_id] = (agora + _CACHE_VALIDADE, dados)
+    return dados
+
+
+def buscar_sku_do_item(access_token: str, item_id: str) -> str | None:
+    """Compatibilidade: SKU principal do anúncio (ver ler_dados_do_anuncio)."""
+    return ler_dados_do_anuncio(access_token, item_id)["sku"]
 
 
 def buscar_titulo_do_item(access_token: str, item_id: str) -> str | None:
-    """
-    Busca o título do anúncio -- usado pra dar contexto de produto
-    real (nome/modelo) pra camada de busca no site do fabricante,
-    já que o SKU sozinho às vezes não diz muito sobre o que é o produto.
-    """
-    try:
-        item = _get(f"/items/{item_id}", access_token, "buscar o item")
-    except MLApiError:
-        return None
-    return item.get("title")
+    """Compatibilidade: título do anúncio (ver ler_dados_do_anuncio)."""
+    return ler_dados_do_anuncio(access_token, item_id)["titulo"]
 
 
 def enviar_resposta(access_token: str, question_id: str, texto: str) -> dict:

@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Pergunta, Conta, AcaoRegistrada, RespostaValidadaSku
 from app.ml_client import MLAuthError, MLApiError, garantir_token_valido, buscar_pergunta, enviar_resposta
+from app.pre_venda_logica import assunto_exige_humano, chave_do_produto
 
 router = APIRouter(prefix="/api/pre-venda", tags=["pré-venda"])
 
@@ -149,14 +150,15 @@ def responder_manualmente(pergunta_id: int, corpo: RespostaManual, db: Session =
         detalhe="Camada: manual (atendente)",
     ))
 
-    # Toda resposta dada por um atendente é confiável por definição --
-    # entra no histórico validado desse SKU pra próximas perguntas
-    # parecidas já saírem automáticas (ver pre_venda_logica.py). Só
-    # promove quando a pergunta tem SKU (sem SKU não dá pra reaproveitar
-    # com segurança pra outro anúncio).
-    if pergunta.sku:
+    # Resposta do atendente entra no banco validado pra próximas perguntas
+    # parecidas saírem automáticas (ver pre_venda_logica.py). Chave: SKU
+    # (vale pra todas as contas do produto) ou, sem SKU, o código do
+    # anúncio (MLB). EXCEÇÃO: assuntos que sempre exigem humano (desconto,
+    # troca, defeito, pedido...) nunca entram -- a IA não pode reaproveitar.
+    chave = chave_do_produto(pergunta.sku, pergunta.item_id)
+    if chave and not assunto_exige_humano(pergunta.texto):
         db.add(RespostaValidadaSku(
-            sku=pergunta.sku,
+            sku=chave,
             pergunta_exemplo=pergunta.texto,
             resposta=corpo.texto,
         ))

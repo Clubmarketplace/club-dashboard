@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -181,6 +181,7 @@ async def exigir_login(request: Request, call_next):
     return await call_next(request)
 
 app.include_router(devolucoes.router)
+app.include_router(diagnostico_sku.router)  # ferramentas de admin do SKU
 app.include_router(relatorio_conta.router)
 app.include_router(auth_ml.router)
 app.include_router(webhook_ml.router)

@@ -40,8 +40,7 @@ from app.ml_client import (
     MLApiError,
     garantir_token_valido,
     buscar_pergunta,
-    buscar_sku_do_item,
-    buscar_titulo_do_item,
+    ler_dados_do_anuncio,
     buscar_mensagem,
     buscar_claim,
     enviar_resposta,
@@ -145,14 +144,24 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
 
     texto = dados_pergunta.get("text", "")
     item_id = dados_pergunta.get("item_id")
-    sku = buscar_sku_do_item(access_token, item_id) if item_id else None
-    titulo_produto = buscar_titulo_do_item(access_token, item_id) if item_id else None
+    # Uma consulta só ao anúncio (antes eram duas): SKU + título.
+    anuncio = ler_dados_do_anuncio(access_token, item_id) if item_id else None
+    sku = anuncio["sku"] if anuncio else None
+    titulo_produto = anuncio["titulo"] if anuncio else None
+    if anuncio and anuncio["erro"]:
+        logger.warning("Pergunta %s: não consegui ler o SKU do anúncio %s (%s)", question_id, item_id, anuncio["erro"])
+    # "" = lido e sem SKU; None = leitura falhou (a ferramenta de preenchimento tenta de novo)
+    if anuncio is None or (anuncio["erro"] and not anuncio.get("nao_existe")):
+        skus_anuncio = None
+    else:
+        skus_anuncio = ",".join(anuncio["skus"])
 
     pergunta = Pergunta(
         conta_id=conta.id,
         ml_question_id=question_id,
         item_id=item_id,
         sku=sku,
+        skus_anuncio=skus_anuncio,
         texto=texto,
         status="pendente",
     )
@@ -171,7 +180,7 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
         db.commit()
         return {"status": "ja_respondida_externamente", "pergunta_id": pergunta.id}
 
-    decisao = decidir_resposta(db, sku, texto, titulo_produto)
+    decisao = decidir_resposta(db, sku, texto, titulo_produto, item_id=item_id)
 
     if decisao["status"] == "respondida":
         try:

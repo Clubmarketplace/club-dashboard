@@ -38,6 +38,9 @@ logger = logging.getLogger(__name__)
 # esta lista é aplicada na inicialização. Regras: só ADICIONAR (nunca
 # apagar/renomear), sempre aceitando nulo, e seguro rodar várias vezes.
 _COLUNAS_ADICIONAIS = {
+    "perguntas": {
+        "skus_anuncio": "VARCHAR",
+    },
     "solicitacoes_cancelamento": {
         "origem": "VARCHAR",
         "solicitado_por": "VARCHAR",

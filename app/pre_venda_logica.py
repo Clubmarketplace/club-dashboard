@@ -27,19 +27,55 @@ from app.ia_pre_venda import (
 LIMITE_HISTORICO_CONSULTADO = 20  # não deixa a chamada de IA crescer sem limite pra SKUs com muito histórico
 
 
-def buscar_resposta_validada(db, sku: str | None, texto_pergunta: str) -> RespostaValidadaSku | None:
+# Assuntos que NÃO podem virar resposta automática (desconto, troca,
+# defeito, pedido já feito...). Proteção provisória por palavra-chave até
+# a triagem por IA entrar: resposta de atendente pra esses assuntos não
+# vai pro banco, então a IA nunca a reaproveita pra outro cliente.
+_PALAVRAS_ASSUNTO_HUMANO = (
+    "desconto", "descont", "precinho", "preco melhor", "melhor preco", "abaixa", "baixar o preco",
+    "negocia", "cupom", "a vista", "pix",
+    "troca", "trocar", "devolu", "defeito", "quebrad", "trincad", "estragad", "nao funciona",
+    "reclama", "procon", "reclame aqui",
+    "meu pedido", "nao chegou", "rastreio", "rastreamento", "cancelar", "cancelamento",
+)
+
+
+def _sem_acento_minusculo(texto: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c)).lower()
+
+
+def assunto_exige_humano(texto_pergunta: str) -> bool:
+    """True se a pergunta é de um assunto que sempre deve ficar com humano."""
+    texto = _sem_acento_minusculo(texto_pergunta)
+    return any(p in texto for p in _PALAVRAS_ASSUNTO_HUMANO)
+
+
+def chave_do_produto(sku: str | None, item_id: str | None) -> str | None:
+    """
+    Chave usada no banco de respostas: o SKU (vale pra todas as contas que
+    vendem o produto) ou, se o anúncio não tiver SKU, o código do anúncio
+    (MLB) -- aí vale só pra aquele anúncio, mas o aprendizado não para.
+    """
+    return (sku or "").strip() or (item_id or "").strip() or None
+
+
+def buscar_resposta_validada(db, sku: str | None, texto_pergunta: str, item_id: str | None = None) -> RespostaValidadaSku | None:
     """
     Busca no histórico validado desse SKU (mais recentes primeiro) e
     pede pro Claude decidir se alguma pergunta anterior parecida já
     responde a pergunta atual. Devolve None se não tiver histórico,
     se a IA não estiver disponível, ou se nada do histórico servir.
     """
-    if not sku:
+    # Procura pelo SKU e também pelo código do anúncio (respostas de
+    # anúncios sem SKU ficam guardadas pelo MLB).
+    chaves = [c for c in {(sku or "").strip(), (item_id or "").strip()} if c]
+    if not chaves:
         return None
 
     historico = (
         db.query(RespostaValidadaSku)
-        .filter(RespostaValidadaSku.sku == sku)
+        .filter(RespostaValidadaSku.sku.in_(chaves))
         .order_by(RespostaValidadaSku.criado_em.desc())
         .limit(LIMITE_HISTORICO_CONSULTADO)
         .all()
@@ -81,12 +117,12 @@ def buscar_politica_geral(db, texto_pergunta: str) -> PoliticaGeral | None:
     return None
 
 
-def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: str | None = None) -> dict:
+def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: str | None = None, item_id: str | None = None) -> dict:
     """
     Roda as camadas em ordem e devolve o resultado da decisão:
     {"resposta": str | None, "camada": str | None, "status": str, "precisa_auditoria": bool}
     """
-    resposta_validada = buscar_resposta_validada(db, sku, texto_pergunta)
+    resposta_validada = buscar_resposta_validada(db, sku, texto_pergunta, item_id=item_id)
     if resposta_validada:
         return {
             "resposta": resposta_validada.resposta,
