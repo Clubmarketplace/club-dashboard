@@ -8,6 +8,7 @@ from sqlalchemy import func
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
+from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
@@ -96,6 +97,7 @@ _AREAS = {
             "/solicitacoes-galpao",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
+            "/api/solicitacoes-cancelamento/opcoes",
         },
         "prefixos_api": (),
     },
@@ -207,6 +209,9 @@ def _hora_br(data, formato: str = "%d/%m/%Y %H:%M") -> str:
 
 
 templates.env.filters["hora_br"] = _hora_br
+# Nomes de plataforma/galpão disponíveis em todas as telas montadas no servidor.
+templates.env.globals["PLATAFORMAS"] = PLATAFORMAS
+templates.env.globals["GALPOES"] = GALPOES
 
 
 @app.get("/", response_class=HTMLResponse)

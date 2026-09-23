@@ -25,7 +25,9 @@
   const PADRAO = { status: "pendente", galpao: "", dias: "30", de: "", ate: "", conta: "", plataforma: "", origem: "", busca: "" };
   const NOMES_STATUS = { pendente: "Aguardando", confirmado: "Confirmados", todos: "Todos" };
   const NOMES_PERIODO = { "1": "Hoje", "7": "7 dias", "30": "30 dias", personalizado: "Personalizado" };
-  const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
+  // Valores padrão; são atualizados pelo servidor (/opcoes), que é a fonte única.
+  let NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok Shop" };
+  let GALPOES = [{ valor: 1, nome: "Galpão 1" }, { valor: 2, nome: "Galpão 2" }, { valor: 3, nome: "Galpão 3" }];
   const NOMES_ORIGEM = { seller: "Sellers", logistica: "Galpão", publico: "Link público" };
 
   function injetarEstilo() {
@@ -95,7 +97,7 @@
           <span class="bf-grupo"><span class="bf-rotulo">Status</span>
           ${seg("status", [["pendente", 'Aguardando<span class="bf-cont" data-cont="pendentes">–</span>'], ["confirmado", 'Confirmados<span class="bf-cont" data-cont="confirmados">–</span>'], ["todos", 'Todos<span class="bf-cont" data-cont="total">–</span>']])}</span>
           <span class="bf-grupo"><span class="bf-rotulo">Galpão</span>
-          ${seg("galpao", [["", "Todos"], ["1", "Galpão 1"], ["2", "Galpão 2"]])}</span>
+          <span data-el="seg-galpao">${seg("galpao", [["", "Todos"], ...GALPOES.map(g => [String(g.valor), g.nome])])}</span></span>
           <span class="bf-grupo"><span class="bf-rotulo">Período</span>
           ${seg("dias", [["1", "Hoje"], ["7", "7 dias"], ["30", "30 dias"], ["personalizado", "Personalizado"]])}</span>
           <span class="bf-personalizado" data-el="personalizado">
@@ -105,11 +107,7 @@
         <div class="bf-linha">
           <input type="text" list="bf-lista-contas" data-el="conta" placeholder="Todas as contas (digite para buscar)" autocomplete="off" style="min-width:220px;" />
           <datalist id="bf-lista-contas"></datalist>
-          <select data-el="plataforma">
-            <option value="">Todas as plataformas</option>
-            <option value="mercado_livre">Mercado Livre</option>
-            <option value="shopee">Shopee</option>
-          </select>
+          <select data-el="plataforma"></select>
           ${mostrarOrigem ? `<select data-el="origem">
             <option value="">Todas as origens</option>
             <option value="seller">Sellers</option>
@@ -166,13 +164,36 @@
       onChange(params());
     }
 
-    // Segmentados
-    container.querySelectorAll("[data-seg] button").forEach(b => b.addEventListener("click", () => {
+    // Segmentados (delegação: continua funcionando quando a lista de galpões é remontada)
+    container.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-seg] button");
+      if (!b || !container.contains(b)) return;
       const campo = b.closest("[data-seg]").dataset.seg;
       estado[campo] = b.dataset.v;
       if (campo === "dias" && b.dataset.v !== "personalizado") { estado.de = ""; estado.ate = ""; }
       mudou();
-    }));
+    });
+
+    function montarOpcoes() {
+      el("seg-galpao").innerHTML = seg("galpao", [["", "Todos"], ...GALPOES.map(g => [String(g.valor), g.nome])]);
+      el("plataforma").innerHTML = '<option value="">Todas as plataformas</option>' +
+        Object.entries(NOMES_PLATAFORMA).map(([v, n]) => `<option value="${escapar(v)}">${escapar(n)}</option>`).join("");
+    }
+    montarOpcoes();
+
+    // Listas oficiais do servidor (se falhar, ficam os valores padrão)
+    fetch("/api/solicitacoes-cancelamento/opcoes", { cache: "no-store" })
+      .then(r => (r.ok ? r.json() : null))
+      .then(op => {
+        if (!op) return;
+        if (Array.isArray(op.galpoes) && op.galpoes.length) GALPOES = op.galpoes;
+        if (Array.isArray(op.plataformas) && op.plataformas.length) {
+          NOMES_PLATAFORMA = Object.fromEntries(op.plataformas.map(p => [p.valor, p.nome]));
+        }
+        montarOpcoes();
+        pintar();
+      })
+      .catch(err => console.error("Não consegui carregar as opções", err));
     el("de").addEventListener("change", e => { estado.de = e.target.value; mudou(); });
     el("ate").addEventListener("change", e => { estado.ate = e.target.value; mudou(); });
 
@@ -218,7 +239,10 @@
         const partes = [];
         if (buscandoTodoHistorico) partes.push("<b>Buscando em todo o histórico</b>");
         partes.push(NOMES_STATUS[estado.status]);
-        if (estado.galpao) partes.push("Galpão " + estado.galpao);
+        if (estado.galpao) {
+          const g = GALPOES.find(x => String(x.valor) === String(estado.galpao));
+          partes.push(g ? g.nome : "Galpão " + estado.galpao);
+        }
         if (!buscandoTodoHistorico) {
           if (estado.dias === "personalizado") {
             const f = d => d ? d.split("-").reverse().join("/") : "…";

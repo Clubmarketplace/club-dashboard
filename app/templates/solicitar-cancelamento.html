@@ -38,20 +38,21 @@
   .opcao-plataforma.selecionada { border-color:var(--amber); background:#fff7e8; color:var(--text); }
   .opcao-plataforma#opt-ml.selecionada { border-color:#ffe600; background:#ffe600; color:#1a1206; }
   .opcao-plataforma#opt-shopee.selecionada { border-color:#ee4d2d; background:#ee4d2d; color:#fff; }
+  .opcao-plataforma#opt-magalu.selecionada { border-color:#0086ff; background:#0086ff; color:#fff; }
+  .opcao-plataforma#opt-tiktok.selecionada { border-color:#000; background:#000; color:#fe2c55; }
+  /* 4 plataformas: no celular ficam 2 por linha; no computador, as 4 na mesma linha */
+  .opcoes-plataforma { flex-wrap:wrap; }
+  .opcoes-plataforma .opcao-plataforma { flex:1 1 calc(50% - 5px); }
+
+  /* Galpão escolhido numa lista (pelo nome) */
+  .campo-galpao { width:100%; height:46px; border-radius:10px; border:1.5px solid var(--line); padding:0 12px;
+    font-family:inherit; font-size:14px; color:var(--text); background:#fff; cursor:pointer; }
+  .campo-galpao.escolhido { border-color:#1b2430; font-weight:600; }
+  .campo-galpao:focus { outline:none; border-color:var(--amber); }
   .opcao-plataforma input { display:none; }
   /* Os "botões" são <label>: zera a margem herdada da regra geral de label */
-  .opcoes-plataforma .opcao-plataforma, .opcoes-galpao .opcao-galpao { margin:0; }
+  .opcoes-plataforma .opcao-plataforma { margin:0; }
 
-  /* Galpão (só perfil Logística) -- mesmo formato dos botões de plataforma */
-  .opcoes-galpao { display:flex; gap:10px; }
-  .opcao-galpao {
-    flex:1; min-width:0; height:46px; box-sizing:border-box; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
-    display:flex; align-items:center; justify-content:center; cursor:pointer;
-    font-weight:600; font-size:13.5px; color:var(--text-dim); white-space:nowrap;
-    transition:border-color .15s, background .15s, color .15s;
-  }
-  .opcao-galpao.selecionada { border-color:#1b2430; background:#1b2430; color:#fff; }
-  .opcao-galpao input { display:none; }
 
   /* Campo Conta com busca (Logística) */
   .campo-conta-caixa { position:relative; }
@@ -128,7 +129,11 @@
 
     .modo-largo .linha-selecao { flex-direction:row; gap:16px; align-items:flex-end; }
     .modo-largo .linha-selecao .grupo { flex:1; min-width:0; }
-    .modo-largo .linha-selecao .grupo.grupo-conta { flex:1.3; }
+    .modo-largo .linha-selecao .grupo.grupo-galpao { flex:0.8; }
+    .modo-largo .linha-selecao .grupo.grupo-plataforma { flex:2.3; }
+    .modo-largo .linha-selecao .grupo.grupo-conta { flex:1.2; }
+    .modo-largo .opcoes-plataforma { flex-wrap:nowrap; gap:8px; }
+    .modo-largo .opcoes-plataforma .opcao-plataforma { flex:1 1 0; font-size:13px; }
     .modo-largo .linha-selecao .grupo + .grupo { margin-top:0; }
     .modo-largo .campo-conta-caixa input[type="text"] { height:46px; }
 
@@ -183,16 +188,16 @@
     <form id="form-cancelamento">
       <div class="linha-selecao">
       {% if logistica_logado %}
-      <div class="grupo">
-      <label>Galpão</label>
-      <div class="opcoes-galpao">
-        <label class="opcao-galpao" data-galpao="1"><input type="radio" name="galpao" value="1" />Galpão 1</label>
-        <label class="opcao-galpao" data-galpao="2"><input type="radio" name="galpao" value="2" />Galpão 2</label>
-      </div>
+      <div class="grupo grupo-galpao">
+      <label for="campo-galpao">Galpão</label>
+      <select id="campo-galpao" class="campo-galpao">
+        <option value="">Escolha o galpão...</option>
+        {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
+      </select>
       </div>
       {% endif %}
 
-      <div class="grupo">
+      <div class="grupo grupo-plataforma">
       <label>Plataforma</label>
       <div class="opcoes-plataforma">
         <label class="opcao-plataforma" id="opt-ml">
@@ -202,6 +207,14 @@
         <label class="opcao-plataforma" id="opt-shopee">
           <input type="radio" name="plataforma" value="shopee" required />
           Shopee
+        </label>
+        <label class="opcao-plataforma" id="opt-magalu">
+          <input type="radio" name="plataforma" value="magalu" required />
+          Magalu
+        </label>
+        <label class="opcao-plataforma" id="opt-tiktok">
+          <input type="radio" name="plataforma" value="tiktok_shop" required />
+          TikTok Shop
         </label>
       </div>
 
@@ -263,20 +276,21 @@
 
   // ---------- Galpão (Logística): obrigatório, lembra o último usado neste aparelho ----------
   const CHAVE_GALPAO_LOCAL = "club_galpao_ultimo";
-  const opcoesGalpao = document.querySelectorAll(".opcao-galpao");
-  function selecionarGalpao(valor) {
-    opcoesGalpao.forEach(o => {
-      const marcado = o.dataset.galpao === String(valor);
-      o.classList.toggle("selecionada", marcado);
-      o.querySelector("input").checked = marcado;
-    });
+  const campoGalpao = document.getElementById("campo-galpao");
+  function marcarGalpao() {
+    if (campoGalpao) campoGalpao.classList.toggle("escolhido", !!campoGalpao.value);
   }
-  opcoesGalpao.forEach(o => o.addEventListener("click", () => {
-    selecionarGalpao(o.dataset.galpao);
-    try { localStorage.setItem(CHAVE_GALPAO_LOCAL, o.dataset.galpao); } catch (e) { /* navegador sem storage: segue sem lembrar */ }
-  }));
-  if (MODO_LOGISTICA) {
-    try { const ultimo = localStorage.getItem(CHAVE_GALPAO_LOCAL); if (ultimo === "1" || ultimo === "2") selecionarGalpao(ultimo); } catch (e) {}
+  if (MODO_LOGISTICA && campoGalpao) {
+    campoGalpao.addEventListener("change", () => {
+      marcarGalpao();
+      try { localStorage.setItem(CHAVE_GALPAO_LOCAL, campoGalpao.value); } catch (e) { /* navegador sem storage: segue sem lembrar */ }
+    });
+    try {
+      // Só restaura se o galpão lembrado ainda existir na lista
+      const ultimo = localStorage.getItem(CHAVE_GALPAO_LOCAL);
+      if (ultimo && Array.from(campoGalpao.options).some(o => o.value === ultimo)) campoGalpao.value = ultimo;
+    } catch (e) {}
+    marcarGalpao();
   }
 
   // ---------- Conta com busca (Logística) ----------
@@ -339,7 +353,7 @@
     return melhorDist <= 2 ? melhor : null;
   }
 
-  const SUFIXOS_PLATAFORMA = ["mercado livre", "mercadolivre", "shopee", "meli", "ml"];
+  const SUFIXOS_PLATAFORMA = ["mercado livre", "mercadolivre", "meli", "ml", "shopee", "magazine luiza", "magalu", "tiktok shop", "tiktokshop", "tiktok"];
   function sufixoPlataforma(nome) {
     const chave = chaveConta(nome);
     return SUFIXOS_PLATAFORMA.find(s => chave.endsWith(" " + s)) || null;
@@ -433,13 +447,12 @@
 
     let galpao = null;
     if (MODO_LOGISTICA) {
-      const marcado = form.querySelector('input[name="galpao"]:checked');
-      if (!marcado) return mostrarErro("Escolha o galpão (1 ou 2).");
-      galpao = Number(marcado.value);
+      if (!campoGalpao || !campoGalpao.value) return mostrarErro("Escolha o galpão.");
+      galpao = Number(campoGalpao.value);
     }
 
     const plataformaSelecionada = form.querySelector('input[name="plataforma"]:checked');
-    if (!plataformaSelecionada) return mostrarErro("Escolha a plataforma (Mercado Livre ou Shopee).");
+    if (!plataformaSelecionada) return mostrarErro("Escolha a plataforma.");
 
     const contaDigitada = campoConta.value.trim();
     if (!contaDigitada) return mostrarErro("Informe a conta.");
@@ -520,7 +533,7 @@
       const resultado = await resposta.json();
       const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
       const textoConfirmacao = MODO_LOGISTICA
-        ? `Registrado no Galpão ${resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
+        ? `Registrado no ${resultado.galpao_nome || "Galpão " + resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
         : `Conta ${resultado.conta || dados.conta} — ${plural}.`;
       document.getElementById("texto-confirmacao").textContent = textoConfirmacao;
       document.getElementById("tela-formulario").style.display = "none";

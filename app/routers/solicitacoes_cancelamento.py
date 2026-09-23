@@ -34,8 +34,22 @@ from app.models import Conta, SolicitacaoCancelamento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
 
-PLATAFORMAS_VALIDAS = {"mercado_livre", "shopee"}
-GALPOES_VALIDOS = {1, 2}
+# --- Opções (fonte ÚNICA: formulário, filtros e telas leem daqui) ---
+# Pra incluir/renomear: é só mexer nestes dicionários. A chave é o que
+# fica gravado no banco -- NUNCA mudar uma chave existente, só o nome.
+PLATAFORMAS = {
+    "mercado_livre": "Mercado Livre",
+    "shopee": "Shopee",
+    "magalu": "Magalu",
+    "tiktok_shop": "TikTok Shop",
+}
+GALPOES = {
+    1: "Galpão 1",
+    2: "Galpão 2",
+    3: "Galpão 3",
+}
+PLATAFORMAS_VALIDAS = set(PLATAFORMAS)
+GALPOES_VALIDOS = set(GALPOES)
 ORIGENS_VALIDAS = {"seller", "logistica", "publico"}
 
 # Horário de Brasília pros filtros de período. O Brasil não tem horário
@@ -100,7 +114,8 @@ class NovaSolicitacaoLote(BaseModel):
 def _normalizar_numero_venda(numero: str, plataforma: str, estrito: bool) -> str:
     """
     Tira espaços/pontos/traços. No modo estrito (logística): ML só aceita
-    números; Shopee aceita letras e números, sempre em maiúsculo. Fora do
+    números; Shopee, Magalu e TikTok Shop aceitam letras e números, sempre
+    em maiúsculo (formato dos pedidos não confirmado pra todas). Fora do
     modo estrito (seller/link público) só limpa espaços -- mantém o
     comportamento que já existia.
     """
@@ -109,8 +124,9 @@ def _normalizar_numero_venda(numero: str, plataforma: str, estrito: bool) -> str
     limpo = re.sub(r"[\s.\-/]", "", numero).upper()
     if plataforma == "mercado_livre" and not limpo.isdigit():
         raise HTTPException(status_code=400, detail=f"Nº da venda do Mercado Livre deve ter só números: \"{numero}\".")
-    if plataforma == "shopee" and not limpo.isalnum():
-        raise HTTPException(status_code=400, detail=f"Nº da venda da Shopee deve ter só letras e números: \"{numero}\".")
+    if plataforma != "mercado_livre" and not limpo.isalnum():
+        nome = PLATAFORMAS.get(plataforma, plataforma)
+        raise HTTPException(status_code=400, detail=f"Nº da venda da {nome} deve ter só letras e números: \"{numero}\".")
     return limpo
 
 
@@ -154,6 +170,8 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "origem": s.origem,
         "solicitado_por": s.solicitado_por,
         "galpao": s.galpao,
+        "galpao_nome": GALPOES.get(s.galpao, f"Galpão {s.galpao}") if s.galpao else None,
+        "plataforma_nome": PLATAFORMAS.get(s.plataforma, s.plataforma),
     }
 
 
@@ -186,7 +204,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, db: Session
         origem = "logistica"
         conta_digitada = corpo.conta
         if corpo.galpao not in GALPOES_VALIDOS:
-            raise HTTPException(status_code=400, detail="Escolha o galpão (1 ou 2).")
+            raise HTTPException(status_code=400, detail="Escolha o galpão.")
         galpao = corpo.galpao
         sufixo = sufixo_de_plataforma(conta_digitada)
         if sufixo:
@@ -262,6 +280,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, db: Session
         "conta": nome_conta,
         "origem": origem,
         "galpao": galpao,
+        "galpao_nome": GALPOES.get(galpao) if galpao else None,
         "solicitado_por": usuario.nome_exibicao if usuario else None,
         "itens": [{"id": s.id, "numero_venda": s.numero_venda, "criado_em": s.criado_em.isoformat()} for s in criadas],
     }
@@ -280,6 +299,15 @@ def listar_solicitacoes(db: Session = Depends(get_db), limite: int = 500):
         .all()
     )
     return [_serializar(s) for s in solicitacoes]
+
+
+@router.get("/opcoes")
+def listar_opcoes():
+    """Plataformas e galpões disponíveis (pro formulário e pros filtros)."""
+    return {
+        "plataformas": [{"valor": k, "nome": v} for k, v in PLATAFORMAS.items()],
+        "galpoes": [{"valor": k, "nome": v} for k, v in GALPOES.items()],
+    }
 
 
 @router.get("/contas")

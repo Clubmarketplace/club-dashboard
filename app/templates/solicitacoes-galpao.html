@@ -45,8 +45,10 @@
     tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
     tbody tr:last-child td { border-bottom:none; }
     .badge { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
-    .badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .badge.ml { background:#fff6b8; color:#6b5b00; }
     .badge.shopee { background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
+    .badge.magalu { background:#e3f0ff; color:#0060c0; }
+    .badge.tiktok { background:#111; color:#fe2c55; }
     .status-pendente { font-size:11.5px; font-weight:600; color:var(--cmx-atencao); background:var(--cmx-leve); padding:3px 9px; border-radius:999px; }
     .status-confirmado { font-size:11.5px; color:#2f6f4f; }
     .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
@@ -121,7 +123,7 @@
     <div id="lista-rodape"></div>
   </main>
 
-  <script src="/static/solicitacoes-filtros.js?v=1"></script>
+  <script src="/static/solicitacoes-filtros.js?v=2"></script>
   <script>
     // Só leitura: o galpão acompanha, quem confirma é a equipe interna.
     // O servidor já devolve apenas solicitações de origem "logística".
@@ -134,6 +136,7 @@
       return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
     }
 
+    const CLASSE_PLATAFORMA = { mercado_livre: "ml", shopee: "shopee", magalu: "magalu", tiktok_shop: "tiktok" };
     let itens = [];
     let ultima = null;
 
@@ -152,9 +155,7 @@
     }
 
     function linha(s) {
-      const plataforma = s.plataforma === "shopee"
-        ? '<span class="badge shopee">Shopee</span>'
-        : '<span class="badge ml">Mercado Livre</span>';
+      const plataforma = `<span class="badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${escaparHtml(s.plataforma_nome || s.plataforma)}</span>`;
       const status = s.confirmado_por
         ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>`
         : '<span class="status-pendente">Pendente</span>';
@@ -164,7 +165,7 @@
         <td>${plataforma}</td>
         <td>${escaparHtml(s.numero_venda)}</td>
         <td>${escaparHtml(s.motivo)}</td>
-        <td class="nowrap"><span class="galpao-tag">G${s.galpao || "?"}</span> <span class="quem">${escaparHtml(s.solicitado_por || "")}</span></td>
+        <td class="nowrap"><span class="galpao-tag" title="${escaparHtml(s.galpao_nome || "")}">G${s.galpao || "?"}</span> <span class="quem">${escaparHtml(s.solicitado_por || "")}</span></td>
         <td>${status}</td>
       </tr>`;
     }

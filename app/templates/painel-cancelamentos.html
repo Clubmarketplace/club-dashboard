@@ -39,8 +39,12 @@
     table.cc-tabela tbody td { padding:11px 18px; border-top:1px solid var(--cmx-borda); vertical-align:top; }
 
     .cc-badge { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
-    .cc-badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .cc-badge.ml { background:#fff6b8; color:#6b5b00; }
     .cc-badge.shopee { background:#fdecec; color:#d64541; }
+    .cc-badge.magalu { background:#e3f0ff; color:#0060c0; }
+    .cc-badge.tiktok { background:#111; color:#fe2c55; }
+    .cc-kpi.plataformas { flex:2; }
+    .cc-kpi .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
 
     .cc-motivo { max-width:320px; }
     .cc-data { white-space:nowrap; color:var(--cmx-texto-suave); font-size:12.5px; }
@@ -149,8 +153,7 @@
         <div class="cc-kpis">
           <div class="cc-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div></div>
           <div class="cc-kpi"><div class="rotulo">Contas com pedidos</div><div class="valor" id="kpi-contas">—</div></div>
-          <div class="cc-kpi"><div class="rotulo">Mercado Livre</div><div class="valor" id="kpi-ml">—</div></div>
-          <div class="cc-kpi"><div class="rotulo">Shopee</div><div class="valor" id="kpi-shopee">—</div></div>
+          <div class="cc-kpi plataformas"><div class="rotulo">Por plataforma</div><div class="chips" id="kpi-plataformas">—</div></div>
         </div>
 
         <div id="barra-filtros"></div>
@@ -174,9 +177,10 @@
     </div>
   </div>
 
-  <script src="/static/solicitacoes-filtros.js?v=1"></script>
+  <script src="/static/solicitacoes-filtros.js?v=2"></script>
   <script>
-    const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee" };
+    const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok Shop" };
+    const CLASSE_PLATAFORMA = { mercado_livre: "ml", shopee: "shopee", magalu: "magalu", tiktok_shop: "tiktok" };
     let todasSolicitacoes = [];
     let ultimaResposta = null;
     const gruposRecolhidos = new Set();
@@ -187,7 +191,7 @@
 
     // De onde veio o pedido: galpão (quem e qual), seller ou link público.
     function htmlOrigem(s) {
-      if (s.origem === "logistica") return `<span class="cc-origem logistica">🏭 Galpão ${s.galpao || "?"}${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "logistica") return `<span class="cc-origem logistica">🏭 ${escaparHtml(s.galpao_nome || ("Galpão " + (s.galpao || "?")))}${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
       if (s.origem === "seller") return `<span class="cc-origem seller">👤 Seller${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
       if (s.origem === "publico") return `<span class="cc-origem publico">🔗 Link público</span>`;
       return `<span class="cc-origem publico">Seller / link público</span>`; // registros antigos
@@ -215,8 +219,9 @@
       const contas = new Set(lista.map(s => s.conta_chave || s.conta.trim().toLowerCase()));
       document.getElementById("kpi-total").textContent = lista.length;
       document.getElementById("kpi-contas").textContent = contas.size;
-      document.getElementById("kpi-ml").textContent = lista.filter(s => s.plataforma === "mercado_livre").length;
-      document.getElementById("kpi-shopee").textContent = lista.filter(s => s.plataforma === "shopee").length;
+      document.getElementById("kpi-plataformas").innerHTML = Object.keys(NOMES_PLATAFORMA).map(p =>
+        `<span class="cc-badge ${CLASSE_PLATAFORMA[p]}">${NOMES_PLATAFORMA[p]}: ${lista.filter(s => s.plataforma === p).length}</span>`
+      ).join("");
     }
 
     function renderizarGrupos() {
@@ -255,7 +260,7 @@
           return `
           <tr>
             <td class="cc-data">${formatarData(s.criado_em)}</td>
-            <td><span class="cc-badge ${s.plataforma === "shopee" ? "shopee" : "ml"}">${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}</span></td>
+            <td><span class="cc-badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}</span></td>
             <td>${escaparHtml(s.numero_venda)}</td>
             <td class="cc-motivo">${escaparHtml(s.motivo)}</td>
             <td>${htmlOrigem(s)}</td>

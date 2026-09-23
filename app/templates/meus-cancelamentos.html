@@ -45,8 +45,10 @@
     tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
     tbody tr:last-child td { border-bottom:none; }
     .badge { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
-    .badge.ml { background:#eaf1ff; color:#2f6fed; }
+    .badge.ml { background:#fff6b8; color:#6b5b00; }
     .badge.shopee { background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
+    .badge.magalu { background:#e3f0ff; color:#0060c0; }
+    .badge.tiktok { background:#111; color:#fe2c55; }
     .status-pendente { font-size:11.5px; font-weight:600; color:var(--cmx-atencao); background:var(--cmx-leve); padding:3px 9px; border-radius:999px; }
     .status-confirmado { font-size:11.5px; color:#2f6f4f; }
     .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
@@ -107,7 +109,7 @@
           {% for s in solicitacoes %}
           <tr>
             <td>{{ s.criado_em | hora_br }}</td>
-            <td><span class="badge {{ 'shopee' if s.plataforma == 'shopee' else 'ml' }}">{{ "Shopee" if s.plataforma == "shopee" else "Mercado Livre" }}</span></td>
+            <td><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></td>
             <td>{{ s.numero_venda }}</td>
             <td>{{ s.motivo }}</td>
             <td>

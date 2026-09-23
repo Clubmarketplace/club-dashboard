@@ -14,7 +14,12 @@ import unicodedata
 
 # Sufixos que o pessoal costuma colar no nome por hábito ("Velasco ML").
 # A plataforma é escolhida nos botões, então isso não pode virar conta nova.
-_SUFIXOS_PLATAFORMA = ("mercado livre", "mercadolivre", "shopee", "meli", "ml")
+_SUFIXOS_PLATAFORMA = (
+    "mercado livre", "mercadolivre", "meli", "ml",
+    "shopee",
+    "magazine luiza", "magalu",
+    "tiktok shop", "tiktokshop", "tiktok",
+)
 
 
 def _sem_acento(texto: str) -> str:
