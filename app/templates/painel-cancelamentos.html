@@ -84,6 +84,17 @@
     .cc-origem.publico { background:#eef1f4; color:#6b7684; }
     .cc-mais { display:block; margin:6px auto 0; padding:9px 18px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; font-weight:600; cursor:pointer; }
     .cc-rodape-lista { text-align:center; font-size:12.5px; color:#6b7684; margin-top:8px; }
+    .cc-btn-atalho {
+      font-size:11.5px; font-weight:600; color:var(--cmx-texto); background:#fff;
+      border:1px solid var(--cmx-borda); border-radius:7px; padding:5px 10px; cursor:pointer;
+      white-space:nowrap; text-decoration:none; display:inline-block;
+    }
+    .cc-btn-atalho:hover { background:#fafbfc; }
+    .cc-btn-exportar {
+      font-size:12.5px; font-weight:600; color:var(--cmx-texto); background:#fff;
+      border:1px solid var(--cmx-borda); border-radius:8px; padding:8px 14px; cursor:pointer; white-space:nowrap;
+    }
+    .cc-btn-exportar:hover { background:#fafbfc; }
   </style>
 </head>
 <body>
@@ -157,7 +168,10 @@
         </div>
 
         <div id="barra-filtros"></div>
-        <div class="cc-rodape-lista" style="text-align:right; margin:-8px 0 10px;">Link público: <b>/solicitar-cancelamento</b></div>
+        <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:-8px 0 10px;">
+          <div class="cc-rodape-lista" style="margin:0;">Link público: <b>/solicitar-cancelamento</b></div>
+          <button type="button" id="btn-exportar-relatorio" class="cc-btn-exportar">⬇ Exportar relatório do dia</button>
+        </div>
 
         <div id="grupos"></div>
         <div id="lista-rodape"></div>
@@ -169,6 +183,15 @@
     <div class="cc-modal">
       <h3>Confirmar cancelamento</h3>
       <p id="modal-detalhe"></p>
+      <label style="display:block; font-size:12.5px; font-weight:600; color:var(--cmx-texto); margin-bottom:6px;">
+        Resultado quanto à reputação:
+      </label>
+      <select id="modal-resultado-impacto" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda); font-family:inherit; font-size:14px; margin-bottom:14px;">
+        <option value="">Selecione...</option>
+        <option value="sem_impacto">Sem impacto</option>
+        <option value="com_impacto">Com impacto</option>
+        <option value="aguardando_confirmacao">Aguardando confirmação do ML</option>
+      </select>
       <div class="cc-modal-erro" id="modal-erro"></div>
       <div class="cc-modal-botoes">
         <button class="cc-modal-cancelar" id="modal-cancelar">Cancelar</button>
@@ -224,6 +247,37 @@
       ).join("");
     }
 
+    const ROTULO_IMPACTO = {
+      sem_impacto: "Sem impacto",
+      com_impacto: "Com impacto",
+      aguardando_confirmacao: "Aguardando confirmação do ML",
+    };
+    const COR_IMPACTO = {
+      sem_impacto: "#2f6f4f",
+      com_impacto: "#d64541",
+      aguardando_confirmacao: "#b56a1f",
+    };
+
+    function montarStatusHtml(s) {
+      if (!s.confirmado_por) {
+        const botaoConfirmar = `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}">Confirmar</button>`;
+        if (s.plataforma !== "mercado_livre") return botaoConfirmar;
+        const motivoAttr = escaparHtml(s.motivo || "");
+        return `
+          <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
+            <button class="cc-btn-atalho" data-copiar-mensagem data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}" data-motivo="${motivoAttr}">📋 Copiar mensagem</button>
+            <a class="cc-btn-atalho" href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener">💬 Abrir atendimento ML</a>
+            <button class="cc-btn-atalho" data-verificar-status="${s.id}">🔄 Verificar agora</button>
+            ${botaoConfirmar}
+          </div>`;
+      }
+      let extra = "";
+      if (ROTULO_IMPACTO[s.resultado_impacto]) {
+        extra = `<br><span style="font-size:11px; font-weight:600; color:${COR_IMPACTO[s.resultado_impacto]};">${ROTULO_IMPACTO[s.resultado_impacto]}</span>`;
+      }
+      return `<span class="cc-status-confirmado">✓ <b>${escaparHtml(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}${extra}</span>`;
+    }
+
     function renderizarGrupos() {
       const filtradas = todasSolicitacoes;
 
@@ -254,9 +308,7 @@
         const itens = porConta[chave].sort((a, b) => parseDataUTC(b.criado_em) - parseDataUTC(a.criado_em));
         const recolhido = gruposRecolhidos.has(chave) ? "recolhido" : "";
         const linhas = itens.map(s => {
-          const statusHtml = s.confirmado_por
-            ? `<span class="cc-status-confirmado">✓ <b>${escaparHtml(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</span>`
-            : `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}">Confirmar</button>`;
+          const statusHtml = montarStatusHtml(s);
           return `
           <tr>
             <td class="cc-data">${formatarData(s.criado_em)}</td>
@@ -298,17 +350,60 @@
       container.querySelectorAll(".cc-btn-confirmar").forEach(botao => {
         botao.addEventListener("click", () => abrirModalConfirmacao(botao.dataset.id, botao.dataset.conta, botao.dataset.venda));
       });
+
+      container.querySelectorAll("[data-copiar-mensagem]").forEach(botao => {
+        botao.addEventListener("click", async () => {
+          const conta = botao.dataset.conta;
+          const venda = botao.dataset.venda;
+          const motivo = botao.dataset.motivo;
+          const mensagem = `Olá! Preciso cancelar o pedido nº ${venda} (conta ${conta}) antes do despacho. Motivo: ${motivo}. O envio ainda não foi despachado -- pode me orientar a cancelar sem impactar a reputação da conta?`;
+          try {
+            await navigator.clipboard.writeText(mensagem);
+            const textoOriginal = botao.textContent;
+            botao.textContent = "✓ Copiado!";
+            setTimeout(() => { botao.textContent = textoOriginal; }, 2000);
+          } catch (erro) {
+            document.getElementById("aviso-erro").innerHTML =
+              `<div class="cc-erro">Não foi possível copiar automaticamente. Copie manualmente: ${escaparHtml(mensagem)}</div>`;
+          }
+        });
+      });
+
+      container.querySelectorAll("[data-verificar-status]").forEach(botao => {
+        botao.addEventListener("click", async () => {
+          const textoOriginal = botao.textContent;
+          botao.disabled = true;
+          botao.textContent = "Verificando...";
+          try {
+            const resposta = await fetch(`/api/solicitacoes-cancelamento/${botao.dataset.verificarStatus}/verificar-status`, { method: "POST" });
+            const dados = await resposta.json().catch(() => ({}));
+            if (!resposta.ok) throw new Error(dados.detail || "Não foi possível verificar.");
+            if (dados.confirmou) {
+              await atualizar();
+            } else {
+              botao.textContent = "Ainda pendente";
+              setTimeout(() => { botao.textContent = textoOriginal; botao.disabled = false; }, 2500);
+            }
+          } catch (erro) {
+            document.getElementById("aviso-erro").innerHTML = `<div class="cc-erro">${escaparHtml(erro.message)}</div>`;
+            botao.textContent = textoOriginal;
+            botao.disabled = false;
+          }
+        });
+      });
     }
 
     // --- Modal de confirmação ---
     const modalFundo = document.getElementById("modal-fundo");
     const modalDetalhe = document.getElementById("modal-detalhe");
     const modalErro = document.getElementById("modal-erro");
+    const modalResultadoImpacto = document.getElementById("modal-resultado-impacto");
     let idPendenteConfirmacao = null;
 
     function abrirModalConfirmacao(id, conta, venda) {
       idPendenteConfirmacao = id;
       modalDetalhe.textContent = `Conta ${conta} — venda ${venda}. Confirme que já foi cancelado de verdade na plataforma.`;
+      modalResultadoImpacto.value = "";
       modalErro.style.display = "none";
       modalFundo.classList.add("aberto");
     }
@@ -322,12 +417,19 @@
     modalFundo.addEventListener("click", (e) => { if (e.target === modalFundo) fecharModal(); });
 
     document.getElementById("modal-confirmar").addEventListener("click", async () => {
+      const resultadoImpacto = modalResultadoImpacto.value;
+      if (!resultadoImpacto) {
+        modalErro.textContent = "Selecione o resultado quanto à reputação antes de confirmar.";
+        modalErro.style.display = "block";
+        return;
+      }
       try {
         // O nome de quem confirma vem da sessão de login no servidor
         // -- não precisa (nem deve) ser digitado aqui.
         const resposta = await fetch(`/api/solicitacoes-cancelamento/${idPendenteConfirmacao}/confirmar`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resultado_impacto: resultadoImpacto }),
         });
         if (!resposta.ok) {
           const erro = await resposta.json().catch(() => ({}));
@@ -339,6 +441,10 @@
         modalErro.textContent = erro.message;
         modalErro.style.display = "block";
       }
+    });
+
+    document.getElementById("btn-exportar-relatorio").addEventListener("click", () => {
+      window.open("/api/solicitacoes-cancelamento/relatorio", "_blank");
     });
 
     // ---------- Barra de filtros + carga ----------
