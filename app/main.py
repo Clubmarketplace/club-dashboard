@@ -69,6 +69,50 @@ _PUBLICO_EXATO = {
 _PUBLICO_PREFIXOS = ("/static/",)
 
 
+# --- Permissões por perfil ---
+# Áreas do sistema que podem ser liberadas pra perfis restritos. Cada
+# área lista as páginas e os prefixos de API que ela usa. Pra criar no
+# futuro um "Atendente Pré" e um "Atendente Pós", basta dar a cada um
+# só a área correspondente em _AREAS_POR_PAPEL -- sem mexer no resto.
+_AREAS = {
+    "pre_venda": {"paginas": {"/pre-venda"}, "prefixos_api": ("/api/pre-venda/",)},
+    "pos_venda": {"paginas": {"/pos-venda"}, "prefixos_api": ("/api/pos-venda/",)},
+    "paineis_tv": {"paginas": {"/painel-tv/geral", "/painel-tv/fila"}, "prefixos_api": ()},
+}
+
+# Perfis com acesso RESTRITO: só entram no que está listado aqui (lista
+# do que PODE -- tela nova nasce bloqueada pra eles até alguém liberar).
+# Admin e supervisor não aparecem aqui porque têm acesso amplo.
+_AREAS_POR_PAPEL = {
+    "atendente": ("pre_venda", "pos_venda", "paineis_tv"),
+}
+_PAGINA_INICIAL_POR_PAPEL = {"seller": "/meus-cancelamentos", "atendente": "/pre-venda"}
+
+# Quais perfis cada papel pode criar/editar/resetar/desativar. Usado em
+# TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
+# no servidor, nunca só no <select> da tela.
+PAPEIS_GERENCIAVEIS_POR = {
+    "admin": ("admin", "supervisor", "atendente", "seller"),
+    "supervisor": ("atendente", "seller"),
+}
+
+
+def _papel_pode_acessar(papel: str, caminho: str) -> bool:
+    """Diz se um perfil restrito (ex: atendente) pode abrir esse caminho."""
+    if caminho == "/logout":
+        return True
+    for nome_area in _AREAS_POR_PAPEL.get(papel, ()):
+        area = _AREAS[nome_area]
+        if caminho in area["paginas"] or any(caminho.startswith(p) for p in area["prefixos_api"]):
+            return True
+    return False
+
+
+def _pode_gerenciar(usuario_logado, papel_alvo: str) -> bool:
+    """True se quem está logado pode mexer num operador com esse papel."""
+    return bool(usuario_logado) and papel_alvo in PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
+
+
 @app.middleware("http")
 async def exigir_login(request: Request, call_next):
     caminho = request.url.path
@@ -97,6 +141,14 @@ async def exigir_login(request: Request, call_next):
             if caminho.startswith("/api/"):
                 return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
             return RedirectResponse("/meus-cancelamentos", status_code=303)
+
+        # Atendente (e futuros perfis restritos): só o que está liberado
+        # pras áreas dele; qualquer outra tela volta pra página inicial.
+        if usuario_logado and usuario_logado.papel in _AREAS_POR_PAPEL:
+            if not _papel_pode_acessar(usuario_logado.papel, caminho):
+                if caminho.startswith("/api/"):
+                    return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
+                return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(usuario_logado.papel, "/logout"), status_code=303)
 
     return await call_next(request)
 
@@ -268,17 +320,17 @@ def pagina_meus_cancelamentos(request: Request):
 
 
 def _listar_usuarios_visiveis(db, usuario_logado):
-    """Admin vê todos; supervisor só vê 'seller' -- mesma regra usada em criar/editar/resetar/desativar."""
+    """Cada um vê só quem pode gerenciar (admin: todos; supervisor: atendentes e sellers) -- mesma regra de criar/editar/resetar/desativar."""
     query = db.query(Usuario)
-    if usuario_logado.papel == "supervisor":
-        query = query.filter(Usuario.papel == "seller")
+    if usuario_logado.papel != "admin":
+        query = query.filter(Usuario.papel.in_(PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())))
     return query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
 
 
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_listar_usuarios(request: Request):
     """
-    Lista os usuários -- admin vê todos, supervisor só vê os "seller"
+    Lista os usuários -- admin vê todos, supervisor vê atendentes e sellers
     (mesma regra de quem cada um pode criar, aplicada aqui também pra
     quem cada um pode desativar/reativar). O formulário de "Adicionar
     operador" já vem embutido nessa mesma tela.
@@ -313,10 +365,10 @@ def alternar_status_usuario(usuario_id: int, request: Request):
         if alvo is None:
             return RedirectResponse("/usuarios", status_code=303)
 
-        # Supervisor só mexe em seller; ninguém mexe na própria conta por aqui.
+        # Supervisor só mexe em atendente e seller; ninguém mexe na própria conta por aqui.
         if alvo.id == usuario_logado.id:
             return RedirectResponse("/usuarios", status_code=303)
-        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+        if not _pode_gerenciar(usuario_logado, alvo.papel):
             return RedirectResponse("/usuarios", status_code=303)
 
         alvo.ativo = not alvo.ativo
@@ -341,8 +393,8 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
         if alvo is None:
             return RedirectResponse("/usuarios", status_code=303)
 
-        # Mesma regra de escopo do desativar: supervisor só mexe em seller.
-        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+        # Mesma regra de escopo do desativar: supervisor só mexe em atendente e seller.
+        if not _pode_gerenciar(usuario_logado, alvo.papel):
             return RedirectResponse("/usuarios", status_code=303)
 
         codigo = auth.gerar_codigo_primeiro_acesso()
@@ -351,10 +403,7 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
         alvo.precisa_trocar_senha = True
         db.commit()
 
-        query = db.query(Usuario)
-        if usuario_logado.papel == "supervisor":
-            query = query.filter(Usuario.papel == "seller")
-        usuarios = query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+        usuarios = _listar_usuarios_visiveis(db, usuario_logado)
 
         return templates.TemplateResponse(
             request=request,
@@ -378,7 +427,7 @@ def pagina_editar_usuario(usuario_id: int, request: Request):
         alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
         if alvo is None:
             return RedirectResponse("/usuarios", status_code=303)
-        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+        if not _pode_gerenciar(usuario_logado, alvo.papel):
             return RedirectResponse("/usuarios", status_code=303)
 
         return templates.TemplateResponse(
@@ -404,12 +453,12 @@ def editar_usuario(
         alvo = db.query(Usuario).filter(Usuario.id == usuario_id).first()
         if alvo is None:
             return RedirectResponse("/usuarios", status_code=303)
-        if usuario_logado.papel == "supervisor" and alvo.papel != "seller":
+        if not _pode_gerenciar(usuario_logado, alvo.papel):
             return RedirectResponse("/usuarios", status_code=303)
 
-        # Mesma regra de criar: supervisor só atribui "seller", mesmo
+        # Mesma regra de criar: supervisor só atribui "atendente" ou "seller", mesmo
         # que tentem forçar outro valor mexendo no HTML.
-        papeis_permitidos = ("admin", "supervisor", "seller") if usuario_logado.papel == "admin" else ("seller",)
+        papeis_permitidos = PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
         contexto_erro = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "alvo": alvo}
 
         if papel not in papeis_permitidos:
@@ -459,10 +508,10 @@ def criar_usuario(
         if not auth.papel_permite(usuario_logado, ("admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
 
-        # Supervisor só pode criar seller, mesmo que alguém tente forçar
+        # Supervisor só pode criar atendente ou seller, mesmo que alguém tente forçar
         # outro valor mexendo no HTML -- a checagem de verdade é aqui,
         # no servidor, nunca só no <select> da tela.
-        papeis_que_esse_criador_pode_atribuir = ("admin", "supervisor", "seller") if usuario_logado.papel == "admin" else ("seller",)
+        papeis_que_esse_criador_pode_atribuir = PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
         contexto_base = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "usuarios": _listar_usuarios_visiveis(db, usuario_logado)}
 
         if papel not in papeis_que_esse_criador_pode_atribuir:
@@ -529,7 +578,7 @@ def saude():
 
 
 def _redirecionar_por_papel(papel: str) -> RedirectResponse:
-    destino = "/meus-cancelamentos" if papel == "seller" else "/"
+    destino = _PAGINA_INICIAL_POR_PAPEL.get(papel, "/")
     return RedirectResponse(destino, status_code=303)
 
 
