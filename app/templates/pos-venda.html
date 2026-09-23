@@ -53,14 +53,14 @@
         <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">
           Painel da Fila
         </a>
-        {% if not eh_atendente %}<span class="cmx-nav-secao">Solicitações manuais</span>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
         <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">
           Nova solicitação
         </a>
         <a class="cmx-nav-item" href="/solicitacoes-painel">
           Solicitações de Cancelamento
         </a>
-        <span class="cmx-nav-secao">Operadores</span>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Operadores</span>
         <a class="cmx-nav-item" href="/usuarios">Operadores</a>
         <a class="cmx-nav-item cmx-nav-item--em-breve" href="#" aria-disabled="true">
           Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
