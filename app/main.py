@@ -66,6 +66,7 @@ _PUBLICO_EXATO = {
     ("POST", "/api/solicitacoes-cancelamento"),
     ("GET", "/painel-tv/geral"), ("GET", "/painel-tv/fila"),
     ("GET", "/api/pre-venda/fila"), ("GET", "/api/pre-venda/painel-geral"),
+    ("GET", "/api/pre-venda/painel-resumo"),
     ("POST", "/webhook/mercado-livre"),
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),

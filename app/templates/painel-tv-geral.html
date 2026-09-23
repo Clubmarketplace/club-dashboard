@@ -8,123 +8,94 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
 <style>
+  /* Painel Geral = "como estamos indo?" (tendência e resultado).
+     O que precisa de resposta AGORA fica no Painel da Fila. */
   :root {
-    --bg:#0b0f14; --panel:#12181f; --panel-2:#161e27; --line:#22303c;
-    --text:#eef3f7; --text-dim:#8ea0b0;
-    --amber:#f0a93d; --amber-dim:#3d2f14;
-    --green:#38c98c; --green-dim:#12301f;
-    --red:#e8615a; --red-dim:#3a1f1e;
-    --gray:#4a5866;
-    --blue:#5aa9e6; --blue-dim:#132a3d;
+    --bg:#0b0f14; --panel:#12181f; --line:#22303c; --text:#eef3f7; --dim:#8ea0b0;
+    --ml:#8b5cf6; --ia:#38c98c; --equipe:#f0a93d; --pend:#e8615a; --outros:#4a5866;
     font-family:"Space Grotesk", sans-serif;
   }
   :root:not([data-theme="light"]) { color-scheme: dark; }
-  * { box-sizing: border-box; }
+  * { box-sizing:border-box; }
   html, body { height:100%; }
-  /* Tela inteira sem rolagem da página: só a lista da direita rola */
-  body { margin:0; background:var(--bg); color:var(--text); padding:24px 32px 14px; display:flex; flex-direction:column; overflow:hidden; }
+  body { margin:0; background:var(--bg); color:var(--text); padding:22px 30px 12px; display:flex; flex-direction:column; overflow:hidden; gap:14px; }
   .mono { font-family:"IBM Plex Mono", monospace; }
 
-  header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:16px; flex-wrap:wrap; gap:14px; }
+  header { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .marca { display:flex; align-items:center; gap:12px; }
-  .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
-  h1 { margin:0; font-size:22px; font-weight:600; }
-  .subtitulo { color:var(--text-dim); font-size:13.5px; margin-top:2px; }
-  .relogio { font-size:15px; color:var(--text-dim); text-align:right; }
-  .relogio .hora { font-size:26px; color:var(--text); display:block; }
+  .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--equipe); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  h1 { margin:0; font-size:21px; font-weight:600; }
+  .subtitulo { color:var(--dim); font-size:13px; margin-top:2px; }
+  /* Filtros compactos: conta + período (Hoje · 7 · 30 · Datas) */
+  .controles { display:flex; gap:8px; align-items:center; margin-left:auto; flex-wrap:wrap; justify-content:flex-end; }
+  .controles select, .controles input[type="date"] { height:32px; background:var(--panel); color:var(--text); border:1px solid var(--line); border-radius:8px; padding:0 8px; font-family:inherit; font-size:13px; }
+  .controles select { min-width:180px; }
+  .controles input[type="date"] { color-scheme:dark; }
+  .datas { display:none; align-items:center; gap:6px; font-size:12px; color:var(--dim); }
+  .datas.aberto { display:inline-flex; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { background:transparent; border:none; color:var(--dim); font-family:inherit; font-size:12.5px; font-weight:600; padding:0 12px; height:30px; cursor:pointer; }
+  .seg button.on { background:var(--text); color:var(--bg); }
+  .relogio { text-align:right; }
+  .relogio .hora { font-size:24px; display:block; }
+  .relogio .data { font-size:12px; color:var(--dim); }
 
-  /* Faixa de alerta: só aparece quando há algo fora do normal */
-  .alerta { display:none; align-items:center; gap:14px; border-radius:12px; padding:12px 18px; margin-bottom:14px; border:1px solid; }
-  .alerta.critico { display:flex; background:var(--red-dim); border-color:var(--red); }
-  .alerta.atencao { display:flex; background:var(--amber-dim); border-color:var(--amber); }
-  .alerta .ponto { width:14px; height:14px; border-radius:50%; flex-shrink:0; }
-  .alerta.critico .ponto { background:var(--red); animation:pisca 1.2s infinite; }
-  .alerta.atencao .ponto { background:var(--amber); }
-  .alerta .titulo { font-size:17px; font-weight:600; }
-  .alerta .detalhe { font-size:12.5px; color:var(--text-dim); }
+  /* Indicadores */
+  .kpis { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:14px; }
+  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 20px; }
+  .kpi .rotulo { font-size:13px; color:var(--dim); }
+  .kpi .valor { font-size:38px; font-weight:600; font-family:"IBM Plex Mono", monospace; margin:2px 0; line-height:1.15; }
+  .kpi .comp { font-size:13px; color:var(--dim); }
+  .bom { color:var(--ia) !important; } .ruim { color:var(--pend) !important; } .aten { color:var(--equipe) !important; }
 
-  .grid-principal { flex:1; min-height:0; display:grid; grid-template-columns:minmax(0,1.35fr) minmax(0,1fr); gap:18px; }
-  .coluna { display:flex; flex-direction:column; gap:16px; min-height:0; }
-  .painel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 20px; }
-  .painel h2 { font-size:14px; font-weight:600; margin:0; color:var(--text-dim); }
-  .painel-cabecalho { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; gap:10px; flex-wrap:wrap; }
+  .linha { display:grid; gap:14px; min-height:0; }
+  .linha-1 { grid-template-columns:minmax(0,2.2fr) minmax(0,1fr); flex:1.25; }
+  .linha-2 { grid-template-columns:minmax(0,1fr) minmax(0,1fr); flex:1; }
+  .painel { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:14px 18px; display:flex; flex-direction:column; min-height:0; }
+  .painel-cab { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+  .painel-cab h2 { font-size:14px; font-weight:600; margin:0; color:var(--dim); }
+  .legenda { display:flex; gap:12px; font-size:12px; color:var(--dim); }
+  .legenda i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:5px; vertical-align:-1px; }
+  .nota { font-size:12px; color:var(--dim); }
 
-  /* ---------- Indicadores (3x2) ---------- */
-  .kpis { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:14px; }
-  .kpi { background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:14px 18px; }
-  .kpi .rotulo { font-size:12.5px; color:var(--text-dim); }
-  .kpi .valor { font-size:34px; font-weight:600; margin-top:4px; font-family:"IBM Plex Mono", monospace; }
-  .kpi .valor.ok { color:var(--green); }
-  .kpi .valor.humano { color:var(--amber); }
-  .kpi .valor.alerta-num { color:var(--red); }
-  .kpi .sub { font-size:11px; color:var(--text-dim); margin-top:2px; }
+  /* Barras empilhadas (dias e horas) */
+  .barras { flex:1; min-height:80px; display:flex; align-items:stretch; gap:4px; }
+  .col { flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:5px; position:relative; }
+  .col .pilha { flex:1; width:100%; display:flex; flex-direction:column-reverse; }
+  .col .seg-b { width:100%; }
+  .col .pilha > .seg-b:last-child { border-radius:4px 4px 0 0; }
+  .b-ml { background:var(--ml); } .b-ia { background:var(--ia); } .b-equipe { background:var(--equipe); } .b-pendente { background:var(--pend); } .b-outros { background:var(--outros); }
+  .col .base { width:100%; height:2px; background:var(--line); }
+  .col .rot { font-size:11px; color:var(--dim); height:13px; white-space:nowrap; }
+  .col .qtd { font-size:10.5px; color:var(--dim); font-family:"IBM Plex Mono", monospace; height:12px; }
+  .col.hoje::before { content:""; position:absolute; top:14px; bottom:16px; left:-3px; right:-3px; border:1px dashed var(--dim); border-radius:6px; pointer-events:none; }
+  .col.hoje .rot { color:var(--text); font-weight:700; }
+  .col.futuro .rot { opacity:.35; }
 
-  /* ---------- Gráfico empilhado por hora ---------- */
-  .painel-grafico { flex:1; min-height:0; display:flex; flex-direction:column; }
-  .legenda { display:flex; gap:14px; font-size:11.5px; color:var(--text-dim); }
-  .legenda span { display:flex; align-items:center; gap:5px; }
-  .legenda .q { width:10px; height:10px; border-radius:2px; display:inline-block; }
-  #grafico { flex:1; min-height:120px; display:flex; align-items:stretch; gap:5px; }
-  .hora-col { flex:1; display:flex; flex-direction:column; align-items:center; gap:6px; min-width:0; position:relative; }
-  .hora-col .pilha { flex:1; width:100%; display:flex; flex-direction:column-reverse; justify-content:flex-start; border-radius:4px 4px 0 0; }
-  .hora-col .seg { width:100%; transition:height .6s; }
-  .hora-col .seg:last-child { border-radius:4px 4px 0 0; }
-  .seg.ia { background:var(--green); } .seg.humano { background:var(--amber); }
-  .seg.pendente { background:var(--red); } .seg.outros { background:var(--gray); }
-  .hora-col .base { width:100%; height:2px; background:var(--line); }
-  .hora-col .rotulo-hora { font-size:10.5px; color:var(--text-dim); }
-  .hora-col .qtd { font-size:10.5px; color:var(--text-dim); font-family:"IBM Plex Mono", monospace; height:13px; }
-  .hora-col.futuro .rotulo-hora { opacity:.4; }
-  .hora-col.agora::before { content:""; position:absolute; top:14px; bottom:18px; left:-3px; right:-3px; border:1px dashed var(--text-dim); border-radius:6px; pointer-events:none; }
-  .hora-col.agora .rotulo-hora { color:var(--text); font-weight:700; }
+  /* Rosca */
+  .rosca-caixa { flex:1; display:flex; align-items:center; justify-content:center; gap:26px; min-height:0; }
+  .rosca-caixa svg { width:min(210px, 100%); height:auto; max-height:100%; }
+  .rosca-leg { display:flex; flex-direction:column; gap:12px; font-size:15px; }
+  .rosca-leg i { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; }
+  .rosca-leg b { font-family:"IBM Plex Mono", monospace; font-weight:500; margin-left:6px; }
 
-  /* ---------- Coluna direita: bolhas + lista ---------- */
-  .painel-acao { flex:1; min-height:0; display:flex; flex-direction:column; }
-  #bolhas { display:grid; grid-template-columns:repeat(auto-fill, minmax(clamp(84px, 5.6vw, 118px), 1fr)); gap:10px; max-height:36%; overflow:hidden; flex-shrink:0; padding:6px; /* folga pro pulsar não ser cortado */ }
-  .bolha {
-    aspect-ratio:1; border-radius:50%; border:3px solid;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:1px;
-    text-align:center; padding:8px;
-    transition:background-color .8s, border-color .8s, color .8s;
-  }
-  .bolha .b-nome { font-size:clamp(9.5px, .68vw, 12px); font-weight:700; line-height:1.15; text-transform:uppercase;
-    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; word-break:break-word; }
-  .bolha .b-tempo { font-family:"IBM Plex Mono", monospace; font-size:clamp(12px, .9vw, 16px); font-weight:600; }
-  .bolha .b-qtd { font-size:clamp(9px, .6vw, 11px); opacity:.85; }
-  .bolha.leve    { background:var(--blue-dim);  border-color:var(--blue);  color:#cfe6fa; }
-  .bolha.ok      { background:var(--green-dim); border-color:var(--green); color:#b9f3d6; }
-  .bolha.atencao { background:var(--amber-dim); border-color:var(--amber); color:#fbe0b0; }
-  .bolha.critico { background:var(--red-dim);   border-color:var(--red);   color:#ffd0cc; animation:pulsar 1.8s ease-in-out infinite; }
-  @keyframes pulsar { 0%,100% { transform:scale(1); } 50% { transform:scale(1.06); } }
-  .bolhas-mais { font-size:11.5px; color:var(--text-dim); text-align:right; margin-top:6px; min-height:14px; }
+  /* Top 10 produtos: duas colunas de 5 */
+  .linha-2 { grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) !important; }
+  .produtos { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-auto-flow:column; grid-template-rows:repeat(5, auto); gap:8px 22px; overflow:hidden; align-content:start; }
+  .produto { display:grid; grid-template-columns:20px minmax(0,1fr) auto; gap:3px 8px; align-items:center; }
+  .produto .pos { font-size:12px; color:var(--dim); font-family:"IBM Plex Mono", monospace; grid-row:span 2; }
+  .produto .nome { font-size:14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .produto .nome .cod { font-size:11.5px; color:var(--dim); font-family:"IBM Plex Mono", monospace; margin-left:6px; }
+  .produto .n { font-family:"IBM Plex Mono", monospace; font-size:16px; font-weight:600; }
+  .produto .trilho { grid-column:2 / 4; height:5px; border-radius:3px; background:#1c2630; overflow:hidden; }
+  .produto .trilho i { display:block; height:100%; background:var(--equipe); border-radius:3px; }
+  .vazio { color:var(--dim); font-size:13px; padding:10px 0; }
 
-  .subtitulo-lista { font-size:13px; font-weight:600; color:var(--text-dim); margin:8px 0 8px; }
-  #lista { flex:1; min-height:80px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding-right:6px; }
-  #lista::-webkit-scrollbar { width:8px; }
-  #lista::-webkit-scrollbar-thumb { background:var(--line); border-radius:4px; }
-  .item-lista { flex-shrink:0; background:var(--panel-2); border-left:4px solid var(--blue); border-radius:0 8px 8px 0; padding:10px 14px; display:flex; justify-content:space-between; align-items:center; gap:12px; }
-  .item-lista.atencao { border-left-color:var(--amber); }
-  .item-lista.critico { border-left-color:var(--red); }
-  .item-lista.ok { border-left-color:var(--green); background:linear-gradient(90deg, var(--green-dim), var(--panel-2) 45%); }
-  .il-resposta { font-size:12.5px; color:var(--text-dim); display:-webkit-box; -webkit-line-clamp:1; -webkit-box-orient:vertical; overflow:hidden; }
-  .il-sub { display:block; font-size:10.5px; color:var(--text-dim); font-weight:400; text-align:right; }
-  .separador-lista { flex-shrink:0; font-size:11.5px; font-weight:600; color:var(--green); text-transform:uppercase; letter-spacing:.04em; margin:8px 0 0; display:flex; align-items:center; gap:10px; }
-  .separador-lista::after { content:""; flex:1; height:1px; background:var(--line); }
-  .il-conta { font-size:11.5px; color:var(--text-dim); font-weight:600; text-transform:uppercase; }
-  .il-texto { font-size:14.5px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
-  .il-tempo { font-family:"IBM Plex Mono", monospace; font-size:16px; font-weight:600; white-space:nowrap; color:var(--blue); text-align:right; }
-  .il-tempo.ok { color:var(--green); }
-  .il-tempo.atencao { color:var(--amber); } .il-tempo.critico { color:var(--red); }
-  .vazio { color:var(--text-dim); font-size:13px; padding:10px 0; }
-
-  .rodape-nota { margin-top:12px; font-size:11.5px; color:var(--text-dim); text-align:center; display:flex; justify-content:center; align-items:center; gap:6px; }
-  .ponto-vivo { width:7px; height:7px; border-radius:50%; background:var(--green); animation:pisca 1.6s infinite; }
+  .rodape { font-size:11.5px; color:var(--dim); text-align:center; display:flex; justify-content:center; align-items:center; gap:6px; }
+  .ponto-vivo { width:7px; height:7px; border-radius:50%; background:var(--ia); animation:pisca 1.6s infinite; }
   @keyframes pisca { 0%,100%{opacity:1;} 50%{opacity:.3;} }
-  .erro-conexao { color:var(--red); text-align:center; padding:6px; font-size:13px; }
-
-  @media (prefers-reduced-motion: reduce) {
-    .bolha.critico, .alerta.critico .ponto { animation:none; }
-  }
+  .erro { color:var(--pend); font-size:13px; text-align:center; }
+  @media (prefers-reduced-motion: reduce) { .ponto-vivo { animation:none; } }
 </style>
 </head>
 <body>
@@ -134,343 +105,250 @@
     <div class="icone">C</div>
     <div>
       <h1>Visão Geral — Pré-venda</h1>
-      <div class="subtitulo">Saúde agregada de todas as contas</div>
+      <div class="subtitulo" id="subtitulo">Todas as contas</div>
     </div>
   </div>
-  <div class="relogio">
-    <span class="hora mono" id="relogio-hora">--:--:--</span>
-    <span id="relogio-data"></span>
+  <div class="controles">
+    <select id="filtro-conta" aria-label="Filtrar por conta"><option value="">Todas as contas</option></select>
+    <span class="seg" id="filtro-periodo"><button data-v="hoje">Hoje</button><button data-v="7">7 dias</button><button data-v="30">30 dias</button><button data-v="datas">Datas</button></span>
+    <span class="datas" id="caixa-datas"><input type="date" id="data-de" aria-label="De" /> até <input type="date" id="data-ate" aria-label="Até" /></span>
   </div>
+  <div class="relogio"><span class="hora mono" id="relogio-hora">--:--:--</span><span class="data" id="relogio-data"></span></div>
 </header>
 
 <div id="aviso-erro"></div>
 
-<div class="alerta" id="alerta">
-  <div class="ponto"></div>
-  <div>
-    <div class="titulo" id="alerta-titulo"></div>
-    <div class="detalhe" id="alerta-detalhe"></div>
-  </div>
-</div>
+<section class="kpis">
+  <div class="kpi"><div class="rotulo">Resolvidas sem a equipe (7 dias)</div><div class="valor" id="k-sem-equipe">—</div><div class="comp" id="k-sem-equipe-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Tempo médio da equipe (7 dias)</div><div class="valor" id="k-tempo">—</div><div class="comp" id="k-tempo-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor" id="k-pend">—</div><div class="comp" id="k-pend-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor" id="k-hoje">—</div><div class="comp" id="k-hoje-comp"></div></div>
+</section>
 
-<div class="grid-principal">
-  <!-- Esquerda: como está o dia -->
-  <div class="coluna">
-    <div class="kpis">
-      <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor" id="kpi-total">—</div></div>
-      <div class="kpi"><div class="rotulo">Respondidas por IA</div><div class="valor ok" id="kpi-ia">—</div><div class="sub" id="kpi-ia-sub"></div></div>
-      <div class="kpi"><div class="rotulo">Foram para humanos</div><div class="valor humano" id="kpi-humano">—</div><div class="sub" id="kpi-humano-sub"></div></div>
-      <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor alerta-num" id="kpi-pendente">—</div></div>
-      <div class="kpi"><div class="rotulo">Tempo médio humano</div><div class="valor" id="kpi-tempo">—</div><div class="sub">para responder, hoje</div></div>
-      <div class="kpi"><div class="rotulo">Contas críticas (+30 min)</div><div class="valor alerta-num" id="kpi-criticas">—</div></div>
-    </div>
-
-    <div class="painel painel-grafico">
-      <div class="painel-cabecalho">
-        <h2>Perguntas por hora — hoje</h2>
-        <div class="legenda">
-          <span><span class="q" style="background:var(--green);"></span> IA</span>
-          <span><span class="q" style="background:var(--amber);"></span> Humano</span>
-          <span><span class="q" style="background:var(--red);"></span> Pendente</span>
-          <span><span class="q" style="background:var(--gray);"></span> Outros</span>
-        </div>
-      </div>
-      <div id="grafico"></div>
-    </div>
-  </div>
-
-  <!-- Direita: o que precisa de ação -->
-  <div class="painel painel-acao">
-    <div class="painel-cabecalho">
-      <h2>Contas de hoje — ao vivo</h2>
+<div class="linha linha-1">
+  <div class="painel">
+    <div class="painel-cab">
+      <h2 id="titulo-dias">Últimos 30 dias — quem respondeu</h2>
       <div class="legenda">
-        <span><span class="q" style="background:var(--blue); border-radius:50%;"></span> até 15 min</span>
-        <span><span class="q" style="background:var(--amber); border-radius:50%;"></span> 15–30 min</span>
-        <span><span class="q" style="background:var(--red); border-radius:50%;"></span> +30 min</span>
-        <span><span class="q" style="background:var(--green); border-radius:50%;"></span> em dia</span>
+        <span><i style="background:var(--ml)"></i>ML / app</span>
+        <span><i style="background:var(--ia)"></i>Nossa IA</span>
+        <span><i style="background:var(--equipe)"></i>Equipe</span>
+        <span><i style="background:var(--pend)"></i>Pendente</span>
       </div>
     </div>
-    <div id="bolhas"></div>
-    <div class="bolhas-mais" id="bolhas-mais"></div>
-    <div class="subtitulo-lista">Perguntas esperando resposta e respondidas hoje</div>
-    <div id="lista"></div>
+    <div class="barras" id="grafico-dias"></div>
+  </div>
+  <div class="painel">
+    <div class="painel-cab"><h2>Hoje — quem respondeu</h2><span class="nota" id="nota-hoje"></span></div>
+    <div class="rosca-caixa">
+      <svg id="rosca" viewBox="0 0 200 200" role="img" aria-label="Quem respondeu hoje"></svg>
+      <div class="rosca-leg" id="rosca-leg"></div>
+    </div>
   </div>
 </div>
 
-<div class="rodape-nota"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 8 segundos · para responder use a tela /pre-venda</div>
+<div class="linha linha-2">
+  <div class="painel">
+    <div class="painel-cab"><h2>Hoje por hora</h2><span class="nota" id="nota-pico"></span></div>
+    <div class="barras" id="grafico-horas"></div>
+  </div>
+  <div class="painel">
+    <div class="painel-cab"><h2>Top 10 produtos que mais chegam para a equipe</h2><span class="nota" id="ctx-produtos"></span></div>
+    <div class="produtos" id="produtos"></div>
+  </div>
+</div>
+
+<div class="rodape"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 30 segundos · o que precisa de resposta agora está no Painel da Fila</div>
 
 <script>
-  // ---------- Configuração ----------
-  const INTERVALO_BUSCA_MS = 8000;       // busca dados novos no servidor
-  const INTERVALO_TELA_MS = 1000;        // recalcula tempos e cores
-  const LIMITE_VOLUME_ALTO = 15;         // pendentes a partir disso = alerta amarelo
-  const ROLAGEM_AUTOMATICA = true;       // lista rola sozinha (TV sem mouse)
-  const VELOCIDADE_ROLAGEM = 0.4;        // pixels por quadro
-  const PAUSA_NAS_PONTAS_MS = 4000;
-  const PAUSA_APOS_INTERACAO_MS = 20000;
+  const INTERVALO_MS = 30000;
   const FUSO = "America/Sao_Paulo";
+  const GRUPOS = [
+    ["ml", "ML / app", "var(--ml)"], ["ia", "Nossa IA", "var(--ia)"],
+    ["equipe", "Equipe", "var(--equipe)"], ["pendente", "Pendente", "var(--pend)"],
+  ];
 
-  // ---------- Utilitários ----------
-  function escaparHtml(texto) {
-    // Texto vem de clientes do Mercado Livre: nunca inserir cru no HTML
-    return String(texto ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-  }
-
-  // Datas vêm do banco em UTC "cru" (sem fuso): marcamos como UTC antes de usar
-  function parseDataUTC(isoString) {
-    if (!isoString) return new Date();
-    const temFuso = /([zZ]|[+-]\d{2}:?\d{2})$/.test(isoString);
-    const data = new Date(temFuso ? isoString : isoString + "Z");
-    return isNaN(data.getTime()) ? new Date() : data;
-  }
-
-  const minutosEsperando = item => Math.max(0, (Date.now() - parseDataUTC(item.recebida_em)) / 60000);
-
-  function formatarTempo(min) {
-    min = Math.floor(min);
-    if (min < 1) return "agora";
+  const escapar = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  const $ = id => document.getElementById(id);
+  function formatarMin(min) {
+    if (min == null) return "—";
+    min = Math.round(min);
     if (min < 60) return min + " min";
-    return Math.floor(min / 60) + "h" + (min % 60).toString().padStart(2, "0") + "min";
+    return Math.floor(min / 60) + "h" + String(min % 60).padStart(2, "0");
   }
 
-  const classeUrgencia = min => (min > 30 ? "critico" : min > 15 ? "atencao" : "leve");
-  const pct = (parte, total) => (total ? Math.round((parte / total) * 100) + "%" : "—");
-  const setTexto = (id, valor) => { document.getElementById(id).textContent = valor; };
+  // ---------- Filtros (ficam no endereço: dá pra fixar uma TV numa conta) ----------
+  const url = new URLSearchParams(location.search);
+  let filtroConta = url.get("conta") || "";
+  let filtroPeriodo = ["hoje", "7", "30", "datas"].includes(url.get("periodo")) ? url.get("periodo")
+                    : (url.get("dias") === "7" ? "7" : "30"); // aceita o link antigo (?dias=7)
+  let filtroDe = url.get("de") || "";
+  let filtroAte = url.get("ate") || "";
 
-  // ---------- Relógio (sempre horário de Brasília) ----------
-  function atualizarRelogio() {
-    const agora = new Date();
-    setTexto("relogio-hora", agora.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit", timeZone:FUSO }));
-    setTexto("relogio-data", agora.toLocaleDateString("pt-BR", { day:"2-digit", month:"long", year:"numeric", timeZone:FUSO }));
+  function gravarUrl() {
+    const p = new URLSearchParams();
+    if (filtroConta) p.set("conta", filtroConta);
+    if (filtroPeriodo !== "30") p.set("periodo", filtroPeriodo);
+    if (filtroPeriodo === "datas") { if (filtroDe) p.set("de", filtroDe); if (filtroAte) p.set("ate", filtroAte); }
+    history.replaceState(null, "", location.pathname + (p.toString() ? "?" + p : ""));
   }
-  setInterval(atualizarRelogio, 1000);
-  atualizarRelogio();
-
-  // ---------- Estado ----------
-  let dadosGerais = null;   // /api/pre-venda/painel-geral
-  let fila = null;          // /api/pre-venda/fila (null = ainda não carregou / falhou)
-
-  // Agrupa a fila por conta (ignorando maiúscula/minúscula), pela pergunta mais antiga
-  function agruparPorConta(itens) {
-    const porConta = {};
-    itens.forEach(item => {
-      const chave = String(item.conta || "sem conta").trim().toLowerCase();
-      const min = minutosEsperando(item);
-      if (!porConta[chave]) porConta[chave] = { nome: item.conta || "Sem conta", min: 0, qtd: 0 };
-      porConta[chave].min = Math.max(porConta[chave].min, min);
-      porConta[chave].qtd++;
-    });
-    return Object.values(porConta).sort((a, b) => b.min - a.min);
+  function pintarFiltros() {
+    document.querySelectorAll("#filtro-periodo button").forEach(b => b.classList.toggle("on", b.dataset.v === filtroPeriodo));
+    $("caixa-datas").classList.toggle("aberto", filtroPeriodo === "datas");
   }
-
-  const horaBR = iso => parseDataUTC(iso).toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", timeZone:FUSO });
-
-  // Contas com pergunta hoje e nada pendente = "em dia" (verde)
-  function contasEmDia(chavesPendentes) {
-    const contas = (dadosGerais && dadosGerais.contas_hoje) || [];
-    return contas
-      .filter(c => !chavesPendentes.has(String(c.conta || "").trim().toLowerCase()))
-      .sort((a, b) => (b.respondidas_hoje || 0) - (a.respondidas_hoje || 0));
+  function hojeIso() {
+    return new Date().toLocaleDateString("en-CA", { timeZone: FUSO }); // AAAA-MM-DD no horário de Brasília
   }
-
-  function htmlItemRespondida(r) {
-    const minutos = Math.max(0, (parseDataUTC(r.respondida_em) - parseDataUTC(r.recebida_em)) / 60000);
-    return `<div class="item-lista ok">
-      <div style="min-width:0;">
-        <div class="il-conta">${escaparHtml(r.conta)} · ${escaparHtml(r.resolvida_por || "—")}</div>
-        <div class="il-texto">${escaparHtml(r.texto)}</div>
-        ${r.resposta ? `<div class="il-resposta">↳ ${escaparHtml(r.resposta)}</div>` : ""}
-      </div>
-      <div class="il-tempo ok">✓ ${horaBR(r.respondida_em)}<span class="il-sub">levou ${formatarTempo(minutos)}</span></div>
-    </div>`;
-  }
-
-  // ---------- Renderização ----------
-  function renderizarIndicadoresEAlerta() {
-    const g = dadosGerais ? dadosGerais.geral : null;
-    const contas = fila ? agruparPorConta(fila) : null;
-
-    // Pendentes e críticas: ao vivo pela fila; se ela falhar, usa o número do servidor
-    const pendentes = fila ? fila.length : (g ? g.pendentes : null);
-    const criticas = contas ? contas.filter(c => c.min > 30).length : (g ? g.contas_criticas : null);
-
-    if (g) {
-      setTexto("kpi-total", g.total_hoje);
-      setTexto("kpi-ia", pct(g.ia, g.total_hoje));
-      setTexto("kpi-ia-sub", g.total_hoje ? `${g.ia} de ${g.total_hoje}` : "");
-      setTexto("kpi-humano", pct(g.humano, g.total_hoje));
-      setTexto("kpi-humano-sub", g.total_hoje ? `${g.humano} de ${g.total_hoje}` : "");
-      setTexto("kpi-tempo", g.tempo_medio_humano_min == null ? "—" : formatarTempo(g.tempo_medio_humano_min));
+  document.querySelectorAll("#filtro-periodo button").forEach(b => b.addEventListener("click", () => {
+    filtroPeriodo = b.dataset.v;
+    if (filtroPeriodo === "datas" && !filtroDe) {
+      // Abre com o mês atual preenchido, pra já mostrar algo útil
+      filtroAte = hojeIso(); filtroDe = filtroAte.slice(0, 8) + "01";
+      $("data-de").value = filtroDe; $("data-ate").value = filtroAte;
     }
-    setTexto("kpi-pendente", pendentes ?? "—");
-    setTexto("kpi-criticas", criticas ?? "—");
+    pintarFiltros(); gravarUrl(); atualizar();
+  }));
+  ["data-de", "data-ate"].forEach(id => $(id).addEventListener("change", () => {
+    filtroDe = $("data-de").value; filtroAte = $("data-ate").value; gravarUrl(); atualizar();
+  }));
+  $("filtro-conta").addEventListener("change", e => { filtroConta = e.target.value; gravarUrl(); atualizar(); });
+  $("data-de").value = filtroDe; $("data-ate").value = filtroAte;
+  $("data-ate").max = $("data-de").max = hojeIso();
+  pintarFiltros();
 
-    const alerta = document.getElementById("alerta");
-    if (criticas > 0) {
-      alerta.className = "alerta critico";
-      setTexto("alerta-titulo", `Atenção: ${criticas} conta(s) com espera crítica (+30 min)`);
-      setTexto("alerta-detalhe", "Responda pela tela de Pré-venda o quanto antes.");
-    } else if (pendentes >= LIMITE_VOLUME_ALTO) {
-      alerta.className = "alerta atencao";
-      setTexto("alerta-titulo", "Volume acima do normal");
-      setTexto("alerta-detalhe", `${pendentes} pergunta(s) esperando — nada crítico ainda, mas de olho.`);
-    } else {
-      alerta.className = "alerta"; // tudo normal: faixa some
-    }
+  // ---------- Relógio ----------
+  function relogio() {
+    const d = new Date();
+    $("relogio-hora").textContent = d.toLocaleTimeString("pt-BR", { hour:"2-digit", minute:"2-digit", second:"2-digit", timeZone:FUSO });
+    $("relogio-data").textContent = d.toLocaleDateString("pt-BR", { weekday:"long", day:"2-digit", month:"long", timeZone:FUSO });
   }
+  setInterval(relogio, 1000); relogio();
 
-  function renderizarGrafico() {
-    if (!dadosGerais) return;
-    const horas = dadosGerais.por_hora || [];
-    const horaAtual = dadosGerais.hora_atual;
-    const maximo = Math.max(1, ...horas.map(h => h.quantidade || 0));
-
-    document.getElementById("grafico").innerHTML = horas.map(h => {
-      const partes = [
-        ["ia", h.ia || 0], ["humano", h.humano || 0],
-        ["pendente", h.pendente || 0], ["outros", h.outros || 0],
-      ];
-      // Compatibilidade: se o servidor ainda não mandar o detalhamento, mostra o total como "outros"
-      const soma = partes.reduce((t, p) => t + p[1], 0);
-      if (soma === 0 && h.quantidade) partes[3][1] = h.quantidade;
-
-      const classes = ["hora-col"];
-      if (horaAtual != null && h.hora === horaAtual) classes.push("agora");
-      if (horaAtual != null && h.hora > horaAtual) classes.push("futuro");
-
-      // A pilha usa column-reverse: primeiro segmento fica embaixo
-      const segmentos = partes.filter(p => p[1] > 0)
-        .map(([tipo, v]) => `<div class="seg ${tipo}" style="height:${(v / maximo) * 100}%" title="${v} ${tipo}"></div>`).join("");
-      return `<div class="${classes.join(" ")}">
-        <span class="qtd">${h.quantidade || ""}</span>
-        <div class="pilha">${segmentos}</div>
-        <div class="base"></div>
-        <span class="rotulo-hora">${h.hora === horaAtual ? "agora" : h.hora + "h"}</span>
-      </div>`;
+  // ---------- Desenho ----------
+  function colunas(containerId, itens, rotulo, indiceHoje) {
+    const max = Math.max(1, ...itens.map(i => GRUPOS.reduce((t, [k]) => t + (i[k] || 0), 0)));
+    $(containerId).innerHTML = itens.map((it, idx) => {
+      const total = GRUPOS.reduce((t, [k]) => t + (it[k] || 0), 0);
+      const segs = GRUPOS.filter(([k]) => it[k] > 0)
+        .map(([k, nome]) => `<div class="seg-b b-${k}" style="height:${(it[k] / max) * 100}%" title="${it[k]} ${nome}"></div>`).join("");
+      const classes = ["col"];
+      if (idx === indiceHoje) classes.push("hoje");
+      if (indiceHoje != null && idx > indiceHoje) classes.push("futuro");
+      return `<div class="${classes.join(" ")}"><span class="qtd">${total || ""}</span><div class="pilha">${segs}</div><div class="base"></div><span class="rot">${rotulo(it, idx)}</span></div>`;
     }).join("");
   }
 
-  function renderizarBolhasELista() {
-    const bolhas = document.getElementById("bolhas");
-    const mais = document.getElementById("bolhas-mais");
-    const lista = document.getElementById("lista");
-
-    if (fila === null) return; // sem dados ainda: mantém o que já está na tela
-    const chavesPendentes = new Set(fila.map(i => String(i.conta || "sem conta").trim().toLowerCase()));
-    const emDia = contasEmDia(chavesPendentes);
-    const respondidas = (dadosGerais && dadosGerais.respondidas_recentes) || [];
-
-    if (fila.length === 0 && emDia.length === 0) {
-      bolhas.innerHTML = '<div class="vazio" style="grid-column:1/-1;">Nenhuma pergunta hoje ainda.</div>';
-      mais.textContent = "";
+  function rosca(hoje) {
+    const total = GRUPOS.reduce((t, [k]) => t + (hoje[k] || 0), 0);
+    const r = 78, c = 2 * Math.PI * r;
+    let acumulado = 0, arcos = "";
+    if (total) {
+      GRUPOS.forEach(([k, , cor]) => {
+        const v = hoje[k] || 0; if (!v) return;
+        const fatia = (v / total) * c;
+        arcos += `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${cor}" stroke-width="24" stroke-dasharray="${fatia} ${c - fatia}" stroke-dashoffset="${-acumulado}" transform="rotate(-90 100 100)"/>`;
+        acumulado += fatia;
+      });
     } else {
-    bolhas.innerHTML = agruparPorConta(fila).map(c => `
-      <div class="bolha ${classeUrgencia(c.min)}" title="${escaparHtml(c.nome)} — ${c.qtd} pendente(s)">
-        <span class="b-nome">${escaparHtml(c.nome)}</span>
-        <span class="b-tempo">${formatarTempo(c.min).replace(" min", "min")}</span>
-        <span class="b-qtd">${c.qtd} ${c.qtd === 1 ? "pergunta" : "perguntas"}</span>
-      </div>`).join("") + emDia.map(c => `
-      <div class="bolha ok" title="${escaparHtml(c.conta)} — em dia">
-        <span class="b-nome">${escaparHtml(c.conta)}</span>
-        <span class="b-tempo">✓ em dia</span>
-        <span class="b-qtd">${c.respondidas_hoje} ${c.respondidas_hoje === 1 ? "respondida" : "respondidas"}</span>
-      </div>`).join("");
-
-    // Conta quantas bolhas ficaram fora da área visível
-    requestAnimationFrame(() => {
-      const limite = bolhas.getBoundingClientRect().bottom;
-      const ocultas = Array.from(bolhas.children).filter(b => b.getBoundingClientRect().top >= limite - 1).length;
-      mais.textContent = ocultas > 0 ? `+${ocultas} conta(s) — todas aparecem na lista abaixo` : "";
-    });
+      arcos = `<circle cx="100" cy="100" r="${r}" fill="none" stroke="#22303c" stroke-width="24"/>`;
     }
+    const semEquipe = total ? Math.round(100 * ((hoje.ml || 0) + (hoje.ia || 0)) / total) : null;
+    $("rosca").innerHTML = arcos +
+      `<text x="100" y="98" text-anchor="middle" font-size="34" font-weight="600" fill="#eef3f7" font-family="IBM Plex Mono, DejaVu Sans Mono, monospace">${semEquipe == null ? "—" : semEquipe + "%"}</text>` +
+      `<text x="100" y="122" text-anchor="middle" font-size="13" fill="#8ea0b0" font-family="Space Grotesk, DejaVu Sans, sans-serif">sem a equipe</text>`;
+    $("rosca-leg").innerHTML = GRUPOS.map(([k, nome, cor]) =>
+      `<span><i style="background:${cor}"></i>${nome}<b>${hoje[k] || 0}</b></span>`).join("");
+    $("nota-hoje").textContent = total ? `${total} pergunta(s)` : "sem perguntas ainda";
+  }
 
-    const ordenada = [...fila].sort((a, b) => parseDataUTC(a.recebida_em) - parseDataUTC(b.recebida_em));
-    const semPendentes = fila.length ? "" : '<div class="vazio">🎉 Nenhuma pergunta esperando resposta.</div>';
-    const blocoRespondidas = respondidas.length
-      ? `<div class="separador-lista">✓ Respondidas hoje (últimas ${respondidas.length})</div>` + respondidas.map(htmlItemRespondida).join("")
-      : "";
-    lista.innerHTML = semPendentes + ordenada.map(item => {
-      const min = minutosEsperando(item);
-      const classe = classeUrgencia(min);
-      return `<div class="item-lista ${classe}">
-        <div style="min-width:0;">
-          <div class="il-conta">${escaparHtml(item.conta)}</div>
-          <div class="il-texto">${escaparHtml(item.texto)}</div>
-        </div>
-        <div class="il-tempo ${classe}">${formatarTempo(min)}</div>
+  function comparar(atual, anterior, maiorEhMelhor, formatar) {
+    if (atual == null || anterior == null) return { texto: "sem base de comparação ainda", classe: "" };
+    const dif = atual - anterior;
+    if (Math.abs(dif) < 0.5) return { texto: "igual à semana anterior", classe: "" };
+    const melhorou = maiorEhMelhor ? dif > 0 : dif < 0;
+    return { texto: `${dif > 0 ? "▲" : "▼"} ${formatar(Math.abs(dif))} vs. semana anterior`, classe: melhorou ? "bom" : "ruim" };
+  }
+
+  function render(d) {
+    const ind = d.indicadores;
+    // Filtro de contas
+    const sel = $("filtro-conta");
+    if (sel.options.length <= 1 || sel.dataset.qtd !== String(d.contas.length)) {
+      sel.innerHTML = '<option value="">Todas as contas</option>' + d.contas.map(c => `<option value="${escapar(c)}">${escapar(c)}</option>`).join("");
+      sel.dataset.qtd = String(d.contas.length);
+    }
+    sel.value = d.filtro.conta || "";
+    $("subtitulo").textContent = d.filtro.conta ? `Conta: ${d.filtro.conta}` : (d.filtro.conta_nao_encontrada ? "Conta não encontrada — mostrando nada" : "Todas as contas");
+
+    // Indicadores
+    $("k-sem-equipe").textContent = ind.sem_equipe_pct == null ? "—" : ind.sem_equipe_pct + "%";
+    let c = comparar(ind.sem_equipe_pct, ind.sem_equipe_pct_anterior, true, v => Math.round(v) + " pts");
+    $("k-sem-equipe-comp").textContent = c.texto; $("k-sem-equipe-comp").className = "comp " + c.classe;
+    $("k-sem-equipe").className = "valor " + (ind.sem_equipe_pct == null ? "" : ind.sem_equipe_pct >= 50 ? "bom" : "aten");
+
+    $("k-tempo").textContent = formatarMin(ind.tempo_medio_equipe_min);
+    c = comparar(ind.tempo_medio_equipe_min, ind.tempo_medio_equipe_min_anterior, false, formatarMin);
+    $("k-tempo-comp").textContent = c.texto; $("k-tempo-comp").className = "comp " + c.classe;
+
+    $("k-pend").textContent = ind.pendentes_agora;
+    $("k-pend").className = "valor " + (ind.contas_criticas ? "ruim" : ind.pendentes_agora ? "aten" : "bom");
+    $("k-pend-comp").textContent = ind.contas_criticas ? `${ind.contas_criticas} conta(s) com espera de +30 min` : (ind.pendentes_agora ? "nenhuma espera crítica" : "fila zerada 🎉");
+
+    $("k-hoje").textContent = ind.perguntas_hoje;
+    $("k-hoje-comp").textContent = ind.media_por_dia == null ? "" : `média ${String(ind.media_por_dia).replace(".", ",")} por dia`;
+
+    // Gráfico por dia
+    const f = d.filtro;
+    $("titulo-dias").textContent = (f.periodo === "hoje" ? "Últimos 7 dias" : f.rotulo) + " — quem respondeu";
+    const n = d.por_dia.length;
+    const temHoje = n && d.por_dia[n - 1].data === hojeIso();
+    const passo = n <= 10 ? 1 : n <= 31 ? 3 : 5;
+    colunas("grafico-dias", d.por_dia, (it, i) => {
+      if (temHoje && i === n - 1) return "hoje";
+      const [, m, dia] = it.data.split("-");
+      return i % passo === 0 ? `${dia}/${m}` : "";
+    }, temHoje ? n - 1 : null);
+
+    // Hoje: rosca e por hora
+    rosca(d.hoje);
+    colunas("grafico-horas", d.por_hora, (it) => it.hora % 3 === 0 ? it.hora + "h" : "", d.hora_atual);
+    const pico = d.por_hora.reduce((m, h) => { const t = GRUPOS.reduce((s, [k]) => s + (h[k] || 0), 0); return t > m.t ? { h: h.hora, t } : m; }, { h: null, t: 0 });
+    $("nota-pico").textContent = pico.t ? `pico às ${pico.h}h (${pico.t})` : "";
+
+    // Top 10 produtos (o título mostra o filtro ativo, pra quem olha a TV saber o que está vendo)
+    $("ctx-produtos").textContent = `${f.conta || "Todas as contas"} · ${f.rotulo}`;
+    const maxP = Math.max(1, ...d.produtos.map(p => p.quantidade));
+    $("produtos").innerHTML = d.produtos.length ? d.produtos.map((p, i) => {
+      // Com a leitura de anúncios liberada, aparece o nome; até lá, o SKU ou o código do anúncio.
+      const nome = p.titulo || (p.sku ? "SKU " + p.sku : "Anúncio " + p.item_id);
+      const codigo = p.titulo ? (p.sku || p.item_id) : (p.sku ? p.item_id : "");
+      return `<div class="produto">
+        <span class="pos">${i + 1}</span>
+        <span class="nome" title="${escapar(nome)}">${escapar(nome)}${codigo ? `<span class="cod">${escapar(codigo)}</span>` : ""}</span>
+        <span class="n">${p.quantidade}</span>
+        <div class="trilho"><i style="width:${(p.quantidade / maxP) * 100}%"></i></div>
       </div>`;
-    }).join("") + blocoRespondidas;
+    }).join("") : '<div class="vazio" style="grid-column:1/-1;">Nenhuma pergunta foi para a equipe nesse período.</div>';
   }
 
-  function renderizarTudo() {
-    renderizarIndicadoresEAlerta();
-    renderizarBolhasELista();
-  }
-
-  // ---------- Busca no servidor ----------
-  async function buscarJson(url) {
-    const resposta = await fetch(url, { cache: "no-store" });
-    if (!resposta.ok) throw new Error(url + " → status " + resposta.status);
-    return resposta.json();
-  }
-
+  // ---------- Dados ----------
   async function atualizar() {
-    // As duas buscas são independentes: se uma falhar, a outra parte da tela continua viva
-    const [geral, filaNova] = await Promise.allSettled([
-      buscarJson("/api/pre-venda/painel-geral"),
-      buscarJson("/api/pre-venda/fila"),
-    ]);
-    const falhas = [];
-    if (geral.status === "fulfilled" && geral.value && geral.value.geral) dadosGerais = geral.value;
-    else { falhas.push("indicadores"); console.error(geral.reason); }
-    if (filaNova.status === "fulfilled" && Array.isArray(filaNova.value)) fila = filaNova.value;
-    else { falhas.push("fila"); console.error(filaNova.reason); }
-
-    document.getElementById("aviso-erro").innerHTML = falhas.length
-      ? `<div class="erro-conexao">Não consegui atualizar (${falhas.join(" e ")}) agora — mostrando os últimos dados, tentando de novo em instantes.</div>`
-      : "";
-    renderizarGrafico();
-    renderizarTudo();
-  }
-
-  atualizar();
-  setInterval(atualizar, INTERVALO_BUSCA_MS);
-  setInterval(renderizarTudo, INTERVALO_TELA_MS); // tempos e cores sem esperar o próximo fetch
-
-  // ---------- Rolagem automática da lista ----------
-  (function iniciarRolagemAutomatica() {
-    if (!ROLAGEM_AUTOMATICA) return;
-    const lista = document.getElementById("lista");
-    let pausadoAte = Date.now() + PAUSA_NAS_PONTAS_MS;
-    let mouseEmCima = false;
-    let posicao = 0;
-
-    lista.addEventListener("mouseenter", () => { mouseEmCima = true; });
-    lista.addEventListener("mouseleave", () => { mouseEmCima = false; posicao = lista.scrollTop; });
-    ["wheel", "touchstart", "keydown"].forEach(ev =>
-      lista.addEventListener(ev, () => { pausadoAte = Date.now() + PAUSA_APOS_INTERACAO_MS; }, { passive: true }));
-
-    function passo() {
-      const agora = Date.now();
-      const maximo = lista.scrollHeight - lista.clientHeight;
-      if (maximo <= 2) {
-        posicao = 0;
-      } else if (!mouseEmCima && agora >= pausadoAte) {
-        if (Math.abs(posicao - lista.scrollTop) > 2) posicao = lista.scrollTop;
-        posicao += VELOCIDADE_ROLAGEM;
-        if (posicao >= maximo) {
-          lista.scrollTop = maximo;
-          pausadoAte = agora + PAUSA_NAS_PONTAS_MS * 2;
-          setTimeout(() => { lista.scrollTo({ top: 0, behavior: "smooth" }); posicao = 0; }, PAUSA_NAS_PONTAS_MS);
-        } else {
-          lista.scrollTop = posicao;
-        }
-      }
-      requestAnimationFrame(passo);
+    try {
+      const p = new URLSearchParams({ periodo: filtroPeriodo });
+      if (filtroConta) p.set("conta", filtroConta);
+      if (filtroPeriodo === "datas") { if (filtroDe) p.set("de", filtroDe); if (filtroAte) p.set("ate", filtroAte); }
+      const r = await fetch("/api/pre-venda/painel-resumo?" + p, { cache: "no-store" });
+      if (!r.ok) throw new Error("status " + r.status);
+      render(await r.json());
+      $("aviso-erro").innerHTML = "";
+    } catch (erro) {
+      // Mantém os últimos dados na tela e tenta de novo no próximo ciclo
+      $("aviso-erro").innerHTML = '<div class="erro">Não consegui atualizar agora — mostrando os últimos dados, tentando de novo em instantes.</div>';
+      console.error(erro);
     }
-    requestAnimationFrame(passo);
-  })();
+  }
+  atualizar();
+  setInterval(atualizar, INTERVALO_MS);
 </script>
-
 </body>
 </html>

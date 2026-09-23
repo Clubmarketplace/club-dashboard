@@ -162,6 +162,7 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
         item_id=item_id,
         sku=sku,
         skus_anuncio=skus_anuncio,
+        titulo_anuncio=titulo_produto,
         texto=texto,
         status="pendente",
     )

@@ -296,3 +296,199 @@ def painel_geral(db: Session = Depends(get_db)):
         "respondidas_recentes": respondidas_recentes,
         "por_hora": por_hora,
     }
+
+
+# ---------------------------------------------------------------------------
+# Painel Geral (versão "como estamos indo?") -- tendência e resultado.
+# Endpoint separado do /painel-geral de propósito: o Painel da Fila usa
+# o /painel-geral e não pode ser afetado por mudanças aqui.
+# ---------------------------------------------------------------------------
+def _desfecho(p: Pergunta) -> str:
+    """Em qual grupo a pergunta entra nos gráficos: ml | ia | equipe | pendente | outros."""
+    if p.camada_resolvida in CAMADAS_AUTOMATICAS:
+        return "ia"
+    if p.camada_resolvida == "manual":
+        return "equipe"
+    if p.status == "respondida_externamente":
+        return "ml"
+    if p.status in ("fila_humana", "pendente"):
+        return "pendente"
+    return "outros"
+
+
+def _dia_br(data_utc_naive: datetime):
+    return _utc_para_br(data_utc_naive).date()
+
+
+LIMITE_DIAS_PERSONALIZADO = 60  # período "Datas" no máximo 60 dias (gráfico legível e consulta leve)
+
+
+def _resolver_periodo(periodo: str | None, dias: int | None, de: str | None, ate: str | None, hoje_br):
+    """
+    Devolve (tipo, inicio_grafico, fim_grafico, inicio_produtos, fim_produtos, rótulo).
+      hoje  -> gráfico dos últimos 7 dias (contexto); produtos só de hoje
+      7/30  -> gráfico e produtos dos últimos 7/30 dias
+      datas -> gráfico e produtos do intervalo escolhido (máx. 60 dias)
+    Aceita também o parâmetro antigo "dias" (7/30), por compatibilidade.
+    """
+    if periodo not in ("hoje", "7", "30", "datas"):
+        periodo = "7" if (dias or 30) <= 7 else "30"
+
+    if periodo == "datas":
+        try:
+            inicio = datetime.strptime(de, "%Y-%m-%d").date() if de else hoje_br - timedelta(days=29)
+            fim = datetime.strptime(ate, "%Y-%m-%d").date() if ate else hoje_br
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
+        if fim > hoje_br:
+            fim = hoje_br
+        if inicio > fim:
+            inicio, fim = fim, inicio
+        if (fim - inicio).days + 1 > LIMITE_DIAS_PERSONALIZADO:
+            inicio = fim - timedelta(days=LIMITE_DIAS_PERSONALIZADO - 1)
+        rotulo = f"{inicio.strftime('%d/%m')} a {fim.strftime('%d/%m')}"
+        return "datas", inicio, fim, inicio, fim, rotulo
+    if periodo == "hoje":
+        return "hoje", hoje_br - timedelta(days=6), hoje_br, hoje_br, hoje_br, "Hoje"
+    n = int(periodo)
+    inicio = hoje_br - timedelta(days=n - 1)
+    return periodo, inicio, hoje_br, inicio, hoje_br, f"Últimos {n} dias"
+
+
+@router.get("/painel-resumo")
+def painel_resumo(
+    db: Session = Depends(get_db),
+    conta: str | None = None,
+    periodo: str | None = None,   # hoje | 7 | 30 | datas
+    de: str | None = None,        # AAAA-MM-DD (só com periodo=datas)
+    ate: str | None = None,
+    dias: int | None = None,      # compatibilidade com a versão anterior
+):
+    """
+    Dados do Painel Geral: indicadores com comparação à semana anterior,
+    últimos N dias por desfecho, hoje (por desfecho e por hora) e os
+    produtos que mais chegam para a equipe. Filtro opcional por conta
+    (apelido, sem diferenciar maiúsculas). Datas no horário de Brasília.
+    """
+    agora = datetime.utcnow()
+    hoje_br = _utc_para_br(agora).date()
+    tipo, ini_graf, fim_graf, ini_prod, fim_prod, rotulo = _resolver_periodo(periodo, dias, de, ate, hoje_br)
+
+    # Janela da consulta: cobre o período escolhido e as 2 semanas da comparação.
+    inicio_janela = min(ini_graf, hoje_br - timedelta(days=13))
+    inicio_br = datetime.combine(inicio_janela, datetime.min.time()).replace(tzinfo=FUSO_BR)
+    inicio_utc = inicio_br.astimezone(timezone.utc).replace(tzinfo=None)
+
+    contas = db.query(Conta).order_by(Conta.apelido).all()
+    conta_filtrada = None
+    if conta:
+        alvo = conta.strip().lower()
+        conta_filtrada = next((c for c in contas if (c.apelido or "").strip().lower() == alvo), None)
+
+    consulta = db.query(Pergunta).filter(Pergunta.recebida_em >= inicio_utc)
+    if conta:
+        consulta = consulta.filter(Pergunta.conta_id == (conta_filtrada.id if conta_filtrada else -1))
+    perguntas = consulta.all()
+
+    # --- Por dia (período do gráfico) ---
+    total_dias = (fim_graf - ini_graf).days + 1
+    por_dia_mapa = {ini_graf + timedelta(days=i): {"ml": 0, "ia": 0, "equipe": 0, "pendente": 0, "outros": 0} for i in range(total_dias)}
+    for p in perguntas:
+        if not p.recebida_em:
+            continue
+        dia = _dia_br(p.recebida_em)
+        if dia in por_dia_mapa:
+            por_dia_mapa[dia][_desfecho(p)] += 1
+    por_dia = [
+        {"data": d.isoformat(), **v, "total": sum(v.values())}
+        for d, v in sorted(por_dia_mapa.items())
+    ]
+
+    # --- Hoje: por desfecho e por hora ---
+    de_hoje = [p for p in perguntas if p.recebida_em and _dia_br(p.recebida_em) == hoje_br]
+    hoje = {"ml": 0, "ia": 0, "equipe": 0, "pendente": 0, "outros": 0}
+    por_hora = [{"hora": h, "ml": 0, "ia": 0, "equipe": 0, "pendente": 0, "outros": 0} for h in range(24)]
+    for p in de_hoje:
+        grupo = _desfecho(p)
+        hoje[grupo] += 1
+        por_hora[_utc_para_br(p.recebida_em).hour][grupo] += 1
+
+    # --- Indicadores: últimos 7 dias x 7 dias anteriores ---
+    def semana(ini: int, fim: int):
+        """Perguntas de (hoje - fim) até (hoje - ini) dias atrás, inclusive."""
+        dias_semana = {hoje_br - timedelta(days=i) for i in range(ini, fim + 1)}
+        return [p for p in perguntas if p.recebida_em and _dia_br(p.recebida_em) in dias_semana]
+
+    def pct_sem_equipe(lista):
+        total = len(lista)
+        if not total:
+            return None
+        return round(100 * sum(1 for p in lista if _desfecho(p) in ("ml", "ia")) / total)
+
+    def tempo_medio_equipe(lista):
+        tempos = [
+            (p.respondida_em - p.recebida_em).total_seconds() / 60
+            for p in lista
+            if _desfecho(p) == "equipe" and p.respondida_em and p.recebida_em and p.respondida_em >= p.recebida_em
+        ]
+        return round(sum(tempos) / len(tempos), 1) if tempos else None
+
+    atual, anterior = semana(0, 6), semana(7, 13)
+
+    # Pendentes agora: de qualquer data (não só da janela), respeitando o filtro de conta.
+    pendentes_q = db.query(Pergunta).filter(Pergunta.status == "fila_humana")
+    if conta:
+        pendentes_q = pendentes_q.filter(Pergunta.conta_id == (conta_filtrada.id if conta_filtrada else -1))
+    pendentes = pendentes_q.all()
+    contas_criticas = len({
+        p.conta_id for p in pendentes
+        if p.recebida_em and (agora - p.recebida_em).total_seconds() > 30 * 60
+    })
+
+    dias_anteriores = [d for d in por_dia if d["data"] != hoje_br.isoformat()]
+    media_dia = round(sum(d["total"] for d in dias_anteriores) / len(dias_anteriores), 1) if dias_anteriores else None
+
+    # --- Top 10 produtos que mais chegam para a equipe (no período escolhido) ---
+    contagem: dict[str, dict] = {}
+    for p in perguntas:
+        if not p.recebida_em or not (ini_prod <= _dia_br(p.recebida_em) <= fim_prod):
+            continue
+        if _desfecho(p) not in ("equipe", "pendente"):
+            continue
+        chave = chave_do_produto(p.sku, p.item_id)
+        if not chave:
+            continue
+        item = contagem.setdefault(chave, {"chave": chave, "sku": p.sku, "item_id": p.item_id, "titulo": None, "quantidade": 0})
+        item["quantidade"] += 1
+        if p.titulo_anuncio and not item["titulo"]:
+            item["titulo"] = p.titulo_anuncio  # aparece sozinho quando o ML liberar a leitura dos anúncios
+    produtos = sorted(contagem.values(), key=lambda x: -x["quantidade"])[:10]
+
+    return {
+        "filtro": {
+            "conta": conta_filtrada.apelido if conta_filtrada else None,
+            "conta_nao_encontrada": bool(conta and not conta_filtrada),
+            "periodo": tipo,
+            "de": ini_prod.isoformat(),
+            "ate": fim_prod.isoformat(),
+            "rotulo": rotulo,
+            "grafico_de": ini_graf.isoformat(),
+            "grafico_ate": fim_graf.isoformat(),
+        },
+        "contas": [c.apelido for c in contas if c.apelido],
+        "hora_atual": _utc_para_br(agora).hour,
+        "indicadores": {
+            "sem_equipe_pct": pct_sem_equipe(atual),
+            "sem_equipe_pct_anterior": pct_sem_equipe(anterior),
+            "tempo_medio_equipe_min": tempo_medio_equipe(atual),
+            "tempo_medio_equipe_min_anterior": tempo_medio_equipe(anterior),
+            "pendentes_agora": len(pendentes),
+            "contas_criticas": contas_criticas,
+            "perguntas_hoje": len(de_hoje),
+            "media_por_dia": media_dia,
+        },
+        "por_dia": por_dia,
+        "hoje": hoje,
+        "por_hora": por_hora,
+        "produtos": produtos,
+    }

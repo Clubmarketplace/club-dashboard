@@ -145,6 +145,8 @@ def preencher_skus(request: Request, limite: int = 100, db: Session = Depends(ge
             continue
 
         pergunta.skus_anuncio = ",".join(dados["skus"])
+        if dados.get("titulo") and not pergunta.titulo_anuncio:
+            pergunta.titulo_anuncio = dados["titulo"]
         if not pergunta.sku and dados["sku"]:
             pergunta.sku = dados["sku"]
         if dados["sku"]:

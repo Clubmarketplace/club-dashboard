@@ -126,6 +126,7 @@ class Pergunta(Base):
     # pode ter um por variação). "" = anúncio lido e sem SKU; nulo = ainda
     # não lido (ou a leitura falhou) -- a ferramenta de preenchimento tenta de novo.
     skus_anuncio = Column(String, nullable=True)
+    titulo_anuncio = Column(String, nullable=True)  # nome do produto no anúncio, quando o ML deixa ler
     texto = Column(Text, nullable=False)
 
     # pendente -> ainda não processada | respondida -> alguém (camada
