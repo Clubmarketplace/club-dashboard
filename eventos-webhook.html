@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Eventos do Webhook</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    .cmx-evento-card { background: #fff; border: 1px solid var(--cmx-borda); border-radius: 10px; padding: 12px 16px; margin-bottom: 10px; }
+    .cmx-evento-topo { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: var(--cmx-texto-suave); margin-bottom: 6px; }
+    .cmx-evento-topico { font-weight: 700; color: var(--cmx-marinho); }
+    .cmx-evento-json { background: #f7f8fa; border-radius: 6px; padding: 8px 10px; font-family: monospace; font-size: 11.5px; white-space: pre-wrap; word-break: break-word; max-height: 200px; overflow-y: auto; }
+    .cmx-evento-label { font-size: 11px; text-transform: uppercase; color: var(--cmx-texto-suave); margin: 6px 0 2px; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      <nav class="cmx-nav">
+        <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
+        <span class="cmx-nav-secao">Operação</span>
+        <a class="cmx-nav-item" href="/devolucoes">Devoluções</a>
+        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
+        <a class="cmx-nav-item" href="/manuais">Manuais</a>
+        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
+        <a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
+        <span class="cmx-nav-secao">Diagnóstico</span>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/eventos-webhook">
+          <span class="cmx-nav-dot"></span> Eventos do Webhook
+        </a>
+        <span class="cmx-nav-secao">Painéis de TV</span>
+        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">
+          Painel Geral
+        </a>
+        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">
+          Painel da Fila
+        </a>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
+        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">
+          Nova solicitação
+        </a>
+        <a class="cmx-nav-item" href="/solicitacoes-painel">
+          Solicitações de Cancelamento
+        </a>
+        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
+        <span class="cmx-nav-secao">Operadores</span>
+        <a class="cmx-nav-item" href="/usuarios">Operadores</a>
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}      <header class="cmx-topbar">
+        <div>
+          <h1>Eventos do Webhook</h1>
+          <p class="cmx-subtitulo">Tudo que o Mercado Livre mandou pro webhook, e o que o sistema fez com cada notificação -- os 100 mais recentes</p>
+        </div>
+      </header>
+      <main>
+        <button class="cmx-botao-primario" onclick="carregar()" style="margin-bottom: 16px;">Atualizar</button>
+        <div id="lista-eventos"></div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function formatarData(iso) {
+      if (!iso) return "—";
+      return new Date(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "medium" });
+    }
+
+    function formatarJson(texto) {
+      try { return JSON.stringify(JSON.parse(texto), null, 2); }
+      catch { return texto || "—"; }
+    }
+
+    async function carregar() {
+      const container = document.getElementById("lista-eventos");
+      container.innerHTML = "<p class='cmx-grafico-nota'>Carregando...</p>";
+      try {
+        const resposta = await fetch("/api/eventos-webhook/lista");
+        const eventos = await resposta.json();
+        if (eventos.length === 0) {
+          container.innerHTML = "<p class='cmx-grafico-nota'>Nenhum evento registrado ainda.</p>";
+          return;
+        }
+        container.innerHTML = eventos.map((e) => `
+          <div class="cmx-evento-card">
+            <div class="cmx-evento-topo">
+              <span class="cmx-evento-topico">${e.topico || "(sem tópico)"}</span>
+              <span>${formatarData(e.recebido_em)}</span>
+            </div>
+            <p class="cmx-evento-label">Payload recebido</p>
+            <div class="cmx-evento-json">${formatarJson(e.payload_bruto)}</div>
+            <p class="cmx-evento-label">Resultado do sistema</p>
+            <div class="cmx-evento-json">${formatarJson(e.resultado)}</div>
+          </div>
+        `).join("");
+      } catch (erro) {
+        container.innerHTML = "<p class='cmx-grafico-nota'>Não foi possível carregar os eventos.</p>";
+        console.error(erro);
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", carregar);
+  </script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>

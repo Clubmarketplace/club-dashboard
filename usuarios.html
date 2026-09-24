@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Operadores</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    .us-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; overflow:hidden; }
+    table.us-tabela { width:100%; border-collapse:collapse; font-size:13.5px; }
+    table.us-tabela thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:12px 18px; border-bottom:1px solid var(--cmx-borda); background:#fafbfc; text-transform:uppercase; letter-spacing:.03em; }
+    table.us-tabela tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+    table.us-tabela tbody tr:last-child td { border-bottom:none; }
+    .us-badge-papel { font-size:11px; font-weight:600; padding:3px 9px; border-radius:999px; text-transform:capitalize; }
+    .us-badge-papel.admin { background:#fbe9e3; color:#c1502e; }
+    .us-badge-papel.supervisor { background:#eaf1ff; color:#2f6fed; }
+    .us-badge-papel.seller { background:#e6f0ea; color:#2f6f4f; }
+    .us-badge-papel.atendente { background:#fff4e0; color:#a4640c; }
+    .us-badge-papel.logistica { background:#efe9fb; color:#6b46c1; }
+    .us-status-ativo { font-size:12px; font-weight:600; color:#2f6f4f; }
+    .us-status-inativo { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); }
+    button.us-alternar { padding:7px 14px; border-radius:7px; border:1px solid var(--cmx-borda); background:#fff; font-size:12.5px; font-weight:600; cursor:pointer; }
+    button.us-alternar.desativar { color:#c1502e; }
+    button.us-alternar.desativar:hover { border-color:#c1502e; background:#fbe9e3; }
+    button.us-alternar.reativar { color:#2f6f4f; }
+    button.us-alternar.reativar:hover { border-color:#2f6f4f; background:#e6f0ea; }
+    button.us-alternar.resetar { color:#2f6fed; margin-right:6px; }
+    button.us-alternar.resetar:hover { border-color:#2f6fed; background:#eaf1ff; }
+    .us-vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
+    .us-reset-banner { background:#eaf1ff; border:1px solid #b9d4fb; border-radius:12px; padding:18px 20px; margin-bottom:18px; }
+    .us-reset-banner .titulo { font-weight:700; margin-bottom:8px; }
+    .us-reset-codigo { font-family:monospace; font-size:20px; font-weight:700; letter-spacing:.04em; background:#fff; border:1.5px dashed #b9d4fb; border-radius:8px; padding:10px 16px; display:inline-block; margin:6px 0; }
+    .us-reset-mensagem { background:#fff; border-radius:8px; padding:12px 14px; font-size:12.5px; line-height:1.6; white-space:pre-wrap; margin-top:8px; }
+    button.us-copiar-reset { margin-top:8px; padding:7px 14px; border-radius:7px; border:1px solid var(--cmx-borda); background:#fff; font-size:12.5px; font-weight:600; cursor:pointer; }
+
+    .us-topo-acoes { display:flex; justify-content:space-between; align-items:center; padding:16px 18px; border-bottom:1px solid var(--cmx-borda); flex-wrap:wrap; gap:12px; }
+    input#busca-usuario { width:100%; max-width:300px; padding:9px 13px; border-radius:8px; border:1.5px solid var(--cmx-borda); font-family:inherit; font-size:13.5px; }
+    button#botao-adicionar { padding:9px 16px; border-radius:8px; border:none; background:var(--cmx-marinho); color:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
+    button#botao-adicionar:hover { background:var(--cmx-marinho-suave); }
+
+    #painel-adicionar { display:none; background:#fafbfc; border-bottom:1px solid var(--cmx-borda); padding:22px 24px; }
+    #painel-adicionar.aberto { display:block; }
+    #painel-adicionar label { display:block; font-size:12.5px; font-weight:600; margin-bottom:6px; }
+    #painel-adicionar input[type="text"], #painel-adicionar select {
+      width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda);
+      font-family:inherit; font-size:13.5px; color:var(--cmx-texto); background:#fff;
+    }
+    #painel-adicionar input:focus, #painel-adicionar select:focus { outline:none; border-color:#2baff2; }
+    .pa-grade { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; align-items:end; }
+    .pa-campo-conta { display:none; }
+    .pa-campo-conta.visivel { display:block; }
+    .pa-dica { font-size:11px; color:var(--cmx-texto-suave); margin-top:4px; }
+    button.pa-criar { padding:10px 18px; border-radius:8px; border:none; background:var(--cmx-marinho); color:#fff; font-weight:600; font-size:13.5px; cursor:pointer; height:41px; }
+    .pa-erro { background:#fbe9e3; color:#c1502e; font-size:12.5px; padding:9px 13px; border-radius:8px; margin-bottom:14px; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      <nav class="cmx-nav">
+        <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
+        <span class="cmx-nav-secao">Operação</span>
+        <a class="cmx-nav-item" href="/devolucoes">Devoluções</a>
+        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
+        <a class="cmx-nav-item" href="/manuais">Manuais</a>
+        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
+        <a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
+        <span class="cmx-nav-secao">Painéis de TV</span>
+        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>
+        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">Painel da Fila</a>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
+        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
+        <a class="cmx-nav-item" href="/solicitacoes-painel">Solicitações de Cancelamento</a>
+        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
+        <span class="cmx-nav-secao">Operadores</span>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/usuarios">
+          <span class="cmx-nav-dot"></span> Operadores
+        </a>
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Operadores</h1>
+          <p class="cmx-subtitulo">
+            {% if papel_logado == "admin" %}
+            Todos os operadores do sistema. Desativar impede o login, mas mantém todo o histórico.
+            {% else %}
+            Atendentes, logística e sellers que você pode gerenciar. Desativar impede o login, mas mantém todo o histórico.
+            {% endif %}
+          </p>
+        </div>
+      </header>
+
+      <main>
+        {% if reset_sucesso %}
+        <div class="us-reset-banner">
+          <div class="titulo">✓ Senha resetada para {{ reset_sucesso.nome_exibicao }}</div>
+          <div>Novo código de primeiro acesso:</div>
+          <div class="us-reset-codigo">{{ reset_sucesso.codigo }}</div>
+          <div class="us-reset-mensagem" id="mensagem-reset">Olá! Sua senha do Club Marketplace foi resetada.
+
+Acesse: https://backend-production-f9196.up.railway.app/primeiro-acesso
+Usuário: {{ reset_sucesso.usuario }}
+Código de primeiro acesso: {{ reset_sucesso.codigo }}
+
+Use esse código uma vez só, pra criar sua senha nova.</div>
+          <button class="us-copiar-reset" onclick="navigator.clipboard.writeText(document.getElementById('mensagem-reset').textContent); this.textContent='✓ Copiado!'; setTimeout(() => this.textContent='📋 Copiar mensagem pra enviar', 2000);">📋 Copiar mensagem pra enviar</button>
+        </div>
+        {% endif %}
+
+        {% if criar_sucesso %}
+        <div class="us-reset-banner">
+          <div class="titulo">✓ Operador criado: {{ criar_sucesso.nome_exibicao }}</div>
+          <div>Código de primeiro acesso:</div>
+          <div class="us-reset-codigo">{{ criar_sucesso.codigo }}</div>
+          <div class="us-reset-mensagem" id="mensagem-criar">Olá! Seu acesso ao Club Marketplace foi criado.
+
+Acesse: https://backend-production-f9196.up.railway.app/primeiro-acesso
+Usuário: {{ criar_sucesso.usuario }}
+Código de primeiro acesso: {{ criar_sucesso.codigo }}
+
+Use esse código uma vez só, pra criar sua senha pessoal.</div>
+          <button class="us-copiar-reset" onclick="navigator.clipboard.writeText(document.getElementById('mensagem-criar').textContent); this.textContent='✓ Copiado!'; setTimeout(() => this.textContent='📋 Copiar mensagem pra enviar', 2000);">📋 Copiar mensagem pra enviar</button>
+        </div>
+        {% endif %}
+
+        <div class="us-cartao">
+          <div class="us-topo-acoes">
+            <input type="text" id="busca-usuario" placeholder="Buscar por usuário ou nome..." autocomplete="off" />
+            <button id="botao-adicionar" onclick="document.getElementById('painel-adicionar').classList.toggle('aberto')">+ Adicionar operador</button>
+          </div>
+
+          <div id="painel-adicionar">
+            {% if erro_criar %}
+            <div class="pa-erro">{{ erro_criar }}</div>
+            {% endif %}
+            <form method="post" action="/usuarios/novo">
+              <div class="pa-grade">
+                <div>
+                  <label>Nome da pessoa</label>
+                  <input type="text" name="nome_exibicao" placeholder="Ex: Velasco, ou Maria Silva" required />
+                </div>
+                <div>
+                  <label>Usuário (login)</label>
+                  <input type="text" name="usuario" placeholder="Ex: velasco" required autocomplete="off" />
+                </div>
+                <div>
+                  <label>Perfil</label>
+                  <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
+                    {% if papel_logado == "admin" %}
+                    <option value="admin">Admin</option>
+                    <option value="supervisor">Supervisor</option>
+                    {% endif %}
+                    <option value="atendente">Atendente</option>
+                    <option value="logistica">Logística</option>
+                    <option value="seller" selected>Seller</option>
+                  </select>
+                </div>
+                <div class="pa-campo-conta" id="bloco-conta">
+                  <label>Conta vinculada</label>
+                  <input type="text" name="conta_vinculada" id="campo-conta" placeholder="Ex: Velasco" />
+                </div>
+                <div>
+                  <button type="submit" class="pa-criar">Criar e gerar código</button>
+                </div>
+              </div>
+              <div class="pa-dica">Sem espaços no login — a pessoa vai digitar isso pra entrar (maiúsculas e minúsculas não importam: "Josef" ou "josef" entram igual). A conta vinculada é obrigatória pra "Seller" (é o que ela vê em "Meus Cancelamentos").</div>
+            </form>
+          </div>
+
+          {% if usuarios %}
+          <table class="us-tabela">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Usuário</th>
+                <th>Perfil</th>
+                <th>Conta vinculada</th>
+                <th>Status</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in usuarios %}
+              <tr data-busca="{{ (u.usuario ~ ' ' ~ u.nome_exibicao)|lower }}">
+                <td>{{ u.nome_exibicao }}</td>
+                <td>{{ u.usuario }}</td>
+                <td><span class="us-badge-papel {{ u.papel }}">{{ u.papel }}</span></td>
+                <td>{{ u.conta_vinculada or "—" }}</td>
+                <td>
+                  {% if u.ativo %}
+                  <span class="us-status-ativo">● Ativo</span>
+                  {% else %}
+                  <span class="us-status-inativo">○ Inativo</span>
+                  {% endif %}
+                </td>
+                <td>
+                  {% if u.id == usuario_logado.id %}
+                  <span style="font-size:12px; color:var(--cmx-texto-suave);">(você)</span>
+                  {% else %}
+                  <a href="/usuarios/{{ u.id }}/editar" class="us-alternar" style="color:var(--cmx-texto); text-decoration:none; display:inline-block;">Editar</a>
+                  <form method="post" action="/usuarios/{{ u.id }}/resetar-senha" style="display:inline;" onsubmit="return confirm('Gerar um novo código de acesso pra {{ u.nome_exibicao }}? A senha atual dela deixa de funcionar.');">
+                    <button type="submit" class="us-alternar resetar">Resetar senha</button>
+                  </form>
+                  <form method="post" action="/usuarios/{{ u.id }}/alternar-status" style="display:inline;" onsubmit="return confirm('{{ 'Desativar' if u.ativo else 'Reativar' }} {{ u.nome_exibicao }}?');">
+                    <button type="submit" class="us-alternar {{ 'desativar' if u.ativo else 'reativar' }}">
+                      {{ "Desativar" if u.ativo else "Reativar" }}
+                    </button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          {% else %}
+          <div class="us-vazio">Nenhum operador encontrado.</div>
+          {% endif %}
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    function alternarCampoConta() {
+      const select = document.getElementById("campo-papel");
+      const papel = select ? select.value : "seller";
+      const bloco = document.getElementById("bloco-conta");
+      bloco.classList.toggle("visivel", papel === "seller");
+      document.getElementById("campo-conta").required = (papel === "seller");
+    }
+    alternarCampoConta();
+
+    document.getElementById("busca-usuario")?.addEventListener("input", (e) => {
+      const termo = e.target.value.trim().toLowerCase();
+      document.querySelectorAll("table.us-tabela tbody tr[data-busca]").forEach((linha) => {
+        linha.style.display = linha.dataset.busca.includes(termo) ? "" : "none";
+      });
+    });
+
+    {% if erro_criar or criar_sucesso %}
+    document.getElementById("painel-adicionar").classList.add("aberto");
+    {% endif %}
+  </script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>

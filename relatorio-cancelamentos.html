@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Relatório de cancelamentos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    .rc-filtros { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:12px 14px; display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+    .rc-filtros select, .rc-filtros input { height:36px; border:1px solid #d5dbe1; border-radius:8px; padding:0 10px; font-family:inherit; font-size:13.5px; background:#fff; }
+    .rc-filtros input[list] { min-width:220px; }
+    .rc-datas { display:none; align-items:center; gap:6px; font-size:13px; color:var(--cmx-texto-suave); }
+    .rc-datas.aberto { display:inline-flex; }
+    .rc-botoes { margin-left:auto; display:flex; gap:8px; }
+    .rc-botao { height:36px; padding:0 14px; border-radius:8px; border:1px solid #d5dbe1; background:#fff; font-weight:600; font-size:13px; cursor:pointer; font-family:inherit; }
+    .rc-botao.primario { background:var(--cmx-marinho); color:#fff; border-color:var(--cmx-marinho); }
+
+    /* A "folha" do relatório: é exatamente o que sai na impressão */
+    .rc-folha { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:28px 32px; color:#1b2430; max-width:1000px; }
+    .rc-cab { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #1b2430; padding-bottom:10px; margin-bottom:16px; gap:20px; }
+    .rc-cab img { height:34px; margin-bottom:8px; display:block; }
+    .rc-cab h1 { font-size:20px; margin:0; }
+    .rc-cab .linha { font-size:14px; margin-top:4px; }
+    .rc-cab .meta { font-size:12px; color:#5b6776; text-align:right; line-height:1.6; white-space:nowrap; }
+    .rc-resumo { display:grid; grid-template-columns:repeat(4, minmax(0,1fr)); gap:10px; margin-bottom:18px; }
+    .rc-resumo div { border:1px solid #e2e6ea; border-radius:10px; padding:10px 12px; }
+    .rc-resumo b { display:block; font-size:22px; }
+    .rc-resumo span { font-size:12px; color:#5b6776; }
+    .rc-folha h2 { font-size:14.5px; margin:18px 0 8px; }
+    .rc-folha table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .rc-folha th { text-align:left; background:#f3f5f8; padding:7px 8px; border-bottom:1px solid #d5dbe1; font-weight:600; }
+    .rc-folha td { padding:7px 8px; border-bottom:1px solid #eef1f4; vertical-align:top; }
+    .rc-folha td.num, .rc-folha th.num { text-align:right; white-space:nowrap; }
+    .rc-folha .nowrap { white-space:nowrap; }
+    .rc-sub { font-size:11.5px; color:#5b6776; }
+    .rc-vazio { padding:30px; text-align:center; color:#5b6776; }
+    .rc-rodape { margin-top:14px; font-size:11px; color:#8a95a3; text-align:right; }
+    .rc-aviso { color:#d64541; font-size:13px; margin-bottom:12px; }
+
+    /* ---------- Impressão / PDF: só a folha, em A4 ---------- */
+    @media print {
+      @page { size: A4; margin: 12mm; }
+      body { background:#fff !important; }
+      .cmx-sidebar, .cmx-topbar, .cmx-menu-usuario, .rc-filtros, .cmx-botao-menu, .cmx-veu-menu, .rc-aviso { display:none !important; }
+      .cmx-shell, .cmx-conteudo, main { display:block !important; margin:0 !important; padding:0 !important; }
+      .rc-folha { border:none; border-radius:0; padding:0; max-width:none; }
+      .rc-folha table { font-size:10.5px; }
+      .rc-folha tr { page-break-inside:avoid; }
+      .rc-resumo div { border-color:#bbb; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% set eh_atendente = usuario_logado and usuario_logado.papel == "atendente" %}
+      <nav class="cmx-nav">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>{% endif %}
+        <span class="cmx-nav-secao">Operação</span>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/devolucoes">Devoluções</a>{% endif %}
+        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/manuais">Manuais</a>{% endif %}
+        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
+        <span class="cmx-nav-secao">Diagnóstico</span>
+        <a class="cmx-nav-item" href="/eventos-webhook">Eventos do Webhook</a>{% endif %}
+        <span class="cmx-nav-secao">Painéis de TV</span>
+        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>
+        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">Painel da Fila</a>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
+        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
+        <a class="cmx-nav-item" href="/solicitacoes-painel">
+          Solicitações de Cancelamento
+        </a>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/relatorio-cancelamentos">
+          <span class="cmx-nav-dot"></span> Relatório de cancelamentos
+        </a>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Operadores</span>
+        <a class="cmx-nav-item" href="/usuarios">Operadores</a>{% endif %}
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}      <header class="cmx-topbar">
+        <div>
+          <h1>Relatório de cancelamentos</h1>
+          <p class="cmx-subtitulo">Por conta e período — com o total de cada SKU. Pronto para imprimir, salvar em PDF ou baixar em Excel.</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="rc-filtros">
+          <input list="rc-lista-contas" id="rc-conta" placeholder="Todas as contas (digite para buscar)" autocomplete="off" />
+          <datalist id="rc-lista-contas"></datalist>
+          <select id="rc-periodo">
+            <option value="mes_atual">Mês atual</option>
+            <option value="mes_anterior">Mês anterior</option>
+            <option value="datas">Escolher datas…</option>
+          </select>
+          <span class="rc-datas" id="rc-datas"><input type="date" id="rc-de" /> até <input type="date" id="rc-ate" /></span>
+          <select id="rc-plataforma"><option value="">Todas as plataformas</option></select>
+          <select id="rc-status">
+            <option value="todos">Cancelados e pendentes</option>
+            <option value="confirmados">Só cancelados</option>
+          </select>
+          <div class="rc-botoes">
+            <button class="rc-botao" id="rc-excel">⬇ Excel</button>
+            <button class="rc-botao primario" id="rc-imprimir">🖨 Imprimir / PDF</button>
+          </div>
+        </div>
+        <div class="rc-aviso" id="rc-aviso"></div>
+
+        <div class="rc-folha" id="rc-folha"><div class="rc-vazio">Carregando…</div></div>
+      </main>
+    </div>
+  </div>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    const esc = t => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    const LOGO = "/static/logo.png?v=2";
+
+    // Filtros ficam no endereço: dá pra mandar o link do relatório pronto.
+    const url = new URLSearchParams(location.search);
+    $("rc-conta").value = url.get("conta") || "";
+    $("rc-periodo").value = ["mes_atual", "mes_anterior", "datas"].includes(url.get("periodo")) ? url.get("periodo") : "mes_atual";
+    $("rc-de").value = url.get("de") || "";
+    $("rc-ate").value = url.get("ate") || "";
+    $("rc-status").value = url.get("status") === "confirmados" ? "confirmados" : "todos";
+
+    function parametros() {
+      const p = new URLSearchParams({ periodo: $("rc-periodo").value, status: $("rc-status").value });
+      if ($("rc-conta").value.trim()) p.set("conta", $("rc-conta").value.trim());
+      if ($("rc-plataforma").value) p.set("plataforma", $("rc-plataforma").value);
+      if ($("rc-periodo").value === "datas") {
+        if ($("rc-de").value) p.set("de", $("rc-de").value);
+        if ($("rc-ate").value) p.set("ate", $("rc-ate").value);
+      }
+      return p;
+    }
+
+    function desenhar(d) {
+      const r = d.resumo, m = d.meta;
+      const skus = d.por_sku.length ? `
+        <table>
+          <tr><th>SKU</th><th>Produto</th><th class="num">Solicitações</th><th class="num">Cancelados</th></tr>
+          ${d.por_sku.map(s => `<tr><td class="nowrap">${esc(s.sku)}</td><td>${esc(s.produto || "")}</td><td class="num"><b>${s.quantidade}</b></td><td class="num">${s.cancelados}</td></tr>`).join("")}
+        </table>` : '<div class="rc-vazio">Nenhum cancelamento no período.</div>';
+      const todas = m.conta === "Todas as contas";
+      const detalhe = d.detalhe.length ? `
+        <table>
+          <tr>${todas ? "<th>Conta</th>" : ""}<th>Solicitado em</th><th>Cancelado em</th><th>Nº da venda</th><th>SKU</th><th>Motivo</th><th>Protocolo</th></tr>
+          ${d.detalhe.map(x => `<tr>
+            ${todas ? `<td>${esc(x.conta)}</td>` : ""}
+            <td class="nowrap">${esc(x.solicitado_em)}</td>
+            <td class="nowrap">${x.cancelado_em ? esc(x.cancelado_em) : "—"}${x.confirmado_por ? `<div class="rc-sub">${esc(x.confirmado_por)}</div>` : ""}</td>
+            <td class="nowrap">${esc(x.numero_venda)}<div class="rc-sub">${esc(x.plataforma)}</div></td>
+            <td class="nowrap">${esc(x.sku)}</td>
+            <td>${esc(x.motivo)}</td>
+            <td class="nowrap">${esc(x.protocolo || "—")}${x.impacto ? `<div class="rc-sub">${esc(x.impacto)}</div>` : ""}</td>
+          </tr>`).join("")}
+        </table>` : "";
+      $("rc-folha").innerHTML = `
+        <div class="rc-cab">
+          <div>
+            <img src="${LOGO}" alt="Club Marketplace" />
+            <h1>Relatório de cancelamentos</h1>
+            <div class="linha"><b>${esc(m.conta)}</b> · ${esc(m.periodo)}</div>
+            <div class="rc-sub">${esc(m.plataforma)} · ${esc(m.status)}</div>
+          </div>
+          <div class="meta">Gerado em ${esc(m.gerado_em)}<br>por ${esc(m.gerado_por)}</div>
+        </div>
+        <div class="rc-resumo">
+          <div><b>${r.solicitacoes}</b><span>Solicitações</span></div>
+          <div><b>${r.cancelados}</b><span>Cancelados</span></div>
+          <div><b>${r.pendentes}</b><span>Pendentes</span></div>
+          <div><b>${r.com_impacto}</b><span>Com impacto na reputação</span></div>
+        </div>
+        <h2>Cancelamentos por SKU</h2>
+        ${skus}
+        ${detalhe ? `<h2>Detalhe</h2>${detalhe}` : ""}
+        <div class="rc-rodape">Club Marketplace · ${esc(m.conta)} · ${esc(m.periodo)}</div>`;
+    }
+
+    let vez = 0;
+    async function carregar() {
+      const p = parametros();
+      history.replaceState(null, "", location.pathname + "?" + p);
+      $("rc-datas").classList.toggle("aberto", $("rc-periodo").value === "datas");
+      const minha = ++vez;
+      try {
+        const resp = await fetch("/api/solicitacoes-cancelamento/relatorio-conta?" + p, { cache: "no-store" });
+        const dados = await resp.json().catch(() => ({}));
+        if (minha !== vez) return;
+        if (!resp.ok) throw new Error(typeof dados.detail === "string" ? dados.detail : "Não foi possível gerar o relatório.");
+        $("rc-aviso").textContent = "";
+        desenhar(dados);
+      } catch (erro) {
+        $("rc-aviso").textContent = erro.message;
+      }
+    }
+
+    ["rc-periodo", "rc-plataforma", "rc-status", "rc-de", "rc-ate", "rc-conta"].forEach(id => $(id).addEventListener("change", carregar));
+    $("rc-imprimir").addEventListener("click", () => window.print());
+    $("rc-excel").addEventListener("click", () => {
+      const p = parametros(); p.set("formato", "xlsx");
+      window.location.href = "/api/solicitacoes-cancelamento/relatorio-conta?" + p;
+    });
+
+    // Listas de contas e plataformas (as mesmas do resto do sistema)
+    fetch("/api/solicitacoes-cancelamento/contas").then(r => r.ok ? r.json() : []).then(lista => {
+      $("rc-lista-contas").innerHTML = lista.map(c => `<option value="${esc(c.nome)}"></option>`).join("");
+    }).catch(() => {});
+    fetch("/api/solicitacoes-cancelamento/opcoes").then(r => r.ok ? r.json() : null).then(op => {
+      if (!op) return;
+      $("rc-plataforma").innerHTML = '<option value="">Todas as plataformas</option>' +
+        op.plataformas.map(p => `<option value="${esc(p.valor)}">${esc(p.nome)}</option>`).join("");
+      $("rc-plataforma").value = url.get("plataforma") || "";
+    }).catch(() => {});
+
+    carregar();
+  </script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>
