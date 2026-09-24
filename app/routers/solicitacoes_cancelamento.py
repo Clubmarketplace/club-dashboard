@@ -760,12 +760,13 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
 
     from app.verificacao_cancelamento import verificar_uma_solicitacao
-    confirmou = verificar_uma_solicitacao(solicitacao, db)
+    resultado = verificar_uma_solicitacao(solicitacao, db)
     db.refresh(solicitacao)
 
     return {
-        "confirmou": confirmou,
-        "mensagem": "Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre.",
+        "confirmou": resultado["confirmou"],
+        "situacao": resultado["situacao"],
+        "mensagem": resultado["detalhe"],
         "solicitacao": _serializar(solicitacao),
     }
 
