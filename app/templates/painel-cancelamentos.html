@@ -369,10 +369,23 @@
       if (s.origem === "seller") return `Seller${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
       return "Link público";
     }
+    // Há quanto tempo o pedido está com o operador (desde que assumiu).
+    function tempoComOperador(s) {
+      const min = minutosDesde(s.em_atendimento_desde);
+      return min < 1 ? "agora" : textoEspera(min);
+    }
+    // Faltando 5 min ou menos pra expirar, avisa que o pedido volta pra fila.
+    function avisoExpira(s) {
+      if (s.confirmado_por || s.em_atendimento_por_id == null) return "";
+      const limite = (ultimaResposta && ultimaResposta.minutos_expira_atendimento) || 30;
+      const resta = limite - minutosDesde(s.em_atendimento_desde);
+      if (resta > 5) return "";
+      return resta <= 0 ? "liberando…" : `libera em ${resta} min`;
+    }
     function situacao(s) {
       if (s.confirmado_por) return ["✓ Cancelado", "st-ok"];
-      if (ehMeu(s)) return ["Com você", "st-meu"];
-      if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por, "st-outro"];
+      if (ehMeu(s)) return ["Com você · " + tempoComOperador(s), "st-meu"];
+      if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por + " · " + tempoComOperador(s), "st-outro"];
       return ["Livre", "st-livre"];
     }
     function textoProtocolo(s) { return s.protocolo === "" ? "Sem protocolo" : s.protocolo; }
@@ -427,6 +440,7 @@
           <div class="c-sit">
             <span class="sl-pill ${sitCls}">${esc(sitTxt)}</span>
             ${s.confirmado_por ? `<div class="sl-sub" style="margin-top:5px">por <b>${esc(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</div>` : ""}
+            ${avisoExpira(s) ? `<div class="sl-sub" style="margin-top:5px; color:#8a4f00; font-weight:600">${avisoExpira(s)}</div>` : ""}
           </div>
           <div class="c-acoes sl-acoes">${principal}<button class="sl-btn icone" data-acao="menu" data-id="${s.id}" aria-label="Mais ações">${ICONE.pontos}</button>${menu}</div>
         </div>`;
@@ -520,26 +534,13 @@
 
     async function verificar(s, botao) {
       avisar("Conferindo no Mercado Livre…");
-      let mensagemFinal = null;
       try {
         const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/verificar-status`, { method: "POST" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.detail || "Não foi possível verificar.");
-        if (d.confirmou) {
-          avisar("O Mercado Livre já mostra a venda cancelada: confirmado automaticamente.");
-        } else {
-          // Mostra SEMPRE o motivo real (pendente de verdade, conta não
-          // encontrada, erro de token, erro de consulta) -- guarda pra
-          // exibir DEPOIS do atualizar() abaixo, porque atualizar() limpa
-          // o aviso-erro toda vez que recarrega (senão a mensagem aparecia
-          // e sumia na mesma fração de segundo, sem dar tempo de ler).
-          mensagemFinal = d.mensagem || "Ainda não aparece como cancelada no Mercado Livre.";
-        }
-      } catch (erro) {
-        mensagemFinal = erro.message;
-      }
+        avisar(d.confirmou ? "O Mercado Livre já mostra a venda cancelada: confirmado automaticamente." : "Ainda não aparece como cancelada no Mercado Livre.");
+      } catch (erro) { avisar(erro.message); }
       await atualizar();
-      if (mensagemFinal) mostrarErro(mensagemFinal);
     }
 
     // ---------- Painel lateral ----------
@@ -669,7 +670,6 @@
       document.querySelectorAll(".sl-tipo").forEach((x) => x.classList.toggle("on", x === b));
       $("rel-canc").style.display = tipoRelatorio === "canc" ? "" : "none";
       $("rel-dia").style.display = tipoRelatorio === "dia" ? "" : "none";
-      $("rel-ver").style.display = tipoRelatorio === "canc" ? "" : "none";
     }));
     $("rel-cancelar").addEventListener("click", () => fecharModal("modal-relatorio"));
     $("modal-relatorio").addEventListener("click", (e) => { if (e.target.id === "modal-relatorio") fecharModal("modal-relatorio"); });
@@ -703,15 +703,20 @@
       fecharModal("modal-relatorio");
     }
     $("rel-excel").addEventListener("click", baixarExcel);
-    $("prev-excel").addEventListener("click", () => { tipoRelatorio = "canc"; baixarExcel(); });
+    let tipoPrevia = "canc"; // qual relatório está aberto na prévia (o Excel segue o mesmo tipo)
+    $("prev-excel").addEventListener("click", () => { tipoRelatorio = tipoPrevia; baixarExcel(); });
     $("rel-ver").addEventListener("click", async () => {
       const botao = $("rel-ver");
       botao.disabled = true;
       try {
-        const r = await fetch("/api/solicitacoes-cancelamento/relatorio-conta?" + parametrosRelatorio(), { cache: "no-store" });
+        const endereco = tipoRelatorio === "dia"
+          ? "/api/solicitacoes-cancelamento/relatorio-dia-dados?data=" + encodeURIComponent($("rel-data").value || "")
+          : "/api/solicitacoes-cancelamento/relatorio-conta?" + parametrosRelatorio();
+        const r = await fetch(endereco, { cache: "no-store" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível gerar o relatório.");
-        desenharRelatorio(d);
+        tipoPrevia = tipoRelatorio;
+        if (tipoRelatorio === "dia") desenharControleDia(d); else desenharRelatorio(d);
         fecharModal("modal-relatorio");
         $("previa").classList.add("aberto");
       } catch (e) {
@@ -749,6 +754,43 @@
             <td class="nw">${esc(x.protocolo || "—")}${x.impacto ? `<div class="rc-sub">${esc(x.impacto)}</div>` : ""}</td></tr>`).join("")}
         </table>` : ""}`;
     }
+    // Controle do dia: registradas e tratadas no dia, com os tempos de cada pedido.
+    function desenharControleDia(d) {
+      const r = d.resumo, m = d.meta;
+      const tabelaRegistradas = d.registradas.length ? `<table>
+          <tr><th>Hora</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Motivo</th><th>Quem pediu</th><th>Situação</th></tr>
+          ${d.registradas.map((x) => `<tr><td class="nw">${esc(x.hora)}</td><td>${esc(x.conta)}</td>
+            <td class="nw">${esc(x.numero_venda)}<div class="rc-sub">${esc(x.plataforma)}</div></td>
+            <td class="nw">${esc(x.sku)}</td><td>${esc(x.motivo)}</td><td>${esc(x.quem_pediu)}</td><td>${esc(x.situacao)}</td></tr>`).join("")}
+        </table>` : '<div class="rc-vazio">Nenhuma solicitação registrada neste dia.</div>';
+      const tabelaTratadas = d.tratadas.length ? `<table>
+          <tr><th>Hora</th><th>Conta</th><th>Nº da venda</th><th>Confirmado por</th><th>Protocolo</th><th>Impacto</th>
+              <th class="num">Esperou<br>(até assumir)</th><th class="num">Com operador<br>(até confirmar)</th><th class="num">Total</th></tr>
+          ${d.tratadas.map((x) => `<tr><td class="nw">${esc(x.hora)}</td><td>${esc(x.conta)}</td><td class="nw">${esc(x.numero_venda)}</td>
+            <td>${esc(x.confirmado_por)}</td><td class="nw">${esc(x.protocolo)}</td><td>${esc(x.impacto)}</td>
+            <td class="num">${esc(x.esperou)}</td><td class="num">${esc(x.com_operador)}</td><td class="num"><b>${esc(x.total)}</b></td></tr>`).join("")}
+        </table>` : '<div class="rc-vazio">Nenhum cancelamento confirmado neste dia.</div>';
+      $("prev-folha").innerHTML = `
+        <div class="rc-cab">
+          <div><img src="${LOGO}" alt="Club Marketplace" /><h1>Controle do dia</h1>
+            <div class="linha"><b>${esc(m.dia)}</b> · solicitações de cancelamento</div></div>
+          <div class="meta">Gerado em ${esc(m.gerado_em)}<br>por ${esc(m.gerado_por)}</div>
+        </div>
+        <div class="rc-resumo">
+          <div><b>${r.registradas}</b><span>Registradas no dia</span></div>
+          <div><b>${r.tratadas}</b><span>Tratadas (confirmadas) no dia</span></div>
+          <div><b>${r.pendentes_do_dia}</b><span>Do dia, ainda pendentes</span></div>
+          <div><b>${r.sem_impacto} / ${r.com_impacto} / ${r.aguardando_ml}</b><span>Sem impacto / com impacto / aguardando ML</span></div>
+        </div>
+        <div class="rc-resumo" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+          <div><b>${esc(r.media_espera)}</b><span>Tempo médio esperando alguém assumir</span></div>
+          <div><b>${esc(r.media_com_operador)}</b><span>Tempo médio com o operador até confirmar</span></div>
+          <div><b>${esc(r.media_total)}</b><span>Tempo médio total (pedido → cancelado)</span></div>
+        </div>
+        <h2>Tratadas no dia</h2>${tabelaTratadas}
+        <h2>Registradas no dia</h2>${tabelaRegistradas}`;
+    }
+
     fetch("/api/solicitacoes-cancelamento/contas").then((r) => (r.ok ? r.json() : [])).then((lista) => {
       $("rel-contas").innerHTML = lista.map((c) => `<option value="${esc(c.nome)}"></option>`).join("");
     }).catch(() => {});
