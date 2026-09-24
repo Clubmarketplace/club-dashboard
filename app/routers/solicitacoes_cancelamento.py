@@ -760,13 +760,12 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
 
     from app.verificacao_cancelamento import verificar_uma_solicitacao
-    resultado = verificar_uma_solicitacao(solicitacao, db)
+    confirmou = verificar_uma_solicitacao(solicitacao, db)
     db.refresh(solicitacao)
 
     return {
-        "confirmou": resultado["confirmou"],
-        "situacao": resultado["situacao"],
-        "mensagem": resultado["detalhe"],
+        "confirmou": confirmou,
+        "mensagem": "Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre.",
         "solicitacao": _serializar(solicitacao),
     }
 
@@ -1059,3 +1058,105 @@ def relatorio_por_conta(
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )
+
+
+# ---------------------------------------------------------------------------
+# Controle do dia -- dados pra prévia na tela / impressão.
+# (O Excel do controle do dia continua sendo o /relatorio, sem mudança.)
+# ---------------------------------------------------------------------------
+def _duracao_texto(inicio: Optional[datetime], fim: Optional[datetime]) -> str:
+    """'12 min' / '1h05' / '2 dia(s) 3h' -- vazio se faltar uma das pontas."""
+    if not inicio or not fim or fim < inicio:
+        return ""
+    minutos = int((fim - inicio).total_seconds() // 60)
+    if minutos < 60:
+        return f"{minutos} min"
+    if minutos < 60 * 24:
+        return f"{minutos // 60}h{minutos % 60:02d}"
+    return f"{minutos // 1440} dia(s) {(minutos % 1440) // 60}h"
+
+
+def _media_texto(pares) -> str:
+    """Média de várias durações (lista de (início, fim)), no mesmo formato."""
+    validos = [(fim - ini).total_seconds() for ini, fim in pares if ini and fim and fim >= ini]
+    if not validos:
+        return "—"
+    base = datetime(2000, 1, 1)
+    return _duracao_texto(base, base + timedelta(seconds=sum(validos) / len(validos)))
+
+
+@router.get("/relatorio-dia-dados")
+def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Session = Depends(get_db)):
+    """
+    Controle do dia pra mostrar/imprimir: o que foi REGISTRADO no dia e o
+    que foi TRATADO (confirmado) no dia, com os tempos de cada pedido:
+      - esperou: do pedido até alguém assumir
+      - com operador: de quando assumiu até confirmar
+      - total: do pedido até a confirmação
+    """
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel not in PAPEIS_RELATORIO:
+        raise HTTPException(status_code=403, detail="Seu perfil não gera este relatório.")
+    try:
+        dia = datetime.strptime(data, "%Y-%m-%d").date() if data else datetime.now(FUSO_BR).date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
+    inicio = _inicio_do_dia_br_em_utc(datetime.combine(dia, datetime.min.time()))
+    fim = _inicio_do_dia_br_em_utc(datetime.combine(dia + timedelta(days=1), datetime.min.time()))
+
+    mapa_contas = _mapa_contas_conhecidas(db)
+    nome_conta = lambda s: mapa_contas.get(s.conta_chave or chave_conta(s.conta), s.conta)
+    hora = lambda d: d.replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%H:%M") if d else ""
+    quem_pediu = lambda s: {"seller": "Seller", "logistica": GALPOES.get(s.galpao, "Galpão"), "publico": "Link público"}.get(s.origem, "Seller / link público") + (f" · {s.solicitado_por}" if s.solicitado_por else "")
+
+    registradas = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.criado_em >= inicio, SolicitacaoCancelamento.criado_em < fim)
+        .order_by(SolicitacaoCancelamento.criado_em.asc()).all()
+    )
+    tratadas = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.confirmado_em >= inicio, SolicitacaoCancelamento.confirmado_em < fim)
+        .order_by(SolicitacaoCancelamento.confirmado_em.asc()).all()
+    )
+
+    return {
+        "meta": {
+            "dia": dia.strftime("%d/%m/%Y"),
+            "gerado_em": datetime.now(FUSO_BR).strftime("%d/%m/%Y %H:%M"),
+            "gerado_por": usuario.nome_exibicao,
+        },
+        "resumo": {
+            "registradas": len(registradas),
+            "tratadas": len(tratadas),
+            "pendentes_do_dia": sum(1 for s in registradas if not s.confirmado_por),
+            "sem_impacto": sum(1 for s in tratadas if s.resultado_impacto == "sem_impacto"),
+            "com_impacto": sum(1 for s in tratadas if s.resultado_impacto == "com_impacto"),
+            "aguardando_ml": sum(1 for s in tratadas if s.resultado_impacto == "aguardando_confirmacao"),
+            "media_espera": _media_texto([(s.criado_em, s.assumido_primeiro_em) for s in tratadas]),
+            "media_com_operador": _media_texto([(s.assumido_primeiro_em, s.confirmado_em) for s in tratadas]),
+            "media_total": _media_texto([(s.criado_em, s.confirmado_em) for s in tratadas]),
+        },
+        "registradas": [
+            {
+                "hora": hora(s.criado_em), "conta": nome_conta(s), "plataforma": PLATAFORMAS.get(s.plataforma, s.plataforma),
+                "numero_venda": s.numero_venda, "sku": s.sku or "—", "motivo": s.motivo, "quem_pediu": quem_pediu(s),
+                "situacao": f"Cancelado · {s.confirmado_por}" if s.confirmado_por else (
+                    f"Com {s.em_atendimento_por}" if _dados_atendimento(s)["em_atendimento_por"] else "Pendente"),
+            }
+            for s in registradas
+        ],
+        "tratadas": [
+            {
+                "hora": hora(s.confirmado_em), "conta": nome_conta(s), "numero_venda": s.numero_venda,
+                "confirmado_por": s.confirmado_por, "protocolo": _texto_protocolo(s) or "—",
+                "impacto": LABEL_RESULTADO_IMPACTO.get(s.resultado_impacto, "Não informado"),
+                "esperou": _duracao_texto(s.criado_em, s.assumido_primeiro_em) or "—",
+                "com_operador": _duracao_texto(s.assumido_primeiro_em, s.confirmado_em) or "—",
+                "total": _duracao_texto(s.criado_em, s.confirmado_em) or "—",
+            }
+            for s in tratadas
+        ],
+    }
