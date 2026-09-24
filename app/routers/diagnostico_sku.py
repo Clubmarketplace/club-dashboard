@@ -186,3 +186,49 @@ def preencher_skus(request: Request, limite: int = 100, db: Session = Depends(ge
         "restantes": restantes,
         "dica": "Se 'restantes' for maior que 0, abra este endereço de novo." if restantes else "Concluído.",
     }
+
+
+@router.get("/preencher-sku-cancelamentos")
+def preencher_sku_cancelamentos(request: Request, limite: int = 100, db: Session = Depends(get_db)):
+    """
+    Lê no Mercado Livre o SKU/produto das solicitações de cancelamento
+    antigas (as registradas antes dessa informação existir). Em lotes;
+    pode abrir várias vezes até "restantes" chegar a 0 -- é seguro repetir.
+    Contas não conectadas ficam como "sem_conta" e são tentadas de novo.
+    """
+    from app.cancelamento_apoio import buscar_produto_da_venda
+    from app.models import SolicitacaoCancelamento
+
+    _exigir_admin(request, db)
+    limite = min(max(limite, 1), 300)
+    pendentes = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.plataforma == "mercado_livre", SolicitacaoCancelamento.sku.is_(None))
+        .order_by(SolicitacaoCancelamento.criado_em.desc())
+        .limit(limite)
+        .all()
+    )
+    contagem = {"ok": 0, "sem_conta": 0, "falha": 0}
+    for solicitacao in pendentes:
+        resultado = buscar_produto_da_venda(solicitacao, db)
+        contagem[resultado] = contagem.get(resultado, 0) + 1
+        if resultado != "ok":
+            # Marca como "tentado" ("") pra não travar as próximas. A verificação
+            # automática ainda preenche depois, se conseguir ler o pedido.
+            solicitacao.sku = ""
+        db.commit()
+        time.sleep(PAUSA_ENTRE_CONSULTAS_SEG)
+    restantes = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.plataforma == "mercado_livre", SolicitacaoCancelamento.sku.is_(None))
+        .count()
+    )
+    return {
+        "processadas": len(pendentes),
+        "sku_lido": contagem["ok"],
+        "conta_nao_conectada": contagem["sem_conta"],
+        "falhas": contagem["falha"],
+        "restantes": restantes,
+        "dica": ("Concluído." if restantes == 0 else
+                 "Abra de novo para continuar. Se 'restantes' não diminuir, são contas não conectadas ou vendas que o ML não encontrou."),
+    }

@@ -123,7 +123,7 @@
     <div id="lista-rodape"></div>
   </main>
 
-  <script src="/static/solicitacoes-filtros.js?v=2"></script>
+  <script src="/static/solicitacoes-filtros.js?v=3"></script>
   <script>
     // Só leitura: o galpão acompanha, quem confirma é a equipe interna.
     // O servidor já devolve apenas solicitações de origem "logística".
@@ -157,7 +157,7 @@
     function linha(s) {
       const plataforma = `<span class="badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${escaparHtml(s.plataforma_nome || s.plataforma)}</span>`;
       const status = s.confirmado_por
-        ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>`
+        ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>${s.protocolo ? `<div class="quem">Protocolo: ${escaparHtml(s.protocolo)}</div>` : ""}`
         : '<span class="status-pendente">Pendente</span>';
       return `<tr>
         <td class="nowrap">${formatarData(s.criado_em)}</td>

@@ -115,6 +115,7 @@
             <td>
               {% if s.confirmado_por %}
               <span class="status-confirmado">✓ Cancelado por {{ s.confirmado_por }}</span>
+              {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>{% endif %}
               {% else %}
               <span class="status-pendente">Pendente</span>
               {% endif %}

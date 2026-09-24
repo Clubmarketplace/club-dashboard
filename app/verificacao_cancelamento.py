@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.contas_util import chave_conta
 from app.database import SessionLocal
 from app.ml_client import MLApiError, MLAuthError, buscar_pedido, garantir_token_valido, repor_estoque_item
+from app.cancelamento_apoio import preencher_produto_do_pedido, registrar_evento
 from app.models import Conta, SolicitacaoCancelamento
 
 logger = logging.getLogger("verificacao_cancelamento")
@@ -99,12 +100,22 @@ def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session)
         logger.info("Não deu pra checar a venda %s agora: %s", solicitacao.numero_venda, exc)
         return False
 
+    # Aproveita a consulta pra guardar o SKU/produto da venda (relatório por SKU).
+    preencher_produto_do_pedido(solicitacao, pedido)
+
     if pedido.get("status") != "cancelled":
+        db.commit()  # grava o SKU, se foi lido agora
         return False  # ainda não foi cancelada -- continua pendente
 
     solicitacao.resultado_impacto = _classificar_resultado(pedido.get("cancel_detail"))
     solicitacao.confirmado_por = "Sistema (verificação automática)"
     solicitacao.confirmado_em = datetime.utcnow()
+    # Saiu do "em atendimento" (se alguém estava com o pedido) e fica no histórico.
+    solicitacao.em_atendimento_por = None
+    solicitacao.em_atendimento_por_id = None
+    solicitacao.em_atendimento_desde = None
+    registrar_evento(db, solicitacao.id, "confirmou_automatico", nome="Sistema",
+                     detalhe=f"Mercado Livre: {(pedido.get('cancel_detail') or {}).get('description') or 'pedido cancelado'}")
     db.commit()
 
     try:

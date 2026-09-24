@@ -23,17 +23,18 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from pydantic import BaseModel, field_validator
-from sqlalchemy import or_
+from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session
 
 from app import auth
+from app.cancelamento_apoio import preencher_produtos_em_segundo_plano, registrar_evento
 from app.contas_util import chave_conta, limpar_espacos, nome_exibicao_novo, sufixo_de_plataforma
 from app.database import get_db
-from app.models import Conta, SolicitacaoCancelamento, Usuario
+from app.models import Conta, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
 
@@ -62,6 +63,11 @@ FUSO_BR = timezone(timedelta(hours=-3))
 # Papéis que podem CONFIRMAR (quem pede não confirma: controle cruzado).
 PAPEIS_QUE_CONFIRMAM = ("admin", "supervisor", "atendente")
 
+# "Em atendimento" expira sozinho depois desse tempo sem confirmação, pra
+# um pedido não ficar "preso" com quem saiu (almoço, fim do turno...).
+MINUTOS_EXPIRA_ATENDIMENTO = 30
+TAMANHO_MAX_PROTOCOLO = 80
+
 RESULTADOS_IMPACTO_VALIDOS = {"sem_impacto", "com_impacto", "aguardando_confirmacao"}
 LABEL_RESULTADO_IMPACTO = {
     "sem_impacto": "Sem impacto",
@@ -76,6 +82,15 @@ LABEL_RESULTADO_IMPACTO = {
 class ItemCancelamento(BaseModel):
     numero_venda: str
     motivo: str
+    # Opcional, pras plataformas ainda não integradas. No Mercado Livre o
+    # SKU é lido do próprio pedido (cancelamento_apoio.py) e este campo é ignorado.
+    sku: Optional[str] = None
+
+    @field_validator("sku")
+    @classmethod
+    def limpar_sku(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:60] or None
 
     @field_validator("numero_venda", "motivo")
     @classmethod
@@ -183,6 +198,32 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "galpao_nome": GALPOES.get(s.galpao, f"Galpão {s.galpao}") if s.galpao else None,
         "plataforma_nome": PLATAFORMAS.get(s.plataforma, s.plataforma),
         "resultado_impacto": s.resultado_impacto,
+        "protocolo": s.protocolo,
+        "sku": s.sku,
+        "produto_titulo": s.produto_titulo,
+        "assumido_primeiro_por": s.assumido_primeiro_por,
+        "assumido_primeiro_em": s.assumido_primeiro_em.isoformat() if s.assumido_primeiro_em else None,
+        **_dados_atendimento(s),
+    }
+
+
+def _limite_atendimento() -> datetime:
+    """Quem assumiu antes desse instante já perdeu a vez (atendimento expirado)."""
+    return datetime.utcnow() - timedelta(minutes=MINUTOS_EXPIRA_ATENDIMENTO)
+
+
+def _dados_atendimento(s: SolicitacaoCancelamento) -> dict:
+    """Quem está com o pedido agora -- só enquanto pendente e dentro do prazo."""
+    ativo = (
+        not s.confirmado_por
+        and s.em_atendimento_por_id is not None
+        and s.em_atendimento_desde is not None
+        and s.em_atendimento_desde >= _limite_atendimento()
+    )
+    return {
+        "em_atendimento_por": s.em_atendimento_por if ativo else None,
+        "em_atendimento_por_id": s.em_atendimento_por_id if ativo else None,
+        "em_atendimento_desde": s.em_atendimento_desde.isoformat() if ativo else None,
     }
 
 
@@ -196,7 +237,7 @@ def _inicio_do_dia_br_em_utc(data_br: datetime) -> datetime:
 # Registrar
 # ---------------------------------------------------------------------------
 @router.post("")
-def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, db: Session = Depends(get_db)):
+def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Registra um ou mais pedidos de uma vez, todos da mesma conta e
     plataforma (tudo ou nada). Rota pública (o link sem login continua
@@ -275,15 +316,27 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, db: Session
                 origem=origem,
                 solicitado_por=usuario.nome_exibicao if usuario else None,
                 galpao=galpao,
+                sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
             )
             db.add(solicitacao)
             criadas.append(solicitacao)
+        db.flush()  # gera os ids, pra registrar o histórico na mesma transação
+        rotulo_origem = {"seller": "Seller", "logistica": GALPOES.get(galpao, "Galpão"), "publico": "Link público"}.get(origem, origem)
+        for s in criadas:
+            registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
+                             detalhe=f"{rotulo_origem} · motivo: {s.motivo}")
         db.commit()
         for s in criadas:
             db.refresh(s)
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail="Não foi possível registrar a solicitação. Tente de novo.") from exc
+
+    # Mercado Livre: lê o SKU/produto no pedido DEPOIS de responder, pra o
+    # formulário não ficar esperando o ML.
+    ids_ml = [s.id for s in criadas if s.plataforma == "mercado_livre"]
+    if ids_ml:
+        tarefas.add_task(preencher_produtos_em_segundo_plano, ids_ml)
 
     return {
         "status": "registrado",
@@ -341,6 +394,7 @@ def buscar_solicitacoes(
     de: Optional[str] = None,          # AAAA-MM-DD (horário de Brasília)
     ate: Optional[str] = None,
     busca: Optional[str] = None,       # nº da venda ou conta -- ignora o período
+    atendimento: Optional[str] = None, # livres | em_atendimento | meus (só pedidos pendentes)
     pagina: int = 1,
     por_pagina: int = 100,
 ):
@@ -396,6 +450,22 @@ def buscar_solicitacoes(
         except ValueError:
             raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
 
+    # Contadores do "em atendimento" (entre os pendentes, com os filtros acima).
+    limite = _limite_atendimento()
+    ativo = and_(SolicitacaoCancelamento.em_atendimento_por_id.isnot(None), SolicitacaoCancelamento.em_atendimento_desde >= limite)
+    pendentes_q = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None))
+    contadores_atendimento = {
+        "livres": pendentes_q.filter(~ativo).count(),
+        "em_atendimento": pendentes_q.filter(ativo).count(),
+        "meus": pendentes_q.filter(ativo, SolicitacaoCancelamento.em_atendimento_por_id == usuario.id).count(),
+    }
+    if atendimento == "livres":
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ~ativo)
+    elif atendimento == "em_atendimento":
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ativo)
+    elif atendimento == "meus":
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ativo, SolicitacaoCancelamento.em_atendimento_por_id == usuario.id)
+
     # Contadores com todos os filtros, menos o de status.
     total = consulta.count()
     confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
@@ -424,6 +494,9 @@ def buscar_solicitacoes(
         "por_pagina": por_pagina,
         "tem_mais": pagina * por_pagina < total_filtrado,
         "buscando_todo_historico": bool(termo),
+        "atendimento": contadores_atendimento,
+        "eu": {"id": usuario.id, "nome": usuario.nome_exibicao},
+        "minutos_expira_atendimento": MINUTOS_EXPIRA_ATENDIMENTO,
     }
 
 
@@ -432,6 +505,20 @@ def buscar_solicitacoes(
 # ---------------------------------------------------------------------------
 class ConfirmarSolicitacaoBody(BaseModel):
     resultado_impacto: str
+    # Obrigatório, a não ser que sem_protocolo=True (cancelado direto no
+    # painel do ML, sem atendimento -- aí não existe protocolo).
+    protocolo: Optional[str] = None
+    sem_protocolo: bool = False
+
+    @field_validator("protocolo")
+    @classmethod
+    def limpar_protocolo(cls, valor: Optional[str]) -> Optional[str]:
+        if valor is None:
+            return None
+        valor = limpar_espacos(valor)
+        if len(valor) > TAMANHO_MAX_PROTOCOLO:
+            raise ValueError(f"Protocolo muito longo (máx. {TAMANHO_MAX_PROTOCOLO} caracteres).")
+        return valor
 
     @field_validator("resultado_impacto")
     @classmethod
@@ -465,10 +552,22 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
+    if not corpo.sem_protocolo and not corpo.protocolo:
+        raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi cancelado sem protocolo).")
 
     solicitacao.confirmado_por = usuario_logado.nome_exibicao
     solicitacao.confirmado_em = datetime.utcnow()
     solicitacao.resultado_impacto = corpo.resultado_impacto
+    # "" = confirmado como "sem protocolo"; texto = protocolo informado.
+    solicitacao.protocolo = "" if corpo.sem_protocolo else corpo.protocolo
+    # Confirmado: sai do "em atendimento".
+    solicitacao.em_atendimento_por = None
+    solicitacao.em_atendimento_por_id = None
+    solicitacao.em_atendimento_desde = None
+    registrar_evento(
+        db, solicitacao.id, "confirmou", usuario=usuario_logado,
+        detalhe=f"{'Sem protocolo' if corpo.sem_protocolo else 'Protocolo ' + corpo.protocolo} · {LABEL_RESULTADO_IMPACTO.get(corpo.resultado_impacto, corpo.resultado_impacto)}",
+    )
     db.commit()
     db.refresh(solicitacao)
 
@@ -478,7 +577,142 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         "confirmado_por": solicitacao.confirmado_por,
         "confirmado_em": solicitacao.confirmado_em.isoformat(),
         "resultado_impacto": solicitacao.resultado_impacto,
+        "protocolo": solicitacao.protocolo,
     }
+
+
+# ---------------------------------------------------------------------------
+# Em atendimento (assumir / liberar)
+# ---------------------------------------------------------------------------
+class AssumirBody(BaseModel):
+    # True = assumir mesmo que outra pessoa esteja com o pedido (a tela
+    # só manda isso depois de perguntar "Assumir no lugar de Fulano?").
+    forcar: bool = False
+
+
+def _operador_que_confirma(request: Request, db: Session):
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel not in PAPEIS_QUE_CONFIRMAM:
+        raise HTTPException(status_code=403, detail="Seu perfil não trata cancelamentos.")
+    return usuario
+
+
+@router.post("/{solicitacao_id}/assumir")
+def assumir_atendimento(solicitacao_id: int, request: Request, corpo: Optional[AssumirBody] = None, db: Session = Depends(get_db)):
+    """
+    Marca que o operador logado começou a tratar o pedido. A checagem e a
+    gravação acontecem num único UPDATE condicional no banco: se duas
+    pessoas clicarem no mesmo instante, só uma consegue (a outra recebe
+    409 com o nome de quem ficou com o pedido).
+    """
+    usuario = _operador_que_confirma(request, db)
+    forcar = bool(corpo and corpo.forcar)
+    agora = datetime.utcnow()
+
+    # Como estava ANTES (só pra escrever o histórico; a decisão é o UPDATE abaixo).
+    antes = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    antes_por = antes.em_atendimento_por if antes else None
+    antes_por_id = antes.em_atendimento_por_id if antes else None
+    antes_ativo = bool(antes and _dados_atendimento(antes)["em_atendimento_por_id"])
+
+    condicao = [
+        SolicitacaoCancelamento.id == solicitacao_id,
+        SolicitacaoCancelamento.confirmado_por.is_(None),
+    ]
+    if not forcar:
+        condicao.append(or_(
+            SolicitacaoCancelamento.em_atendimento_por_id.is_(None),
+            SolicitacaoCancelamento.em_atendimento_por_id == usuario.id,
+            SolicitacaoCancelamento.em_atendimento_desde < _limite_atendimento(),
+        ))
+    resultado = db.execute(
+        update(SolicitacaoCancelamento)
+        .where(*condicao)
+        .values(em_atendimento_por=usuario.nome_exibicao, em_atendimento_por_id=usuario.id, em_atendimento_desde=agora)
+        .execution_options(synchronize_session=False)
+    )
+    db.commit()
+
+    solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if solicitacao is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if resultado.rowcount == 0:
+        if solicitacao.confirmado_por:
+            raise HTTPException(status_code=400, detail=f"Esse pedido já foi confirmado por {solicitacao.confirmado_por}.")
+        atual = _dados_atendimento(solicitacao)
+        raise HTTPException(status_code=409, detail={
+            "codigo": "ocupado",
+            "mensagem": f"{atual['em_atendimento_por'] or 'Outra pessoa'} já está com esse pedido.",
+            **atual,
+        })
+
+    # Histórico (só quando mudou de mãos -- assumir de novo o que já é meu não conta).
+    if antes_por_id != usuario.id or not antes_ativo:
+        if antes_ativo and antes_por_id != usuario.id:
+            registrar_evento(db, solicitacao.id, "assumiu_no_lugar", usuario=usuario, detalhe=f"no lugar de {antes_por}")
+        elif antes_por and antes_por_id != usuario.id:
+            registrar_evento(db, solicitacao.id, "assumiu", usuario=usuario, detalhe=f"{antes_por} tinha deixado expirar ({MINUTOS_EXPIRA_ATENDIMENTO} min)")
+        else:
+            registrar_evento(db, solicitacao.id, "assumiu", usuario=usuario)
+    if not solicitacao.assumido_primeiro_por:
+        solicitacao.assumido_primeiro_por = usuario.nome_exibicao
+        solicitacao.assumido_primeiro_em = agora
+    db.commit()
+    return {"status": "assumido", **_dados_atendimento(solicitacao)}
+
+
+@router.post("/{solicitacao_id}/liberar")
+def liberar_atendimento(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """Devolve o pedido pra fila. Só quem está com ele (ou admin/supervisor)."""
+    usuario = _operador_que_confirma(request, db)
+    solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if solicitacao is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    atual = _dados_atendimento(solicitacao)
+    if atual["em_atendimento_por_id"] not in (None, usuario.id) and usuario.papel not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail=f"Esse pedido está com {atual['em_atendimento_por']}; só essa pessoa (ou um supervisor) pode liberar.")
+    if atual["em_atendimento_por_id"] is not None:
+        registrar_evento(db, solicitacao.id, "liberou", usuario=usuario,
+                         detalhe=None if atual["em_atendimento_por_id"] == usuario.id else f"estava com {atual['em_atendimento_por']}")
+    solicitacao.em_atendimento_por = None
+    solicitacao.em_atendimento_por_id = None
+    solicitacao.em_atendimento_desde = None
+    db.commit()
+    return {"status": "liberado"}
+
+
+ROTULO_EVENTO = {
+    "registrou": "Registrou a solicitação",
+    "assumiu": "Assumiu o atendimento",
+    "assumiu_no_lugar": "Assumiu no lugar de outra pessoa",
+    "liberou": "Liberou o atendimento",
+    "confirmou": "Confirmou o cancelamento",
+    "confirmou_automatico": "Cancelamento confirmado automaticamente",
+}
+
+
+@router.get("/{solicitacao_id}/historico")
+def historico_solicitacao(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """Linha do tempo da solicitação (quem fez o quê e quando), da mais antiga pra mais nova."""
+    _operador_que_confirma(request, db)
+    eventos = (
+        db.query(SolicitacaoEvento)
+        .filter(SolicitacaoEvento.solicitacao_id == solicitacao_id)
+        .order_by(SolicitacaoEvento.quando.asc(), SolicitacaoEvento.id.asc())
+        .all()
+    )
+    return [
+        {
+            "tipo": e.tipo,
+            "rotulo": ROTULO_EVENTO.get(e.tipo, e.tipo),
+            "quem": e.usuario_nome,
+            "detalhe": e.detalhe,
+            "quando": e.quando.isoformat() if e.quando else None,
+        }
+        for e in eventos
+    ]
 
 
 @router.post("/{solicitacao_id}/verificar-status")
@@ -577,7 +811,7 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
     detalhe = wb.create_sheet("Detalhe do dia")
     detalhe.append([
         "Conta", "Plataforma", "Nº da venda", "Motivo", "Origem", "Confirmado por",
-        "Confirmado em", "Resultado (reputação)",
+        "Confirmado em", "Resultado (reputação)", "Protocolo",
     ])
     for s in tratadas_no_dia:
         info = _serializar(s, mapa_contas)
@@ -588,10 +822,12 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
             info["motivo"],
             {"seller": "Seller", "logistica": info["galpao_nome"] or "Logística", "publico": "Link público"}.get(info["origem"], "Seller / link público"),
             info["confirmado_por"],
-            datetime.fromisoformat(info["confirmado_em"]).strftime("%d/%m/%Y %H:%M") if info["confirmado_em"] else "",
+            # Horário de Brasília (o banco guarda em UTC).
+            datetime.fromisoformat(info["confirmado_em"]).replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%d/%m/%Y %H:%M") if info["confirmado_em"] else "",
             LABEL_RESULTADO_IMPACTO.get(info["resultado_impacto"], "Não informado"),
+            "Sem protocolo" if info["protocolo"] == "" else (info["protocolo"] or ""),
         ])
-    larguras = [18, 14, 18, 30, 18, 18, 18, 26]
+    larguras = [18, 14, 18, 30, 18, 18, 18, 26, 20]
     for indice, largura in enumerate(larguras, start=1):
         detalhe.column_dimensions[detalhe.cell(row=1, column=indice).column_letter].width = largura
 
@@ -604,4 +840,182 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{nome_arquivo}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Relatório por conta e período (tela "Relatório de cancelamentos")
+# ---------------------------------------------------------------------------
+PAPEIS_RELATORIO = ("admin", "supervisor")
+SEM_SKU = "—"
+
+
+def _periodo_relatorio(periodo: str | None, de: str | None, ate: str | None):
+    """(início, fim, rótulo) em datas de Brasília. mes_atual | mes_anterior | datas."""
+    hoje = datetime.now(FUSO_BR).date()
+    if periodo == "mes_anterior":
+        fim = hoje.replace(day=1) - timedelta(days=1)
+        inicio = fim.replace(day=1)
+    elif periodo == "datas":
+        try:
+            inicio = datetime.strptime(de, "%Y-%m-%d").date() if de else hoje.replace(day=1)
+            fim = datetime.strptime(ate, "%Y-%m-%d").date() if ate else hoje
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
+        if inicio > fim:
+            inicio, fim = fim, inicio
+        if (fim - inicio).days > 366:
+            raise HTTPException(status_code=400, detail="Período máximo de 1 ano.")
+    else:
+        inicio, fim = hoje.replace(day=1), hoje
+    return inicio, fim, f"{inicio.strftime('%d/%m/%Y')} a {fim.strftime('%d/%m/%Y')}"
+
+
+def _hora_br_texto(data_utc: Optional[datetime]) -> str:
+    if not data_utc:
+        return ""
+    return data_utc.replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%d/%m/%Y %H:%M")
+
+
+def _texto_protocolo(s: SolicitacaoCancelamento) -> str:
+    if s.protocolo == "":
+        return "Sem protocolo"
+    return s.protocolo or ""
+
+
+@router.get("/relatorio-conta")
+def relatorio_por_conta(
+    request: Request,
+    db: Session = Depends(get_db),
+    conta: Optional[str] = None,       # vazio = todas as contas
+    periodo: str = "mes_atual",        # mes_atual | mes_anterior | datas
+    de: Optional[str] = None,
+    ate: Optional[str] = None,
+    plataforma: Optional[str] = None,
+    status: str = "todos",             # todos | confirmados
+    formato: str = "json",             # json | xlsx
+):
+    """
+    Cancelamentos SOLICITADOS no período, de uma conta (ou todas): resumo,
+    total por SKU (quantas vezes cada produto foi cancelado) e o detalhe
+    de cada venda. formato=xlsx devolve a planilha pronta.
+    """
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel not in PAPEIS_RELATORIO:
+        raise HTTPException(status_code=403, detail="Só admin e supervisor geram este relatório.")
+
+    inicio, fim, rotulo = _periodo_relatorio(periodo, de, ate)
+    consulta = db.query(SolicitacaoCancelamento).filter(
+        SolicitacaoCancelamento.criado_em >= _inicio_do_dia_br_em_utc(datetime.combine(inicio, datetime.min.time())),
+        SolicitacaoCancelamento.criado_em < _inicio_do_dia_br_em_utc(datetime.combine(fim + timedelta(days=1), datetime.min.time())),
+    )
+    mapa_contas = _mapa_contas_conhecidas(db)
+    conta_nome = None
+    if conta:
+        chave = chave_conta(conta)
+        consulta = consulta.filter(SolicitacaoCancelamento.conta_chave == chave)
+        conta_nome = mapa_contas.get(chave, conta)
+    if plataforma in PLATAFORMAS_VALIDAS:
+        consulta = consulta.filter(SolicitacaoCancelamento.plataforma == plataforma)
+    if status == "confirmados":
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None))
+    itens = consulta.order_by(SolicitacaoCancelamento.criado_em.asc()).all()
+
+    # Total por SKU (pedido com vários produtos conta em cada SKU).
+    por_sku: dict[str, dict] = {}
+    for s in itens:
+        skus = [x.strip() for x in (s.sku or "").split(",") if x.strip()] or [SEM_SKU]
+        # Nomes na mesma ordem dos SKUs (ver cancelamento_apoio.extrair_produto_do_pedido)
+        nomes = [x.strip() for x in (s.produto_titulo or "").split(" | ")] if len(skus) > 1 else [s.produto_titulo]
+        for indice, sku in enumerate(skus):
+            linha = por_sku.setdefault(sku, {"sku": sku, "produto": None, "quantidade": 0, "cancelados": 0})
+            linha["quantidade"] += 1
+            linha["cancelados"] += 1 if s.confirmado_por else 0
+            nome = nomes[indice] if indice < len(nomes) else None
+            if not linha["produto"] and nome and sku != SEM_SKU:
+                linha["produto"] = nome
+    ranking = sorted(por_sku.values(), key=lambda x: (x["sku"] == SEM_SKU, -x["quantidade"], x["sku"]))
+    for linha in ranking:
+        if linha["sku"] == SEM_SKU:
+            linha["produto"] = "Sem SKU identificado"
+
+    detalhe = [
+        {
+            "conta": mapa_contas.get(s.conta_chave or chave_conta(s.conta), s.conta),
+            "plataforma": PLATAFORMAS.get(s.plataforma, s.plataforma),
+            "solicitado_em": _hora_br_texto(s.criado_em),
+            "cancelado_em": _hora_br_texto(s.confirmado_em),
+            "numero_venda": s.numero_venda,
+            "sku": s.sku or SEM_SKU,
+            "produto": s.produto_titulo or "",
+            "motivo": s.motivo,
+            "protocolo": _texto_protocolo(s),
+            "impacto": LABEL_RESULTADO_IMPACTO.get(s.resultado_impacto, "") if s.confirmado_por else "",
+            "confirmado_por": s.confirmado_por or "",
+            "origem": {"seller": "Seller", "logistica": GALPOES.get(s.galpao, "Galpão"), "publico": "Link público"}.get(s.origem, "Seller / link público"),
+        }
+        for s in itens
+    ]
+    resumo = {
+        "solicitacoes": len(itens),
+        "cancelados": sum(1 for s in itens if s.confirmado_por),
+        "pendentes": sum(1 for s in itens if not s.confirmado_por),
+        "com_impacto": sum(1 for s in itens if s.confirmado_por and s.resultado_impacto == "com_impacto"),
+    }
+    meta = {
+        "conta": conta_nome or "Todas as contas",
+        "periodo": rotulo,
+        "de": inicio.isoformat(),
+        "ate": fim.isoformat(),
+        "plataforma": PLATAFORMAS.get(plataforma, "Todas as plataformas") if plataforma else "Todas as plataformas",
+        "status": "Só cancelados" if status == "confirmados" else "Cancelados e pendentes",
+        "gerado_em": datetime.now(FUSO_BR).strftime("%d/%m/%Y %H:%M"),
+        "gerado_por": usuario.nome_exibicao,
+    }
+
+    if formato != "xlsx":
+        return {"meta": meta, "resumo": resumo, "por_sku": ranking, "detalhe": detalhe}
+
+    wb = Workbook()
+    aba = wb.active
+    aba.title = "Resumo"
+    for linha in (
+        ["Relatório de cancelamentos -- Club Marketplace"],
+        ["Conta", meta["conta"]], ["Período", meta["periodo"]], ["Plataforma", meta["plataforma"]],
+        ["Status", meta["status"]], ["Gerado em", f"{meta['gerado_em']} por {meta['gerado_por']}"], [],
+        ["Solicitações", resumo["solicitacoes"]], ["Cancelados", resumo["cancelados"]],
+        ["Pendentes", resumo["pendentes"]], ["Com impacto na reputação", resumo["com_impacto"]],
+    ):
+        aba.append(linha)
+    aba.column_dimensions["A"].width = 30
+    aba.column_dimensions["B"].width = 34
+
+    aba_sku = wb.create_sheet("Por SKU")
+    aba_sku.append(["SKU", "Produto", "Solicitações", "Cancelados"])
+    for linha in ranking:
+        aba_sku.append([linha["sku"], linha["produto"] or "", linha["quantidade"], linha["cancelados"]])
+    for coluna, largura in zip("ABCD", (22, 50, 14, 12)):
+        aba_sku.column_dimensions[coluna].width = largura
+
+    aba_det = wb.create_sheet("Detalhe")
+    colunas = [("Conta", "conta", 18), ("Plataforma", "plataforma", 14), ("Solicitado em", "solicitado_em", 17),
+               ("Cancelado em", "cancelado_em", 17), ("Nº da venda", "numero_venda", 20), ("SKU", "sku", 18),
+               ("Produto", "produto", 40), ("Motivo", "motivo", 30), ("Protocolo", "protocolo", 18),
+               ("Impacto", "impacto", 16), ("Confirmado por", "confirmado_por", 18), ("Origem", "origem", 16)]
+    aba_det.append([c[0] for c in colunas])
+    for linha in detalhe:
+        aba_det.append([linha[c[1]] for c in colunas])
+    for indice, (_, _, largura) in enumerate(colunas, start=1):
+        aba_det.column_dimensions[aba_det.cell(row=1, column=indice).column_letter].width = largura
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    nome = f"cancelamentos_{chave_conta(meta['conta']).replace(' ', '-')}_{inicio.isoformat()}_{fim.isoformat()}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
     )

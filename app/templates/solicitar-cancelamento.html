@@ -111,6 +111,9 @@
   .linha-selecao { display:flex; flex-direction:column; }
   .linha-selecao .grupo + .grupo { margin-top:18px; }
   .cabecalho-vendas { display:none; }
+  /* SKU (opcional) só pras plataformas ainda não integradas -- no ML ele vem do pedido */
+  .campo-sku, .rotulo-sku, .cab-sku { display:none; }
+  form.com-sku .campo-sku, form.com-sku .rotulo-sku { display:block; }
   .acoes-form { display:flex; flex-direction:column; }
   .acoes-form .btn-adicionar { order:0; }
   .acoes-form button[type="submit"] { order:1; }
@@ -149,6 +152,12 @@
     .modo-largo .item-venda label { display:none; }
     .modo-largo .item-venda .campo-numero-venda { grid-column:2; grid-row:1; height:44px; }
     .modo-largo .item-venda .campo-motivo { grid-column:3; grid-row:1; min-height:44px; height:44px; resize:none; overflow:hidden; line-height:1.4; }
+    /* Com o SKU visível, a linha ganha uma coluna: nº | SKU | motivo | remover */
+    .modo-largo form.com-sku .cabecalho-vendas, .modo-largo form.com-sku .item-venda { grid-template-columns:70px minmax(0,1fr) minmax(0,.8fr) minmax(0,2fr) 70px; }
+    .modo-largo form.com-sku .cab-sku { display:block; }
+    .modo-largo form.com-sku .item-venda .campo-sku { grid-column:3; grid-row:1; height:44px; }
+    .modo-largo form.com-sku .item-venda .campo-motivo { grid-column:4; }
+    .modo-largo form.com-sku .item-venda .btn-remover-item { grid-column:5; }
 
     .modo-largo .acoes-form { flex-direction:row; gap:12px; margin-top:14px; }
     .modo-largo .acoes-form .btn-adicionar, .modo-largo .acoes-form button[type="submit"] { flex:1; margin-top:0; height:46px; padding:0 14px; }
@@ -230,7 +239,7 @@
       </div>
       </div>
 
-      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span>Motivo do cancelamento</span><span></span></div>
+      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span class="cab-sku">SKU (opcional)</span><span>Motivo do cancelamento</span><span></span></div>
 
       <div class="bloco-itens" id="bloco-itens"></div>
 
@@ -261,6 +270,14 @@
       opcao.querySelector("input").checked = true;
     });
   });
+
+  // SKU opcional aparece só fora do Mercado Livre (no ML ele é lido do pedido).
+  function atualizarCampoSku() {
+    const marcada = document.querySelector('input[name="plataforma"]:checked');
+    document.getElementById("form-cancelamento").classList.toggle("com-sku", !!marcada && marcada.value !== "mercado_livre");
+  }
+  document.querySelectorAll('input[name="plataforma"]').forEach(r => r.addEventListener("change", atualizarCampoSku));
+  document.querySelectorAll(".opcao-plataforma").forEach(o => o.addEventListener("click", () => setTimeout(atualizarCampoSku, 0)));
 
   const MODO_LOGISTICA = {{ 'true' if logistica_logado else 'false' }};
   const MODO_SELLER = {{ 'true' if seller_logado else 'false' }};
@@ -390,6 +407,8 @@
       </div>
       <label>Número da venda</label>
       <input type="text" class="campo-numero-venda" placeholder="Número do pedido" required autocomplete="off" />
+      <label class="rotulo-sku">SKU do produto (opcional)</label>
+      <input type="text" class="campo-sku" placeholder="SKU (opcional)" autocomplete="off" maxlength="60" />
       <label>Motivo do cancelamento</label>
       <textarea class="campo-motivo" placeholder="Ex: Etiqueta não foi gerada, CEP errado, sem estoque..." required></textarea>
     `;
@@ -460,6 +479,7 @@
     const itens = Array.from(blocoItens.querySelectorAll(".item-venda")).map(div => ({
       numero_venda: div.querySelector(".campo-numero-venda").value.trim(),
       motivo: div.querySelector(".campo-motivo").value.trim(),
+      sku: (div.querySelector(".campo-sku").value || "").trim() || null,
     }));
     if (itens.some(i => !i.numero_venda || !i.motivo)) return mostrarErro("Preencha o número da venda e o motivo de todas as vendas.");
 

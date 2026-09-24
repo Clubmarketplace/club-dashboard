@@ -22,7 +22,8 @@
  *   barra.atualizarResumo(buscandoTodoHistorico);
  */
 (function () {
-  const PADRAO = { status: "pendente", galpao: "", dias: "30", de: "", ate: "", conta: "", plataforma: "", origem: "", busca: "" };
+  const PADRAO = { status: "pendente", galpao: "", dias: "30", de: "", ate: "", conta: "", plataforma: "", origem: "", busca: "", atendimento: "" };
+  const NOMES_ATENDIMENTO = { livres: "Livres", em_atendimento: "Em atendimento", meus: "Meus" };
   const NOMES_STATUS = { pendente: "Aguardando", confirmado: "Confirmados", todos: "Todos" };
   const NOMES_PERIODO = { "1": "Hoje", "7": "7 dias", "30": "30 dias", personalizado: "Personalizado" };
   // Valores padrão; são atualizados pelo servidor (/opcoes), que é a fonte única.
@@ -83,7 +84,7 @@
     history.replaceState(null, "", window.location.pathname + (qs ? "?" + qs : ""));
   }
 
-  window.criarBarraFiltros = function ({ container, mostrarOrigem = false, onChange }) {
+  window.criarBarraFiltros = function ({ container, mostrarOrigem = false, mostrarAtendimento = false, onChange }) {
     injetarEstilo();
     let estado = lerDaUrl();
     let contas = []; // [{chave, nome}]
@@ -98,6 +99,8 @@
           ${seg("status", [["pendente", 'Aguardando<span class="bf-cont" data-cont="pendentes">–</span>'], ["confirmado", 'Confirmados<span class="bf-cont" data-cont="confirmados">–</span>'], ["todos", 'Todos<span class="bf-cont" data-cont="total">–</span>']])}</span>
           <span class="bf-grupo"><span class="bf-rotulo">Galpão</span>
           <span data-el="seg-galpao">${seg("galpao", [["", "Todos"], ...GALPOES.map(g => [String(g.valor), g.nome])])}</span></span>
+          ${mostrarAtendimento ? `<span class="bf-grupo"><span class="bf-rotulo">Atendimento</span>
+          ${seg("atendimento", [["", 'Todos'], ["livres", 'Livres<span class="bf-cont" data-cont="livres">–</span>'], ["em_atendimento", 'Em atendimento<span class="bf-cont" data-cont="em_atendimento">–</span>'], ["meus", 'Meus<span class="bf-cont" data-cont="meus">–</span>']])}</span>` : ""}
           <span class="bf-grupo"><span class="bf-rotulo">Período</span>
           ${seg("dias", [["1", "Hoje"], ["7", "7 dias"], ["30", "30 dias"], ["personalizado", "Personalizado"]])}</span>
           <span class="bf-personalizado" data-el="personalizado">
@@ -148,6 +151,7 @@
       if (estado.plataforma) p.plataforma = estado.plataforma;
       if (estado.origem) p.origem = estado.origem;
       if (estado.busca) p.busca = estado.busca;
+      if (estado.atendimento) p.atendimento = estado.atendimento;
       if (estado.dias === "personalizado") {
         if (estado.de) p.de = estado.de;
         if (estado.ate) p.ate = estado.ate;
@@ -231,9 +235,10 @@
 
     return {
       params,
-      atualizarContadores({ total, pendentes, confirmados }) {
+      atualizarContadores({ total, pendentes, confirmados }, atendimento) {
         const setar = (k, v) => { const x = container.querySelector(`[data-cont="${k}"]`); if (x) x.textContent = v; };
         setar("total", total); setar("pendentes", pendentes); setar("confirmados", confirmados);
+        if (atendimento) { setar("livres", atendimento.livres); setar("em_atendimento", atendimento.em_atendimento); setar("meus", atendimento.meus); }
       },
       atualizarResumo(buscandoTodoHistorico) {
         const partes = [];
@@ -252,6 +257,7 @@
         if (estado.conta) partes.push(escapar(nomeDaConta(estado.conta)));
         if (estado.plataforma) partes.push(NOMES_PLATAFORMA[estado.plataforma]);
         if (estado.origem) partes.push(NOMES_ORIGEM[estado.origem]);
+        if (estado.atendimento) partes.push(NOMES_ATENDIMENTO[estado.atendimento]);
         el("resumo").innerHTML = "Filtros: " + partes.join(" · ");
       },
     };

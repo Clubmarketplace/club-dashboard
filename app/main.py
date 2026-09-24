@@ -666,6 +666,15 @@ def pagina_solicitacoes_painel(request: Request):
     return templates.TemplateResponse(request=request, name="painel-cancelamentos.html", context={"usuario_logado": _usuario_logado(request)})
 
 
+@app.get("/relatorio-cancelamentos", response_class=HTMLResponse)
+def pagina_relatorio_cancelamentos(request: Request):
+    """Relatório de cancelamentos por conta e período (imprimir / PDF / Excel). Só admin e supervisor."""
+    usuario = _usuario_logado(request)
+    if not usuario or usuario.papel not in ("admin", "supervisor"):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request=request, name="relatorio-cancelamentos.html", context={"usuario_logado": usuario})
+
+
 @app.get("/api/saude")
 def saude():
     """Endpoint simples pra confirmar que o backend está de pé."""

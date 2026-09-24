@@ -329,6 +329,50 @@ class SolicitacaoCancelamento(Base):
     # cancel_detail do próprio Mercado Livre. Nulo = ainda não informado.
     resultado_impacto = Column(String, nullable=True)
 
+    # Protocolo do cancelamento informado na confirmação manual.
+    # Nulo = não informado (registros antigos ou confirmação automática);
+    # "" (vazio) = confirmado explicitamente como "sem protocolo"
+    # (cancelado direto no painel do Mercado Livre).
+    protocolo = Column(String, nullable=True)
+
+    # "Em atendimento": quem assumiu o tratamento desse pedido, pra outro
+    # operador não pegar o mesmo. Vale por MINUTOS_EXPIRA_ATENDIMENTO
+    # (routers/solicitacoes_cancelamento.py); depois disso volta a ficar livre.
+    em_atendimento_por = Column(String, nullable=True)        # nome de exibição
+    em_atendimento_por_id = Column(Integer, nullable=True)    # id do usuário
+    em_atendimento_desde = Column(DateTime, nullable=True)
+
+    # Quem assumiu o pedido pela PRIMEIRA vez e quando (fica gravado mesmo
+    # depois de confirmar) -- base dos tempos do relatório.
+    assumido_primeiro_por = Column(String, nullable=True)
+    assumido_primeiro_em = Column(DateTime, nullable=True)
+
+    # Produto vendido. Mercado Livre: lido do próprio pedido (order_items).
+    # Outras plataformas: digitado (opcional) no formulário.
+    # sku nulo = ainda não lido; "" = lido e o pedido não tem SKU.
+    sku = Column(String, nullable=True, index=True)
+    produto_titulo = Column(String, nullable=True)
+
+
+class SolicitacaoEvento(Base):
+    """
+    Histórico de cada solicitação de cancelamento: quem registrou, assumiu,
+    liberou, assumiu no lugar de outro e confirmou -- e quando. Só se
+    ACRESCENTA (nunca altera nem apaga), pra servir de trilha pros
+    relatórios por operador e pro "ver histórico" da tela.
+    """
+
+    __tablename__ = "solicitacao_eventos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    solicitacao_id = Column(Integer, ForeignKey("solicitacoes_cancelamento.id"), nullable=False, index=True)
+    # registrou | assumiu | assumiu_no_lugar | liberou | confirmou | confirmou_automatico
+    tipo = Column(String, nullable=False, index=True)
+    usuario_id = Column(Integer, nullable=True)
+    usuario_nome = Column(String, nullable=True)
+    detalhe = Column(Text, nullable=True)
+    quando = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
 
 class Usuario(Base):
     """

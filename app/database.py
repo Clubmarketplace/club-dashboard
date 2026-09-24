@@ -48,6 +48,14 @@ _COLUNAS_ADICIONAIS = {
         "galpao": "INTEGER",
         "conta_chave": "VARCHAR",
         "resultado_impacto": "VARCHAR",
+        "protocolo": "VARCHAR",
+        "em_atendimento_por": "VARCHAR",
+        "em_atendimento_por_id": "INTEGER",
+        "em_atendimento_desde": "TIMESTAMP",
+        "assumido_primeiro_por": "VARCHAR",
+        "assumido_primeiro_em": "TIMESTAMP",
+        "sku": "VARCHAR",
+        "produto_titulo": "VARCHAR",
     },
 }
 
@@ -58,6 +66,7 @@ _INDICES_ADICIONAIS = [
     # mesmo nome que o SQLAlchemy dá ao index=True do modelo: em banco novo já
     # existe (IF NOT EXISTS ignora); em banco antigo é criado aqui.
     ("ix_solicitacoes_cancelamento_conta_chave", "solicitacoes_cancelamento", "conta_chave"),
+    ("ix_solicitacoes_cancelamento_sku", "solicitacoes_cancelamento", "sku"),
 ]
 
 
