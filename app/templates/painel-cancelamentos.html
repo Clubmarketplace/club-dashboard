@@ -524,7 +524,15 @@
         const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/verificar-status`, { method: "POST" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.detail || "Não foi possível verificar.");
-        avisar(d.confirmou ? "O Mercado Livre já mostra a venda cancelada: confirmado automaticamente." : "Ainda não aparece como cancelada no Mercado Livre.");
+        if (d.confirmou) {
+          avisar("O Mercado Livre já mostra a venda cancelada: confirmado automaticamente.");
+        } else {
+          // Mostra SEMPRE o motivo real (pendente de verdade, conta não
+          // encontrada, erro de token, erro de consulta) -- não some
+          // silenciosamente atrás de um toast genérico de 3s, senão fica
+          // impossível saber por que não funcionou.
+          mostrarErro(d.mensagem || "Ainda não aparece como cancelada no Mercado Livre.");
+        }
       } catch (erro) { avisar(erro.message); }
       await atualizar();
     }
