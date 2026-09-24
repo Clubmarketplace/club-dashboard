@@ -323,6 +323,12 @@ class SolicitacaoCancelamento(Base):
     # virarem duas contas. O campo "conta" guarda o nome de exibição.
     conta_chave = Column(String, nullable=True, index=True)
 
+    # Impacto do cancelamento na reputação: "sem_impacto" | "com_impacto" |
+    # "aguardando_confirmacao". Preenchido na confirmação manual ou pela
+    # verificação automática (app/verificacao_cancelamento.py), que lê o
+    # cancel_detail do próprio Mercado Livre. Nulo = ainda não informado.
+    resultado_impacto = Column(String, nullable=True)
+
 
 class Usuario(Base):
     """

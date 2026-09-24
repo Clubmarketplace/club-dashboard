@@ -47,6 +47,7 @@ _COLUNAS_ADICIONAIS = {
         "solicitado_por": "VARCHAR",
         "galpao": "INTEGER",
         "conta_chave": "VARCHAR",
+        "resultado_impacto": "VARCHAR",
     },
 }
 

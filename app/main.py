@@ -51,6 +51,25 @@ bootstrap_admin_inicial()
 
 app = FastAPI(title="Club Marketplace — Painel")
 
+
+# --- Tarefa em segundo plano: verificação automática das solicitações de
+# cancelamento (ver app/verificacao_cancelamento.py). A cada 12 min confere
+# no Mercado Livre se as pendentes já foram canceladas. Pode ser desligada
+# sem mexer no código com a variável VERIFICACAO_CANCELAMENTO_ATIVA=0.
+@app.on_event("startup")
+async def _iniciar_verificacao_cancelamentos() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("VERIFICACAO_CANCELAMENTO_ATIVA", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Verificação automática de cancelamentos DESLIGADA pela variável de ambiente.")
+        return
+    from app.verificacao_cancelamento import loop_verificacao_cancelamentos
+    # Guarda a referência da tarefa (senão o Python pode descartá-la).
+    app.state.tarefa_verificacao_cancelamentos = asyncio.create_task(loop_verificacao_cancelamentos())
+    logging.getLogger(__name__).info("Verificação automática de cancelamentos iniciada (a cada 12 min).")
+
 # --- Middleware de autenticação ---
 # Tudo exige login por padrão. As exceções abaixo são as páginas/APIs
 # que PRECISAM ficar abertas: as telas de TV (ficam ligadas o dia
