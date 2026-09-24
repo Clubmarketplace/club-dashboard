@@ -63,9 +63,9 @@ FUSO_BR = timezone(timedelta(hours=-3))
 # Papéis que podem CONFIRMAR (quem pede não confirma: controle cruzado).
 PAPEIS_QUE_CONFIRMAM = ("admin", "supervisor", "atendente")
 
-# "Em atendimento" expira sozinho depois desse tempo sem confirmação, pra
-# um pedido não ficar "preso" com quem saiu (almoço, fim do turno...).
-MINUTOS_EXPIRA_ATENDIMENTO = 30
+# "Em atendimento" NÃO expira: o pedido fica com quem assumiu até confirmar
+# ou liberar. Se outra pessoa precisar, ela assume no lugar (e o histórico
+# guarda quanto tempo ficou com cada um). Decidido com a equipe.
 TAMANHO_MAX_PROTOCOLO = 80
 
 RESULTADOS_IMPACTO_VALIDOS = {"sem_impacto", "com_impacto", "aguardando_confirmacao"}
@@ -207,9 +207,6 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
     }
 
 
-def _limite_atendimento() -> datetime:
-    """Quem assumiu antes desse instante já perdeu a vez (atendimento expirado)."""
-    return datetime.utcnow() - timedelta(minutes=MINUTOS_EXPIRA_ATENDIMENTO)
 
 
 def _dados_atendimento(s: SolicitacaoCancelamento) -> dict:
@@ -218,7 +215,6 @@ def _dados_atendimento(s: SolicitacaoCancelamento) -> dict:
         not s.confirmado_por
         and s.em_atendimento_por_id is not None
         and s.em_atendimento_desde is not None
-        and s.em_atendimento_desde >= _limite_atendimento()
     )
     return {
         "em_atendimento_por": s.em_atendimento_por if ativo else None,
@@ -457,8 +453,7 @@ def buscar_solicitacoes(
     confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
 
     # Contadores do "em atendimento" (entre os pendentes, com os filtros acima).
-    limite = _limite_atendimento()
-    ativo = and_(SolicitacaoCancelamento.em_atendimento_por_id.isnot(None), SolicitacaoCancelamento.em_atendimento_desde >= limite)
+    ativo = and_(SolicitacaoCancelamento.em_atendimento_por_id.isnot(None), SolicitacaoCancelamento.em_atendimento_desde.isnot(None))
     pendentes_q = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None))
     contadores_atendimento = {
         "livres": pendentes_q.filter(~ativo).count(),
@@ -511,7 +506,6 @@ def buscar_solicitacoes(
         "buscando_todo_historico": bool(termo),
         "atendimento": contadores_atendimento,
         "eu": {"id": usuario.id, "nome": usuario.nome_exibicao},
-        "minutos_expira_atendimento": MINUTOS_EXPIRA_ATENDIMENTO,
     }
 
 
@@ -649,7 +643,6 @@ def assumir_atendimento(solicitacao_id: int, request: Request, corpo: Optional[A
         condicao.append(or_(
             SolicitacaoCancelamento.em_atendimento_por_id.is_(None),
             SolicitacaoCancelamento.em_atendimento_por_id == usuario.id,
-            SolicitacaoCancelamento.em_atendimento_desde < _limite_atendimento(),
         ))
     resultado = db.execute(
         update(SolicitacaoCancelamento)
@@ -676,8 +669,6 @@ def assumir_atendimento(solicitacao_id: int, request: Request, corpo: Optional[A
     if antes_por_id != usuario.id or not antes_ativo:
         if antes_ativo and antes_por_id != usuario.id:
             registrar_evento(db, solicitacao.id, "assumiu_no_lugar", usuario=usuario, detalhe=f"no lugar de {antes_por}")
-        elif antes_por and antes_por_id != usuario.id:
-            registrar_evento(db, solicitacao.id, "assumiu", usuario=usuario, detalhe=f"{antes_por} tinha deixado expirar ({MINUTOS_EXPIRA_ATENDIMENTO} min)")
         else:
             registrar_evento(db, solicitacao.id, "assumiu", usuario=usuario)
     if not solicitacao.assumido_primeiro_por:
@@ -715,6 +706,49 @@ ROTULO_EVENTO = {
     "confirmou": "Confirmou o cancelamento",
     "confirmou_automatico": "Cancelamento confirmado automaticamente",
 }
+
+
+def _tempo_por_operador(solicitacao: SolicitacaoCancelamento, eventos: list) -> dict:
+    """
+    Reconstrói, pelo histórico, quanto tempo o pedido ficou com cada operador:
+    assumiu / assumiu no lugar abre um trecho; liberou, a troca de operador
+    ou a confirmação fecham. Soma os trechos do mesmo operador.
+    Devolve {"fila": texto, "por_operador": [{"nome", "texto"}], "total": texto}.
+    """
+    fim_geral = solicitacao.confirmado_em or datetime.utcnow()
+    trechos: dict[str, float] = {}
+    ordem: list[str] = []
+    atual, desde = None, None
+    primeiro_assumiu = None
+    for e in sorted(eventos, key=lambda x: (x.quando, x.id)):
+        if e.tipo in ("assumiu", "assumiu_no_lugar", "liberou", "confirmou", "confirmou_automatico") and atual and desde:
+            trechos[atual] = trechos.get(atual, 0) + max(0, (e.quando - desde).total_seconds())
+            atual, desde = None, None
+        if e.tipo in ("assumiu", "assumiu_no_lugar"):
+            atual, desde = (e.usuario_nome or "—"), e.quando
+            primeiro_assumiu = primeiro_assumiu or e.quando
+            if atual not in ordem:
+                ordem.append(atual)
+    if atual and desde:  # ainda está com alguém
+        trechos[atual] = trechos.get(atual, 0) + max(0, (fim_geral - desde).total_seconds())
+    base = datetime(2000, 1, 1)
+    texto = lambda seg: _duracao_texto(base, base + timedelta(seconds=seg)) or "0 min"
+    return {
+        "fila": _duracao_texto(solicitacao.criado_em, primeiro_assumiu or solicitacao.assumido_primeiro_em) or "—",
+        "por_operador": [{"nome": nome, "texto": texto(trechos.get(nome, 0))} for nome in ordem],
+        "total": _duracao_texto(solicitacao.criado_em, fim_geral) or "0 min",
+    }
+
+
+@router.get("/{solicitacao_id}/tempos")
+def tempos_solicitacao(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """Tempo na fila, tempo com cada operador e tempo total do pedido."""
+    _operador_que_confirma(request, db)
+    solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if solicitacao is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    eventos = db.query(SolicitacaoEvento).filter(SolicitacaoEvento.solicitacao_id == solicitacao_id).all()
+    return _tempo_por_operador(solicitacao, eventos)
 
 
 @router.get("/{solicitacao_id}/historico")
@@ -760,12 +794,23 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
 
     from app.verificacao_cancelamento import verificar_uma_solicitacao
-    confirmou = verificar_uma_solicitacao(solicitacao, db)
+    resultado = verificar_uma_solicitacao(solicitacao, db)
+    # Compatível com os dois formatos: o antigo (True/False) e o novo, que
+    # também diz O MOTIVO ({"confirmou", "situacao", "detalhe"}).
+    if isinstance(resultado, dict):
+        confirmou = bool(resultado.get("confirmou"))
+        situacao = resultado.get("situacao")
+        mensagem = resultado.get("detalhe") or ("Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre.")
+    else:
+        confirmou = bool(resultado)
+        situacao = "confirmado" if confirmou else "ainda_pendente"
+        mensagem = "Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre."
     db.refresh(solicitacao)
 
     return {
         "confirmou": confirmou,
-        "mensagem": "Cancelamento confirmado no Mercado Livre!" if confirmou else "Ainda não aparece como cancelada no Mercado Livre.",
+        "situacao": situacao,
+        "mensagem": mensagem,
         "solicitacao": _serializar(solicitacao),
     }
 
@@ -1121,6 +1166,15 @@ def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Sessio
         .filter(SolicitacaoCancelamento.confirmado_em >= inicio, SolicitacaoCancelamento.confirmado_em < fim)
         .order_by(SolicitacaoCancelamento.confirmado_em.asc()).all()
     )
+    # Histórico das tratadas numa consulta só (pro "tempo por operador").
+    eventos_por_id: dict[int, list] = {}
+    if tratadas:
+        for e in db.query(SolicitacaoEvento).filter(SolicitacaoEvento.solicitacao_id.in_([s.id for s in tratadas])).all():
+            eventos_por_id.setdefault(e.solicitacao_id, []).append(e)
+
+    def por_operador(s):
+        t = _tempo_por_operador(s, eventos_por_id.get(s.id, []))
+        return " · ".join(f"{x['nome']} {x['texto']}" for x in t["por_operador"]) or "—"
 
     return {
         "meta": {
@@ -1156,6 +1210,7 @@ def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Sessio
                 "esperou": _duracao_texto(s.criado_em, s.assumido_primeiro_em) or "—",
                 "com_operador": _duracao_texto(s.assumido_primeiro_em, s.confirmado_em) or "—",
                 "total": _duracao_texto(s.criado_em, s.confirmado_em) or "—",
+                "por_operador": por_operador(s),
             }
             for s in tratadas
         ],
