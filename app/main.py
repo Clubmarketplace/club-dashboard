@@ -106,7 +106,7 @@ _AREAS = {
     # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
     # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
     "solicitacoes_cancelamento": {
-        "paginas": {"/solicitacoes-painel", "/api/solicitacoes-cancelamento"},
+        "paginas": {"/solicitacoes-painel", "/relatorio-cancelamentos", "/api/solicitacoes-cancelamento"},
         "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
     # Galpão: registrar (o formulário e o envio já são públicos) e
@@ -668,9 +668,9 @@ def pagina_solicitacoes_painel(request: Request):
 
 @app.get("/relatorio-cancelamentos", response_class=HTMLResponse)
 def pagina_relatorio_cancelamentos(request: Request):
-    """Relatório de cancelamentos por conta e período (imprimir / PDF / Excel). Só admin e supervisor."""
+    """Relatório de cancelamentos por conta e período (imprimir / PDF / Excel). Admin, supervisor e atendente."""
     usuario = _usuario_logado(request)
-    if not usuario or usuario.papel not in ("admin", "supervisor"):
+    if not usuario or usuario.papel not in ("admin", "supervisor", "atendente"):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(request=request, name="relatorio-cancelamentos.html", context={"usuario_logado": usuario})
 
