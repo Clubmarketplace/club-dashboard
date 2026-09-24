@@ -374,14 +374,6 @@
       const min = minutosDesde(s.em_atendimento_desde);
       return min < 1 ? "agora" : textoEspera(min);
     }
-    // Faltando 5 min ou menos pra expirar, avisa que o pedido volta pra fila.
-    function avisoExpira(s) {
-      if (s.confirmado_por || s.em_atendimento_por_id == null) return "";
-      const limite = (ultimaResposta && ultimaResposta.minutos_expira_atendimento) || 30;
-      const resta = limite - minutosDesde(s.em_atendimento_desde);
-      if (resta > 5) return "";
-      return resta <= 0 ? "liberando…" : `libera em ${resta} min`;
-    }
     function situacao(s) {
       if (s.confirmado_por) return ["✓ Cancelado", "st-ok"];
       if (ehMeu(s)) return ["Com você · " + tempoComOperador(s), "st-meu"];
@@ -409,7 +401,7 @@
       let principal = "";
       if (pendente) {
         if (ehMeu(s)) principal = `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">Confirmar</button>`;
-        else if (ehDeOutro(s)) principal = `<button class="sl-btn" data-acao="abrir" data-id="${s.id}">Ver</button>`;
+        else if (ehDeOutro(s)) principal = `<button class="sl-btn" data-acao="assumir-lugar" data-id="${s.id}">Assumir</button>`;
         else principal = `<button class="sl-btn" data-acao="assumir" data-id="${s.id}">Assumir</button>`;
       }
       const menu = `
@@ -420,7 +412,6 @@
               <button data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
               <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
               <button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}
-            ${ehDeOutro(s) ? `<button data-acao="assumir-lugar" data-id="${s.id}">Assumir no lugar de ${esc(s.em_atendimento_por)}</button>` : ""}
             ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
           <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
         </div>`;
@@ -440,7 +431,6 @@
           <div class="c-sit">
             <span class="sl-pill ${sitCls}">${esc(sitTxt)}</span>
             ${s.confirmado_por ? `<div class="sl-sub" style="margin-top:5px">por <b>${esc(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</div>` : ""}
-            ${avisoExpira(s) ? `<div class="sl-sub" style="margin-top:5px; color:#8a4f00; font-weight:600">${avisoExpira(s)}</div>` : ""}
           </div>
           <div class="c-acoes sl-acoes">${principal}<button class="sl-btn icone" data-acao="menu" data-id="${s.id}" aria-label="Mais ações">${ICONE.pontos}</button>${menu}</div>
         </div>`;
@@ -474,7 +464,7 @@
       if (acao === "abrir") return abrirPainel(s.id);
       if (acao === "assumir") return assumir(s, false);
       if (acao === "assumir-lugar") {
-        if (!confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar?`)) return renderizarLista();
+        if (!confirm(`${s.em_atendimento_por} está com esse pedido. Assumir?`)) return renderizarLista();
         return assumir(s, true);
       }
       if (acao === "liberar") return liberar(s);
@@ -538,7 +528,7 @@
         const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/verificar-status`, { method: "POST" });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(d.detail || "Não foi possível verificar.");
-        avisar(d.confirmou ? "O Mercado Livre já mostra a venda cancelada: confirmado automaticamente." : "Ainda não aparece como cancelada no Mercado Livre.");
+        avisar(d.mensagem || (d.confirmou ? "Cancelamento confirmado no Mercado Livre!" : "Ainda não aparece como cancelada no Mercado Livre."));
       } catch (erro) { avisar(erro.message); }
       await atualizar();
     }
@@ -569,7 +559,7 @@
       if (pendente) {
         acoes = `<div class="sl-acoes-painel">
           ${ehMeu(s) ? `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`
-            : `<button class="sl-btn pri" data-acao="${ehDeOutro(s) ? "assumir-lugar" : "assumir"}" data-id="${s.id}">${ehDeOutro(s) ? "Assumir no lugar de " + esc(s.em_atendimento_por) : "Assumir atendimento"}</button>
+            : `<button class="sl-btn pri" data-acao="${ehDeOutro(s) ? "assumir-lugar" : "assumir"}" data-id="${s.id}">${ehDeOutro(s) ? "Assumir (está com " + esc(s.em_atendimento_por) + ")" : "Assumir atendimento"}</button>
                <button class="sl-btn" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`}
           ${s.plataforma === "mercado_livre" ? `
             <button class="sl-btn" data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
@@ -587,9 +577,25 @@
           <div class="sl-campo"><div class="r">Cancelado</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
           <div class="sl-campo"><div class="r">Protocolo</div>${s.protocolo != null ? esc(textoProtocolo(s)) : "—"}${s.resultado_impacto ? " · " + esc(ROTULO_IMPACTO[s.resultado_impacto] || s.resultado_impacto) : ""}</div>` : ""}
         ${acoes}
-        <div class="sl-campo" style="margin-top:22px"><div class="r" style="font-weight:600; color:var(--cmx-texto); font-size:13px">Histórico</div><div class="sl-hist" id="p-hist"><div class="sl-sub">Carregando…</div></div></div>`;
+        <div class="sl-campo" style="margin-top:22px"><div class="r" style="font-weight:600; color:var(--cmx-texto); font-size:13px">Tempo</div><div id="p-tempos" class="sl-sub">Carregando…</div></div>
+        <div class="sl-campo" style="margin-top:18px"><div class="r" style="font-weight:600; color:var(--cmx-texto); font-size:13px">Histórico</div><div class="sl-hist" id="p-hist"><div class="sl-sub">Carregando…</div></div></div>`;
     }
+    async function carregarTempos(id) {
+      try {
+        const r = await fetch(`/api/solicitacoes-cancelamento/${id}/tempos`, { cache: "no-store" });
+        const t = await r.json();
+        if (!r.ok || painelDe !== id || !$("p-tempos")) return;
+        const ops = t.por_operador.length
+          ? t.por_operador.map((o) => `<div>• <b>${esc(o.nome)}</b>: ${esc(o.texto)}</div>`).join("")
+          : "<div>• Ninguém assumiu ainda</div>";
+        $("p-tempos").innerHTML = `<div style="line-height:1.7; color:var(--cmx-texto); font-size:13.5px">
+          <div>Esperando na fila: <b>${esc(t.fila)}</b></div>${ops}
+          <div style="margin-top:4px">Total: <b>${esc(t.total)}</b></div></div>`;
+      } catch (erro) { if ($("p-tempos")) $("p-tempos").textContent = "Não foi possível calcular os tempos."; }
+    }
+
     async function carregarHistorico(id) {
+      carregarTempos(id);
       try {
         const r = await fetch(`/api/solicitacoes-cancelamento/${id}/historico`, { cache: "no-store" });
         const ev = await r.json();
@@ -765,10 +771,10 @@
         </table>` : '<div class="rc-vazio">Nenhuma solicitação registrada neste dia.</div>';
       const tabelaTratadas = d.tratadas.length ? `<table>
           <tr><th>Hora</th><th>Conta</th><th>Nº da venda</th><th>Confirmado por</th><th>Protocolo</th><th>Impacto</th>
-              <th class="num">Esperou<br>(até assumir)</th><th class="num">Com operador<br>(até confirmar)</th><th class="num">Total</th></tr>
+              <th class="num">Esperou<br>(até assumir)</th><th class="num">Com operador<br>(até confirmar)</th><th>Por operador</th><th class="num">Total</th></tr>
           ${d.tratadas.map((x) => `<tr><td class="nw">${esc(x.hora)}</td><td>${esc(x.conta)}</td><td class="nw">${esc(x.numero_venda)}</td>
             <td>${esc(x.confirmado_por)}</td><td class="nw">${esc(x.protocolo)}</td><td>${esc(x.impacto)}</td>
-            <td class="num">${esc(x.esperou)}</td><td class="num">${esc(x.com_operador)}</td><td class="num"><b>${esc(x.total)}</b></td></tr>`).join("")}
+            <td class="num">${esc(x.esperou)}</td><td class="num">${esc(x.com_operador)}</td><td>${esc(x.por_operador || "—")}</td><td class="num"><b>${esc(x.total)}</b></td></tr>`).join("")}
         </table>` : '<div class="rc-vazio">Nenhum cancelamento confirmado neste dia.</div>';
       $("prev-folha").innerHTML = `
         <div class="rc-cab">
