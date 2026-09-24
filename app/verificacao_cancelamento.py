@@ -77,35 +77,61 @@ def _repor_estoque_do_pedido(access_token: str, pedido: dict) -> None:
             logger.warning("Falha ao repor estoque do item %s (pedido %s): %s", item_id, pedido.get("id"), exc)
 
 
-def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session) -> bool:
+def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session) -> dict:
     """
     Confere se essa solicitação pendente já foi cancelada de verdade
     no Mercado Livre. Se sim, confirma sozinha (com o resultado real
-    vindo da API) e repõe o estoque. Devolve True se confirmou agora,
-    False se continua pendente (ou se não deu pra checar). Nunca
-    levanta exceção -- qualquer falha só fica no log, pra não travar
-    as outras solicitações da leva.
+    vindo da API) e repõe o estoque.
+
+    Devolve um dicionário com o resultado E O MOTIVO -- importante pra
+    diagnóstico: sem isso, qualquer falha (conta não encontrada, token
+    inválido, erro de rede) ficava indistinguível de "ainda não foi
+    cancelada", e ninguém conseguia saber por que não funcionou:
+        {"confirmou": bool, "situacao": str, "detalhe": str}
+    situacao é um de: "confirmado", "ainda_pendente",
+    "conta_nao_encontrada", "erro_token", "erro_consulta".
+    Nunca levanta exceção.
     """
-    if solicitacao.plataforma != "mercado_livre" or solicitacao.confirmado_por:
-        return False
+    if solicitacao.plataforma != "mercado_livre":
+        return {"confirmou": False, "situacao": "plataforma_nao_suportada", "detalhe": "Verificação automática só existe pra Mercado Livre."}
+    if solicitacao.confirmado_por:
+        return {"confirmou": False, "situacao": "ja_confirmada", "detalhe": "Essa solicitação já foi confirmada antes."}
 
     conta = _achar_conta(solicitacao, db)
     if conta is None:
-        return False  # sem conta cadastrada em /contas -- não dá pra consultar, continua pendente
+        return {
+            "confirmou": False,
+            "situacao": "conta_nao_encontrada",
+            "detalhe": (
+                f'Não achei nenhuma conta cadastrada em /contas com o nome "{solicitacao.conta}" '
+                f"(mesmo ignorando maiúscula/espaço). Confira se o apelido bate exatamente com o "
+                f"cadastrado lá."
+            ),
+        }
 
     try:
         access_token = garantir_token_valido(conta, db)
+    except MLAuthError as exc:
+        logger.info("Erro de token ao checar a venda %s: %s", solicitacao.numero_venda, exc)
+        return {"confirmou": False, "situacao": "erro_token", "detalhe": f"Problema com o token da conta '{conta.apelido}': {exc}"}
+
+    try:
         pedido = buscar_pedido(access_token, solicitacao.numero_venda)
-    except (MLAuthError, MLApiError) as exc:
-        logger.info("Não deu pra checar a venda %s agora: %s", solicitacao.numero_venda, exc)
-        return False
+    except MLApiError as exc:
+        logger.info("Erro ao consultar a venda %s: %s", solicitacao.numero_venda, exc)
+        return {"confirmou": False, "situacao": "erro_consulta", "detalhe": f"O Mercado Livre recusou a consulta: {exc}"}
 
     # Aproveita a consulta pra guardar o SKU/produto da venda (relatório por SKU).
     preencher_produto_do_pedido(solicitacao, pedido)
 
-    if pedido.get("status") != "cancelled":
+    status_pedido = pedido.get("status")
+    if status_pedido != "cancelled":
         db.commit()  # grava o SKU, se foi lido agora
-        return False  # ainda não foi cancelada -- continua pendente
+        return {
+            "confirmou": False,
+            "situacao": "ainda_pendente",
+            "detalhe": f'O Mercado Livre ainda mostra o status "{status_pedido}" pra essa venda -- ainda não foi cancelada por lá.',
+        }
 
     solicitacao.resultado_impacto = _classificar_resultado(pedido.get("cancel_detail"))
     solicitacao.confirmado_por = "Sistema (verificação automática)"
@@ -118,12 +144,14 @@ def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session)
                      detalhe=f"Mercado Livre: {(pedido.get('cancel_detail') or {}).get('description') or 'pedido cancelado'}")
     db.commit()
 
+    aviso_estoque = ""
     try:
         _repor_estoque_do_pedido(access_token, pedido)
     except Exception:
         logger.exception("Falha ao repor estoque da venda %s", solicitacao.numero_venda)
+        aviso_estoque = " (obs: não consegui repor o estoque automaticamente -- confira manualmente)"
 
-    return True
+    return {"confirmou": True, "situacao": "confirmado", "detalhe": f"Cancelamento confirmado no Mercado Livre!{aviso_estoque}"}
 
 
 def verificar_pendentes() -> None:
@@ -137,13 +165,16 @@ def verificar_pendentes() -> None:
             .all()
         )
         confirmadas = 0
+        situacoes: dict[str, int] = {}
         for solicitacao in pendentes:
-            if verificar_uma_solicitacao(solicitacao, db):
+            resultado = verificar_uma_solicitacao(solicitacao, db)
+            situacoes[resultado["situacao"]] = situacoes.get(resultado["situacao"], 0) + 1
+            if resultado["confirmou"]:
                 confirmadas += 1
         if pendentes:
             logger.info(
-                "Verificação de cancelamentos: %d pendente(s) checada(s), %d confirmada(s).",
-                len(pendentes), confirmadas,
+                "Verificação de cancelamentos: %d pendente(s) checada(s), %d confirmada(s). Detalhe: %s",
+                len(pendentes), confirmadas, situacoes,
             )
     finally:
         db.close()
