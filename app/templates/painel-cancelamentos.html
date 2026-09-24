@@ -9,106 +9,138 @@
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/dashboard.css?v=7" />
   <style>
-    .cc-kpis { display:flex; gap:14px; margin: 18px 0 22px; }
-    .cc-kpi { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 18px; flex:1; }
-    .cc-kpi .rotulo { font-size:12px; color:var(--cmx-texto-suave); }
-    .cc-kpi .valor { font-size:26px; font-weight:700; margin-top:2px; }
+    /* ================= Solicitações de Cancelamento (redesenho) =================
+       Topo: título + 3 cartões. Abaixo: barra de filtros (abas, busca, período,
+       filtros recolhidos) e a lista corrida, uma linha por pedido, com UMA ação
+       principal e o resto no "⋯". Detalhes num painel lateral. */
+    main { padding-top: 6px; }
+    .cmx-topbar { padding-top: 18px !important; padding-bottom: 14px !important; }
+    .sl-kpis { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1.7fr); gap:14px; margin: 4px 0 16px; }
+    .sl-kpi { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:12px 18px; }
+    .sl-kpi .rotulo { font-size:13px; color:var(--cmx-texto-suave); }
+    .sl-kpi .valor { font-size:26px; font-weight:700; margin-top:2px; }
+    .sl-kpi .chips { display:flex; gap:7px; flex-wrap:wrap; margin-top:9px; }
+    .sl-pill { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap; }
+    .sl-pill svg { flex-shrink:0; }
+    .pl-ml { background:#fff3a8; color:#5c4d00; } .pl-shopee { background:#fde4e0; color:#a83a1f; }
+    .pl-magalu { background:#e1efff; color:#0b4f96; } .pl-tiktok { background:#111; color:#ff4d73; }
+    .or-seller { background:#e2f4e9; color:#1a6641; } .or-galpao { background:#eee6fb; color:#5b2fa6; } .or-publico { background:#eceff2; color:#46525e; }
+    .st-livre { background:#f1f3f5; color:#4a5663; } .st-outro { background:#fff0d6; color:#8a4f00; }
+    .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; }
 
-    .cc-controles { display:flex; gap:10px; margin-bottom:18px; flex-wrap:wrap; align-items:center; }
-    .cc-controles input, .cc-controles select {
-      padding:9px 12px; border-radius:8px; border:1px solid var(--cmx-borda); font-family:inherit; font-size:13.5px; background:#fff; color:var(--cmx-texto);
-    }
-    .cc-controles input { flex:1; min-width:180px; max-width:260px; }
-    .cc-link-publico { margin-left:auto; font-size:12.5px; color:var(--cmx-texto-suave); background:#fff; border:1px solid var(--cmx-borda); padding:8px 12px; border-radius:8px; }
-    .cc-link-publico b { color:var(--cmx-texto); }
+    /* Aqui a barra de filtros "cola" na lista, formando um cartão só */
+    #barra-filtros .bf2 { border-radius:14px 14px 0 0; border-bottom:none; margin-bottom:0; }
+    .sl-lista { background:#fff; border:1px solid var(--cmx-borda); border-top:none; border-radius:0 0 14px 14px; }
+    .sl-row { display:grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1.45fr) 118px 190px 190px; gap:14px; align-items:center; padding:13px 20px; border-top:1px solid #eef1f4; }
+    .sl-row:hover { background:#fafbfc; }
+    .sl-cab { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); background:#fafbfc; padding:10px 20px; border-top:1px solid #e2e6ea; }
+    .sl-cab:hover { background:#fafbfc; }
+    .sl-venda { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+    .sl-num { background:none; border:none; padding:0; font:inherit; font-size:14px; font-weight:600; color:var(--cmx-texto); cursor:pointer; text-align:left; }
+    .sl-num:hover { color:#1f6fb2; text-decoration:underline; }
+    .sl-conta { font-size:13.5px; font-weight:700; margin-top:3px; }
+    .sl-sub { font-size:12px; color:var(--cmx-texto-suave); margin-top:3px; line-height:1.45; }
+    .sl-sub b { color:var(--cmx-texto); font-weight:600; }
+    .sl-motivo { font-size:14px; }
+    .sl-espera { font-size:13px; }
+    .sl-espera.r { color:#b3261e; font-weight:600; } .sl-espera.y { color:#8a4f00; font-weight:600; }
+    .sl-acoes { display:flex; justify-content:flex-end; gap:6px; position:relative; }
+    .sl-btn { height:34px; padding:0 13px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; color:var(--cmx-texto); font:inherit; font-size:13px; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; gap:7px; white-space:nowrap; }
+    .sl-btn:hover { background:#f7f9fb; }
+    .sl-btn:disabled { opacity:.6; cursor:default; }
+    .sl-btn.pri { background:var(--cmx-marinho); border-color:var(--cmx-marinho); color:#fff; }
+    .sl-btn.pri:hover { background:var(--cmx-marinho-suave); }
+    .sl-btn.icone { width:34px; padding:0; }
+    .sl-btn.grande { height:40px; font-size:14px; }
+    .sl-menu { display:none; position:absolute; top:40px; right:0; width:240px; background:#fff; border:1px solid #d5dbe1; border-radius:10px; box-shadow:0 12px 30px rgba(20,30,40,.14); padding:5px; z-index:25; }
+    .sl-menu.aberto { display:block; }
+    .sl-menu button, .sl-menu a { display:block; width:100%; box-sizing:border-box; text-align:left; background:none; border:none; padding:9px 10px; border-radius:7px; font:inherit; font-size:13px; color:var(--cmx-texto); cursor:pointer; text-decoration:none; }
+    .sl-menu button:hover, .sl-menu a:hover { background:#f3f5f8; }
+    .sl-vazio { padding:44px 20px; text-align:center; color:var(--cmx-texto-suave); font-size:14px; border-top:1px solid #eef1f4; }
+    .sl-rodape { display:flex; justify-content:center; align-items:center; gap:12px; padding:14px; border-top:1px solid #eef1f4; font-size:12.5px; color:var(--cmx-texto-suave); }
+    .sl-erro { color:#b3261e; text-align:center; padding:10px; font-size:13px; }
 
-    .cc-grupo { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; margin-bottom:14px; overflow:hidden; }
-    .cc-grupo-cabecalho {
-      display:flex; align-items:center; justify-content:space-between; padding:14px 18px;
-      cursor:pointer; user-select:none;
-    }
-    .cc-grupo-cabecalho:hover { background:#fafbfc; }
-    .cc-grupo-nome { font-weight:700; font-size:15px; display:flex; align-items:center; gap:10px; }
-    .cc-grupo-contagem { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); background:#f1f3f5; padding:2px 9px; border-radius:999px; }
-    .cc-grupo-seta { font-size:12px; color:var(--cmx-texto-suave); transition: transform .15s; }
-    .cc-grupo.recolhido .cc-grupo-seta { transform: rotate(-90deg); }
-    .cc-grupo.recolhido .cc-grupo-tabela { display:none; }
+    /* Painel lateral */
+    .sl-veu { position:fixed; inset:0; background:rgba(15,22,30,.45); z-index:60; display:none; }
+    .sl-veu.aberto { display:block; }
+    .sl-painel { position:fixed; top:0; right:0; bottom:0; width:420px; max-width:100vw; background:#fff; z-index:61; transform:translateX(105%); transition:transform .2s ease; box-shadow:-12px 0 30px rgba(0,0,0,.12); display:flex; flex-direction:column; }
+    .sl-painel.aberto { transform:translateX(0); }
+    .sl-painel-cab { display:flex; justify-content:space-between; gap:10px; padding:22px 24px 12px; }
+    .sl-painel-corpo { padding:0 24px 24px; overflow-y:auto; }
+    .sl-campo { margin-top:14px; font-size:14px; }
+    .sl-campo .r { font-size:12px; color:var(--cmx-texto-suave); margin-bottom:3px; }
+    .sl-acoes-painel { display:flex; flex-direction:column; gap:8px; margin-top:20px; }
+    .sl-acoes-painel .sl-btn { justify-content:flex-start; height:40px; }
+    .sl-acoes-painel .sl-btn.pri { justify-content:center; }
+    .sl-hist { border-left:2px solid #e2e6ea; padding-left:14px; display:flex; flex-direction:column; gap:10px; margin-top:8px; }
+    .sl-hist div { font-size:13px; line-height:1.45; }
+    .sl-hist .q { color:var(--cmx-texto-suave); margin-right:6px; }
+    .sl-hist .d { color:var(--cmx-texto-suave); font-size:12px; }
 
-    table.cc-tabela { width:100%; border-collapse:collapse; font-size:13.5px; }
-    table.cc-tabela thead th { text-align:left; font-size:11.5px; color:var(--cmx-texto-suave); font-weight:600; padding:9px 18px; border-top:1px solid var(--cmx-borda); background:#fafbfc; }
-    table.cc-tabela tbody td { padding:11px 18px; border-top:1px solid var(--cmx-borda); vertical-align:top; }
+    /* Janelas */
+    .sl-modal-fundo { position:fixed; inset:0; background:rgba(15,22,30,.45); z-index:70; display:none; align-items:center; justify-content:center; padding:16px; }
+    .sl-modal-fundo.aberto { display:flex; }
+    .sl-modal { background:#fff; border-radius:14px; padding:22px 24px; width:100%; max-width:440px; box-shadow:0 16px 40px rgba(0,0,0,.2); }
+    .sl-modal h3 { margin:0 0 4px; font-size:17px; }
+    .sl-modal .desc { margin:0 0 16px; font-size:13px; color:var(--cmx-texto-suave); }
+    .sl-modal label.t { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+    .sl-modal input[type=text], .sl-modal select, .sl-modal input[type=date] { width:100%; height:40px; box-sizing:border-box; border:1px solid #d5dbe1; border-radius:9px; padding:0 12px; font:inherit; font-size:14px; background:#fff; }
+    .sl-modal .check { display:flex; gap:8px; align-items:center; font-size:13px; color:var(--cmx-texto-suave); margin-top:10px; cursor:pointer; }
+    .sl-modal .erro { color:#b3261e; font-size:12.5px; margin-top:10px; display:none; }
+    .sl-modal .botoes { display:flex; gap:10px; justify-content:flex-end; margin-top:20px; flex-wrap:wrap; }
+    .sl-tipos { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .sl-tipo { text-align:left; border:1px solid #d5dbe1; border-radius:10px; padding:10px 12px; background:#fff; font:inherit; cursor:pointer; }
+    .sl-tipo b { display:block; font-size:14px; }
+    .sl-tipo span { font-size:12px; color:var(--cmx-texto-suave); }
+    .sl-tipo.on { border:2px solid var(--cmx-marinho); padding:9px 11px; }
 
-    .cc-badge { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
-    .cc-badge.ml { background:#fff6b8; color:#6b5b00; }
-    .cc-badge.shopee { background:#fdecec; color:#d64541; }
-    .cc-badge.magalu { background:#e3f0ff; color:#0060c0; }
-    .cc-badge.tiktok { background:#111; color:#fe2c55; }
-    .cc-kpi.plataformas { flex:2; }
-    .cc-kpi .chips { display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; }
+    /* Prévia do relatório (é o que sai na impressão) */
+    .sl-previa { position:fixed; inset:0; background:rgba(15,22,30,.55); z-index:80; display:none; overflow-y:auto; padding:20px; box-sizing:border-box; }
+    .sl-previa.aberto { display:block; }
+    .sl-previa-barra { max-width:900px; margin:0 auto 10px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+    .rc-folha { background:#fff; max-width:900px; margin:0 auto; border-radius:6px; padding:30px 34px; box-sizing:border-box; color:#1b2430; }
+    .rc-cab { display:flex; justify-content:space-between; gap:20px; border-bottom:2px solid #1b2430; padding-bottom:10px; margin-bottom:16px; }
+    .rc-cab img { height:32px; display:block; margin-bottom:8px; }
+    .rc-cab h1 { font-size:20px; margin:0; }
+    .rc-cab .linha { font-size:14px; margin-top:4px; }
+    .rc-cab .meta { font-size:12px; color:#5b6776; text-align:right; line-height:1.6; white-space:nowrap; }
+    .rc-sub { font-size:11.5px; color:#5b6776; }
+    .rc-resumo { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:18px; }
+    .rc-resumo div { border:1px solid #e2e6ea; border-radius:10px; padding:10px 12px; }
+    .rc-resumo b { display:block; font-size:22px; }
+    .rc-resumo span { font-size:12px; color:#5b6776; }
+    .rc-folha h2 { font-size:15px; margin:18px 0 8px; }
+    .rc-folha table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .rc-folha th { text-align:left; background:#f3f5f8; padding:7px 8px; border-bottom:1px solid #d5dbe1; }
+    .rc-folha td { padding:7px 8px; border-bottom:1px solid #eef1f4; vertical-align:top; }
+    .rc-folha .num { text-align:right; white-space:nowrap; }
+    .rc-folha .nw { white-space:nowrap; }
+    .rc-vazio { padding:26px; text-align:center; color:#5b6776; }
 
-    .cc-motivo { max-width:320px; }
-    .cc-data { white-space:nowrap; color:var(--cmx-texto-suave); font-size:12.5px; }
-    .cc-vazio { text-align:center; padding:40px 20px; color:var(--cmx-texto-suave); }
-    .cc-erro { color:#d64541; text-align:center; padding:14px; font-size:13px; }
+    .sl-aviso { position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:#1b2430; color:#fff; padding:12px 18px; border-radius:10px; font-size:14px; z-index:90; box-shadow:0 10px 30px rgba(0,0,0,.25); display:none; max-width:90vw; }
+    .sl-aviso.aberto { display:block; }
 
-    .cc-status-pendente { font-size:11.5px; font-weight:600; color:#b56a1f; background:#fdf3e3; padding:3px 9px; border-radius:999px; }
-    .cc-status-confirmado { font-size:11.5px; color:#2f6f4f; }
-    .cc-status-confirmado b { font-weight:700; }
-    .cc-btn-confirmar {
-      font-size:12px; font-weight:600; color:#fff; background:var(--cmx-marinho);
-      border:none; border-radius:7px; padding:6px 12px; cursor:pointer; white-space:nowrap;
+    /* Celular / tela estreita: a lista vira cartões */
+    @media (max-width: 900px) {
+      .sl-kpis { grid-template-columns:1fr 1fr; }
+      .sl-kpis .sl-kpi:last-child { grid-column:1 / -1; }
+      .sl-cab { display:none; }
+      .sl-row { grid-template-columns:1fr auto; grid-template-areas: "venda espera" "motivo motivo" "sit acoes"; gap:8px 12px; padding:14px 14px; }
+      .sl-row > .c-venda { grid-area:venda; } .sl-row > .c-motivo { grid-area:motivo; }
+      .sl-row > .c-espera { grid-area:espera; text-align:right; } .sl-row > .c-sit { grid-area:sit; }
+      .sl-row > .c-acoes { grid-area:acoes; }
     }
-    .cc-btn-confirmar:hover { background:var(--cmx-marinho-suave); }
 
-    .cc-modal-fundo {
-      display:none; position:fixed; inset:0; background:rgba(18,24,31,.45);
-      align-items:center; justify-content:center; z-index:50;
+    /* Impressão: só a folha do relatório */
+    @media print {
+      @page { size: A4; margin: 12mm; }
+      body > *:not(.sl-previa) { display:none !important; }
+      .sl-previa { position:static !important; display:block !important; background:none !important; padding:0 !important; overflow:visible !important; }
+      .sl-previa-barra { display:none !important; }
+      .rc-folha { padding:0 !important; max-width:none !important; }
+      .rc-folha table { font-size:10.5px; }
+      .rc-folha tr { page-break-inside:avoid; }
     }
-    .cc-modal-fundo.aberto { display:flex; }
-    .cc-modal { background:#fff; border-radius:14px; padding:24px; width:100%; max-width:360px; box-shadow:0 12px 40px rgba(0,0,0,.2); }
-    .cc-modal h3 { margin:0 0 4px 0; font-size:16px; }
-    .cc-modal p { margin:0 0 16px 0; font-size:13px; color:var(--cmx-texto-suave); }
-    .cc-modal input {
-      width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda);
-      font-family:inherit; font-size:14px; margin-bottom:14px;
-    }
-    .cc-modal input:focus { outline:none; border-color:var(--cmx-ambar); }
-    .cc-modal-botoes { display:flex; gap:10px; }
-    .cc-modal-botoes button { flex:1; padding:10px; border-radius:8px; font-weight:600; font-size:13.5px; cursor:pointer; border:none; }
-    .cc-modal-cancelar { background:#f1f3f5; color:var(--cmx-texto); }
-    .cc-modal-confirmar { background:var(--cmx-marinho); color:#fff; }
-    .cc-modal-erro { color:#d64541; font-size:12px; margin:-8px 0 12px; display:none; }
-    .cc-origem { display:inline-block; font-size:11.5px; font-weight:600; padding:2px 8px; border-radius:999px; white-space:nowrap; }
-    .cc-origem.logistica { background:#efe9fb; color:#6b46c1; }
-    .cc-origem.seller { background:#e6f0ea; color:#2f6f4f; }
-    .cc-origem.publico { background:#eef1f4; color:#6b7684; }
-    .cc-mais { display:block; margin:6px auto 0; padding:9px 18px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; font-weight:600; cursor:pointer; }
-    .cc-rodape-lista { text-align:center; font-size:12.5px; color:#6b7684; margin-top:8px; }
-    .cc-btn-atalho {
-      font-size:11.5px; font-weight:600; color:var(--cmx-texto); background:#fff;
-      border:1px solid var(--cmx-borda); border-radius:7px; padding:5px 10px; cursor:pointer;
-      white-space:nowrap; text-decoration:none; display:inline-block;
-    }
-    .cc-btn-atalho:hover { background:#fafbfc; }
-    /* Em atendimento (quem está tratando o pedido) */
-    .cc-selo-atend { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; margin-bottom:6px; white-space:nowrap; }
-    .cc-selo-atend.meu { background:#e6f2fd; color:#1f6fb2; }
-    .cc-selo-atend.outro { background:#fff3df; color:#9a5b08; }
-    .cc-btn-assumir { background:#fff; border:1.5px solid var(--cmx-marinho); color:var(--cmx-marinho); font-weight:600; font-size:12px; padding:6px 12px; border-radius:8px; cursor:pointer; }
-    .cc-btn-assumir:hover { background:#f4f6f8; }
-    .cc-btn-liberar { background:none; border:none; color:var(--cmx-texto-suave); font-size:11.5px; text-decoration:underline; cursor:pointer; padding:2px 0; }
-    .cc-venda-info { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:4px; line-height:1.45; }
-    .cc-venda-info b { color:var(--cmx-texto); font-weight:600; }
-    .cc-hist-item { display:grid; grid-template-columns:110px minmax(0,1fr); gap:10px; padding:8px 0; border-bottom:1px solid #eef1f4; font-size:13px; }
-    .cc-hist-item .q { color:var(--cmx-texto-suave); font-size:12px; white-space:nowrap; }
-    .cc-hist-item .d { color:var(--cmx-texto-suave); font-size:12px; margin-top:2px; }
-    .cc-modal .cc-check { display:flex; gap:8px; align-items:center; font-size:12.5px; color:var(--cmx-texto-suave); margin:-4px 0 14px; cursor:pointer; }
-    .cc-modal .cc-check input { width:auto; margin:0; }
-    .cc-btn-exportar {
-      font-size:12.5px; font-weight:600; color:var(--cmx-texto); background:#fff;
-      border:1px solid var(--cmx-borda); border-radius:8px; padding:8px 14px; cursor:pointer; white-space:nowrap;
-    }
-    .cc-btn-exportar:hover { background:#fafbfc; }
   </style>
 </head>
 <body>
@@ -138,7 +170,7 @@
         <a class="cmx-nav-item cmx-nav-item--ativo" href="/solicitacoes-painel">
           <span class="cmx-nav-dot"></span> Solicitações de Cancelamento
         </a>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>{% endif %}
+        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
         {% if not eh_atendente %}<span class="cmx-nav-secao">Operadores</span>
         <a class="cmx-nav-item" href="/usuarios">Operadores</a>{% endif %}
       </nav>
@@ -169,534 +201,599 @@
       {% endif %}      <header class="cmx-topbar">
         <div>
           <h1>Solicitações de Cancelamento</h1>
-          <p class="cmx-subtitulo">Pedidos MANUAIS registrados pelas contas via link público, agrupados por conta (diferente da fila de IA em 'Cancelamentos')</p>
+          <p class="cmx-subtitulo">Pedidos manuais de todas as contas</p>
         </div>
       </header>
 
       <main>
         <div id="aviso-erro"></div>
 
-        <div class="cc-kpis">
-          <div class="cc-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div></div>
-          <div class="cc-kpi"><div class="rotulo">Contas com pedidos</div><div class="valor" id="kpi-contas">—</div></div>
-          <div class="cc-kpi plataformas"><div class="rotulo">Por plataforma</div><div class="chips" id="kpi-plataformas">—</div></div>
+        <div class="sl-kpis">
+          <div class="sl-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div></div>
+          <div class="sl-kpi"><div class="rotulo">Contas com pedidos</div><div class="valor" id="kpi-contas">—</div></div>
+          <div class="sl-kpi"><div class="rotulo">Por plataforma</div><div class="chips" id="kpi-plataformas">—</div></div>
         </div>
 
         <div id="barra-filtros"></div>
-        <div style="display:flex; align-items:center; justify-content:flex-end; gap:10px; margin:-8px 0 10px;">
-          <div class="cc-rodape-lista" style="margin:0;">Link público: <b>/solicitar-cancelamento</b></div>
-          <button type="button" id="btn-exportar-relatorio" class="cc-btn-exportar">⬇ Exportar relatório do dia</button>
-        </div>
-
-        <div id="grupos"></div>
-        <div id="lista-rodape"></div>
+        <div class="sl-lista" id="lista"></div>
       </main>
     </div>
   </div>
 
-  <div class="cc-modal-fundo" id="modal-historico">
-    <div class="cc-modal" style="max-width:520px;">
-      <h3>Histórico da solicitação</h3>
-      <p id="historico-titulo"></p>
-      <div id="historico-lista" style="max-height:55vh; overflow-y:auto; margin-bottom:14px;"></div>
-      <div class="cc-modal-botoes"><button class="cc-modal-cancelar" id="historico-fechar">Fechar</button></div>
+  <!-- Painel lateral de detalhes -->
+  <div class="sl-veu" id="veu"></div>
+  <aside class="sl-painel" id="painel" aria-hidden="true" aria-label="Detalhes da solicitação">
+    <div class="sl-painel-cab">
+      <div>
+        <div class="sl-sub" style="margin:0">Venda</div>
+        <div style="font-size:20px; font-weight:700" id="p-venda"></div>
+        <div class="sl-sub" id="p-conta"></div>
+      </div>
+      <button class="sl-btn icone" id="p-fechar" aria-label="Fechar detalhes">✕</button>
     </div>
-  </div>
+    <div class="sl-painel-corpo" id="p-corpo"></div>
+  </aside>
 
-  <div class="cc-modal-fundo" id="modal-fundo">
-    <div class="cc-modal">
-      <h3>Confirmar cancelamento</h3>
-      <p id="modal-detalhe"></p>
-      <label for="modal-protocolo" style="display:block; font-size:12.5px; font-weight:600; color:var(--cmx-texto); margin-bottom:6px;">
-        Nº do protocolo do cancelamento:
-      </label>
-      <input type="text" id="modal-protocolo" placeholder="Ex: SAC-548812" maxlength="80" autocomplete="off" />
-      <label class="cc-check"><input type="checkbox" id="modal-sem-protocolo" /> Cancelado direto no painel do ML (sem protocolo)</label>
-      <label style="display:block; font-size:12.5px; font-weight:600; color:var(--cmx-texto); margin-bottom:6px;">
-        Resultado quanto à reputação:
-      </label>
-      <select id="modal-resultado-impacto" style="width:100%; padding:10px 12px; border-radius:8px; border:1.5px solid var(--cmx-borda); font-family:inherit; font-size:14px; margin-bottom:14px;">
-        <option value="">Selecione...</option>
+  <!-- Confirmar cancelamento -->
+  <div class="sl-modal-fundo" id="modal-confirmar">
+    <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="conf-titulo">
+      <h3 id="conf-titulo">Confirmar cancelamento</h3>
+      <p class="desc" id="conf-detalhe"></p>
+      <label class="t" for="conf-protocolo">Nº do protocolo do cancelamento</label>
+      <input type="text" id="conf-protocolo" placeholder="Ex: SAC-548812" maxlength="80" autocomplete="off" />
+      <label class="check"><input type="checkbox" id="conf-sem-protocolo" /> Cancelado direto no painel do ML (sem protocolo)</label>
+      <label class="t" for="conf-impacto">Impacto na reputação</label>
+      <select id="conf-impacto">
+        <option value="">Selecione…</option>
         <option value="sem_impacto">Sem impacto</option>
         <option value="com_impacto">Com impacto</option>
         <option value="aguardando_confirmacao">Aguardando confirmação do ML</option>
       </select>
-      <div class="cc-modal-erro" id="modal-erro"></div>
-      <div class="cc-modal-botoes">
-        <button class="cc-modal-cancelar" id="modal-cancelar">Cancelar</button>
-        <button class="cc-modal-confirmar" id="modal-confirmar">Confirmar</button>
+      <div class="erro" id="conf-erro"></div>
+      <div class="botoes">
+        <button class="sl-btn grande" id="conf-cancelar">Cancelar</button>
+        <button class="sl-btn grande pri" id="conf-ok">Confirmar cancelamento</button>
       </div>
     </div>
   </div>
 
-  <script src="/static/solicitacoes-filtros.js?v=3"></script>
+  <!-- Gerar relatório -->
+  <div class="sl-modal-fundo" id="modal-relatorio">
+    <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="rel-titulo" style="max-width:500px">
+      <h3 id="rel-titulo">Gerar relatório</h3>
+      <p class="desc">Usa os filtros aplicados na tela; dá pra ajustar aqui.</p>
+      <div class="sl-tipos">
+        <button class="sl-tipo on" data-tipo="canc"><b>Cancelamentos</b><span>Por conta e período, com total por SKU</span></button>
+        <button class="sl-tipo" data-tipo="dia"><b>Controle do dia</b><span>Registradas e tratadas no dia (Excel)</span></button>
+      </div>
+      <div id="rel-canc">
+        <label class="t" for="rel-conta">Conta</label>
+        <input type="text" id="rel-conta" list="rel-contas" placeholder="Todas as contas (digite para buscar)" autocomplete="off" />
+        <datalist id="rel-contas"></datalist>
+        <label class="t" for="rel-periodo">Período</label>
+        <select id="rel-periodo">
+          <option value="tela">Filtro atual da tela</option>
+          <option value="mes_atual">Mês atual</option>
+          <option value="mes_anterior">Mês anterior</option>
+        </select>
+        <label class="t" for="rel-status">Incluir</label>
+        <select id="rel-status">
+          <option value="todos">Cancelados e pendentes</option>
+          <option value="confirmados">Só cancelados</option>
+        </select>
+      </div>
+      <div id="rel-dia" style="display:none">
+        <label class="t" for="rel-data">Dia</label>
+        <input type="date" id="rel-data" />
+      </div>
+      <div class="erro" id="rel-erro"></div>
+      <div class="botoes">
+        <button class="sl-btn grande" id="rel-cancelar">Cancelar</button>
+        <button class="sl-btn grande" id="rel-excel">⬇ Baixar Excel</button>
+        <button class="sl-btn grande pri" id="rel-ver">Ver e imprimir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Prévia do relatório (o que sai na impressão) -->
+  <div class="sl-previa" id="previa">
+    <div class="sl-previa-barra">
+      <button class="sl-btn grande" id="prev-excel">⬇ Baixar Excel</button>
+      <button class="sl-btn grande pri" id="prev-imprimir">🖨 Imprimir / salvar PDF</button>
+      <button class="sl-btn grande" id="prev-fechar">Fechar</button>
+    </div>
+    <div class="rc-folha" id="prev-folha"></div>
+  </div>
+
+  <div class="sl-aviso" id="aviso" role="status" aria-live="polite"></div>
+
+  <script src="/static/solicitacoes-filtros.js?v=5"></script>
   <script>
     const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok Shop" };
-    const CLASSE_PLATAFORMA = { mercado_livre: "ml", shopee: "shopee", magalu: "magalu", tiktok_shop: "tiktok" };
-    let todasSolicitacoes = [];
+    const CURTO_PLATAFORMA = { mercado_livre: "ML", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok" };
+    const CLASSE_PLATAFORMA = { mercado_livre: "pl-ml", shopee: "pl-shopee", magalu: "pl-magalu", tiktok_shop: "pl-tiktok" };
+    const ROTULO_IMPACTO = { sem_impacto: "Sem impacto", com_impacto: "Com impacto", aguardando_confirmacao: "Aguardando confirmação do ML" };
+    const ICONE = {
+      seller: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>',
+      galpao: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-7h10v7"/></svg>',
+      link: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+      pontos: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+      impressora: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/></svg>',
+    };
+    const LOGO = "/static/logo.png?v=2";
+
+    let itens = [];            // o que está na tela
     let ultimaResposta = null;
-    const gruposRecolhidos = new Set();
+    let eu = { id: null, nome: "" };
+    let menuAberto = null;     // id do "⋯" aberto
+    let painelDe = null;       // id aberto no painel lateral
 
-    function escaparHtml(t) {
-      return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-    }
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+    const porId = (id) => itens.find((x) => String(x.id) === String(id));
 
-    // De onde veio o pedido: galpão (quem e qual), seller ou link público.
-    function htmlOrigem(s) {
-      if (s.origem === "logistica") return `<span class="cc-origem logistica">🏭 ${escaparHtml(s.galpao_nome || ("Galpão " + (s.galpao || "?")))}${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
-      if (s.origem === "seller") return `<span class="cc-origem seller">👤 Seller${s.solicitado_por ? " · " + escaparHtml(s.solicitado_por) : ""}</span>`;
-      if (s.origem === "publico") return `<span class="cc-origem publico">🔗 Link público</span>`;
-      return `<span class="cc-origem publico">Seller / link público</span>`; // registros antigos
-    }
-
-    function parseDataUTC(iso) {
-      if (!iso) return new Date();
-      return new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
-    }
+    function parseDataUTC(iso) { return new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z"); }
     function formatarData(iso) {
       if (!iso) return "—";
-      return parseDataUTC(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+      return parseDataUTC(iso).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" }).replace(",", " às");
+    }
+    function minutosDesde(iso) { return iso ? Math.max(0, Math.floor((Date.now() - parseDataUTC(iso).getTime()) / 60000)) : 0; }
+    function textoEspera(min) {
+      if (min < 60) return `há ${min} min`;
+      if (min < 60 * 24) return `há ${Math.floor(min / 60)}h${String(min % 60).padStart(2, "0")}`;
+      return `há ${Math.floor(min / 1440)} dia(s)`;
     }
 
-    // Filtragem feita no servidor (paginada): os filtros vêm da barra.
-    async function carregar(params, pagina = 1) {
-      const qs = new URLSearchParams({ ...params, pagina, por_pagina: 300 });
-      const resposta = await fetch("/api/solicitacoes-cancelamento/busca?" + qs.toString(), { cache: "no-store" });
-      if (resposta.status === 401) { window.location.href = "/login"; return null; }
-      if (!resposta.ok) throw new Error("status " + resposta.status);
-      return resposta.json();
+    // Quem está com o pedido
+    const ehMeu = (s) => s.em_atendimento_por_id != null && s.em_atendimento_por_id === eu.id;
+    const ehDeOutro = (s) => s.em_atendimento_por_id != null && s.em_atendimento_por_id !== eu.id;
+
+    function avisar(texto) {
+      const a = $("aviso");
+      a.textContent = texto;
+      a.classList.add("aberto");
+      clearTimeout(avisar._t);
+      avisar._t = setTimeout(() => a.classList.remove("aberto"), 3000);
+    }
+    function mostrarErro(texto) { $("aviso-erro").innerHTML = texto ? `<div class="sl-erro">${esc(texto)}</div>` : ""; }
+
+    function htmlOrigem(s) {
+      if (s.origem === "logistica") return `<span class="sl-pill or-galpao">${ICONE.galpao}${esc(s.galpao_nome || "Galpão " + (s.galpao || "?"))}${s.solicitado_por ? " · " + esc(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "seller") return `<span class="sl-pill or-seller">${ICONE.seller}Seller${s.solicitado_por ? " · " + esc(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "publico") return `<span class="sl-pill or-publico">${ICONE.link}Link público</span>`;
+      return `<span class="sl-pill or-publico">${ICONE.link}Seller / link público</span>`; // registros antigos
+    }
+    function textoOrigem(s) {
+      if (s.origem === "logistica") return `${s.galpao_nome || "Galpão"}${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
+      if (s.origem === "seller") return `Seller${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
+      return "Link público";
+    }
+    function situacao(s) {
+      if (s.confirmado_por) return ["✓ Cancelado", "st-ok"];
+      if (ehMeu(s)) return ["Com você", "st-meu"];
+      if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por, "st-outro"];
+      return ["Livre", "st-livre"];
+    }
+    function textoProtocolo(s) { return s.protocolo === "" ? "Sem protocolo" : s.protocolo; }
+
+    // ---------- Cartões do topo ----------
+    function renderizarKpis() {
+      const contas = new Set(itens.map((s) => s.conta_chave || (s.conta || "").trim().toLowerCase()));
+      $("kpi-total").textContent = ultimaResposta ? ultimaResposta.contadores.total : itens.length;
+      $("kpi-contas").textContent = contas.size;
+      $("kpi-plataformas").innerHTML = Object.keys(NOMES_PLATAFORMA).map((p) =>
+        `<span class="sl-pill ${CLASSE_PLATAFORMA[p]}">${NOMES_PLATAFORMA[p]}: ${itens.filter((s) => s.plataforma === p).length}</span>`).join("");
     }
 
-    function renderizarKpis(lista) {
-      const contas = new Set(lista.map(s => s.conta_chave || s.conta.trim().toLowerCase()));
-      document.getElementById("kpi-total").textContent = lista.length;
-      document.getElementById("kpi-contas").textContent = contas.size;
-      document.getElementById("kpi-plataformas").innerHTML = Object.keys(NOMES_PLATAFORMA).map(p =>
-        `<span class="cc-badge ${CLASSE_PLATAFORMA[p]}">${NOMES_PLATAFORMA[p]}: ${lista.filter(s => s.plataforma === p).length}</span>`
-      ).join("");
-    }
-
-    const ROTULO_IMPACTO = {
-      sem_impacto: "Sem impacto",
-      com_impacto: "Com impacto",
-      aguardando_confirmacao: "Aguardando confirmação do ML",
-    };
-    const COR_IMPACTO = {
-      sem_impacto: "#2f6f4f",
-      com_impacto: "#d64541",
-      aguardando_confirmacao: "#b56a1f",
-    };
-
-    // Quem está logado (vem do servidor em cada atualização) -- usado pra
-    // saber se o "em atendimento" é meu ou de outra pessoa.
-    let eu = { id: null, nome: "" };
-
-    function minutosDesde(iso) {
-      if (!iso) return 0;
-      return Math.max(0, Math.floor((Date.now() - parseDataUTC(iso).getTime()) / 60000));
-    }
-    function textoHa(iso) {
-      const m = minutosDesde(iso);
-      return m < 1 ? "agora" : `há ${m} min`;
-    }
-    const ehMeu = s => s.em_atendimento_por_id != null && s.em_atendimento_por_id === eu.id;
-    const ehDeOutro = s => s.em_atendimento_por_id != null && s.em_atendimento_por_id !== eu.id;
-
-    // Selo e botões de "em atendimento" (só pra pedidos pendentes)
-    function htmlAtendimento(s) {
-      if (ehMeu(s)) {
-        return `<span class="cc-selo-atend meu">🔒 Com você · ${textoHa(s.em_atendimento_desde)}</span>
-                <button class="cc-btn-liberar" data-liberar="${s.id}">Liberar</button>`;
+    // ---------- Lista ----------
+    function linha(s) {
+      const [sitTxt, sitCls] = situacao(s);
+      const pendente = !s.confirmado_por;
+      const min = minutosDesde(s.criado_em);
+      const clsEspera = !pendente ? "" : min >= 30 ? "r" : min >= 15 ? "y" : "";
+      const sku = s.sku ? `<div class="sl-sub">SKU: <b>${esc(s.sku.replace(/,/g, ", "))}</b></div>` : "";
+      let principal = "";
+      if (pendente) {
+        if (ehMeu(s)) principal = `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">Confirmar</button>`;
+        else if (ehDeOutro(s)) principal = `<button class="sl-btn" data-acao="abrir" data-id="${s.id}">Ver</button>`;
+        else principal = `<button class="sl-btn" data-acao="assumir" data-id="${s.id}">Assumir</button>`;
       }
-      if (ehDeOutro(s)) {
-        return `<span class="cc-selo-atend outro">🔒 Com ${escaparHtml(s.em_atendimento_por)} · ${textoHa(s.em_atendimento_desde)}</span>
-                <button class="cc-btn-liberar" data-assumir="${s.id}" data-forcar="1">Assumir no lugar</button>`;
-      }
-      return `<button class="cc-btn-assumir" data-assumir="${s.id}">✋ Assumir atendimento</button>`;
-    }
-
-    // Protocolo e quem confirmou, embaixo do nº da venda
-    function htmlInfoVenda(s) {
-      const partes = [];
-      if (s.sku) partes.push(`SKU: <b>${escaparHtml(s.sku)}</b>`);
-      if (s.confirmado_por) {
-        if (s.protocolo === "") partes.push("Sem protocolo (cancelado no painel do ML)");
-        else if (s.protocolo) partes.push(`Protocolo: <b>${escaparHtml(s.protocolo)}</b>`);
-        partes.push(`Confirmado por ${escaparHtml(s.confirmado_por)} · ${formatarData(s.confirmado_em)}`);
-      }
-      partes.push(`<button class="cc-btn-liberar" data-historico="${s.id}" data-venda="${escaparHtml(s.numero_venda)}">ver histórico</button>`);
-      return `<div class="cc-venda-info">${partes.join("<br>")}</div>`;
-    }
-
-    function montarStatusHtml(s) {
-      if (!s.confirmado_por) {
-        const botaoConfirmar = `<button class="cc-btn-confirmar" data-id="${s.id}" data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}">Confirmar</button>`;
-        if (s.plataforma !== "mercado_livre") {
-          return `<div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">${htmlAtendimento(s)}${botaoConfirmar}</div>`;
-        }
-        const motivoAttr = escaparHtml(s.motivo || "");
-        return `
-          <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-start;">
-            ${htmlAtendimento(s)}
-            <button class="cc-btn-atalho" data-copiar-mensagem data-id="${s.id}" data-conta="${escaparHtml(s.conta)}" data-venda="${escaparHtml(s.numero_venda)}" data-motivo="${motivoAttr}">📋 Copiar mensagem</button>
-            <a class="cc-btn-atalho" data-abrir-atendimento="${s.id}" href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener">💬 Abrir atendimento ML</a>
-            <button class="cc-btn-atalho" data-verificar-status="${s.id}">🔄 Verificar agora</button>
-            ${botaoConfirmar}
-          </div>`;
-      }
-      let extra = "";
-      if (ROTULO_IMPACTO[s.resultado_impacto]) {
-        extra = `<br><span style="font-size:11px; font-weight:600; color:${COR_IMPACTO[s.resultado_impacto]};">${ROTULO_IMPACTO[s.resultado_impacto]}</span>`;
-      }
-      return `<span class="cc-status-confirmado">✓ <b>${escaparHtml(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}${extra}</span>`;
-    }
-
-    function renderizarGrupos() {
-      const filtradas = todasSolicitacoes;
-
-      const container = document.getElementById("grupos");
-      if (filtradas.length === 0) {
-        container.innerHTML = '<div class="cc-vazio">Nenhuma solicitação com esses filtros.</div>';
-        return;
-      }
-
-      // Agrupa por conta (ignorando maiúscula/minúscula e espaços, pra
-      // "Velasco" e "velasco" não virarem grupos separados por engano),
-      // ordenado pela conta com pedido mais recente primeiro
-      const porConta = {};
-      const nomeExibicaoPorChave = {};
-      filtradas.forEach(s => {
-        const chave = s.conta_chave || s.conta.trim().toLowerCase();
-        if (!porConta[chave]) { porConta[chave] = []; nomeExibicaoPorChave[chave] = (s.conta_nome || s.conta).trim(); }
-        porConta[chave].push(s);
-      });
-      const contasOrdenadas = Object.keys(porConta).sort((a, b) => {
-        const maisRecenteA = Math.max(...porConta[a].map(s => parseDataUTC(s.criado_em).getTime()));
-        const maisRecenteB = Math.max(...porConta[b].map(s => parseDataUTC(s.criado_em).getTime()));
-        return maisRecenteB - maisRecenteA;
-      });
-
-      container.innerHTML = contasOrdenadas.map(chave => {
-        const conta = nomeExibicaoPorChave[chave];
-        const itens = porConta[chave].sort((a, b) => parseDataUTC(b.criado_em) - parseDataUTC(a.criado_em));
-        const recolhido = gruposRecolhidos.has(chave) ? "recolhido" : "";
-        const linhas = itens.map(s => {
-          const statusHtml = montarStatusHtml(s);
-          return `
-          <tr>
-            <td class="cc-data">${formatarData(s.criado_em)}</td>
-            <td><span class="cc-badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}</span></td>
-            <td>${escaparHtml(s.numero_venda)}${htmlInfoVenda(s)}</td>
-            <td class="cc-motivo">${escaparHtml(s.motivo)}</td>
-            <td>${htmlOrigem(s)}</td>
-            <td>${statusHtml}</td>
-          </tr>
-        `;
-        }).join("");
-
-        return `
-          <div class="cc-grupo ${recolhido}" data-conta="${chave}">
-            <div class="cc-grupo-cabecalho">
-              <span class="cc-grupo-nome">${escaparHtml(conta)} <span class="cc-grupo-contagem">${itens.length} pedido${itens.length > 1 ? "s" : ""}</span></span>
-              <span class="cc-grupo-seta">▾</span>
-            </div>
-            <div class="cc-grupo-tabela">
-              <table class="cc-tabela">
-                <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Origem</th><th>Status</th></tr></thead>
-                <tbody>${linhas}</tbody>
-              </table>
-            </div>
+      const menu = `
+        <div class="sl-menu${menuAberto === s.id ? " aberto" : ""}" data-menu="${s.id}">
+          ${pendente ? `
+            ${!ehMeu(s) ? `<button data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>` : ""}
+            ${s.plataforma === "mercado_livre" ? `
+              <button data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
+              <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
+              <button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}
+            ${ehDeOutro(s) ? `<button data-acao="assumir-lugar" data-id="${s.id}">Assumir no lugar de ${esc(s.em_atendimento_por)}</button>` : ""}
+            ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
+          <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
+        </div>`;
+      return `
+        <div class="sl-row">
+          <div class="c-venda">
+            <div class="sl-venda"><button class="sl-num" data-acao="abrir" data-id="${s.id}">${esc(s.numero_venda)}</button><span class="sl-pill ${CLASSE_PLATAFORMA[s.plataforma] || ""}">${CURTO_PLATAFORMA[s.plataforma] || esc(s.plataforma)}</span></div>
+            <div class="sl-conta">${esc(s.conta)}</div>
+            ${sku}
           </div>
-        `;
-      }).join("");
-
-      container.querySelectorAll(".cc-grupo-cabecalho").forEach(cabecalho => {
-        cabecalho.addEventListener("click", () => {
-          const grupo = cabecalho.closest(".cc-grupo");
-          const conta = grupo.dataset.conta;
-          grupo.classList.toggle("recolhido");
-          if (grupo.classList.contains("recolhido")) gruposRecolhidos.add(conta);
-          else gruposRecolhidos.delete(conta);
-        });
-      });
-
-      container.querySelectorAll(".cc-btn-confirmar").forEach(botao => {
-        botao.addEventListener("click", () => {
-          const s = porId(botao.dataset.id);
-          if (s && ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está tratando esse pedido. Confirmar mesmo assim?`)) return;
-          abrirModalConfirmacao(botao.dataset.id, botao.dataset.conta, botao.dataset.venda);
-        });
-      });
-
-      // Ver histórico
-      container.querySelectorAll("[data-historico]").forEach(botao => {
-        botao.addEventListener("click", () => abrirHistorico(botao.dataset.historico, botao.dataset.venda));
-      });
-
-      // Assumir / assumir no lugar / liberar
-      container.querySelectorAll("[data-assumir]").forEach(botao => {
-        botao.addEventListener("click", async () => {
-          const s = porId(botao.dataset.assumir);
-          const forcar = botao.dataset.forcar === "1";
-          if (forcar && s && !confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar?`)) return;
-          botao.disabled = true;
-          await assumir(botao.dataset.assumir, forcar, true);
-        });
-      });
-      container.querySelectorAll("[data-liberar]").forEach(botao => {
-        botao.addEventListener("click", async () => {
-          botao.disabled = true;
-          try {
-            const r = await fetch(`/api/solicitacoes-cancelamento/${botao.dataset.liberar}/liberar`, { method: "POST" });
-            if (!r.ok) { const e = await r.json().catch(() => ({})); throw new Error(e.detail || "Não foi possível liberar."); }
-          } catch (erro) { mostrarErro(erro.message); }
-          await atualizar();
-        });
-      });
-
-      // "Abrir atendimento ML" também assume (o link abre normalmente).
-      container.querySelectorAll("[data-abrir-atendimento]").forEach(link => {
-        link.addEventListener("click", (e) => {
-          const s = porId(link.dataset.abrirAtendimento);
-          if (s && ehMeu(s)) return;
-          if (s && ehDeOutro(s)) {
-            if (!confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar e abrir o atendimento?`)) { e.preventDefault(); return; }
-            assumir(s.id, true, false);
-            return;
-          }
-          assumir(link.dataset.abrirAtendimento, false, false);
-        });
-      });
-
-      container.querySelectorAll("[data-copiar-mensagem]").forEach(botao => {
-        botao.addEventListener("click", async () => {
-          // Copiar a mensagem é sinal de que começou a tratar: assume o pedido.
-          const s = porId(botao.dataset.id);
-          if (s && ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar e copiar a mensagem?`)) return;
-          if (s && !ehMeu(s)) assumir(s.id, ehDeOutro(s), false);
-          const conta = botao.dataset.conta;
-          const venda = botao.dataset.venda;
-          const motivo = botao.dataset.motivo;
-          const mensagem = `Olá! Preciso cancelar o pedido nº ${venda} (conta ${conta}) antes do despacho. Motivo: ${motivo}. O envio ainda não foi despachado -- pode me orientar a cancelar sem impactar a reputação da conta?`;
-          try {
-            await navigator.clipboard.writeText(mensagem);
-            const textoOriginal = botao.textContent;
-            botao.textContent = "✓ Copiado!";
-            setTimeout(() => { botao.textContent = textoOriginal; }, 2000);
-          } catch (erro) {
-            document.getElementById("aviso-erro").innerHTML =
-              `<div class="cc-erro">Não foi possível copiar automaticamente. Copie manualmente: ${escaparHtml(mensagem)}</div>`;
-          }
-        });
-      });
-
-      container.querySelectorAll("[data-verificar-status]").forEach(botao => {
-        botao.addEventListener("click", async () => {
-          const textoOriginal = botao.textContent;
-          botao.disabled = true;
-          botao.textContent = "Verificando...";
-          try {
-            const resposta = await fetch(`/api/solicitacoes-cancelamento/${botao.dataset.verificarStatus}/verificar-status`, { method: "POST" });
-            const dados = await resposta.json().catch(() => ({}));
-            if (!resposta.ok) throw new Error(dados.detail || "Não foi possível verificar.");
-            if (dados.confirmou) {
-              await atualizar();
-            } else {
-              botao.textContent = "Ainda pendente";
-              setTimeout(() => { botao.textContent = textoOriginal; botao.disabled = false; }, 2500);
-            }
-          } catch (erro) {
-            document.getElementById("aviso-erro").innerHTML = `<div class="cc-erro">${escaparHtml(erro.message)}</div>`;
-            botao.textContent = textoOriginal;
-            botao.disabled = false;
-          }
-        });
-      });
+          <div class="c-motivo">
+            <div class="sl-motivo">${esc(s.motivo)}</div>
+            <div style="margin-top:6px">${htmlOrigem(s)}</div>
+            ${s.confirmado_por && s.protocolo != null ? `<div class="sl-sub">Protocolo: <b>${esc(textoProtocolo(s))}</b></div>` : ""}
+          </div>
+          <div class="c-espera sl-espera ${clsEspera}">${pendente ? textoEspera(min) : `<span class="sl-sub" style="margin:0">pedido em<br>${formatarData(s.criado_em)}</span>`}</div>
+          <div class="c-sit">
+            <span class="sl-pill ${sitCls}">${esc(sitTxt)}</span>
+            ${s.confirmado_por ? `<div class="sl-sub" style="margin-top:5px">por <b>${esc(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</div>` : ""}
+          </div>
+          <div class="c-acoes sl-acoes">${principal}<button class="sl-btn icone" data-acao="menu" data-id="${s.id}" aria-label="Mais ações">${ICONE.pontos}</button>${menu}</div>
+        </div>`;
     }
 
-    const porId = id => todasSolicitacoes.find(x => String(x.id) === String(id));
-    function mostrarErro(texto) {
-      document.getElementById("aviso-erro").innerHTML = `<div class="cc-erro">${escaparHtml(texto)}</div>`;
-    }
-
-    // Assume o pedido. O servidor decide de forma atômica: se outra pessoa
-    // assumiu primeiro, volta 409 com o nome dela.
-    async function assumir(id, forcar, recarregar) {
-      try {
-        const r = await fetch(`/api/solicitacoes-cancelamento/${id}/assumir`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ forcar: !!forcar }),
-        });
-        if (r.status === 409) {
-          const e = await r.json().catch(() => ({}));
-          mostrarErro((e.detail && e.detail.mensagem) || "Outra pessoa acabou de assumir esse pedido.");
-        } else if (!r.ok) {
-          const e = await r.json().catch(() => ({}));
-          mostrarErro(typeof e.detail === "string" ? e.detail : "Não foi possível assumir.");
-        }
-      } catch (erro) {
-        mostrarErro("Sem conexão para assumir o pedido agora.");
+    function renderizarLista() {
+      const cab = `<div class="sl-row sl-cab"><div>Venda / conta</div><div>Motivo / origem</div><div>Espera</div><div>Situação</div><div style="text-align:right">Ação</div></div>`;
+      const estado = barra.estado();
+      const vazio = estado.aba === "meus" && !estado.busca
+        ? 'Nenhum pedido com você agora. Assuma um na aba "Aguardando".'
+        : "Nenhum pedido com esses filtros.";
+      let rodape = "";
+      if (ultimaResposta && ultimaResposta.tem_mais) {
+        rodape = `<div class="sl-rodape">Mostrando ${itens.length} de ${ultimaResposta.total_filtrado}<button class="sl-btn" id="carregar-mais">Carregar mais</button></div>`;
+      } else if (itens.length) {
+        rodape = `<div class="sl-rodape">${itens.length} pedido(s)</div>`;
       }
-      if (recarregar) await atualizar(); else setTimeout(atualizar, 600);
+      $("lista").innerHTML = cab + (itens.length ? itens.map(linha).join("") : `<div class="sl-vazio">${vazio}</div>`) + rodape;
+      const mais = $("carregar-mais");
+      if (mais) mais.addEventListener("click", carregarMais);
     }
 
-    // --- Histórico (quem fez o quê e quando) ---
-    const modalHistorico = document.getElementById("modal-historico");
-    async function abrirHistorico(id, venda) {
-      document.getElementById("historico-titulo").textContent = `Venda ${venda}`;
-      const lista = document.getElementById("historico-lista");
-      lista.innerHTML = '<div class="cc-hist-item"><span class="q">…</span><span>Carregando</span></div>';
-      modalHistorico.classList.add("aberto");
+    // ---------- Ações (um lugar só, pra lista, menu e painel) ----------
+    document.addEventListener("click", (e) => {
+      const alvo = e.target.closest("[data-acao]");
+      if (!alvo) { if (menuAberto !== null && !e.target.closest(".sl-menu")) { menuAberto = null; renderizarLista(); } return; }
+      const s = porId(alvo.dataset.id);
+      const acao = alvo.dataset.acao;
+      if (acao === "menu") { e.stopPropagation(); menuAberto = menuAberto === s.id ? null : s.id; renderizarLista(); return; }
+      if (menuAberto !== null) { menuAberto = null; if (acao !== "atendimento") renderizarLista(); } // escolheu algo: o "⋯" fecha
+      if (acao === "abrir") return abrirPainel(s.id);
+      if (acao === "assumir") return assumir(s, false);
+      if (acao === "assumir-lugar") {
+        if (!confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar?`)) return renderizarLista();
+        return assumir(s, true);
+      }
+      if (acao === "liberar") return liberar(s);
+      if (acao === "confirmar") {
+        if (ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está tratando esse pedido. Confirmar mesmo assim?`)) return renderizarLista();
+        return abrirConfirmacao(s);
+      }
+      if (acao === "copiar") return copiarMensagem(s);
+      if (acao === "atendimento") { // o link abre normalmente; aqui só assume
+        if (ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar e abrir o atendimento?`)) { e.preventDefault(); return renderizarLista(); }
+        if (!ehMeu(s)) assumir(s, ehDeOutro(s), true);
+        return renderizarLista();
+      }
+      if (acao === "verificar") return verificar(s, alvo);
+    });
+    document.addEventListener("keydown", (e) => {
+      if (e.key !== "Escape") return;
+      if (menuAberto !== null) { menuAberto = null; renderizarLista(); }
+      fecharPainel(); fecharModal("modal-confirmar"); fecharModal("modal-relatorio"); $("previa").classList.remove("aberto");
+    });
+
+    async function assumir(s, forcar, silencioso) {
+      try {
+        const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/assumir`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ forcar: !!forcar }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (r.status === 409) avisar((d.detail && d.detail.mensagem) || "Outra pessoa acabou de assumir esse pedido.");
+        else if (!r.ok) avisar(typeof d.detail === "string" ? d.detail : "Não foi possível assumir.");
+        else if (!silencioso) avisar(`Pedido ${s.numero_venda} está com você (aba "Meus").`);
+      } catch (erro) { avisar("Sem conexão para assumir agora."); }
+      await atualizar();
+    }
+
+    async function liberar(s) {
+      try {
+        const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/liberar`, { method: "POST" });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.detail || "Não foi possível liberar.");
+        avisar("Pedido liberado para a fila.");
+      } catch (erro) { avisar(erro.message); }
+      await atualizar();
+    }
+
+    async function copiarMensagem(s) {
+      // Copiar é sinal de que começou a tratar: assume o pedido.
+      if (ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar e copiar a mensagem?`)) return renderizarLista();
+      const mensagem = `Olá! Preciso cancelar o pedido nº ${s.numero_venda} (conta ${s.conta}) antes do despacho. Motivo: ${s.motivo}. O envio ainda não foi despachado -- pode me orientar a cancelar sem impactar a reputação da conta?`;
+      try {
+        await navigator.clipboard.writeText(mensagem);
+        avisar("Mensagem copiada. Cole no atendimento do Mercado Livre.");
+      } catch (erro) {
+        mostrarErro("Não foi possível copiar automaticamente. Copie manualmente: " + mensagem);
+      }
+      if (!ehMeu(s)) assumir(s, ehDeOutro(s), true); else renderizarLista();
+    }
+
+    async function verificar(s, botao) {
+      avisar("Conferindo no Mercado Livre…");
+      try {
+        const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/verificar-status`, { method: "POST" });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(d.detail || "Não foi possível verificar.");
+        avisar(d.confirmou ? "O Mercado Livre já mostra a venda cancelada: confirmado automaticamente." : "Ainda não aparece como cancelada no Mercado Livre.");
+      } catch (erro) { avisar(erro.message); }
+      await atualizar();
+    }
+
+    // ---------- Painel lateral ----------
+    async function abrirPainel(id) {
+      painelDe = id;
+      desenharPainel();
+      $("veu").classList.add("aberto");
+      $("painel").classList.add("aberto");
+      $("painel").setAttribute("aria-hidden", "false");
+      carregarHistorico(id);
+    }
+    function fecharPainel() {
+      painelDe = null;
+      $("veu").classList.remove("aberto");
+      $("painel").classList.remove("aberto");
+      $("painel").setAttribute("aria-hidden", "true");
+    }
+    function desenharPainel() {
+      const s = porId(painelDe);
+      if (!s) return;
+      const [sitTxt, sitCls] = situacao(s);
+      const pendente = !s.confirmado_por;
+      $("p-venda").textContent = s.numero_venda;
+      $("p-conta").textContent = `${s.conta} · ${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}`;
+      let acoes = "";
+      if (pendente) {
+        acoes = `<div class="sl-acoes-painel">
+          ${ehMeu(s) ? `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`
+            : `<button class="sl-btn pri" data-acao="${ehDeOutro(s) ? "assumir-lugar" : "assumir"}" data-id="${s.id}">${ehDeOutro(s) ? "Assumir no lugar de " + esc(s.em_atendimento_por) : "Assumir atendimento"}</button>
+               <button class="sl-btn" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`}
+          ${s.plataforma === "mercado_livre" ? `
+            <button class="sl-btn" data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
+            <a class="sl-btn" href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}" style="text-decoration:none">Abrir atendimento ML</a>
+            <button class="sl-btn" data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}
+          ${ehMeu(s) ? `<button class="sl-btn" data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}
+        </div>`;
+      }
+      $("p-corpo").innerHTML = `
+        <div><span class="sl-pill ${sitCls}">${esc(sitTxt)}</span></div>
+        <div class="sl-campo"><div class="r">Motivo</div>${esc(s.motivo)}</div>
+        <div class="sl-campo"><div class="r">Solicitado por</div>${esc(textoOrigem(s))} · ${formatarData(s.criado_em)}</div>
+        <div class="sl-campo"><div class="r">Produto (SKU)</div>${s.sku ? esc(s.sku.replace(/,/g, ", ")) + (s.produto_titulo ? " · " + esc(s.produto_titulo) : "") : '<span class="sl-sub">Não identificado</span>'}</div>
+        ${s.confirmado_por ? `
+          <div class="sl-campo"><div class="r">Cancelado</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
+          <div class="sl-campo"><div class="r">Protocolo</div>${s.protocolo != null ? esc(textoProtocolo(s)) : "—"}${s.resultado_impacto ? " · " + esc(ROTULO_IMPACTO[s.resultado_impacto] || s.resultado_impacto) : ""}</div>` : ""}
+        ${acoes}
+        <div class="sl-campo" style="margin-top:22px"><div class="r" style="font-weight:600; color:var(--cmx-texto); font-size:13px">Histórico</div><div class="sl-hist" id="p-hist"><div class="sl-sub">Carregando…</div></div></div>`;
+    }
+    async function carregarHistorico(id) {
       try {
         const r = await fetch(`/api/solicitacoes-cancelamento/${id}/historico`, { cache: "no-store" });
-        const eventos = await r.json();
-        if (!r.ok) throw new Error(eventos.detail || "Não foi possível carregar o histórico.");
-        lista.innerHTML = eventos.length ? eventos.map(e => `
-          <div class="cc-hist-item">
-            <span class="q">${formatarData(e.quando)}</span>
-            <span><b>${escaparHtml(e.rotulo)}</b>${e.quem ? ` · ${escaparHtml(e.quem)}` : ""}${e.detalhe ? `<div class="d">${escaparHtml(e.detalhe)}</div>` : ""}</span>
-          </div>`).join("")
-          : '<div class="cc-hist-item"><span class="q">—</span><span>Sem registros. O histórico começou a ser gravado a partir desta versão do sistema.</span></div>';
+        const ev = await r.json();
+        if (!r.ok) throw new Error(ev.detail || "Não foi possível carregar o histórico.");
+        if (painelDe !== id || !$("p-hist")) return;
+        $("p-hist").innerHTML = ev.length ? ev.map((e) => `
+          <div><span class="q">${formatarData(e.quando)}</span><b style="font-weight:600">${esc(e.rotulo)}</b>${e.quem ? " · " + esc(e.quem) : ""}${e.detalhe ? `<div class="d">${esc(e.detalhe)}</div>` : ""}</div>`).join("")
+          : '<div class="sl-sub">Sem registros (o histórico começou a ser gravado a partir da versão com histórico).</div>';
       } catch (erro) {
-        lista.innerHTML = `<div class="cc-hist-item"><span class="q">—</span><span>${escaparHtml(erro.message)}</span></div>`;
+        if ($("p-hist")) $("p-hist").innerHTML = `<div class="sl-sub">${esc(erro.message)}</div>`;
       }
     }
-    document.getElementById("historico-fechar").addEventListener("click", () => modalHistorico.classList.remove("aberto"));
-    modalHistorico.addEventListener("click", (e) => { if (e.target === modalHistorico) modalHistorico.classList.remove("aberto"); });
+    $("p-fechar").addEventListener("click", fecharPainel);
+    $("veu").addEventListener("click", fecharPainel);
 
-    // --- Modal de confirmação ---
-    const modalFundo = document.getElementById("modal-fundo");
-    const modalDetalhe = document.getElementById("modal-detalhe");
-    const modalErro = document.getElementById("modal-erro");
-    const modalResultadoImpacto = document.getElementById("modal-resultado-impacto");
-    const modalProtocolo = document.getElementById("modal-protocolo");
-    const modalSemProtocolo = document.getElementById("modal-sem-protocolo");
-    // Ao corrigir o que faltava, o aviso vermelho some.
-    [modalProtocolo, modalResultadoImpacto].forEach(campo => campo.addEventListener("input", () => { modalErro.style.display = "none"; }));
-    modalSemProtocolo.addEventListener("change", () => {
-      modalErro.style.display = "none";
-      modalProtocolo.disabled = modalSemProtocolo.checked;
-      if (modalSemProtocolo.checked) modalProtocolo.value = "";
+    // ---------- Confirmar cancelamento ----------
+    let confirmandoId = null;
+    function abrirConfirmacao(s) {
+      confirmandoId = s.id;
+      $("conf-detalhe").textContent = `Conta ${s.conta} · venda ${s.numero_venda}. Confirme que já foi cancelado de verdade na plataforma.`;
+      $("conf-protocolo").value = ""; $("conf-protocolo").disabled = false;
+      $("conf-sem-protocolo").checked = false;
+      $("conf-impacto").value = "";
+      $("conf-erro").style.display = "none";
+      $("modal-confirmar").classList.add("aberto");
+      setTimeout(() => $("conf-protocolo").focus(), 50);
+    }
+    function fecharModal(id) { $(id).classList.remove("aberto"); }
+    $("conf-cancelar").addEventListener("click", () => fecharModal("modal-confirmar"));
+    $("modal-confirmar").addEventListener("click", (e) => { if (e.target.id === "modal-confirmar") fecharModal("modal-confirmar"); });
+    $("conf-sem-protocolo").addEventListener("change", () => {
+      $("conf-protocolo").disabled = $("conf-sem-protocolo").checked;
+      if ($("conf-sem-protocolo").checked) $("conf-protocolo").value = "";
+      $("conf-erro").style.display = "none";
     });
-    let idPendenteConfirmacao = null;
-
-    function abrirModalConfirmacao(id, conta, venda) {
-      idPendenteConfirmacao = id;
-      modalDetalhe.textContent = `Conta ${conta} — venda ${venda}. Confirme que já foi cancelado de verdade na plataforma.`;
-      modalResultadoImpacto.value = "";
-      modalProtocolo.value = "";
-      modalProtocolo.disabled = false;
-      modalSemProtocolo.checked = false;
-      modalErro.style.display = "none";
-      setTimeout(() => modalProtocolo.focus(), 50);
-      modalFundo.classList.add("aberto");
-    }
-
-    function fecharModal() {
-      modalFundo.classList.remove("aberto");
-      idPendenteConfirmacao = null;
-    }
-
-    document.getElementById("modal-cancelar").addEventListener("click", fecharModal);
-    modalFundo.addEventListener("click", (e) => { if (e.target === modalFundo) fecharModal(); });
-
-    document.getElementById("modal-confirmar").addEventListener("click", async () => {
-      const resultadoImpacto = modalResultadoImpacto.value;
-      const protocolo = modalProtocolo.value.trim();
-      const semProtocolo = modalSemProtocolo.checked;
-      if (!protocolo && !semProtocolo) {
-        modalErro.textContent = "Informe o nº do protocolo (ou marque que foi cancelado sem protocolo).";
-        modalErro.style.display = "block";
-        modalProtocolo.focus();
-        return;
-      }
-      if (!resultadoImpacto) {
-        modalErro.textContent = "Selecione o resultado quanto à reputação antes de confirmar.";
-        modalErro.style.display = "block";
-        return;
-      }
+    ["conf-protocolo", "conf-impacto"].forEach((id) => $(id).addEventListener("input", () => { $("conf-erro").style.display = "none"; }));
+    $("conf-ok").addEventListener("click", async () => {
+      const protocolo = $("conf-protocolo").value.trim();
+      const semProtocolo = $("conf-sem-protocolo").checked;
+      const impacto = $("conf-impacto").value;
+      const erro = (t) => { $("conf-erro").textContent = t; $("conf-erro").style.display = "block"; };
+      if (!protocolo && !semProtocolo) { $("conf-protocolo").focus(); return erro("Informe o nº do protocolo (ou marque que foi cancelado sem protocolo)."); }
+      if (!impacto) return erro("Selecione o impacto na reputação.");
+      const botao = $("conf-ok");
+      botao.disabled = true;
       try {
-        // O nome de quem confirma vem da sessão de login no servidor
-        // -- não precisa (nem deve) ser digitado aqui.
-        const resposta = await fetch(`/api/solicitacoes-cancelamento/${idPendenteConfirmacao}/confirmar`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resultado_impacto: resultadoImpacto, protocolo: semProtocolo ? null : protocolo, sem_protocolo: semProtocolo }),
+        const r = await fetch(`/api/solicitacoes-cancelamento/${confirmandoId}/confirmar`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resultado_impacto: impacto, protocolo: semProtocolo ? null : protocolo, sem_protocolo: semProtocolo }),
         });
-        if (!resposta.ok) {
-          const erro = await resposta.json().catch(() => ({}));
-          throw new Error(erro.detail || "Não foi possível confirmar.");
-        }
-        fecharModal();
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível confirmar.");
+        fecharModal("modal-confirmar");
+        avisar('Cancelamento confirmado. Ele está na aba "Confirmados".');
         await atualizar();
-      } catch (erro) {
-        modalErro.textContent = erro.message;
-        modalErro.style.display = "block";
-      }
+        if (painelDe) { desenharPainel(); carregarHistorico(painelDe); }
+      } catch (e) { erro(e.message); }
+      finally { botao.disabled = false; }
     });
 
-    document.getElementById("btn-exportar-relatorio").addEventListener("click", () => {
-      window.open("/api/solicitacoes-cancelamento/relatorio", "_blank");
+    // ---------- Gerar relatório ----------
+    let tipoRelatorio = "canc";
+    const botaoRelatorio = document.createElement("button");
+    botaoRelatorio.type = "button";
+    botaoRelatorio.className = "sl-btn pri";
+    botaoRelatorio.style.height = "38px";
+    botaoRelatorio.innerHTML = ICONE.impressora + "Gerar relatório";
+    botaoRelatorio.addEventListener("click", () => {
+      const f = barra.estado();
+      $("rel-conta").value = f.conta || "";
+      $("rel-status").value = f.status === "confirmado" ? "confirmados" : "todos";
+      $("rel-erro").style.display = "none";
+      $("rel-data").value = new Date().toLocaleDateString("en-CA", { timeZone: "America/Sao_Paulo" });
+      $("modal-relatorio").classList.add("aberto");
     });
+    document.querySelectorAll(".sl-tipo").forEach((b) => b.addEventListener("click", () => {
+      tipoRelatorio = b.dataset.tipo;
+      document.querySelectorAll(".sl-tipo").forEach((x) => x.classList.toggle("on", x === b));
+      $("rel-canc").style.display = tipoRelatorio === "canc" ? "" : "none";
+      $("rel-dia").style.display = tipoRelatorio === "dia" ? "" : "none";
+      $("rel-ver").style.display = tipoRelatorio === "canc" ? "" : "none";
+    }));
+    $("rel-cancelar").addEventListener("click", () => fecharModal("modal-relatorio"));
+    $("modal-relatorio").addEventListener("click", (e) => { if (e.target.id === "modal-relatorio") fecharModal("modal-relatorio"); });
+
+    function parametrosRelatorio() {
+      // Parte do filtro atual da tela (galpão, plataforma, origem, período) + o que foi escolhido aqui.
+      const f = barra.estado();
+      const p = new URLSearchParams({ status: $("rel-status").value });
+      const conta = $("rel-conta").value.trim();
+      if (conta) p.set("conta", conta);
+      if (f.plataforma) p.set("plataforma", f.plataforma);
+      if (f.galpao) p.set("galpao", f.galpao);
+      if (f.origem) p.set("origem", f.origem);
+      const per = $("rel-periodo").value;
+      if (per === "tela") {
+        if (f.dias === "personalizado") { p.set("periodo", "datas"); if (f.de) p.set("de", f.de); if (f.ate) p.set("ate", f.ate); }
+        else { p.set("periodo", "dias"); p.set("dias", f.dias || "30"); }
+      } else {
+        p.set("periodo", per);
+      }
+      return p;
+    }
+    function baixarExcel() {
+      if (tipoRelatorio === "dia") {
+        const data = $("rel-data").value;
+        window.open("/api/solicitacoes-cancelamento/relatorio" + (data ? "?data=" + encodeURIComponent(data) : ""), "_blank");
+      } else {
+        const p = parametrosRelatorio(); p.set("formato", "xlsx");
+        window.location.href = "/api/solicitacoes-cancelamento/relatorio-conta?" + p;
+      }
+      fecharModal("modal-relatorio");
+    }
+    $("rel-excel").addEventListener("click", baixarExcel);
+    $("prev-excel").addEventListener("click", () => { tipoRelatorio = "canc"; baixarExcel(); });
+    $("rel-ver").addEventListener("click", async () => {
+      const botao = $("rel-ver");
+      botao.disabled = true;
+      try {
+        const r = await fetch("/api/solicitacoes-cancelamento/relatorio-conta?" + parametrosRelatorio(), { cache: "no-store" });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível gerar o relatório.");
+        desenharRelatorio(d);
+        fecharModal("modal-relatorio");
+        $("previa").classList.add("aberto");
+      } catch (e) {
+        $("rel-erro").textContent = e.message; $("rel-erro").style.display = "block";
+      } finally { botao.disabled = false; }
+    });
+    $("prev-fechar").addEventListener("click", () => $("previa").classList.remove("aberto"));
+    $("prev-imprimir").addEventListener("click", () => window.print());
+
+    function desenharRelatorio(d) {
+      const r = d.resumo, m = d.meta;
+      const todas = m.conta === "Todas as contas";
+      const extras = [m.plataforma, m.galpao, m.origem, m.status].filter(Boolean).join(" · ");
+      $("prev-folha").innerHTML = `
+        <div class="rc-cab">
+          <div><img src="${LOGO}" alt="Club Marketplace" /><h1>Relatório de cancelamentos</h1>
+            <div class="linha"><b>${esc(m.conta)}</b> · ${esc(m.periodo)}</div><div class="rc-sub">${esc(extras)}</div></div>
+          <div class="meta">Gerado em ${esc(m.gerado_em)}<br>por ${esc(m.gerado_por)}</div>
+        </div>
+        <div class="rc-resumo">
+          <div><b>${r.solicitacoes}</b><span>Solicitações</span></div><div><b>${r.cancelados}</b><span>Cancelados</span></div>
+          <div><b>${r.pendentes}</b><span>Pendentes</span></div><div><b>${r.com_impacto}</b><span>Com impacto na reputação</span></div>
+        </div>
+        <h2>Cancelamentos por SKU</h2>
+        ${d.por_sku.length ? `<table><tr><th>SKU</th><th>Produto</th><th class="num">Solicitações</th><th class="num">Cancelados</th></tr>
+          ${d.por_sku.map((s) => `<tr><td class="nw">${esc(s.sku)}</td><td>${esc(s.produto || "")}</td><td class="num"><b>${s.quantidade}</b></td><td class="num">${s.cancelados}</td></tr>`).join("")}</table>`
+          : '<div class="rc-vazio">Nenhum cancelamento no período.</div>'}
+        ${d.detalhe.length ? `<h2>Detalhe</h2><table>
+          <tr>${todas ? "<th>Conta</th>" : ""}<th>Solicitado em</th><th>Cancelado em</th><th>Nº da venda</th><th>SKU</th><th>Motivo</th><th>Protocolo</th></tr>
+          ${d.detalhe.map((x) => `<tr>${todas ? `<td>${esc(x.conta)}</td>` : ""}
+            <td class="nw">${esc(x.solicitado_em)}</td>
+            <td class="nw">${x.cancelado_em ? esc(x.cancelado_em) : "—"}${x.confirmado_por ? `<div class="rc-sub">${esc(x.confirmado_por)}</div>` : ""}</td>
+            <td class="nw">${esc(x.numero_venda)}<div class="rc-sub">${esc(x.plataforma)}</div></td>
+            <td class="nw">${esc(x.sku)}</td><td>${esc(x.motivo)}</td>
+            <td class="nw">${esc(x.protocolo || "—")}${x.impacto ? `<div class="rc-sub">${esc(x.impacto)}</div>` : ""}</td></tr>`).join("")}
+        </table>` : ""}`;
+    }
+    fetch("/api/solicitacoes-cancelamento/contas").then((r) => (r.ok ? r.json() : [])).then((lista) => {
+      $("rel-contas").innerHTML = lista.map((c) => `<option value="${esc(c.nome)}"></option>`).join("");
+    }).catch(() => {});
 
     // ---------- Barra de filtros + carga ----------
     const barra = criarBarraFiltros({
-      container: document.getElementById("barra-filtros"),
-      mostrarOrigem: true,
+      container: $("barra-filtros"),
       mostrarAtendimento: true,
-      onChange: () => atualizar(),
+      mostrarOrigem: true,
+      ordem: "espera", // pendentes primeiro (espera mais longa no topo), depois os confirmados
+      acaoDireita: botaoRelatorio,
+      onChange: () => { menuAberto = null; atualizar(); },
     });
 
-    function renderizarRodape() {
-      const r = ultimaResposta;
-      const rodape = document.getElementById("lista-rodape");
-      if (!r) { rodape.innerHTML = ""; return; }
-      const mostrando = todasSolicitacoes.length;
-      rodape.innerHTML = r.tem_mais
-        ? `<div class="cc-rodape-lista">Mostrando ${mostrando} de ${r.total_filtrado}</div><button class="cc-mais" id="carregar-mais">Carregar mais</button>`
-        : (mostrando ? `<div class="cc-rodape-lista">${mostrando} solicitação(ões)</div>` : "");
-      const botao = document.getElementById("carregar-mais");
-      if (botao) botao.addEventListener("click", async () => {
-        botao.disabled = true;
-        try {
-          const proxima = await carregar(barra.params(), r.pagina + 1);
-          if (!proxima) return;
-          todasSolicitacoes = todasSolicitacoes.concat(proxima.itens);
-          ultimaResposta = proxima;
-          renderizarKpis(todasSolicitacoes);
-          renderizarGrupos();
-          renderizarRodape();
-        } catch (e) { console.error(e); botao.disabled = false; }
-      });
+    async function carregar(params, pagina = 1) {
+      const qs = new URLSearchParams({ ...params, pagina, por_pagina: 200 });
+      const r = await fetch("/api/solicitacoes-cancelamento/busca?" + qs, { cache: "no-store" });
+      if (r.status === 401) { window.location.href = "/login"; return null; }
+      if (!r.ok) throw new Error("status " + r.status);
+      return r.json();
+    }
+    async function carregarMais() {
+      if (!ultimaResposta) return;
+      try {
+        const prox = await carregar(barra.params(), ultimaResposta.pagina + 1);
+        if (!prox) return;
+        itens = itens.concat(prox.itens);
+        ultimaResposta = prox;
+        renderizarKpis(); renderizarLista();
+      } catch (e) { console.error(e); }
     }
 
-    let emAndamento = 0;
+    let vez = 0;
     async function atualizar() {
-      const minhaVez = ++emAndamento; // descarta respostas antigas se o filtro mudou no meio
+      const minha = ++vez; // descarta respostas antigas se o filtro mudou no meio
       try {
         const r = await carregar(barra.params());
-        if (!r || minhaVez !== emAndamento) return;
+        if (!r || minha !== vez) return;
         ultimaResposta = r;
-        todasSolicitacoes = r.itens;
-        document.getElementById("aviso-erro").innerHTML = "";
+        itens = r.itens;
         if (r.eu) eu = r.eu;
+        mostrarErro("");
         barra.atualizarContadores(r.contadores, r.atendimento);
-        barra.atualizarResumo(r.buscando_todo_historico);
-        renderizarKpis(todasSolicitacoes);
-        renderizarGrupos();
-        renderizarRodape();
+        renderizarKpis();
+        renderizarLista();
+        if (painelDe && porId(painelDe)) desenharPainel(), carregarHistorico(painelDe);
       } catch (erro) {
-        document.getElementById("aviso-erro").innerHTML = '<div class="cc-erro">Não foi possível carregar os dados agora.</div>';
+        mostrarErro("Não foi possível carregar os dados agora.");
+        barra.falhou();
         console.error(erro);
       }
     }
 
     atualizar();
-    // Atualiza sozinho, mas só a 1ª página (não desfaz um "carregar mais").
+    // Atualiza sozinho a cada 15 s (só a 1ª página, e não com o "⋯" ou uma janela aberta).
     setInterval(() => {
-      const porPagina = (ultimaResposta && ultimaResposta.por_pagina) || 300;
-      if (todasSolicitacoes.length <= porPagina) atualizar();
+      const ocupado = menuAberto !== null || document.querySelector(".sl-modal-fundo.aberto") || $("previa").classList.contains("aberto");
+      const porPagina = (ultimaResposta && ultimaResposta.por_pagina) || 200;
+      if (!ocupado && itens.length <= porPagina) atualizar();
     }, 15000);
   </script>
   <script src="/static/menu-celular.js?v=1"></script>

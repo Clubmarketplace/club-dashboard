@@ -123,7 +123,7 @@
     <div id="lista-rodape"></div>
   </main>
 
-  <script src="/static/solicitacoes-filtros.js?v=3"></script>
+  <script src="/static/solicitacoes-filtros.js?v=5"></script>
   <script>
     // Só leitura: o galpão acompanha, quem confirma é a equipe interna.
     // O servidor já devolve apenas solicitações de origem "logística".
@@ -140,9 +140,14 @@
     let itens = [];
     let ultima = null;
 
+    // Logística: abas Aguardando/Confirmados/Todos e o galpão sempre à vista
+    // (é o filtro que ele mais usa). Só acompanhamento -- sem assumir/confirmar.
     const barra = criarBarraFiltros({
       container: document.getElementById("barra-filtros"),
       mostrarOrigem: false,
+      mostrarAtendimento: false,
+      ordem: "recentes",
+      titulo: "Filtros",
       onChange: () => atualizar(),
     });
 
