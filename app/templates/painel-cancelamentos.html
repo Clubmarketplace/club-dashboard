@@ -31,10 +31,11 @@
     /* Aqui a barra de filtros "cola" na lista, formando um cartão só */
     #barra-filtros .bf2 { border-radius:14px 14px 0 0; border-bottom:none; margin-bottom:0; }
     .sl-lista { background:#fff; border:1px solid var(--cmx-borda); border-top:none; border-radius:0 0 14px 14px; }
-    .sl-row { display:grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1.45fr) 118px 190px 190px; gap:14px; align-items:center; padding:13px 20px; border-top:1px solid #eef1f4; }
-    .sl-row:hover { background:#fafbfc; }
-    .sl-cab { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); background:#fafbfc; padding:10px 20px; border-top:1px solid #e2e6ea; }
-    .sl-cab:hover { background:#fafbfc; }
+    /* Cada pedido bem separado: linha divisória visível + fundo alternado */
+    .sl-row { display:grid; grid-template-columns: minmax(0,1.5fr) minmax(0,1.45fr) 118px 190px 190px; gap:14px; align-items:center; padding:15px 20px; border-top:1px solid #d9dfe6; }
+    .sl-lista > .sl-row:not(.sl-cab):nth-of-type(odd) { background:#f7f9fb; }
+    .sl-lista > .sl-row:not(.sl-cab):hover { background:#eef3f8; }
+    .sl-cab { font-size:12px; font-weight:600; color:var(--cmx-texto-suave); background:#f1f4f7; padding:10px 20px; border-top:1px solid #d9dfe6; border-bottom:1px solid #d9dfe6; }
     .sl-venda { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
     .sl-num { background:none; border:none; padding:0; font:inherit; font-size:14px; font-weight:600; color:var(--cmx-texto); cursor:pointer; text-align:left; }
     .sl-num:hover { color:#1f6fb2; text-decoration:underline; }
@@ -125,7 +126,7 @@
       .sl-kpis { grid-template-columns:1fr 1fr; }
       .sl-kpis .sl-kpi:last-child { grid-column:1 / -1; }
       .sl-cab { display:none; }
-      .sl-row { grid-template-columns:1fr auto; grid-template-areas: "venda espera" "motivo motivo" "sit acoes"; gap:8px 12px; padding:14px 14px; }
+      .sl-row { grid-template-columns:1fr auto; grid-template-areas: "venda espera" "motivo motivo" "sit acoes"; gap:8px 12px; padding:14px 14px; border-top:6px solid #eef1f4; }
       .sl-row > .c-venda { grid-area:venda; } .sl-row > .c-motivo { grid-area:motivo; }
       .sl-row > .c-espera { grid-area:espera; text-align:right; } .sl-row > .c-sit { grid-area:sit; }
       .sl-row > .c-acoes { grid-area:acoes; }
