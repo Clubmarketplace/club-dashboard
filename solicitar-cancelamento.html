@@ -1,0 +1,594 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Solicitar Cancelamento (manual)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#f4f6f8; --card:#ffffff; --line:#e2e6ea;
+    --text:#1b2430; --text-dim:#6b7684;
+    --amber:#f0a93d; --green:#1c9a63; --red:#d64541;
+    font-family:"Inter", sans-serif;
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); min-height:100vh; display:flex; justify-content:center; padding:40px 16px; }
+  .cartao { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:32px; max-width:480px; width:100%; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+  .marca { display:flex; align-items:center; gap:10px; margin-bottom:22px; }
+  .marca .icone { width:34px; height:34px; border-radius:9px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; }
+  .marca span { font-weight:600; font-size:14.5px; }
+
+  h1 { font-size:19px; margin:0 0 4px 0; }
+  .subtitulo { font-size:13.5px; color:var(--text-dim); margin:0 0 26px 0; line-height:1.4; }
+
+  label { display:block; font-size:13px; font-weight:600; margin-bottom:7px; margin-top:18px; }
+  label:first-of-type { margin-top:0; }
+
+  .opcoes-plataforma { display:flex; gap:10px; }
+  .opcao-plataforma {
+    flex:1; min-width:0; height:46px; box-sizing:border-box; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
+    display:flex; align-items:center; justify-content:center;
+    text-align:center; cursor:pointer; font-weight:600; font-size:13.5px; color:var(--text-dim);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    transition:border-color .15s, background .15s, color .15s;
+  }
+  .opcao-plataforma.selecionada { border-color:var(--amber); background:#fff7e8; color:var(--text); }
+  .opcao-plataforma#opt-ml.selecionada { border-color:#ffe600; background:#ffe600; color:#1a1206; }
+  .opcao-plataforma#opt-shopee.selecionada { border-color:#ee4d2d; background:#ee4d2d; color:#fff; }
+  .opcao-plataforma#opt-magalu.selecionada { border-color:#0086ff; background:#0086ff; color:#fff; }
+  .opcao-plataforma#opt-tiktok.selecionada { border-color:#000; background:#000; color:#fe2c55; }
+  /* 4 plataformas: no celular ficam 2 por linha; no computador, as 4 na mesma linha */
+  .opcoes-plataforma { flex-wrap:wrap; }
+  .opcoes-plataforma .opcao-plataforma { flex:1 1 calc(50% - 5px); }
+
+  /* Galpão escolhido numa lista (pelo nome) */
+  .campo-galpao { width:100%; height:46px; border-radius:10px; border:1.5px solid var(--line); padding:0 12px;
+    font-family:inherit; font-size:14px; color:var(--text); background:#fff; cursor:pointer; }
+  .campo-galpao.escolhido { border-color:#1b2430; font-weight:600; }
+  .campo-galpao:focus { outline:none; border-color:var(--amber); }
+  .opcao-plataforma input { display:none; }
+  /* Os "botões" são <label>: zera a margem herdada da regra geral de label */
+  .opcoes-plataforma .opcao-plataforma { margin:0; }
+
+
+  /* Campo Conta com busca (Logística) */
+  .campo-conta-caixa { position:relative; }
+  .sugestoes-conta { display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5; background:#fff;
+    border:1.5px solid var(--line); border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,.08); max-height:240px; overflow-y:auto; }
+  .sugestoes-conta.aberta { display:block; }
+  .sugestao-conta { padding:9px 13px; font-size:13.5px; cursor:pointer; }
+  .sugestao-conta:hover, .sugestao-conta.ativa { background:#f4f6f8; }
+  .sugestao-conta.nova { color:#8a5a10; font-weight:600; border-top:1px solid var(--line); }
+
+  /* Caixa de aviso com ação (duplicidade / "você quis dizer") */
+  .aviso-caixa { display:none; margin-top:16px; padding:12px 14px; border-radius:10px; background:#fff7e8;
+    border:1.5px solid var(--amber); font-size:13px; line-height:1.45; }
+  .aviso-caixa ul { margin:6px 0 10px; padding-left:18px; }
+  .aviso-caixa .acoes { display:flex; gap:8px; flex-wrap:wrap; }
+  .aviso-caixa button { padding:8px 12px; border-radius:8px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:12.5px; cursor:pointer; }
+  .aviso-caixa button.principal { background:#1b2430; border-color:#1b2430; color:#fff; }
+  .logado-como { font-size:12.5px; color:var(--text-dim); margin:0 0 20px; }
+
+  input[type="text"], textarea {
+    width:100%; padding:11px 13px; border-radius:9px; border:1.5px solid var(--line);
+    font-family:inherit; font-size:14px; color:var(--text); background:#fff;
+  }
+  input[type="text"]:focus, textarea:focus { outline:none; border-color:var(--amber); }
+  textarea { resize:vertical; min-height:64px; }
+
+  .bloco-itens { display:flex; flex-direction:column; gap:14px; margin-top:18px; }
+  .item-venda { border:1.5px dashed var(--line); border-radius:12px; padding:14px; position:relative; }
+  .item-venda .item-cabecalho { display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; }
+  .item-venda .item-numero { font-size:12px; font-weight:700; color:var(--text-dim); text-transform:uppercase; letter-spacing:.03em; }
+  .btn-remover-item {
+    border:none; background:none; color:var(--red); font-size:12.5px; font-weight:600; cursor:pointer; padding:0;
+  }
+  .item-venda label { margin-top:10px; font-size:12.5px; }
+  .item-venda label:first-of-type { margin-top:0; }
+
+  .btn-adicionar {
+    margin-top:14px; width:100%; padding:11px; border-radius:9px; border:1.5px dashed var(--amber);
+    background:#fff7e8; color:#8a5a10; font-weight:600; font-size:13.5px; cursor:pointer;
+  }
+  .btn-adicionar:hover { background:#ffefd0; }
+
+  button[type="submit"] {
+    width:100%; margin-top:24px; padding:13px; border:none; border-radius:10px;
+    background:#1b2430; color:#fff; font-weight:600; font-size:14.5px; cursor:pointer;
+  }
+  button[type="submit"]:hover { background:#2a3644; }
+  button[type="submit"]:disabled { background:#a9b2bb; cursor:default; }
+
+  .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
+  .aviso.erro { color:var(--red); }
+
+  /* ---------- Estrutura (vale pra todas as larguras) ---------- */
+  .topo-form { margin-bottom:18px; }
+  .topo-form .links-direita p { margin:0 0 6px; }
+  .linha-selecao { display:flex; flex-direction:column; }
+  .linha-selecao .grupo + .grupo { margin-top:18px; }
+  .cabecalho-vendas { display:none; }
+  /* SKU (opcional) só pras plataformas ainda não integradas -- no ML ele vem do pedido */
+  .campo-sku, .rotulo-sku, .cab-sku { display:none; }
+  form.com-sku .campo-sku, form.com-sku .rotulo-sku { display:block; }
+  .acoes-form { display:flex; flex-direction:column; }
+  .acoes-form .btn-adicionar { order:0; }
+  .acoes-form button[type="submit"] { order:1; }
+
+  /* ---------- Computador: formulário na horizontal, sem rolar ----------
+     Abaixo de 860px (celular/tablet em pé) fica tudo como antes: vertical. */
+  @media (min-width: 860px) {
+    body.modo-largo { padding:24px 16px; }
+    .modo-largo .cartao { max-width:1100px; padding:24px 28px; align-self:flex-start; } /* altura do conteúdo, sem esticar */
+    .modo-largo .marca { margin-bottom:12px; }
+
+    .modo-largo .topo-form { display:flex; justify-content:space-between; align-items:flex-end; gap:24px; margin-bottom:18px; }
+    .modo-largo .topo-form .subtitulo { margin:0; max-width:620px; }
+    .modo-largo .topo-form .links-direita { text-align:right; flex-shrink:0; }
+    .modo-largo .topo-form .links-direita p, .modo-largo .topo-form .logado-como { margin:0 0 4px !important; }
+
+    .modo-largo .linha-selecao { flex-direction:row; gap:16px; align-items:flex-end; }
+    .modo-largo .linha-selecao .grupo { flex:1; min-width:0; }
+    .modo-largo .linha-selecao .grupo.grupo-galpao { flex:0.8; }
+    .modo-largo .linha-selecao .grupo.grupo-plataforma { flex:2.3; }
+    .modo-largo .linha-selecao .grupo.grupo-conta { flex:1.2; }
+    .modo-largo .opcoes-plataforma { flex-wrap:nowrap; gap:8px; }
+    .modo-largo .opcoes-plataforma .opcao-plataforma { flex:1 1 0; font-size:13px; }
+    .modo-largo .linha-selecao .grupo + .grupo { margin-top:0; }
+    .modo-largo .campo-conta-caixa input[type="text"] { height:46px; }
+
+    /* Cada venda vira uma linha: nº | motivo | remover */
+    .modo-largo .cabecalho-vendas { display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,2fr) 70px; gap:10px;
+      font-size:12px; font-weight:600; color:var(--text-dim); margin:20px 0 6px; }
+    .modo-largo .bloco-itens { gap:8px; margin-top:0; }
+    .modo-largo .item-venda { display:grid; grid-template-columns:70px minmax(0,1fr) minmax(0,2fr) 70px; gap:10px; align-items:start;
+      border:none; padding:0; }
+    .modo-largo .item-venda .item-cabecalho { display:contents; }
+    .modo-largo .item-venda .item-numero { grid-column:1; grid-row:1; align-self:center; margin:0; }
+    .modo-largo .item-venda .btn-remover-item { grid-column:4; grid-row:1; align-self:center; justify-self:start; }
+    .modo-largo .item-venda label { display:none; }
+    .modo-largo .item-venda .campo-numero-venda { grid-column:2; grid-row:1; height:44px; }
+    .modo-largo .item-venda .campo-motivo { grid-column:3; grid-row:1; min-height:44px; height:44px; resize:none; overflow:hidden; line-height:1.4; }
+    /* Com o SKU visível, a linha ganha uma coluna: nº | SKU | motivo | remover */
+    .modo-largo form.com-sku .cabecalho-vendas, .modo-largo form.com-sku .item-venda { grid-template-columns:70px minmax(0,1fr) minmax(0,.8fr) minmax(0,2fr) 70px; }
+    .modo-largo form.com-sku .cab-sku { display:block; }
+    .modo-largo form.com-sku .item-venda .campo-sku { grid-column:3; grid-row:1; height:44px; }
+    .modo-largo form.com-sku .item-venda .campo-motivo { grid-column:4; }
+    .modo-largo form.com-sku .item-venda .btn-remover-item { grid-column:5; }
+
+    .modo-largo .acoes-form { flex-direction:row; gap:12px; margin-top:14px; }
+    .modo-largo .acoes-form .btn-adicionar, .modo-largo .acoes-form button[type="submit"] { flex:1; margin-top:0; height:46px; padding:0 14px; }
+  }
+
+  .tela-sucesso { display:none; text-align:center; padding:20px 0; }
+  .tela-sucesso .check { width:56px; height:56px; border-radius:50%; background:#e7f7ee; color:var(--green); display:flex; align-items:center; justify-content:center; font-size:28px; margin:0 auto 16px; }
+  .tela-sucesso h2 { font-size:18px; margin:0 0 6px 0; }
+  .tela-sucesso p { font-size:13.5px; color:var(--text-dim); margin:0 0 22px 0; }
+  .tela-sucesso button { padding:10px 20px; border-radius:9px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
+</style>
+</head>
+<body class="modo-largo"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
+
+<div class="cartao">
+  <div class="marca">
+    <img src="/static/logo.png?v=2" alt="Club Marketplace" style="height:32px; width:auto;" />
+  </div>
+
+  <div id="tela-formulario">
+    <div class="topo-form">
+      <div>
+        <h1>Solicitar cancelamento</h1>
+        <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
+      </div>
+      <div class="links-direita">
+        {% if seller_logado %}
+        <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
+        {% endif %}
+        {% if logistica_logado %}
+        <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
+        <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
+        {% endif %}
+      </div>
+    </div>
+
+    <form id="form-cancelamento">
+      <div class="linha-selecao">
+      {% if logistica_logado %}
+      <div class="grupo grupo-galpao">
+      <label for="campo-galpao">Galpão</label>
+      <select id="campo-galpao" class="campo-galpao">
+        <option value="">Escolha o galpão...</option>
+        {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
+      </select>
+      </div>
+      {% endif %}
+
+      <div class="grupo grupo-plataforma">
+      <label>Plataforma</label>
+      <div class="opcoes-plataforma">
+        <label class="opcao-plataforma" id="opt-ml">
+          <input type="radio" name="plataforma" value="mercado_livre" required />
+          Mercado Livre
+        </label>
+        <label class="opcao-plataforma" id="opt-shopee">
+          <input type="radio" name="plataforma" value="shopee" required />
+          Shopee
+        </label>
+        <label class="opcao-plataforma" id="opt-magalu">
+          <input type="radio" name="plataforma" value="magalu" required />
+          Magalu
+        </label>
+        <label class="opcao-plataforma" id="opt-tiktok">
+          <input type="radio" name="plataforma" value="tiktok_shop" required />
+          TikTok Shop
+        </label>
+      </div>
+
+      </div>
+
+      <div class="grupo grupo-conta">
+      <label for="conta">Conta</label>
+      <div class="campo-conta-caixa">
+        <input type="text" id="conta" name="conta" placeholder="{% if logistica_logado %}Digite para buscar a conta (ex: vel){% else %}Ex: Velasco{% endif %}" required autocomplete="off"
+          value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
+        <div class="sugestoes-conta" id="sugestoes-conta"></div>
+      </div>
+      </div>
+      </div>
+
+      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span class="cab-sku">SKU (opcional)</span><span>Motivo do cancelamento</span><span></span></div>
+
+      <div class="bloco-itens" id="bloco-itens"></div>
+
+      <div class="aviso-caixa" id="aviso-caixa"></div>
+
+      <div class="acoes-form">
+        <button type="button" class="btn-adicionar" id="botao-adicionar">+ Adicionar outra venda</button>
+        <button type="submit" id="botao-enviar">Enviar solicitação</button>
+      </div>
+      <div class="aviso" id="aviso-erro" style="display:none;"></div>
+    </form>
+  </div>
+
+  <div class="tela-sucesso" id="tela-sucesso">
+    <div class="check">✓</div>
+    <h2>Solicitação registrada</h2>
+    <p id="texto-confirmacao"></p>
+    <button id="botao-nova">Registrar outra</button>
+  </div>
+</div>
+
+<script>
+  const opcoesPlataforma = document.querySelectorAll(".opcao-plataforma");
+  opcoesPlataforma.forEach(opcao => {
+    opcao.addEventListener("click", () => {
+      opcoesPlataforma.forEach(o => o.classList.remove("selecionada"));
+      opcao.classList.add("selecionada");
+      opcao.querySelector("input").checked = true;
+    });
+  });
+
+  // SKU opcional aparece só fora do Mercado Livre (no ML ele é lido do pedido).
+  function atualizarCampoSku() {
+    const marcada = document.querySelector('input[name="plataforma"]:checked');
+    document.getElementById("form-cancelamento").classList.toggle("com-sku", !!marcada && marcada.value !== "mercado_livre");
+  }
+  document.querySelectorAll('input[name="plataforma"]').forEach(r => r.addEventListener("change", atualizarCampoSku));
+  document.querySelectorAll(".opcao-plataforma").forEach(o => o.addEventListener("click", () => setTimeout(atualizarCampoSku, 0)));
+
+  const MODO_LOGISTICA = {{ 'true' if logistica_logado else 'false' }};
+  const MODO_SELLER = {{ 'true' if seller_logado else 'false' }};
+  const NOME_USUARIO = {{ (nome_usuario or '') | tojson }};
+
+  function escaparHtml(t) {
+    return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+  }
+  // Mesma regra do servidor (app/contas_util.py): minúsculo, sem acento, sem espaço sobrando.
+  function chaveConta(nome) {
+    return String(nome || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+  }
+
+  // ---------- Galpão (Logística): obrigatório, lembra o último usado neste aparelho ----------
+  const CHAVE_GALPAO_LOCAL = "club_galpao_ultimo";
+  const campoGalpao = document.getElementById("campo-galpao");
+  function marcarGalpao() {
+    if (campoGalpao) campoGalpao.classList.toggle("escolhido", !!campoGalpao.value);
+  }
+  if (MODO_LOGISTICA && campoGalpao) {
+    campoGalpao.addEventListener("change", () => {
+      marcarGalpao();
+      try { localStorage.setItem(CHAVE_GALPAO_LOCAL, campoGalpao.value); } catch (e) { /* navegador sem storage: segue sem lembrar */ }
+    });
+    try {
+      // Só restaura se o galpão lembrado ainda existir na lista
+      const ultimo = localStorage.getItem(CHAVE_GALPAO_LOCAL);
+      if (ultimo && Array.from(campoGalpao.options).some(o => o.value === ultimo)) campoGalpao.value = ultimo;
+    } catch (e) {}
+    marcarGalpao();
+  }
+
+  // ---------- Conta com busca (Logística) ----------
+  let contasConhecidas = []; // [{chave, nome}]
+  const campoConta = document.getElementById("conta");
+  const caixaSugestoes = document.getElementById("sugestoes-conta");
+
+  async function carregarContas() {
+    try {
+      const r = await fetch("/api/solicitacoes-cancelamento/contas", { cache: "no-store" });
+      if (r.ok) contasConhecidas = await r.json();
+    } catch (e) { console.error("Não consegui carregar a lista de contas", e); }
+  }
+
+  function mostrarSugestoes() {
+    const termo = chaveConta(campoConta.value);
+    const achadas = contasConhecidas.filter(c => !termo || c.chave.includes(termo)).slice(0, 8);
+    const exata = contasConhecidas.some(c => c.chave === termo);
+    let html = achadas.map(c => `<div class="sugestao-conta" data-nome="${escaparHtml(c.nome)}">${escaparHtml(c.nome)}</div>`).join("");
+    if (termo && !exata) {
+      html += `<div class="sugestao-conta nova" data-nome="${escaparHtml(campoConta.value.trim())}">+ Usar nova conta: "${escaparHtml(campoConta.value.trim())}"</div>`;
+    }
+    caixaSugestoes.innerHTML = html;
+    caixaSugestoes.classList.toggle("aberta", !!html);
+  }
+
+  if (MODO_LOGISTICA) {
+    carregarContas();
+    campoConta.addEventListener("input", mostrarSugestoes);
+    campoConta.addEventListener("focus", mostrarSugestoes);
+    caixaSugestoes.addEventListener("mousedown", (e) => {
+      const item = e.target.closest(".sugestao-conta");
+      if (!item) return;
+      e.preventDefault();
+      campoConta.value = item.dataset.nome;
+      caixaSugestoes.classList.remove("aberta");
+    });
+    campoConta.addEventListener("blur", () => setTimeout(() => caixaSugestoes.classList.remove("aberta"), 150));
+  }
+
+  // Distância de edição simples -- pega "Vellasco" x "Velasco", "Velsaco" etc.
+  function distancia(a, b) {
+    const m = a.length, n = b.length;
+    if (Math.abs(m - n) > 3) return 99;
+    const d = Array.from({ length: m + 1 }, (_, i) => [i, ...Array(n).fill(0)]);
+    for (let j = 1; j <= n; j++) d[0][j] = j;
+    for (let i = 1; i <= m; i++) for (let j = 1; j <= n; j++)
+      d[i][j] = Math.min(d[i-1][j] + 1, d[i][j-1] + 1, d[i-1][j-1] + (a[i-1] === b[j-1] ? 0 : 1));
+    return d[m][n];
+  }
+  function contaParecida(nome) {
+    const chave = chaveConta(nome);
+    let melhor = null, melhorDist = 99;
+    contasConhecidas.forEach(c => {
+      const dist = distancia(chave, c.chave);
+      const contem = chave.length >= 4 && (c.chave.startsWith(chave) || chave.startsWith(c.chave));
+      const pontos = contem ? Math.min(dist, 1) : dist;
+      if (pontos < melhorDist) { melhorDist = pontos; melhor = c; }
+    });
+    return melhorDist <= 2 ? melhor : null;
+  }
+
+  const SUFIXOS_PLATAFORMA = ["mercado livre", "mercadolivre", "meli", "ml", "shopee", "magazine luiza", "magalu", "tiktok shop", "tiktokshop", "tiktok"];
+  function sufixoPlataforma(nome) {
+    const chave = chaveConta(nome);
+    return SUFIXOS_PLATAFORMA.find(s => chave.endsWith(" " + s)) || null;
+  }
+
+  // ---------- Caixa de aviso com ações ----------
+  const avisoCaixa = document.getElementById("aviso-caixa");
+  function mostrarAvisoCaixa(html, acoes) {
+    avisoCaixa.innerHTML = html + `<div class="acoes">${acoes.map((a, i) => `<button type="button" class="${a.principal ? "principal" : ""}" data-i="${i}">${escaparHtml(a.texto)}</button>`).join("")}</div>`;
+    avisoCaixa.style.display = "block";
+    avisoCaixa.querySelectorAll("button").forEach(b => b.addEventListener("click", () => { esconderAvisoCaixa(); acoes[+b.dataset.i].acao(); }));
+    avisoCaixa.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function esconderAvisoCaixa() { avisoCaixa.style.display = "none"; avisoCaixa.innerHTML = ""; }
+
+  function formatarDataBR(iso) {
+    if (!iso) return "";
+    const d = new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
+    return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+  }
+
+  const blocoItens = document.getElementById("bloco-itens");
+  let contadorItens = 0;
+
+  function criarBlocoItem() {
+    contadorItens++;
+    const div = document.createElement("div");
+    div.className = "item-venda";
+    div.dataset.item = contadorItens;
+    div.innerHTML = `
+      <div class="item-cabecalho">
+        <span class="item-numero">Venda</span>
+        <button type="button" class="btn-remover-item" style="display:none;">Remover</button>
+      </div>
+      <label>Número da venda</label>
+      <input type="text" class="campo-numero-venda" placeholder="Número do pedido" required autocomplete="off" />
+      <label class="rotulo-sku">SKU do produto (opcional)</label>
+      <input type="text" class="campo-sku" placeholder="SKU (opcional)" autocomplete="off" maxlength="60" />
+      <label>Motivo do cancelamento</label>
+      <textarea class="campo-motivo" placeholder="Ex: Etiqueta não foi gerada, CEP errado, sem estoque..." required></textarea>
+    `;
+    // No layout horizontal o motivo começa com 1 linha e cresce se precisar.
+    const motivo = div.querySelector(".campo-motivo");
+    motivo.addEventListener("input", () => {
+      if (!window.matchMedia("(min-width: 860px)").matches) return;
+      motivo.style.height = "44px";
+      motivo.style.height = Math.min(motivo.scrollHeight + 2, 140) + "px";
+    });
+    div.querySelector(".btn-remover-item").addEventListener("click", () => {
+      div.remove();
+      atualizarNumerosEBotoesRemover();
+    });
+    return div;
+  }
+
+  function atualizarNumerosEBotoesRemover() {
+    const itens = blocoItens.querySelectorAll(".item-venda");
+    itens.forEach((item, i) => {
+      item.querySelector(".item-numero").textContent = "Venda " + (i + 1);
+      item.querySelector(".btn-remover-item").style.display = itens.length > 1 ? "block" : "none";
+    });
+  }
+
+  function adicionarItem() {
+    blocoItens.appendChild(criarBlocoItem());
+    atualizarNumerosEBotoesRemover();
+  }
+
+  document.getElementById("botao-adicionar").addEventListener("click", adicionarItem);
+  adicionarItem(); // sempre começa com 1 item pronto pra preencher
+
+  const form = document.getElementById("form-cancelamento");
+  const botaoEnviar = document.getElementById("botao-enviar");
+  const avisoErro = document.getElementById("aviso-erro");
+
+  function mostrarErro(msg) {
+    avisoErro.textContent = msg;
+    avisoErro.className = "aviso erro";
+    avisoErro.style.display = "block";
+  }
+
+  // Conta já decidida pelo usuário no "você quis dizer?" (pra não perguntar de novo)
+  let contaConfirmadaComoNova = null;
+
+  form.addEventListener("submit", (evento) => {
+    evento.preventDefault();
+    enviar(false);
+  });
+
+  async function enviar(confirmarDuplicadas) {
+    avisoErro.style.display = "none";
+    esconderAvisoCaixa();
+
+    let galpao = null;
+    if (MODO_LOGISTICA) {
+      if (!campoGalpao || !campoGalpao.value) return mostrarErro("Escolha o galpão.");
+      galpao = Number(campoGalpao.value);
+    }
+
+    const plataformaSelecionada = form.querySelector('input[name="plataforma"]:checked');
+    if (!plataformaSelecionada) return mostrarErro("Escolha a plataforma.");
+
+    const contaDigitada = campoConta.value.trim();
+    if (!contaDigitada) return mostrarErro("Informe a conta.");
+
+    const itens = Array.from(blocoItens.querySelectorAll(".item-venda")).map(div => ({
+      numero_venda: div.querySelector(".campo-numero-venda").value.trim(),
+      motivo: div.querySelector(".campo-motivo").value.trim(),
+      sku: (div.querySelector(".campo-sku").value || "").trim() || null,
+    }));
+    if (itens.some(i => !i.numero_venda || !i.motivo)) return mostrarErro("Preencha o número da venda e o motivo de todas as vendas.");
+
+    // --- Checagens de conta (só Logística; o seller tem a conta fixa) ---
+    if (MODO_LOGISTICA) {
+      const sufixo = sufixoPlataforma(contaDigitada);
+      if (sufixo) return mostrarErro(`Use só o nome da loja, sem "${sufixo.toUpperCase()}" -- a plataforma já é escolhida nos botões.`);
+
+      const chave = chaveConta(contaDigitada);
+      const exata = contasConhecidas.find(c => c.chave === chave);
+      if (exata) {
+        campoConta.value = exata.nome; // sempre o nome oficial
+      } else if (contaConfirmadaComoNova !== chave) {
+        const parecida = contaParecida(contaDigitada);
+        if (parecida) {
+          return mostrarAvisoCaixa(
+            `<b>Você quis dizer "${escaparHtml(parecida.nome)}"?</b><br>Não encontrei a conta "${escaparHtml(contaDigitada)}", mas existe uma parecida.`,
+            [
+              { texto: `Sim, usar ${parecida.nome}`, principal: true, acao: () => { campoConta.value = parecida.nome; enviar(confirmarDuplicadas); } },
+              { texto: "Não, é uma conta nova", acao: () => { contaConfirmadaComoNova = chave; enviar(confirmarDuplicadas); } },
+            ]
+          );
+        }
+      }
+    }
+
+    const dados = {
+      plataforma: plataformaSelecionada.value,
+      conta: campoConta.value.trim(),
+      itens,
+      galpao,
+      confirmar_duplicadas: confirmarDuplicadas,
+    };
+
+    botaoEnviar.disabled = true;
+    botaoEnviar.textContent = "Enviando...";
+
+    try {
+      const resposta = await fetch("/api/solicitacoes-cancelamento", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(dados),
+      });
+
+      if (resposta.status === 409) {
+        // Venda já solicitada antes: mostra quem/quando e deixa decidir.
+        const erro = await resposta.json().catch(() => ({}));
+        const dup = (erro.detail && erro.detail.duplicadas) || [];
+        const linhas = dup.map(d => {
+          const quem = d.galpao ? `Galpão ${d.galpao}${d.solicitado_por ? " · " + d.solicitado_por : ""}` : (d.solicitado_por || d.conta);
+          const status = d.confirmado_por ? ` — ✓ já cancelada por ${d.confirmado_por}` : " — pendente";
+          return `<li>Venda <b>${escaparHtml(d.numero_venda)}</b> (${escaparHtml(d.conta)}): pedida em ${formatarDataBR(d.criado_em)} por ${escaparHtml(quem)}${escaparHtml(status)}</li>`;
+        }).join("");
+        return mostrarAvisoCaixa(
+          `<b>Essa venda já tem solicitação de cancelamento.</b><ul>${linhas}</ul>Enviar de novo pode gerar pedido duplicado.`,
+          [
+            { texto: "Não enviar", principal: true, acao: () => {} },
+            { texto: "Enviar mesmo assim", acao: () => enviar(true) },
+          ]
+        );
+      }
+
+      if (!resposta.ok) {
+        const erro = await resposta.json().catch(() => ({}));
+        const mensagem = Array.isArray(erro.detail)
+          ? erro.detail.map(d => d.msg).join(" ")
+          : (typeof erro.detail === "string" ? erro.detail : "Não foi possível registrar. Confira os campos e tente de novo.");
+        throw new Error(mensagem);
+      }
+
+      const resultado = await resposta.json();
+      const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
+      const textoConfirmacao = MODO_LOGISTICA
+        ? `Registrado no ${resultado.galpao_nome || "Galpão " + resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
+        : `Conta ${resultado.conta || dados.conta} — ${plural}.`;
+      document.getElementById("texto-confirmacao").textContent = textoConfirmacao;
+      document.getElementById("tela-formulario").style.display = "none";
+      document.getElementById("tela-sucesso").style.display = "block";
+      contaConfirmadaComoNova = null;
+      if (MODO_LOGISTICA) carregarContas(); // conta nova passa a aparecer na lista
+
+      const destino = MODO_SELLER ? "/meus-cancelamentos" : (MODO_LOGISTICA ? "/solicitacoes-galpao" : null);
+      if (destino) {
+        // Logado: volta sozinho pra tela de acompanhamento depois de mostrar a confirmação.
+        document.getElementById("botao-nova").style.display = "none";
+        const avisoVoltar = document.createElement("p");
+        avisoVoltar.style.cssText = "font-size:12.5px; color:var(--text-dim); margin-top:10px;";
+        avisoVoltar.textContent = MODO_SELLER ? "Voltando pra Meus Cancelamentos..." : "Voltando pras solicitações do galpão...";
+        document.getElementById("tela-sucesso").appendChild(avisoVoltar);
+        setTimeout(() => { window.location.href = destino; }, MODO_LOGISTICA ? 2400 : 1600);
+      }
+    } catch (erro) {
+      mostrarErro(erro.message);
+    } finally {
+      botaoEnviar.disabled = false;
+      botaoEnviar.textContent = "Enviar solicitação";
+    }
+  }
+
+  document.getElementById("botao-nova").addEventListener("click", () => {
+    form.reset();
+    opcoesPlataforma.forEach(o => o.classList.remove("selecionada"));
+    blocoItens.innerHTML = "";
+    contadorItens = 0;
+    adicionarItem();
+    document.getElementById("tela-sucesso").style.display = "none";
+    document.getElementById("tela-formulario").style.display = "block";
+  });
+</script>
+
+</body>
+</html>

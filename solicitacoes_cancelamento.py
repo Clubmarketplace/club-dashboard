@@ -27,7 +27,7 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from pydantic import BaseModel, field_validator
-from sqlalchemy import and_, or_, update
+from sqlalchemy import and_, case, or_, update
 from sqlalchemy.orm import Session
 
 from app import auth
@@ -395,6 +395,7 @@ def buscar_solicitacoes(
     ate: Optional[str] = None,
     busca: Optional[str] = None,       # nº da venda ou conta -- ignora o período
     atendimento: Optional[str] = None, # livres | em_atendimento | meus (só pedidos pendentes)
+    ordem: str = "recentes",           # recentes (mais novos primeiro) | espera (mais antigos primeiro -- a fila)
     pagina: int = 1,
     por_pagina: int = 100,
 ):
@@ -450,6 +451,11 @@ def buscar_solicitacoes(
         except ValueError:
             raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
 
+    # Contadores de status com todos os filtros, menos status e atendimento
+    # (cada aba mostra o seu número, independente da aba aberta).
+    total = consulta.count()
+    confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
+
     # Contadores do "em atendimento" (entre os pendentes, com os filtros acima).
     limite = _limite_atendimento()
     ativo = and_(SolicitacaoCancelamento.em_atendimento_por_id.isnot(None), SolicitacaoCancelamento.em_atendimento_desde >= limite)
@@ -466,10 +472,6 @@ def buscar_solicitacoes(
     elif atendimento == "meus":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ativo, SolicitacaoCancelamento.em_atendimento_por_id == usuario.id)
 
-    # Contadores com todos os filtros, menos o de status.
-    total = consulta.count()
-    confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
-
     if status == "pendente":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None))
     elif status == "confirmado":
@@ -478,8 +480,21 @@ def buscar_solicitacoes(
     por_pagina = min(max(por_pagina, 1), 500)
     pagina = max(pagina, 1)
     total_filtrado = consulta.count()
+    if ordem == "espera":
+        # Fila: PENDENTES primeiro (quem espera há mais tempo no topo); depois os
+        # CONFIRMADOS (confirmação mais recente primeiro). Dentro de cada grupo a
+        # 2ª chave é toda preenchida (pendentes) ou toda vazia (confirmados), então
+        # a ordem vale igual no Postgres e no SQLite.
+        pendente = SolicitacaoCancelamento.confirmado_por.is_(None)
+        ordenacao = (
+            case((pendente, 0), else_=1),
+            case((pendente, SolicitacaoCancelamento.criado_em), else_=None).asc(),
+            SolicitacaoCancelamento.confirmado_em.desc(),
+        )
+    else:
+        ordenacao = (SolicitacaoCancelamento.criado_em.desc(),)
     itens = (
-        consulta.order_by(SolicitacaoCancelamento.criado_em.desc())
+        consulta.order_by(*ordenacao)
         .offset((pagina - 1) * por_pagina)
         .limit(por_pagina)
         .all()
@@ -554,6 +569,15 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
     if not corpo.sem_protocolo and not corpo.protocolo:
         raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi cancelado sem protocolo).")
+
+    # Confirmou direto, sem ter assumido: o histórico registra os dois passos.
+    atual = _dados_atendimento(solicitacao)
+    if atual["em_atendimento_por_id"] != usuario_logado.id:
+        registrar_evento(db, solicitacao.id, "assumiu", usuario=usuario_logado,
+                         detalhe=(f"no lugar de {atual['em_atendimento_por']}" if atual["em_atendimento_por"] else "ao confirmar"))
+    if not solicitacao.assumido_primeiro_por:
+        solicitacao.assumido_primeiro_por = usuario_logado.nome_exibicao
+        solicitacao.assumido_primeiro_em = datetime.utcnow()
 
     solicitacao.confirmado_por = usuario_logado.nome_exibicao
     solicitacao.confirmado_em = datetime.utcnow()
@@ -850,9 +874,13 @@ PAPEIS_RELATORIO = ("admin", "supervisor", "atendente")
 SEM_SKU = "—"
 
 
-def _periodo_relatorio(periodo: str | None, de: str | None, ate: str | None):
-    """(início, fim, rótulo) em datas de Brasília. mes_atual | mes_anterior | datas."""
+def _periodo_relatorio(periodo: str | None, de: str | None, ate: str | None, dias: int | None = None):
+    """(início, fim, rótulo) em datas de Brasília. mes_atual | mes_anterior | datas | dias (últimos N dias)."""
     hoje = datetime.now(FUSO_BR).date()
+    if periodo == "dias" and dias and dias > 0:
+        inicio = hoje - timedelta(days=min(dias, 366) - 1)
+        rotulo = "Hoje" if dias == 1 else f"Últimos {dias} dias"
+        return inicio, hoje, f"{rotulo} ({inicio.strftime('%d/%m/%Y')} a {hoje.strftime('%d/%m/%Y')})"
     if periodo == "mes_anterior":
         fim = hoje.replace(day=1) - timedelta(days=1)
         inicio = fim.replace(day=1)
@@ -894,6 +922,9 @@ def relatorio_por_conta(
     plataforma: Optional[str] = None,
     status: str = "todos",             # todos | confirmados
     formato: str = "json",             # json | xlsx
+    dias: Optional[int] = None,        # com periodo=dias: últimos N dias (filtro da tela)
+    galpao: Optional[int] = None,
+    origem: Optional[str] = None,      # seller | logistica | publico
 ):
     """
     Cancelamentos SOLICITADOS no período, de uma conta (ou todas): resumo,
@@ -906,7 +937,7 @@ def relatorio_por_conta(
     if usuario.papel not in PAPEIS_RELATORIO:
         raise HTTPException(status_code=403, detail="Seu perfil não gera este relatório.")
 
-    inicio, fim, rotulo = _periodo_relatorio(periodo, de, ate)
+    inicio, fim, rotulo = _periodo_relatorio(periodo, de, ate, dias)
     consulta = db.query(SolicitacaoCancelamento).filter(
         SolicitacaoCancelamento.criado_em >= _inicio_do_dia_br_em_utc(datetime.combine(inicio, datetime.min.time())),
         SolicitacaoCancelamento.criado_em < _inicio_do_dia_br_em_utc(datetime.combine(fim + timedelta(days=1), datetime.min.time())),
@@ -919,6 +950,12 @@ def relatorio_por_conta(
         conta_nome = mapa_contas.get(chave, conta)
     if plataforma in PLATAFORMAS_VALIDAS:
         consulta = consulta.filter(SolicitacaoCancelamento.plataforma == plataforma)
+    if galpao in GALPOES_VALIDOS:
+        consulta = consulta.filter(SolicitacaoCancelamento.galpao == galpao)
+    if origem == "publico":
+        consulta = consulta.filter(or_(SolicitacaoCancelamento.origem == "publico", SolicitacaoCancelamento.origem.is_(None)))
+    elif origem in ORIGENS_VALIDAS:
+        consulta = consulta.filter(SolicitacaoCancelamento.origem == origem)
     if status == "confirmados":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None))
     itens = consulta.order_by(SolicitacaoCancelamento.criado_em.asc()).all()
@@ -971,6 +1008,8 @@ def relatorio_por_conta(
         "ate": fim.isoformat(),
         "plataforma": PLATAFORMAS.get(plataforma, "Todas as plataformas") if plataforma else "Todas as plataformas",
         "status": "Só cancelados" if status == "confirmados" else "Cancelados e pendentes",
+        "galpao": GALPOES.get(galpao) if galpao in GALPOES_VALIDOS else None,
+        "origem": {"seller": "Sellers", "logistica": "Galpão", "publico": "Link público"}.get(origem),
         "gerado_em": datetime.now(FUSO_BR).strftime("%d/%m/%Y %H:%M"),
         "gerado_por": usuario.nome_exibicao,
     }
