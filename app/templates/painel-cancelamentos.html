@@ -520,6 +520,7 @@
 
     async function verificar(s, botao) {
       avisar("Conferindo no Mercado Livre…");
+      let mensagemFinal = null;
       try {
         const r = await fetch(`/api/solicitacoes-cancelamento/${s.id}/verificar-status`, { method: "POST" });
         const d = await r.json().catch(() => ({}));
@@ -528,13 +529,17 @@
           avisar("O Mercado Livre já mostra a venda cancelada: confirmado automaticamente.");
         } else {
           // Mostra SEMPRE o motivo real (pendente de verdade, conta não
-          // encontrada, erro de token, erro de consulta) -- não some
-          // silenciosamente atrás de um toast genérico de 3s, senão fica
-          // impossível saber por que não funcionou.
-          mostrarErro(d.mensagem || "Ainda não aparece como cancelada no Mercado Livre.");
+          // encontrada, erro de token, erro de consulta) -- guarda pra
+          // exibir DEPOIS do atualizar() abaixo, porque atualizar() limpa
+          // o aviso-erro toda vez que recarrega (senão a mensagem aparecia
+          // e sumia na mesma fração de segundo, sem dar tempo de ler).
+          mensagemFinal = d.mensagem || "Ainda não aparece como cancelada no Mercado Livre.";
         }
-      } catch (erro) { avisar(erro.message); }
+      } catch (erro) {
+        mensagemFinal = erro.message;
+      }
       await atualizar();
+      if (mensagemFinal) mostrarErro(mensagemFinal);
     }
 
     // ---------- Painel lateral ----------
