@@ -36,13 +36,13 @@
         </a>
         {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">
           Cancelamentos
-        </a>
+        </a>{% endif %}
         <span class="cmx-nav-secao">Contas</span>
-        <a class="cmx-nav-item" href="/contas">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/contas">
           Contas conectadas
-        </a>
+        </a>{% endif %}
         <a class="cmx-nav-item" href="/reputacao">Reputação das contas</a>
-        <span class="cmx-nav-secao">Diagnóstico</span>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Diagnóstico</span>
         <a class="cmx-nav-item" href="/eventos-webhook">
           Eventos do Webhook
         </a>

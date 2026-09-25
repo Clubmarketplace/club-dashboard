@@ -67,11 +67,11 @@
         <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
         {% if not eh_atendente %}<a class="cmx-nav-item" href="/manuais">Manuais</a>{% endif %}
         <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>{% endif %}
         <span class="cmx-nav-secao">Contas</span>
-        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/contas">Contas conectadas</a>{% endif %}
         <a class="cmx-nav-item" href="/reputacao">Reputação das contas</a>
-        <span class="cmx-nav-secao">Diagnóstico</span>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Diagnóstico</span>
         <a class="cmx-nav-item" href="/eventos-webhook">Eventos do Webhook</a>{% endif %}
         <span class="cmx-nav-secao">Painéis de TV</span>
         <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>

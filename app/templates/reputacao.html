@@ -83,33 +83,38 @@
       <div class="cmx-marca">
         <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
+      {% set eh_atendente = usuario_logado and usuario_logado.papel == "atendente" %}
       <nav class="cmx-nav">
-        <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
+        {% endif %}
         <span class="cmx-nav-secao">Operação</span>
-        <a class="cmx-nav-item" href="/devolucoes">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/devolucoes">
           Devoluções
         </a>
+        {% endif %}
         <a class="cmx-nav-item" href="/pre-venda">
           Pré-venda
         </a>
-        <a class="cmx-nav-item" href="/manuais">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/manuais">
           Manuais
         </a>
+        {% endif %}
         <a class="cmx-nav-item" href="/pos-venda">
           Pós-venda
         </a>
-        <a class="cmx-nav-item" href="/cancelamentos">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">
           Cancelamentos
-        </a>
+        </a>{% endif %}
         <span class="cmx-nav-secao">Contas</span>
-        <a class="cmx-nav-item" href="/contas">
+        {% if not eh_atendente %}<a class="cmx-nav-item" href="/contas">
           Contas conectadas
-        </a>
+        </a>{% endif %}
         <a class="cmx-nav-item cmx-nav-item--ativo" href="/reputacao"><span class="cmx-nav-dot"></span> Reputação das contas</a>
-        <span class="cmx-nav-secao">Diagnóstico</span>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Diagnóstico</span>
         <a class="cmx-nav-item" href="/eventos-webhook">
           Eventos do Webhook
         </a>
+        {% endif %}
         <span class="cmx-nav-secao">Painéis de TV</span>
         <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">
           Painel Geral
@@ -125,11 +130,12 @@
           Solicitações de Cancelamento
         </a>
         <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
-        <span class="cmx-nav-secao">Operadores</span>
+        {% if not eh_atendente %}<span class="cmx-nav-secao">Operadores</span>
         <a class="cmx-nav-item" href="/usuarios">Operadores</a>
         <a class="cmx-nav-item cmx-nav-item--em-breve" href="#" aria-disabled="true">
           Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
         </a>
+        {% endif %}
       </nav>
     </aside>
 
