@@ -337,7 +337,7 @@ def excluir_conta_teste(
     confirmar: str = "",
     db: Session = Depends(get_db),
 ):
-    from app.models import AcaoRegistrada, Devolucao, MensagemPosVenda, PedidoCancelamento
+    from app.models import AcaoRegistrada, Devolucao, MensagemPosVenda, PedidoCancelamento, ReputacaoConta
 
     usuario = _exigir_somente_admin(request, db)
 
@@ -365,6 +365,7 @@ def excluir_conta_teste(
         ("perguntas", Pergunta),
         ("acoes_registradas", AcaoRegistrada),
         ("devolucoes", Devolucao),
+        ("reputacao_contas", ReputacaoConta),
     ]
     contagem = {nome: db.query(modelo).filter(modelo.conta_id == conta.id).count() for nome, modelo in tabelas}
 

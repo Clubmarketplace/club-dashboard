@@ -295,6 +295,9 @@ def excluir_conta(conta_id: int, db: Session = Depends(get_db)):
         )
 
     apelido = conta.apelido
+    # A leitura de reputação é só uma "foto" do termômetro (não é histórico).
+    from app.models import ReputacaoConta
+    db.query(ReputacaoConta).filter(ReputacaoConta.conta_id == conta_id).delete(synchronize_session=False)
     db.delete(conta)
     db.commit()
 
