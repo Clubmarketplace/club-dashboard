@@ -412,3 +412,36 @@ class Usuario(Base):
     # esse usuário representa. É o que filtra o que ele vê em
     # /meus-cancelamentos e pré-preenche a conta no formulário público.
     conta_vinculada = Column(String, nullable=True)
+
+
+class ReputacaoConta(Base):
+    """
+    Última leitura da reputação de cada conta no Mercado Livre
+    (GET /users/{id} -> seller_reputation). Uma linha por conta, sobrescrita
+    a cada leitura -- é uma "foto" do termômetro, não histórico.
+    As taxas ficam como o ML manda (fração: 0.0088 = 0,88%).
+    """
+
+    __tablename__ = "reputacao_contas"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, unique=True, index=True)
+    lido_em = Column(DateTime, nullable=True)       # última leitura BEM-SUCEDIDA
+    tentativa_em = Column(DateTime, nullable=True)  # última tentativa (com ou sem sucesso)
+    erro = Column(String, nullable=True)            # motivo da última falha (vazio = ok)
+
+    level_id = Column(String, nullable=True)             # ex.: "5_green"
+    power_seller_status = Column(String, nullable=True)  # silver / gold / platinum / vazio
+    vendas = Column(Integer, nullable=True)
+    periodo = Column(String, nullable=True)              # ex.: "60 days"
+
+    reclamacoes_taxa = Column(Float, nullable=True)
+    reclamacoes_qtd = Column(Integer, nullable=True)
+    mediacoes_taxa = Column(Float, nullable=True)
+    mediacoes_qtd = Column(Integer, nullable=True)
+    canceladas_taxa = Column(Float, nullable=True)
+    canceladas_qtd = Column(Integer, nullable=True)
+    atrasos_taxa = Column(Float, nullable=True)
+    atrasos_qtd = Column(Integer, nullable=True)
+
+    bruto = Column(Text, nullable=True)  # seller_reputation completo (JSON), pra conferência

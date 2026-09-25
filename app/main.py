@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -70,6 +70,23 @@ async def _iniciar_verificacao_cancelamentos() -> None:
     app.state.tarefa_verificacao_cancelamentos = asyncio.create_task(loop_verificacao_cancelamentos())
     logging.getLogger(__name__).info("Verificação automática de cancelamentos iniciada (a cada 12 min).")
 
+
+# --- Tarefa em segundo plano: leitura da reputação (termômetro) de todas as
+# contas no Mercado Livre (ver app/reputacao.py). Padrão: a cada 90 min
+# (REPUTACAO_INTERVALO_MIN). Desliga com REPUTACAO_AUTOMATICA_ATIVA=0.
+@app.on_event("startup")
+async def _iniciar_leitura_reputacao() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("REPUTACAO_AUTOMATICA_ATIVA", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Leitura automática de reputação DESLIGADA pela variável de ambiente.")
+        return
+    from app.reputacao import loop_reputacao
+    app.state.tarefa_reputacao = asyncio.create_task(loop_reputacao())
+    logging.getLogger(__name__).info("Leitura automática de reputação iniciada.")
+
 # --- Middleware de autenticação ---
 # Tudo exige login por padrão. As exceções abaixo são as páginas/APIs
 # que PRECISAM ficar abertas: as telas de TV (ficam ligadas o dia
@@ -102,6 +119,9 @@ _AREAS = {
     "pre_venda": {"paginas": {"/pre-venda"}, "prefixos_api": ("/api/pre-venda/",)},
     "pos_venda": {"paginas": {"/pos-venda"}, "prefixos_api": ("/api/pos-venda/",)},
     "paineis_tv": {"paginas": {"/painel-tv/geral", "/painel-tv/fila"}, "prefixos_api": ()},
+    # Termômetro de reputação de todas as contas (só visualizar; o
+    # "Atualizar agora" é conferido na própria rota: admin/supervisor).
+    "reputacao": {"paginas": {"/reputacao"}, "prefixos_api": ("/api/reputacao/",)},
     # Acompanhar e confirmar as solicitações manuais de cancelamento.
     # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
     # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
@@ -127,7 +147,7 @@ _AREAS = {
 # do que PODE -- tela nova nasce bloqueada pra eles até alguém liberar).
 # Admin e supervisor não aparecem aqui porque têm acesso amplo.
 _AREAS_POR_PAPEL = {
-    "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento"),
+    "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento", "reputacao"),
     "logistica": ("logistica",),
 }
 _PAGINA_INICIAL_POR_PAPEL = {
@@ -211,6 +231,7 @@ app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
 app.include_router(solicitacoes_cancelamento.router)
+app.include_router(reputacao_rotas.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -304,6 +325,11 @@ def pagina_devolucoes(request: Request):
 @app.get("/contas", response_class=HTMLResponse)
 def pagina_contas(request: Request):
     return templates.TemplateResponse(request=request, name="contas.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/reputacao", response_class=HTMLResponse)
+def pagina_reputacao(request: Request):
+    return templates.TemplateResponse(request=request, name="reputacao.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/pre-venda", response_class=HTMLResponse)
