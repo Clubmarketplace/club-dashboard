@@ -62,7 +62,17 @@ function montarSeloStatus(conta) {
   return `<span class="cmx-selo cmx-selo-encerrado">Conectada</span>`;
 }
 
-function renderizarTabela(contas) {
+// Inativar/Reativar é só do admin (o servidor também confere).
+const EH_ADMIN = window.CMX_PAPEL === "admin";
+
+function escaparHtml(texto) {
+  return String(texto ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function renderizarTabela(todas) {
+  // Separa: ativas na tabela principal, inativas (saíram do Club) na seção de baixo.
+  const contas = todas.filter((c) => !c.inativa);
+  renderizarInativas(todas.filter((c) => c.inativa));
   const corpo = document.querySelector("#tabela-contas tbody");
   corpo.innerHTML = "";
 
@@ -80,13 +90,16 @@ function renderizarTabela(contas) {
       ? `<button class="cmx-botao-link-perigo" data-desconectar="${conta.id}" data-apelido="${conta.apelido}">Desconectar</button>`
       : "";
     const botaoExcluir = `<button class="cmx-botao-link-perigo" data-excluir="${conta.id}" data-apelido="${conta.apelido}" style="margin-left: 10px;">Excluir</button>`;
+    const botaoInativar = EH_ADMIN
+      ? `<button class="cmx-botao-link-perigo" data-inativar="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}" style="margin-left: 10px;">Inativar</button>`
+      : "";
     linha.innerHTML = `
       <td>${conta.apelido}</td>
       <td>${montarSeloStatus(conta)}</td>
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
-      <td>${botaoDesconectar}${botaoExcluir}</td>
+      <td>${botaoDesconectar}${botaoInativar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
   }
@@ -97,6 +110,95 @@ function renderizarTabela(contas) {
   corpo.querySelectorAll("[data-excluir]").forEach((botao) => {
     botao.addEventListener("click", () => excluirConta(botao));
   });
+  corpo.querySelectorAll("[data-inativar]").forEach((botao) => {
+    botao.addEventListener("click", () => inativarConta(botao));
+  });
+}
+
+function renderizarInativas(inativas) {
+  const secao = document.getElementById("secao-inativas");
+  const corpo = document.querySelector("#tabela-inativas tbody");
+  if (!secao || !corpo) return;
+  secao.style.display = inativas.length ? "block" : "none";
+  document.getElementById("inativas-contador").textContent = `(${inativas.length})`;
+  corpo.innerHTML = "";
+  for (const conta of inativas) {
+    const linha = document.createElement("tr");
+    const botaoReativar = EH_ADMIN
+      ? `<button class="cmx-botao-link-perigo" style="color:#2f6f4f;" data-reativar="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}">Reativar</button>`
+      : "—";
+    linha.innerHTML = `
+      <td>${escaparHtml(conta.apelido)}</td>
+      <td>${escaparHtml(conta.ml_user_id || "—")}</td>
+      <td>${formatarData(conta.inativa_em)}</td>
+      <td>${escaparHtml(conta.motivo_inativacao || "—")}</td>
+      <td>${botaoReativar}</td>
+    `;
+    corpo.appendChild(linha);
+  }
+  corpo.querySelectorAll("[data-reativar]").forEach((botao) => {
+    botao.addEventListener("click", () => reativarConta(botao));
+  });
+}
+
+async function recarregarContas() {
+  renderizarTabela(await carregarContas());
+}
+
+async function inativarConta(botao) {
+  const contaId = botao.getAttribute("data-inativar");
+  const apelido = botao.getAttribute("data-apelido");
+  const motivo = window.prompt(
+    `Inativar a conta "${apelido}"?\n\n` +
+    `Ela sai das listas e filtros e é desconectada do Mercado Livre. ` +
+    `O histórico NÃO é apagado e dá pra reativar depois.\n\nMotivo (opcional):`,
+    "Saiu do Club"
+  );
+  if (motivo === null) return; // cancelou
+
+  botao.disabled = true;
+  botao.textContent = "Inativando...";
+  try {
+    const resposta = await fetch(`/auth/contas/${contaId}/inativar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ motivo }),
+    });
+    if (!resposta.ok) {
+      const dados = await resposta.json().catch(() => null);
+      throw new Error(dados && dados.detail ? dados.detail : `status ${resposta.status}`);
+    }
+    await recarregarContas();
+  } catch (erro) {
+    mostrarAviso(`Não foi possível inativar: ${erro.message}`);
+    console.error(erro);
+    botao.disabled = false;
+    botao.textContent = "Inativar";
+  }
+}
+
+async function reativarConta(botao) {
+  const contaId = botao.getAttribute("data-reativar");
+  const apelido = botao.getAttribute("data-apelido");
+  if (!window.confirm(`Reativar a conta "${apelido}"?\n\nEla volta para as listas e filtros.`)) return;
+
+  botao.disabled = true;
+  botao.textContent = "Reativando...";
+  try {
+    const resposta = await fetch(`/auth/contas/${contaId}/reativar`, { method: "POST" });
+    const dados = await resposta.json().catch(() => null);
+    if (!resposta.ok) throw new Error(dados && dados.detail ? dados.detail : `status ${resposta.status}`);
+    await recarregarContas();
+    if (dados && dados.precisa_reconectar) {
+      mostrarAviso(`"${apelido}" reativada. Ela está desconectada: gere o link de autorização acima e envie ao seller.`);
+      document.getElementById("conectar-aviso").classList.remove("cmx-aviso-erro");
+    }
+  } catch (erro) {
+    mostrarAviso(`Não foi possível reativar: ${erro.message}`);
+    console.error(erro);
+    botao.disabled = false;
+    botao.textContent = "Reativar";
+  }
 }
 
 async function desconectarConta(botao) {
