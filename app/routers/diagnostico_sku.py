@@ -232,3 +232,76 @@ def preencher_sku_cancelamentos(request: Request, limite: int = 100, db: Session
         "dica": ("Concluído." if restantes == 0 else
                  "Abra de novo para continuar. Se 'restantes' não diminuir, são contas não conectadas ou vendas que o ML não encontrou."),
     }
+
+
+# ---------------------------------------------------------------------------
+# Diagnóstico da REPUTAÇÃO de uma conta (só consulta, não grava nada)
+# ---------------------------------------------------------------------------
+# Serve pra conferir, com uma conta real, se o que a API do Mercado Livre
+# devolve em /users/{id} (seller_reputation) bate com o painel "Reputação"
+# que o seller vê -- ANTES de construir a tela do termômetro em cima disso.
+#   GET /api/admin/diagnostico-reputacao?conta=Velasco
+
+def _porcentagem(valor):
+    """A API manda as taxas como fração (0.0088 = 0,88%). Mostra do jeito do painel."""
+    try:
+        return f"{float(valor) * 100:.2f}%".replace(".", ",")
+    except (TypeError, ValueError):
+        return None
+
+
+@router.get("/diagnostico-reputacao")
+def diagnostico_reputacao(request: Request, conta: str, db: Session = Depends(get_db)):
+    from app.contas_util import chave_conta
+
+    _exigir_admin(request, db)
+    alvo = chave_conta(conta)
+    encontrada = next((c for c in db.query(Conta).all() if chave_conta(c.apelido) == alvo), None)
+    if encontrada is None:
+        raise HTTPException(status_code=404, detail=f'Não achei a conta "{conta}" em Contas conectadas.')
+
+    token = _token_de(encontrada, db, {})
+    if not token:
+        raise HTTPException(status_code=502, detail=f"A conta {encontrada.apelido} está sem acesso válido ao Mercado Livre (reconecte a conta).")
+    try:
+        usuario = _get(f"/users/{encontrada.ml_user_id}", token, "buscar a reputação")
+    except MLApiError as exc:
+        return {"conta": encontrada.apelido, "erro": str(exc)[:500],
+                "dica": "Se aparecer 403/PolicyAgent, falta permissão no aplicativo (DevCenter) pra ler dados do usuário."}
+
+    rep = usuario.get("seller_reputation") or {}
+    metricas = rep.get("metrics") or {}
+    transacoes = rep.get("transactions") or {}
+
+    def indicador(chave):
+        m = metricas.get(chave) or {}
+        return {
+            "taxa_api": m.get("rate"),
+            "taxa_como_no_painel": _porcentagem(m.get("rate")),
+            "quantidade": m.get("value"),
+            "periodo": m.get("period"),
+        }
+
+    return {
+        "conta": encontrada.apelido,
+        "ml_user_id": encontrada.ml_user_id,
+        "apelido_no_ml": usuario.get("nickname"),
+        "resumo_pra_comparar_com_o_painel": {
+            "medalha (power_seller_status)": rep.get("power_seller_status"),  # silver/gold/platinum ou vazio
+            "termometro (level_id)": rep.get("level_id"),                       # ex.: 5_green
+            "vendas_no_periodo": (metricas.get("sales") or {}).get("completed"),
+            "periodo_das_vendas": (metricas.get("sales") or {}).get("period"),
+            "reclamacoes": indicador("claims"),
+            "canceladas_por_voce": indicador("cancellations"),
+            "envios_com_atraso": indicador("delayed_handling_time"),
+            "mediacoes": indicador("mediations"),
+        },
+        "transacoes": {
+            "total": transacoes.get("total"),
+            "concluidas": transacoes.get("completed"),
+            "canceladas": transacoes.get("canceled"),
+            "periodo": transacoes.get("period"),
+        },
+        # O bloco inteiro como veio do ML, pra conferir campo a campo se algo não bater.
+        "seller_reputation_original": rep,
+    }
