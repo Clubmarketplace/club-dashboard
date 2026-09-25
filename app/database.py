@@ -38,6 +38,10 @@ logger = logging.getLogger(__name__)
 # esta lista é aplicada na inicialização. Regras: só ADICIONAR (nunca
 # apagar/renomear), sempre aceitando nulo, e seguro rodar várias vezes.
 _COLUNAS_ADICIONAIS = {
+    "contas": {
+        "inativa_em": "TIMESTAMP",
+        "motivo_inativacao": "VARCHAR",
+    },
     "perguntas": {
         "skus_anuncio": "VARCHAR",
         "titulo_anuncio": "VARCHAR",

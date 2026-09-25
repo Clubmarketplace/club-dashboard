@@ -85,11 +85,10 @@ def preencher_produto_do_pedido(solicitacao: SolicitacaoCancelamento, pedido: di
 
 def conta_da_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session) -> Conta | None:
     """Conta conectada correspondente à solicitação (pela chave do nome)."""
-    chave = solicitacao.conta_chave or chave_conta(solicitacao.conta)
-    for candidata in db.query(Conta).all():
-        if chave_conta(candidata.apelido) == chave:
-            return candidata
-    return None
+    # Usa a busca única (ignora contas inativas e, havendo nomes repetidos,
+    # prefere a conectada) -- ver contas_util.achar_conta_por_nome.
+    from app.contas_util import achar_conta_por_nome
+    return achar_conta_por_nome(db, solicitacao.conta_chave or solicitacao.conta)
 
 
 def buscar_produto_da_venda(solicitacao: SolicitacaoCancelamento, db: Session) -> str:

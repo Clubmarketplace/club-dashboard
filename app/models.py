@@ -58,6 +58,12 @@ class Conta(Base):
     token_expira_em = Column(DateTime, nullable=True)
     conectada_em = Column(DateTime, default=datetime.utcnow)
     ativa = Column(Boolean, default=True)
+    # "Saiu do Club": preenchido quando o admin inativa a conta (vazio = conta
+    # ativa). É separado de "ativa" porque "ativa" já significa só "conectada"
+    # (o Desconectar zera). Conta inativa some das listas/filtros, mas o
+    # histórico dela é preservado; reativar limpa este campo.
+    inativa_em = Column(DateTime, nullable=True)
+    motivo_inativacao = Column(String, nullable=True)
 
     devolucoes = relationship("Devolucao", back_populates="conta")
     acoes = relationship("AcaoRegistrada", back_populates="conta")

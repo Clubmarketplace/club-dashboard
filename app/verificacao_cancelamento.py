@@ -55,11 +55,10 @@ def _classificar_resultado(cancel_detail: dict | None) -> str:
 
 def _achar_conta(solicitacao: SolicitacaoCancelamento, db: Session) -> Conta | None:
     """Acha a Conta cadastrada em /contas correspondente a essa solicitação, pela chave normalizada do nome."""
-    chave = solicitacao.conta_chave or chave_conta(solicitacao.conta)
-    for candidata in db.query(Conta).all():
-        if chave_conta(candidata.apelido) == chave:
-            return candidata
-    return None
+    # Usa a busca única (ignora contas inativas e, havendo nomes repetidos,
+    # prefere a conectada) -- ver contas_util.achar_conta_por_nome.
+    from app.contas_util import achar_conta_por_nome
+    return achar_conta_por_nome(db, solicitacao.conta_chave or solicitacao.conta)
 
 
 def _repor_estoque_do_pedido(access_token: str, pedido: dict) -> None:

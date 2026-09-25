@@ -54,3 +54,27 @@ def nome_exibicao_novo(nome: str) -> str:
     if limpo.islower() or limpo.isupper():
         return " ".join(p[:1].upper() + p[1:].lower() for p in limpo.split(" "))
     return limpo
+
+
+def achar_conta_por_nome(db, nome_ou_chave: str):
+    """
+    Acha a Conta (Contas conectadas) pelo nome, usando a chave normalizada.
+
+    Pode haver mais de uma conta com a mesma chave (ex.: "Velasco" antiga de
+    teste e "VELASCO" real). Regra de desempate:
+      1) ignora contas inativas ("saiu do Club");
+      2) prefere a que está conectada (tem token);
+      3) entre iguais, a mais recente (id maior).
+    Devolve None se não houver conta ativa com esse nome.
+    """
+    from app.models import Conta  # import local: evita ciclo na carga
+
+    alvo = chave_conta(nome_ou_chave)
+    candidatas = [
+        c for c in db.query(Conta).filter(Conta.inativa_em.is_(None)).all()
+        if chave_conta(c.apelido) == alvo
+    ]
+    if not candidatas:
+        return None
+    candidatas.sort(key=lambda c: (bool(c.access_token), c.id), reverse=True)
+    return candidatas[0]
