@@ -156,11 +156,30 @@
             <tbody></tbody>
           </table>
         </section>
+
+        <!-- Contas que saíram do Club: fora das listas e filtros, histórico preservado. -->
+        <section class="cmx-tabela-secao" id="secao-inativas" style="display:none;">
+          <h2>Contas inativas <span id="inativas-contador" style="font-weight:400; color:var(--cmx-texto-suave); font-size:14px;"></span></h2>
+          <p class="cmx-grafico-nota">Saíram do Club: não aparecem nos filtros nem nas listas, mas o histórico continua nos relatórios.</p>
+          <table class="cmx-tabela" id="tabela-inativas" style="opacity:.75;">
+            <thead>
+              <tr>
+                <th>Apelido</th>
+                <th>ID no Mercado Livre</th>
+                <th>Inativada em</th>
+                <th>Motivo</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
       </main>
     </div>
   </div>
 
-  <script src="/static/contas.js"></script>
+  <script>window.CMX_PAPEL = {{ (usuario_logado.papel if usuario_logado else "")|tojson }};</script>
+  <script src="/static/contas.js?v=2"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
