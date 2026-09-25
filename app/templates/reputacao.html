@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Reputação das contas</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    /* Tela "Reputação das contas" -- estilos só desta página (prefixo rp-). */
+    .rp-topo { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+    .rp-btn { height:38px; padding:0 14px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; color:var(--cmx-texto); font:600 13px Inter,sans-serif; cursor:pointer; }
+    .rp-btn:hover { background:#f7f9fb; }
+    .rp-btn:disabled { opacity:.6; cursor:default; }
+    .rp-btn-escuro { background:#1b2430; border-color:#1b2430; color:#fff; }
+    .rp-btn-escuro:hover { background:#2a3645; }
+    .rp-resumo { display:grid; grid-template-columns:minmax(300px,380px) minmax(0,1fr); gap:18px; margin:18px 0; }
+    .rp-painel { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; }
+    .rp-rosca { padding:18px 20px; display:flex; gap:18px; align-items:center; }
+    .rp-rosca-svg { position:relative; width:160px; height:160px; flex-shrink:0; }
+    .rp-rosca-svg circle.rp-fatia { cursor:pointer; transition:stroke-width .2s, opacity .2s; }
+    .rp-rosca-centro { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; pointer-events:none; text-align:center; }
+    .rp-rosca-centro b { font-size:30px; line-height:1; }
+    .rp-rosca-centro span { font-size:12px; color:var(--cmx-texto-suave); max-width:96px; }
+    .rp-legenda { flex-grow:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+    .rp-leg { display:flex; align-items:center; gap:10px; width:100%; background:none; border:1px solid transparent; border-radius:10px; padding:7px 10px; text-align:left; font:14px Inter,sans-serif; color:var(--cmx-texto); cursor:pointer; }
+    .rp-leg:hover { background:#f4f6f8; }
+    .rp-leg.ativo { background:#f1f4f7; border-color:#d5dbe1; }
+    .rp-leg span.nome { flex-grow:1; }
+    .rp-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; display:inline-block; }
+    .rp-inds { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+    .rp-ind { display:flex; flex-direction:column; justify-content:flex-start; background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:14px 16px; text-align:left; color:var(--cmx-texto); font-family:Inter,sans-serif; cursor:pointer; }
+    .rp-ind:hover { border-color:#b9c3cd; }
+    .rp-ind.ativo { border:2px solid #1b2430; padding:13px 15px; }
+    .rp-ind .n { font-size:13px; color:var(--cmx-texto-suave); }
+    .rp-ind .l { font-size:12px; color:var(--cmx-texto-suave); }
+    .rp-ind .nums { display:flex; gap:14px; margin-top:12px; align-items:baseline; }
+    .rp-ind .nums b { display:block; font-size:26px; line-height:1.1; }
+    .rp-ind .nums small { font-size:11.5px; color:var(--cmx-texto-suave); }
+    .rp-filtros { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:16px; }
+    .rp-busca { height:40px; width:300px; max-width:100%; border:1px solid #d5dbe1; border-radius:10px; padding:0 12px; font:14px Inter,sans-serif; }
+    .rp-chip { height:34px; padding:0 14px; border-radius:999px; border:1px solid #d5dbe1; background:#fff; font:600 13px Inter,sans-serif; color:#4a5663; cursor:pointer; }
+    .rp-chip.ativo { background:#1b2430; border-color:#1b2430; color:#fff; }
+    .rp-contador { margin-left:auto; font-size:13px; color:var(--cmx-texto-suave); }
+    .rp-titulo-grupo { font-size:15px; font-weight:700; margin:6px 0 10px; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+    .rp-grade { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:12px; margin-bottom:22px; }
+    .rp-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:14px 16px; display:flex; flex-direction:column; gap:10px; text-align:left; color:var(--cmx-texto); font-family:Inter,sans-serif; cursor:pointer; width:100%; }
+    .rp-card:hover { border-color:#9fb0c0; box-shadow:0 6px 18px rgba(20,30,40,.08); }
+    .rp-card-topo { display:flex; justify-content:space-between; align-items:center; gap:8px; font-size:11.5px; color:var(--cmx-texto-suave); }
+    .rp-tag { font-size:10.5px; font-weight:700; letter-spacing:.06em; border-radius:6px; padding:3px 8px; }
+    .rp-nome { font-size:16px; font-weight:700; line-height:1.25; word-break:break-word; }
+    .rp-medalha { font-size:12.5px; font-weight:600; margin-top:2px; }
+    .rp-termo { display:flex; gap:3px; }
+    .rp-termo span { flex:1; border-radius:2px; }
+    .rp-mets { display:grid; grid-template-columns:1fr 1fr; gap:6px 10px; }
+    .rp-met { display:flex; align-items:center; gap:6px; font-size:13px; }
+    .rp-met small { font-size:11.5px; color:var(--cmx-texto-suave); }
+    .rp-motivo { font-size:12.5px; color:#8a4200; background:#fff4e6; border-radius:8px; padding:7px 9px; }
+    .rp-vazio { padding:36px; text-align:center; color:var(--cmx-texto-suave); }
+    .rp-fundo { position:fixed; inset:0; background:rgba(15,22,30,.45); z-index:40; }
+    .rp-gaveta { position:fixed; top:0; right:0; bottom:0; width:440px; max-width:100%; background:#fff; z-index:41; padding:24px 26px; overflow-y:auto; box-shadow:-12px 0 30px rgba(0,0,0,.12); }
+    .rp-det-met { border:1px solid var(--cmx-borda); border-radius:12px; padding:12px 14px; }
+    .rp-barra { height:8px; border-radius:4px; background:#eef1f4; margin:8px 0 6px; overflow:hidden; }
+    .rp-barra div { height:100%; border-radius:4px; }
+    .rp-aviso { margin:12px 0 0; padding:10px 12px; border-radius:10px; font-size:13.5px; background:#fdf3e3; color:#8a4200; display:none; }
+    @media (max-width: 1100px) {
+      .rp-resumo { grid-template-columns:1fr; }
+      .rp-inds { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    }
+    @media (max-width: 560px) {
+      .rp-rosca { flex-direction:column; align-items:stretch; }
+      .rp-rosca-svg { margin:0 auto; }
+      .rp-busca { width:100%; }
+      .rp-contador { margin-left:0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      <nav class="cmx-nav">
+        <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
+        <span class="cmx-nav-secao">Operação</span>
+        <a class="cmx-nav-item" href="/devolucoes">
+          Devoluções
+        </a>
+        <a class="cmx-nav-item" href="/pre-venda">
+          Pré-venda
+        </a>
+        <a class="cmx-nav-item" href="/manuais">
+          Manuais
+        </a>
+        <a class="cmx-nav-item" href="/pos-venda">
+          Pós-venda
+        </a>
+        <a class="cmx-nav-item" href="/cancelamentos">
+          Cancelamentos
+        </a>
+        <span class="cmx-nav-secao">Contas</span>
+        <a class="cmx-nav-item" href="/contas">
+          Contas conectadas
+        </a>
+        <a class="cmx-nav-item cmx-nav-item--ativo" href="/reputacao"><span class="cmx-nav-dot"></span> Reputação das contas</a>
+        <span class="cmx-nav-secao">Diagnóstico</span>
+        <a class="cmx-nav-item" href="/eventos-webhook">
+          Eventos do Webhook
+        </a>
+        <span class="cmx-nav-secao">Painéis de TV</span>
+        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">
+          Painel Geral
+        </a>
+        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">
+          Painel da Fila
+        </a>
+        <span class="cmx-nav-secao">Solicitações manuais</span>
+        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">
+          Nova solicitação
+        </a>
+        <a class="cmx-nav-item" href="/solicitacoes-painel">
+          Solicitações de Cancelamento
+        </a>
+        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
+        <span class="cmx-nav-secao">Operadores</span>
+        <a class="cmx-nav-item" href="/usuarios">Operadores</a>
+        <a class="cmx-nav-item cmx-nav-item--em-breve" href="#" aria-disabled="true">
+          Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
+        </a>
+      </nav>
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+      <header class="cmx-topbar rp-topo">
+        <div>
+          <h1>Reputação das contas</h1>
+          <p class="cmx-subtitulo" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+            <span id="rp-subtitulo">Termômetro do Mercado Livre de todas as contas</span>
+            <!-- Fica junto do subtítulo (e não no canto direito) pra não ficar embaixo do menu do usuário. -->
+            <button class="rp-btn rp-btn-escuro" id="rp-atualizar" style="display:none; height:32px;">Atualizar agora</button>
+          </p>
+        </div>
+      </header>
+      <p class="rp-aviso" id="rp-aviso"></p>
+
+      <main id="rp-conteudo">
+        <div class="rp-painel rp-vazio">Carregando…</div>
+      </main>
+    </div>
+  </div>
+
+  <div id="rp-detalhe"></div>
+
+  <script src="/static/reputacao.js?v=1"></script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>
