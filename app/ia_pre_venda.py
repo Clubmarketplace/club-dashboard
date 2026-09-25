@@ -191,3 +191,48 @@ def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str 
     if not texto or SINALIZADOR_SEM_CONTEXTO in texto:
         return None
     return texto
+
+
+def escolher_resposta_padrao(pergunta_texto: str, candidatas: list[dict]) -> int | None:
+    """
+    Respostas padrão (tela "Respostas padrão"): recebe as respostas ativas
+    que valem pra essa pergunta -- [{"tema", "exemplos": [str], "resposta"}] --
+    e pede pro Claude escolher a que responde a pergunta pelo SENTIDO
+    ("tem NF?" = "vem com nota fiscal?"). Devolve o índice escolhido, ou
+    None se nenhuma responder com segurança (ou sem chave / erro de API).
+    Conservador de propósito: na dúvida, NENHUMA -- a pergunta segue pras
+    próximas camadas ou pra equipe.
+    """
+    if not candidatas:
+        return None
+    cliente = _obter_cliente()
+    if cliente is None:
+        return None
+
+    lista = "\n".join(
+        f"{i}. Tema: {c['tema']}\n   Exemplos de pergunta: {' | '.join(c['exemplos']) or '(nenhum)'}\n   Resposta: {c['resposta']}"
+        for i, c in enumerate(candidatas)
+    )
+    prompt_sistema = (
+        "Você decide se uma pergunta de um comprador no Mercado Livre é respondida por "
+        "alguma das RESPOSTAS PADRÃO abaixo, cadastradas pela loja. Compare pelo sentido, "
+        "não pela palavra exata. Só escolha uma resposta se ela responder a pergunta por "
+        "completo e sem risco de estar errada para esse caso; se a pergunta tiver um "
+        "detalhe que a resposta não cobre, não escolha. Responda SOMENTE com o número da "
+        "resposta escolhida (ex.: 2), ou SOMENTE com a palavra NENHUMA.\n\n" + lista
+    )
+    try:
+        resposta = cliente.messages.create(
+            model=CLAUDE_MODEL_PRE_VENDA,
+            max_tokens=10,
+            system=prompt_sistema,
+            messages=[{"role": "user", "content": f"Pergunta do comprador: {pergunta_texto}"}],
+        )
+    except Exception as exc:
+        logger.error("Falha ao chamar a API do Claude pra escolher resposta padrão: %s", exc)
+        return None
+
+    texto = "".join(b.text for b in resposta.content if getattr(b, "type", None) == "text").strip()
+    if texto.isdigit() and int(texto) < len(candidatas):
+        return int(texto)
+    return None

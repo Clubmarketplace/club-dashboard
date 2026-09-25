@@ -9,14 +9,26 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
 # pra essa fase inicial).
+from sqlalchemy import inspect as _inspecionar
+_tabela_respostas_padrao_existia = _inspecionar(engine).has_table("respostas_padrao")
 Base.metadata.create_all(bind=engine)
 # Colunas novas em tabelas que já existiam (o create_all não faz isso).
 garantir_estrutura_atualizada()
+# Primeira subida com a tela "Respostas padrão": cadastra as respostas
+# iniciais (desligadas, pra revisão). Só nessa vez -- se apagarem, não voltam.
+if not _tabela_respostas_padrao_existia:
+    try:
+        from app.respostas_iniciais import semear as _semear_respostas
+        with SessionLocal() as _db:
+            _semear_respostas(_db)
+    except Exception:  # nunca impede o sistema de subir por causa disso
+        import logging as _logging
+        _logging.getLogger(__name__).exception("Não consegui cadastrar as respostas padrão iniciais")
 
 
 def bootstrap_admin_inicial():
@@ -141,6 +153,9 @@ _AREAS = {
     # Termômetro de reputação de todas as contas (só visualizar; o
     # "Atualizar agora" é conferido na própria rota: admin/supervisor).
     "reputacao": {"paginas": {"/reputacao"}, "prefixos_api": ("/api/reputacao/",)},
+    # Respostas padrão da nossa IA (os atendentes cadastram e mantêm; apagar
+    # é conferido na própria rota: só admin/supervisor).
+    "respostas_padrao": {"paginas": {"/respostas-padrao", "/api/respostas-padrao"}, "prefixos_api": ("/api/respostas-padrao/",)},
     # Acompanhar e confirmar as solicitações manuais de cancelamento.
     # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
     # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
@@ -166,7 +181,7 @@ _AREAS = {
 # do que PODE -- tela nova nasce bloqueada pra eles até alguém liberar).
 # Admin e supervisor não aparecem aqui porque têm acesso amplo.
 _AREAS_POR_PAPEL = {
-    "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento", "reputacao"),
+    "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento", "reputacao", "respostas_padrao"),
     "logistica": ("logistica",),
 }
 _PAGINA_INICIAL_POR_PAPEL = {
@@ -251,6 +266,7 @@ app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
 app.include_router(solicitacoes_cancelamento.router)
 app.include_router(reputacao_rotas.router)
+app.include_router(respostas_padrao_rotas.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -297,7 +313,7 @@ def pagina_dashboard(request: Request):
         inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
         perguntas_hoje = db.query(Pergunta).filter(Pergunta.recebida_em >= inicio_do_dia).all()
         pre_venda_total_hoje = len(perguntas_hoje)
-        camadas_automaticas = {"resposta_validada", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
+        camadas_automaticas = {"resposta_validada", "resposta_padrao", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
         pre_venda_ia = sum(1 for p in perguntas_hoje if p.camada_resolvida in camadas_automaticas)
         pre_venda_pct_ia = round(pre_venda_ia / pre_venda_total_hoje * 100) if pre_venda_total_hoje else 0
 
@@ -344,6 +360,11 @@ def pagina_devolucoes(request: Request):
 @app.get("/contas", response_class=HTMLResponse)
 def pagina_contas(request: Request):
     return templates.TemplateResponse(request=request, name="contas.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/respostas-padrao", response_class=HTMLResponse)
+def pagina_respostas_padrao(request: Request):
+    return templates.TemplateResponse(request=request, name="respostas-padrao.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/reputacao", response_class=HTMLResponse)

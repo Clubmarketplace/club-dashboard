@@ -9,6 +9,10 @@ pergunta recebida, seguindo a ordem de camadas combinada:
    ela entra aqui automaticamente (ver routers/pre_venda.py) -- assim
    a próxima pergunta parecida sobre o mesmo produto já sai
    automática, sem precisar de humano nem chamar a camada 2 de novo.
+1.5 Respostas padrão (tela "Respostas padrão") -> a IA escolhe, pelo
+   SENTIDO, a resposta cadastrada que responde a pergunta (as de "todas
+   as contas" + as do próprio produto). Cadastradas pela equipe, então
+   não precisam de auditoria.
 2. Manual técnico do SKU -> a IA (Claude) tenta formular uma resposta
    usando SÓ o conteúdo do manual. Se não tiver confiança suficiente
    (ou a chave não estiver configurada, ou a chamada falhar), cai pra
@@ -17,8 +21,9 @@ pergunta recebida, seguindo a ordem de camadas combinada:
 3. Política geral (palavra-chave) -> responde automático
 4. Nada encontrado (ou nenhuma camada anterior teve confiança) -> fila humana
 """
-from app.models import RespostaValidadaSku, ManualSku, PoliticaGeral
+from app.models import RespostaValidadaSku, ManualSku, PoliticaGeral, RespostaPadrao
 from app.ia_pre_venda import (
+    escolher_resposta_padrao,
     gerar_resposta_com_manual,
     encontrar_indice_resposta_similar,
     buscar_resposta_no_site_fabricante,
@@ -90,6 +95,46 @@ def buscar_resposta_validada(db, sku: str | None, texto_pergunta: str, item_id: 
     return historico[indice]
 
 
+LIMITE_RESPOSTAS_PADRAO_CONSULTADAS = 60  # teto pra chamada de IA não crescer sem limite
+
+
+def respostas_padrao_candidatas(db, sku: str | None, item_id: str | None) -> list[RespostaPadrao]:
+    """As ativas que valem pra essa pergunta: as do próprio produto primeiro, depois as gerais."""
+    chaves = [c for c in {(sku or "").strip(), (item_id or "").strip()} if c]
+    do_produto = []
+    if chaves:
+        do_produto = (
+            db.query(RespostaPadrao)
+            .filter(RespostaPadrao.ativa.is_(True), RespostaPadrao.alcance == "produto",
+                    RespostaPadrao.produto_chave.in_(chaves))
+            .order_by(RespostaPadrao.id.desc())
+            .all()
+        )
+    gerais = (
+        db.query(RespostaPadrao)
+        .filter(RespostaPadrao.ativa.is_(True), RespostaPadrao.alcance == "geral")
+        .order_by(RespostaPadrao.usada.desc(), RespostaPadrao.id.desc())
+        .all()
+    )
+    return (do_produto + gerais)[:LIMITE_RESPOSTAS_PADRAO_CONSULTADAS]
+
+
+def para_ia(r: RespostaPadrao) -> dict:
+    return {
+        "tema": r.tema,
+        "exemplos": [e.strip() for e in (r.exemplos or "").splitlines() if e.strip()],
+        "resposta": r.resposta,
+    }
+
+
+def buscar_resposta_padrao(db, sku: str | None, texto_pergunta: str, item_id: str | None = None) -> RespostaPadrao | None:
+    candidatas = respostas_padrao_candidatas(db, sku, item_id)
+    if not candidatas:
+        return None
+    indice = escolher_resposta_padrao(texto_pergunta, [para_ia(r) for r in candidatas])
+    return candidatas[indice] if indice is not None else None
+
+
 def buscar_manual_por_sku(db, sku: str | None) -> ManualSku | None:
     if not sku:
         return None
@@ -129,6 +174,16 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
             "camada": "resposta_validada",
             "status": "respondida",
             "precisa_auditoria": False,
+        }
+
+    padrao = buscar_resposta_padrao(db, sku, texto_pergunta, item_id=item_id)
+    if padrao:
+        padrao.usada = (padrao.usada or 0) + 1  # quem chama faz o commit
+        return {
+            "resposta": padrao.resposta,
+            "camada": "resposta_padrao",
+            "status": "respondida",
+            "precisa_auditoria": False,  # texto escrito pela própria equipe
         }
 
     manual = buscar_manual_por_sku(db, sku)

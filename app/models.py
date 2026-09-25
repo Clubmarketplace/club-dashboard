@@ -445,3 +445,32 @@ class ReputacaoConta(Base):
     atrasos_qtd = Column(Integer, nullable=True)
 
     bruto = Column(Text, nullable=True)  # seller_reputation completo (JSON), pra conferência
+
+
+class RespostaPadrao(Base):
+    """
+    Resposta padrão cadastrada pela equipe (tela "Respostas padrão"):
+    tema + exemplos de pergunta + resposta. A nossa IA entende o SENTIDO
+    (não precisa bater a palavra exata) e usa quando a IA do ML não
+    respondeu. Substitui, com vantagem, a antiga PoliticaGeral por
+    palavra-chave (que continua funcionando como último recurso).
+
+    alcance: "geral"   -> vale pra todas as contas
+             "produto" -> vale só pro produto de produto_chave (SKU, ou
+                          o código MLB do anúncio quando não tem SKU)
+    """
+
+    __tablename__ = "respostas_padrao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tema = Column(String, nullable=False)
+    exemplos = Column(Text, nullable=False, default="")  # um exemplo de pergunta por linha
+    resposta = Column(Text, nullable=False)
+    alcance = Column(String, nullable=False, default="geral")
+    produto_chave = Column(String, nullable=True, index=True)
+    produto_nome = Column(String, nullable=True)  # só pra exibir na tela
+    ativa = Column(Boolean, nullable=False, default=True)
+    usada = Column(Integer, nullable=False, default=0)  # quantas vezes a IA usou
+    criado_por = Column(String, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

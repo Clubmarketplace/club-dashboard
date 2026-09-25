@@ -12,7 +12,10 @@ pra sempre nos painéis.
         apagada/encerrada   -> "encerrada_no_ml" (sai da fila, cinza)
         ainda sem resposta  -> continua na fila
   - conferir_fila(): passa por todas as perguntas esperando (mais antigas
-    primeiro), reaproveitando o token de cada conta.
+    primeiro), reaproveitando o token de cada conta. Também encerra a
+    JANELA DA IA DO ML: pergunta em "aguardando_ml" há mais de
+    JANELA_IA_ML_MIN minutos e ainda sem resposta no ML -> a nossa IA
+    tenta (app/pre_venda_resposta.py); se não souber, vai pra equipe.
   - loop_vigia_perguntas(): roda conferir_fila() a cada
     VIGIA_PERGUNTAS_INTERVALO_SEG segundos (padrão 60). Desliga com
     VIGIA_PERGUNTAS_ATIVA=0.
@@ -36,7 +39,10 @@ from app.models import Conta, Pergunta
 logger = logging.getLogger(__name__)
 
 # Status nossos que significam "ainda esperando resposta".
-STATUS_ESPERANDO = ("fila_humana", "pendente")
+#   aguardando_ml -> dentro da janela em que a IA do ML tem a vez
+#   pendente      -> em processamento (nossa IA decidindo/enviando)
+#   fila_humana   -> com a equipe
+STATUS_ESPERANDO = ("fila_humana", "pendente", "aguardando_ml")
 # "pendente" = o webhook ainda está decidindo. Só confere depois desse
 # tempo, pra não atravessar uma resposta automática em andamento.
 PENDENTE_TOLERANCIA_MIN = 5
@@ -73,10 +79,27 @@ def _atualizar_se_esperando(db, pergunta_id: int, campos: dict) -> bool:
     return alteradas > 0
 
 
+def _atualizar_de(db, pergunta_id: int, de: str, campos: dict) -> bool:
+    """UPDATE condicional: só altera se a pergunta estiver EXATAMENTE no status 'de'."""
+    alteradas = (
+        db.query(Pergunta)
+        .filter(Pergunta.id == pergunta_id, Pergunta.status == de)
+        .update(campos, synchronize_session=False)
+    )
+    db.commit()
+    return alteradas > 0
+
+
+def _reservar(db, pergunta_id: int, de: str) -> bool:
+    """Marca a pergunta como 'pendente' (em processamento) se ela ainda estiver em 'de'."""
+    return _atualizar_de(db, pergunta_id, de=de, campos={"status": "pendente"})
+
+
 def conferir_pergunta(pergunta: Pergunta, access_token: str, db) -> str:
     """
     Confere UMA pergunta no ML. Devolve:
-      "respondida_fora" | "encerrada" | "esperando" | "falha"
+      "respondida_fora" | "encerrada" | "sem_resposta" (UNANSWERED) |
+      "esperando" (em análise no ML, ou mudou de status aqui no meio) | "falha"
     Nunca levanta exceção.
     """
     try:
@@ -116,7 +139,9 @@ def conferir_pergunta(pergunta: Pergunta, access_token: str, db) -> str:
         })
         return "encerrada" if ok else "esperando"
 
-    # UNANSWERED, UNDER_REVIEW (em análise no ML) ou algo novo: continua na fila.
+    if status_ml == "UNANSWERED":
+        return "sem_resposta"
+    # UNDER_REVIEW (em análise no ML) ou algum status novo: só espera.
     return "esperando"
 
 
@@ -124,15 +149,21 @@ def conferir_fila() -> dict:
     """Uma rodada do vigia. Se já houver uma rodando, não começa outra."""
     if not _trava.acquire(blocking=False):
         return {"status": "ja_em_andamento"}
-    contagem = {"conferidas": 0, "respondida_fora": 0, "encerrada": 0, "esperando": 0, "falha": 0, "sem_acesso": 0}
+    from app.pre_venda_resposta import janela_ia_ml_min, responder_com_nossa_ia
+
+    contagem = {"conferidas": 0, "respondida_fora": 0, "encerrada": 0, "sem_resposta": 0, "esperando": 0,
+                "falha": 0, "sem_acesso": 0, "nossa_ia_respondeu": 0, "foi_pra_equipe": 0}
     try:
         with SessionLocal() as db:
-            limite_pendente = datetime.utcnow() - timedelta(minutes=PENDENTE_TOLERANCIA_MIN)
+            agora = datetime.utcnow()
+            limite_pendente = agora - timedelta(minutes=PENDENTE_TOLERANCIA_MIN)
+            fim_da_janela = agora - timedelta(minutes=janela_ia_ml_min())
             perguntas = (
                 db.query(Pergunta)
                 .filter(
                     (Pergunta.status == "fila_humana")
                     | ((Pergunta.status == "pendente") & (Pergunta.recebida_em < limite_pendente))
+                    | ((Pergunta.status == "aguardando_ml") & (Pergunta.recebida_em <= fim_da_janela))
                 )
                 .order_by(Pergunta.recebida_em.asc())
                 .limit(LIMITE_POR_RODADA)
@@ -151,10 +182,28 @@ def conferir_fila() -> dict:
                 if not token:
                     contagem["sem_acesso"] += 1
                     continue
-                contagem[conferir_pergunta(pergunta, token, db)] += 1
+                status_antes = pergunta.status
+                resultado = conferir_pergunta(pergunta, token, db)
+                contagem[resultado] += 1
                 contagem["conferidas"] += 1
+
+                if resultado == "sem_resposta" and status_antes == "aguardando_ml":
+                    # Janela acabou e a IA do ML não respondeu: vez da nossa IA.
+                    # "Reserva" a pergunta (UPDATE condicional) antes de agir --
+                    # garante que nunca saem duas respostas pra mesma pergunta.
+                    if _reservar(db, pergunta.id, de="aguardando_ml"):
+                        db.refresh(pergunta)
+                        if responder_com_nossa_ia(pergunta, token, db) == "respondida":
+                            contagem["nossa_ia_respondeu"] += 1
+                        else:
+                            contagem["foi_pra_equipe"] += 1
+                elif resultado == "sem_resposta" and status_antes == "pendente":
+                    # Processamento interrompido no meio (ex.: reinício do
+                    # servidor): não deixa a pergunta presa -- vai pra equipe.
+                    _atualizar_de(db, pergunta.id, de="pendente", campos={"status": "fila_humana"})
+                    contagem["foi_pra_equipe"] += 1
                 time.sleep(PAUSA_ENTRE_CONSULTAS_SEG)
-        if contagem["respondida_fora"] or contagem["encerrada"]:
+        if contagem["respondida_fora"] or contagem["encerrada"] or contagem["nossa_ia_respondeu"] or contagem["foi_pra_equipe"]:
             logger.info("Vigia da fila: %s", contagem)
         return contagem
     finally:
