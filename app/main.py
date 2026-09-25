@@ -71,6 +71,25 @@ async def _iniciar_verificacao_cancelamentos() -> None:
     logging.getLogger(__name__).info("Verificação automática de cancelamentos iniciada (a cada 12 min).")
 
 
+# --- Tarefa em segundo plano: vigia da fila de pré-venda (ver
+# app/vigia_perguntas.py). A cada 60 s confere no ML se as perguntas que
+# estão esperando já foram respondidas por fora (IA do ML / seller no app)
+# ou apagadas. Intervalo: VIGIA_PERGUNTAS_INTERVALO_SEG. Desliga com
+# VIGIA_PERGUNTAS_ATIVA=0.
+@app.on_event("startup")
+async def _iniciar_vigia_perguntas() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("VIGIA_PERGUNTAS_ATIVA", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Vigia da fila de pré-venda DESLIGADO pela variável de ambiente.")
+        return
+    from app.vigia_perguntas import loop_vigia_perguntas
+    app.state.tarefa_vigia_perguntas = asyncio.create_task(loop_vigia_perguntas())
+    logging.getLogger(__name__).info("Vigia da fila de pré-venda iniciado.")
+
+
 # --- Tarefa em segundo plano: leitura da reputação (termômetro) de todas as
 # contas no Mercado Livre (ver app/reputacao.py). Padrão: a cada 90 min
 # (REPUTACAO_INTERVALO_MIN). Desliga com REPUTACAO_AUTOMATICA_ATIVA=0.
@@ -278,7 +297,7 @@ def pagina_dashboard(request: Request):
         inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
         perguntas_hoje = db.query(Pergunta).filter(Pergunta.recebida_em >= inicio_do_dia).all()
         pre_venda_total_hoje = len(perguntas_hoje)
-        camadas_automaticas = {"resposta_validada", "manual_sku_ia", "politica_geral"}
+        camadas_automaticas = {"resposta_validada", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
         pre_venda_ia = sum(1 for p in perguntas_hoje if p.camada_resolvida in camadas_automaticas)
         pre_venda_pct_ia = round(pre_venda_ia / pre_venda_total_hoje * 100) if pre_venda_total_hoje else 0
 
