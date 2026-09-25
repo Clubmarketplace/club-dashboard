@@ -13,10 +13,11 @@ Fluxo:
 from datetime import datetime
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
+from app import auth
 from app.database import get_db
 from app.models import Conta, EmpresaPlanejada, Devolucao, AcaoRegistrada
 from app.ml_client import (
@@ -55,6 +56,9 @@ def listar_contas_conectadas(db: Session = Depends(get_db)):
             "token_expirado": bool(c.token_expira_em and c.token_expira_em < agora),
             "conectada_em": c.conectada_em.isoformat() if c.conectada_em else None,
             "token_expira_em": c.token_expira_em.isoformat() if c.token_expira_em else None,
+            "inativa": c.inativa_em is not None,
+            "inativa_em": c.inativa_em.isoformat() if c.inativa_em else None,
+            "motivo_inativacao": c.motivo_inativacao,
         }
         for c in contas
     ]
@@ -219,6 +223,11 @@ def callback(
     conta.token_expira_em = calcular_expiracao(expires_in)
     conta.conectada_em = datetime.utcnow()
     conta.ativa = True
+    if conta.inativa_em is not None:
+        # Seller que tinha saído do Club autorizou de novo: volta a ser ativa.
+        logger.info("Conta %s reativada automaticamente ao reconectar", conta.apelido)
+        conta.inativa_em = None
+        conta.motivo_inativacao = None
 
     db.commit()
     db.refresh(conta)
@@ -290,3 +299,63 @@ def excluir_conta(conta_id: int, db: Session = Depends(get_db)):
     db.commit()
 
     return {"status": "excluida", "apelido": apelido}
+
+
+# ---------------------------------------------------------------------------
+# Inativar / reativar conta (seller que saiu do Club) -- SÓ ADMIN
+# ---------------------------------------------------------------------------
+# Inativar NÃO apaga nada: a conta some das listas e filtros, o token é
+# limpo (não faz sentido continuar acessando o ML de quem saiu) e o
+# histórico continua nos relatórios. Reativar devolve a conta às listas;
+# se ela estiver sem token, basta mandar o link de autorização de sempre
+# (o próprio callback também reativa ao reconectar).
+
+def _exigir_admin(request: Request, db: Session):
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin",)):
+        raise HTTPException(status_code=403, detail="Só o admin pode inativar ou reativar contas.")
+    return usuario
+
+
+def _conta_ou_404(conta_id: int, db: Session) -> Conta:
+    conta = db.query(Conta).filter(Conta.id == conta_id).first()
+    if conta is None:
+        raise HTTPException(status_code=404, detail="Conta não encontrada")
+    return conta
+
+
+@router.post("/contas/{conta_id}/inativar")
+def inativar_conta(
+    conta_id: int,
+    request: Request,
+    dados: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    usuario = _exigir_admin(request, db)
+    conta = _conta_ou_404(conta_id, db)
+    if conta.inativa_em is not None:
+        return {"status": "ja_inativa", "apelido": conta.apelido}
+
+    motivo = str((dados or {}).get("motivo") or "").strip()[:200] or "Saiu do Club"
+    conta.inativa_em = datetime.utcnow()
+    conta.motivo_inativacao = motivo
+    conta.access_token = None
+    conta.refresh_token = None
+    conta.token_expira_em = None
+    conta.ativa = False
+    db.commit()
+    logger.warning("Conta %s (ml %s) inativada por %s: %s",
+                   conta.apelido, conta.ml_user_id, getattr(usuario, "nome_exibicao", "?"), motivo)
+    return {"status": "inativada", "apelido": conta.apelido}
+
+
+@router.post("/contas/{conta_id}/reativar")
+def reativar_conta(conta_id: int, request: Request, db: Session = Depends(get_db)):
+    usuario = _exigir_admin(request, db)
+    conta = _conta_ou_404(conta_id, db)
+    conta.inativa_em = None
+    conta.motivo_inativacao = None
+    db.commit()
+    logger.warning("Conta %s (ml %s) reativada por %s",
+                   conta.apelido, conta.ml_user_id, getattr(usuario, "nome_exibicao", "?"))
+    return {"status": "reativada", "apelido": conta.apelido, "precisa_reconectar": not conta.access_token}

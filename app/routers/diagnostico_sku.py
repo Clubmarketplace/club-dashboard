@@ -252,11 +252,10 @@ def _porcentagem(valor):
 
 @router.get("/diagnostico-reputacao")
 def diagnostico_reputacao(request: Request, conta: str, db: Session = Depends(get_db)):
-    from app.contas_util import chave_conta
+    from app.contas_util import achar_conta_por_nome
 
     _exigir_admin(request, db)
-    alvo = chave_conta(conta)
-    encontrada = next((c for c in db.query(Conta).all() if chave_conta(c.apelido) == alvo), None)
+    encontrada = achar_conta_por_nome(db, conta)
     if encontrada is None:
         raise HTTPException(status_code=404, detail=f'Não achei a conta "{conta}" em Contas conectadas.')
 
@@ -305,3 +304,95 @@ def diagnostico_reputacao(request: Request, conta: str, db: Session = Depends(ge
         # O bloco inteiro como veio do ML, pra conferir campo a campo se algo não bater.
         "seller_reputation_original": rep,
     }
+
+
+# ---------------------------------------------------------------------------
+# Excluir conta de teste / conta que saiu do Club (SÓ ADMIN)
+# ---------------------------------------------------------------------------
+# A exclusão normal (DELETE /contas/{id}) recusa contas que têm histórico,
+# de propósito. Esta ferramenta existe para os casos em que o histórico
+# também deve sumir (conta de teste, ou seller que saiu do Club).
+#
+# Segurança:
+#   - só papel "admin" (supervisor NÃO);
+#   - localiza a conta SOMENTE pelo ml_user_id exato (nunca pelo nome,
+#     porque existem contas com nomes parecidos, ex.: "Velasco"/"VELASCO");
+#   - recusa conta que ainda está conectada (com token) -- desconecte antes;
+#   - sem "confirmar=SIM" só mostra o que seria apagado (nada é alterado);
+#   - tudo numa transação única: se algo falhar, nada é apagado.
+# Não mexe em SolicitacaoCancelamento (gravadas pelo nome da conta) nem em
+# usuários/operadores.
+
+def _exigir_somente_admin(request: Request, db: Session):
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin",)):
+        raise HTTPException(status_code=403, detail="Só o admin pode excluir contas.")
+    return usuario
+
+
+@router.get("/excluir-conta-teste")
+def excluir_conta_teste(
+    request: Request,
+    ml_user_id: str,
+    confirmar: str = "",
+    db: Session = Depends(get_db),
+):
+    from app.models import AcaoRegistrada, Devolucao, MensagemPosVenda, PedidoCancelamento
+
+    usuario = _exigir_somente_admin(request, db)
+
+    ml_user_id = (ml_user_id or "").strip()
+    if not ml_user_id.isdigit():
+        raise HTTPException(status_code=400, detail="Informe o ml_user_id numérico exato da conta.")
+
+    conta = db.query(Conta).filter(Conta.ml_user_id == ml_user_id).first()
+    if conta is None:
+        raise HTTPException(status_code=404, detail=f"Nenhuma conta com ml_user_id {ml_user_id}.")
+
+    if conta.access_token:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' (ml_user_id {ml_user_id}) ainda está conectada. "
+                "Por segurança, desconecte-a em Contas conectadas antes de excluir."
+            ),
+        )
+
+    # Ordem importa: pedidos de cancelamento apontam para mensagens pós-venda.
+    tabelas = [
+        ("pedidos_cancelamento", PedidoCancelamento),
+        ("mensagens_pos_venda", MensagemPosVenda),
+        ("perguntas", Pergunta),
+        ("acoes_registradas", AcaoRegistrada),
+        ("devolucoes", Devolucao),
+    ]
+    contagem = {nome: db.query(modelo).filter(modelo.conta_id == conta.id).count() for nome, modelo in tabelas}
+
+    info_conta = {"id": conta.id, "apelido": conta.apelido, "ml_user_id": conta.ml_user_id}
+
+    if confirmar != "SIM":
+        return {
+            "modo": "pré-visualização (nada foi apagado)",
+            "conta": info_conta,
+            "seria_apagado": contagem,
+            "para_confirmar": f"repita a mesma URL acrescentando &confirmar=SIM",
+        }
+
+    try:
+        apagado = {}
+        for nome, modelo in tabelas:
+            apagado[nome] = (
+                db.query(modelo).filter(modelo.conta_id == conta.id).delete(synchronize_session=False)
+            )
+        db.delete(conta)
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Falha ao excluir conta %s", ml_user_id)
+        raise HTTPException(status_code=500, detail=f"Nada foi apagado (erro: {exc}).")
+
+    logger.warning(
+        "Conta excluída por %s: %s (ml_user_id %s) -- %s",
+        getattr(usuario, "nome_exibicao", "?"), info_conta["apelido"], ml_user_id, apagado,
+    )
+    return {"modo": "excluída", "conta": info_conta, "apagado": apagado}

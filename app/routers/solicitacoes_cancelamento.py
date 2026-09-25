@@ -168,12 +168,24 @@ def _mapa_contas_conhecidas(db: Session) -> dict[str, str]:
         if nome and limpar_espacos(nome):
             mapa.setdefault(chave_conta(nome), limpar_espacos(nome))
 
-    for (apelido,) in db.query(Conta.apelido).all():
-        registrar(apelido)
+    contas = db.query(Conta).all()
+    ativas = [c for c in contas if c.inativa_em is None]
+    # Conectadas primeiro: com nomes repetidos ("Velasco"/"VELASCO") vale o
+    # nome da conta que está em uso.
+    for c in sorted(ativas, key=lambda c: not c.access_token):
+        registrar(c.apelido)
     for (vinculada,) in db.query(Usuario.conta_vinculada).filter(Usuario.papel == "seller").all():
         registrar(vinculada)
     for (nome,) in db.query(SolicitacaoCancelamento.conta).order_by(SolicitacaoCancelamento.criado_em.asc()).all():
         registrar(nome)
+
+    # Contas que saíram do Club somem das listas/filtros (o histórico continua
+    # aparecendo com o nome gravado na própria solicitação). Só sai se não
+    # houver outra conta ATIVA com a mesma chave.
+    chaves_ativas = {chave_conta(c.apelido) for c in ativas}
+    for c in contas:
+        if c.inativa_em is not None and chave_conta(c.apelido) not in chaves_ativas:
+            mapa.pop(chave_conta(c.apelido), None)
     return mapa
 
 
