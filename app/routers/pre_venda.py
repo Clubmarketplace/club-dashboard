@@ -36,6 +36,8 @@ def _resolvida_por(p: Pergunta) -> str:
         return "Atendente"
     if p.status == "respondida_externamente":
         return "Por fora (ML/app)"
+    if p.status == "encerrada_no_ml":
+        return "Encerrada no ML"
     return "—"
 
 
@@ -46,7 +48,7 @@ def _utc_para_br(data_utc_naive: datetime) -> datetime:
 # Camadas que respondem sozinhas (sem humano) — usado só pra classificar
 # estatística no painel de TV; não muda a lógica de decisão em si (essa
 # continua em pre_venda_logica.py).
-CAMADAS_AUTOMATICAS = {"resposta_validada", "manual_sku_ia", "politica_geral"}
+CAMADAS_AUTOMATICAS = {"resposta_validada", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
 
 
 class RespostaManual(BaseModel):

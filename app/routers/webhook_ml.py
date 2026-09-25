@@ -134,9 +134,20 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
     if conta is None or not conta.access_token:
         return {"status": "conta_nao_conectada", "ml_user_id": ml_user_id}
 
-    # Evita duplicar se o Mercado Livre reenviar a mesma notificação
+    # Evita duplicar se o Mercado Livre reenviar a mesma notificação.
+    # O ML também avisa quando a pergunta é RESPONDIDA (pela IA dele ou pelo
+    # seller no app): se ela ainda está esperando aqui, confere na hora pra
+    # sair da fila -- antes esse aviso era ignorado e a pergunta ficava presa.
     ja_existe = db.query(Pergunta).filter(Pergunta.ml_question_id == question_id).first()
     if ja_existe:
+        if ja_existe.status in ("fila_humana",):
+            from app.vigia_perguntas import conferir_pergunta
+            try:
+                resultado = conferir_pergunta(ja_existe, garantir_token_valido(conta, db), db)
+            except Exception as exc:  # o vigia periódico tenta de novo em 1 minuto
+                logger.warning("Não consegui conferir a pergunta %s agora: %s", ja_existe.id, exc)
+                resultado = "falha"
+            return {"status": "ja_processada", "pergunta_id": ja_existe.id, "conferida": resultado}
         return {"status": "ja_processada", "pergunta_id": ja_existe.id}
 
     access_token = garantir_token_valido(conta, db)
