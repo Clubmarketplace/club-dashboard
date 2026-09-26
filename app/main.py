@@ -326,7 +326,7 @@ def pagina_dashboard(request: Request):
         inicio_do_dia = agora.replace(hour=0, minute=0, second=0, microsecond=0)
         perguntas_hoje = db.query(Pergunta).filter(Pergunta.recebida_em >= inicio_do_dia).all()
         pre_venda_total_hoje = len(perguntas_hoje)
-        camadas_automaticas = {"resposta_validada", "resposta_padrao", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
+        camadas_automaticas = {"resposta_validada", "resposta_padrao", "dados_anuncio", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
         pre_venda_ia = sum(1 for p in perguntas_hoje if p.camada_resolvida in camadas_automaticas)
         pre_venda_pct_ia = round(pre_venda_ia / pre_venda_total_hoje * 100) if pre_venda_total_hoje else 0
 

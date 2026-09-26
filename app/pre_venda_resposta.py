@@ -46,6 +46,7 @@ def responder_com_nossa_ia(pergunta: Pergunta, access_token: str, db) -> str:
     try:
         decisao = decidir_resposta(
             db, pergunta.sku, pergunta.texto or "", pergunta.titulo_anuncio, item_id=pergunta.item_id,
+            access_token=access_token,
         )
     except Exception:
         logger.exception("Nossa IA falhou ao decidir a pergunta %s -- vai pra equipe", pergunta.id)

@@ -22,6 +22,83 @@ logger = logging.getLogger("ia_pre_venda")
 
 SINALIZADOR_SEM_CONTEXTO = "SEM_CONTEXTO_SUFICIENTE"
 
+# Regras de escrita que valem pra TODA resposta que vai pro comprador.
+REGRAS_DE_ESCRITA = (
+    "Escreva APENAS o texto final que será enviado ao comprador, pronto, em português do Brasil. "
+    "Não comente o que você fez ou vai fazer (nada de 'vou pesquisar', 'deixe-me buscar', "
+    "'encontrei', 'minha função'), não fale de fontes, sites ou pesquisa, e não use formatação "
+    "(sem negrito, asteriscos, listas, títulos ou links). Nunca sugira ao comprador procurar o "
+    "fabricante, outra loja ou outro canal. Se não tiver certeza da resposta, não escreva nada "
+    f"além de: {SINALIZADOR_SEM_CONTEXTO}"
+)
+
+# Frases que denunciam "raciocínio" da IA ou resposta em dúvida. Se aparecerem,
+# a resposta NÃO é enviada: a pergunta vai pra equipe (ver resposta_segura).
+_FRASES_BLOQUEADAS = (
+    # raciocínio / narração da pesquisa
+    "minha funcao", "deixe-me", "deixa eu", "vou buscar", "vou pesquisar", "vou verificar",
+    "pesquisei", "pesquisando", "encontrei", "achei a", "achei uma", "localizei", "segundo a pesquisa",
+    "site oficial", "ficha tecnica que", "com base na pesquisa", "resultados da busca", "como ia", "como assistente",
+    # dúvida / não-resposta
+    "nao localizei", "nao encontrei", "nao consegui", "nao tenho essa", "nao tenho informac",
+    "nao ha informac", "nao possuo", "nao sei", "nao foi possivel", "sem informac",
+    "recomendo consultar", "recomendamos consultar", "consulte o fabricante", "contatar o fabricante",
+    "contato com o fabricante", "entre em contato", "contatar diretamente", "site do fabricante",
+    SINALIZADOR_SEM_CONTEXTO.lower(), "semcontexto", "sem contexto",
+)
+
+
+def _sem_acento(texto: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFKD", texto or "") if not unicodedata.combining(c)).lower()
+
+
+def _texto_final(resposta) -> str:
+    """
+    Só o texto FINAL da IA. Quando ela usa a busca na web, o conteúdo vem em
+    pedaços: comentários antes da busca, a busca, e a resposta depois. Antes
+    o sistema juntava tudo e o comprador recebia o "raciocínio" junto.
+    Aqui pega só os textos que vêm DEPOIS do último resultado de ferramenta.
+    """
+    blocos = list(getattr(resposta, "content", None) or [])
+    ultimo_resultado = -1
+    for i, b in enumerate(blocos):
+        tipo = str(getattr(b, "type", "") or "")
+        if tipo.endswith("tool_result") or tipo in ("server_tool_use", "tool_use"):
+            ultimo_resultado = i
+    textos = [getattr(b, "text", "") for b in blocos[ultimo_resultado + 1:] if getattr(b, "type", None) == "text"]
+    return "".join(textos).strip()
+
+
+def limpar_formatacao(texto: str) -> str:
+    """Tira markdown (negrito, títulos, listas, links) -- o Mercado Livre mostra texto puro."""
+    import re
+    t = texto or ""
+    t = re.sub(r"\[([^\]]+)\]\((?:https?://)?[^)]+\)", r"\1", t)   # [texto](link) -> texto
+    t = re.sub(r"https?://\S+", "", t)                              # links soltos
+    t = re.sub(r"[*_`#>]+", "", t)                                   # **negrito**, # título, `código`
+    t = re.sub(r"^\s*[-•]\s+", "", t, flags=re.MULTILINE)            # marcadores de lista
+    t = re.sub(r"\s+", " ", t)                                       # tudo numa linha só
+    return t.strip()
+
+
+def resposta_segura(texto: str | None) -> str | None:
+    """
+    Última trava antes de enviar ao comprador. Devolve o texto limpo, ou None
+    (= não enviar, vai pra equipe) se estiver vazio, longo demais, com cara de
+    raciocínio da IA ou de resposta em dúvida.
+    """
+    if not texto or SINALIZADOR_SEM_CONTEXTO in texto.upper().replace(" ", "_"):
+        return None  # a IA disse que não sabe (conferido ANTES da limpeza, que tira os "_")
+    limpo = limpar_formatacao(texto)
+    if not limpo or len(limpo) > 2000:
+        return None
+    normal = _sem_acento(limpo)
+    if any(frase in normal for frase in _FRASES_BLOQUEADAS):
+        logger.warning("Resposta da IA bloqueada pela trava de segurança: %s", limpo[:200])
+        return None
+    return limpo
+
 _cliente = None
 
 
@@ -108,7 +185,7 @@ def gerar_resposta_com_manual(pergunta_texto: str, manual_titulo: str | None, ma
         "especificação, prazo, compatibilidade, cor, tamanho ou qualquer dado que "
         "não esteja explicitamente no manual. Se o manual não contiver informação "
         "suficiente pra responder essa pergunta com segurança, responda EXATA e "
-        f"SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n\n"
+        f"SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n" + REGRAS_DE_ESCRITA + "\n\n"
         f"--- MANUAL TÉCNICO: {manual_titulo or '(sem título)'} ---\n{manual_conteudo}"
     )
 
@@ -123,13 +200,8 @@ def gerar_resposta_com_manual(pergunta_texto: str, manual_titulo: str | None, ma
         logger.error("Falha ao chamar a API do Claude pra pré-venda: %s", exc)
         return None
 
-    texto = "".join(
-        bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
-    ).strip()
-
-    if not texto or SINALIZADOR_SEM_CONTEXTO in texto:
-        return None
-    return texto
+    # Só o texto final (sem o "raciocínio" da busca), limpo e conferido.
+    return resposta_segura(_texto_final(resposta))
 
 
 def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str | None, sku: str | None) -> str | None:
@@ -168,7 +240,10 @@ def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str 
         "qualquer dado que não esteja explicitamente lá. Se não encontrar o site do "
         "fabricante, se o produto exato não bater com o que achou, ou se a informação "
         "encontrada não for suficiente pra responder com segurança, responda EXATA e "
-        f"SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n\n"
+        f"SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n"
+        "Se a pergunta for sobre COMPATIBILIDADE com um modelo/veículo específico e o "
+        "fabricante não citar exatamente esse modelo, também responda só "
+        f"{SINALIZADOR_SEM_CONTEXTO}.\n" + REGRAS_DE_ESCRITA + "\n\n"
         f"--- PRODUTO: {identificador} ---"
     )
 
@@ -184,13 +259,8 @@ def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str 
         logger.error("Falha ao chamar a API do Claude pra busca no site do fabricante: %s", exc)
         return None
 
-    texto = "".join(
-        bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
-    ).strip()
-
-    if not texto or SINALIZADOR_SEM_CONTEXTO in texto:
-        return None
-    return texto
+    # Só o texto final (sem o "raciocínio" da busca), limpo e conferido.
+    return resposta_segura(_texto_final(resposta))
 
 
 def escolher_resposta_padrao(pergunta_texto: str, candidatas: list[dict]) -> int | None:
@@ -236,3 +306,46 @@ def escolher_resposta_padrao(pergunta_texto: str, candidatas: list[dict]) -> int
     if texto.isdigit() and int(texto) < len(candidatas):
         return int(texto)
     return None
+
+
+def responder_com_dados_do_anuncio(pergunta_texto: str, ficha_anuncio: str) -> str | None:
+    """
+    Dados do anúncio ("manual automático"): responde usando SÓ o que está no
+    próprio anúncio -- ficha técnica, variações (cor/tamanho/voltagem), estoque,
+    garantia, envio (Full), descrição e compatibilidades. É a fonte mais
+    confiável pra dúvida técnica e de compatibilidade (é o que o comprador vê).
+    Devolve o texto pronto, ou None (vai pra próxima camada / equipe).
+    """
+    if not ficha_anuncio:
+        return None
+    cliente = _obter_cliente()
+    if cliente is None:
+        return None
+
+    prompt_sistema = (
+        "Você responde perguntas de pré-venda de um anúncio no Mercado Livre, num tom cordial "
+        "e direto, em no máximo 2-3 frases, começando com 'Olá!'. Use APENAS os DADOS DO "
+        "ANÚNCIO abaixo. Regras:\n"
+        "- Cor, tamanho, voltagem ou modelo à venda: só os que aparecem nas VARIAÇÕES como "
+        "disponível (ou no título/ficha, se o anúncio não tiver variações).\n"
+        "- Compatibilidade com veículo/aparelho/modelo: só confirme se o modelo (e o ano, se "
+        "perguntado) aparecer EXPLICITAMENTE nos dados (descrição, lista de aplicação, ficha "
+        "ou compatibilidades). Se não aparecer, não responda.\n"
+        "- Estoque: diga apenas se está disponível; nunca informe quantidade.\n"
+        "- Nunca invente medida, material, prazo, garantia ou qualquer dado que não esteja nos "
+        "dados. Se a pergunta for sobre outro assunto (desconto, pedido já feito, troca), ou os "
+        "dados não responderem com certeza, responda só "
+        f"{SINALIZADOR_SEM_CONTEXTO}.\n" + REGRAS_DE_ESCRITA +
+        "\n\n--- DADOS DO ANÚNCIO ---\n" + ficha_anuncio
+    )
+    try:
+        resposta = cliente.messages.create(
+            model=CLAUDE_MODEL_PRE_VENDA,
+            max_tokens=300,
+            system=prompt_sistema,
+            messages=[{"role": "user", "content": pergunta_texto}],
+        )
+    except Exception as exc:  # falha de API/rede: segue pras próximas camadas
+        logger.error("Falha ao chamar a API do Claude com os dados do anúncio: %s", exc)
+        return None
+    return resposta_segura(_texto_final(resposta))

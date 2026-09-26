@@ -249,6 +249,113 @@ def ler_dados_do_anuncio(access_token: str, item_id: str, usar_cache: bool = Tru
     return dados
 
 
+# ---------------------------------------------------------------------------
+# Ficha completa do anúncio (pra nossa IA responder dúvidas técnicas)
+# ---------------------------------------------------------------------------
+# Junta num texto só o que o comprador vê no anúncio: título, ficha técnica
+# (atributos), variações com estoque (cor, tamanho, voltagem...), garantia,
+# envio (Full, frete grátis, retirada), descrição e, quando o ML tiver, a
+# lista de compatibilidades (autopeças). Memória curta (20 min): estoque e
+# variações mudam ao longo do dia.
+_CACHE_FICHA: dict[str, tuple[datetime, str]] = {}
+_CACHE_FICHA_VALIDADE = timedelta(minutes=20)
+LIMITE_DESCRICAO = 6000      # caracteres da descrição enviados à IA (controle de custo)
+LIMITE_ATRIBUTOS = 80
+LIMITE_COMPATIBILIDADES = 120
+_ATRIBUTOS_IGNORADOS = {"SELLER_SKU", "GTIN", "EAN", "UPC", "ITEM_CONDITION", "PACKAGE_LENGTH",
+                        "PACKAGE_WIDTH", "PACKAGE_HEIGHT", "PACKAGE_WEIGHT", "SHIPMENT_PACKING"}
+
+
+def _texto_atributo(a: dict) -> str | None:
+    nome = (a.get("name") or a.get("id") or "").strip()
+    valor = (a.get("value_name") or "").strip()
+    if not valor:
+        valores = [v.get("name") for v in (a.get("values") or []) if v.get("name")]
+        valor = ", ".join(valores)
+    return f"{nome}: {valor}" if nome and valor else None
+
+
+def ler_ficha_do_anuncio(access_token: str, item_id: str) -> str | None:
+    """
+    Texto com os dados do anúncio pra IA, ou None se não der pra ler.
+    Nunca levanta erro (cada parte opcional que falhar é só pulada).
+    """
+    if not item_id:
+        return None
+    agora = datetime.utcnow()
+    em_cache = _CACHE_FICHA.get(item_id)
+    if em_cache and em_cache[0] > agora:
+        return em_cache[1]
+
+    try:
+        item = _get(f"/items/{item_id}?include_attributes=all", access_token, "ler a ficha do anúncio")
+    except MLApiError as exc:
+        logger.warning("Ficha do anúncio %s não lida: %s", item_id, exc)
+        return None
+
+    partes = [f"TÍTULO: {item.get('title') or '-'}"]
+    if item.get("condition"):
+        partes.append("CONDIÇÃO: " + {"new": "novo", "used": "usado"}.get(item["condition"], item["condition"]))
+    disponivel = (item.get("available_quantity") or 0) > 0
+    partes.append("DISPONÍVEL PARA COMPRA: " + ("sim" if disponivel else "não (sem estoque no momento)"))
+
+    atributos = [t for t in (_texto_atributo(a) for a in (item.get("attributes") or [])
+                             if a.get("id") not in _ATRIBUTOS_IGNORADOS) if t][:LIMITE_ATRIBUTOS]
+    if atributos:
+        partes.append("FICHA TÉCNICA:\n- " + "\n- ".join(atributos))
+
+    variacoes = []
+    for v in item.get("variations") or []:
+        combinacao = ", ".join(t for t in (_texto_atributo(a) for a in (v.get("attribute_combinations") or [])) if t)
+        if combinacao:
+            estoque = "disponível" if (v.get("available_quantity") or 0) > 0 else "sem estoque"
+            variacoes.append(f"{combinacao} ({estoque})")
+    if variacoes:
+        partes.append("VARIAÇÕES À VENDA:\n- " + "\n- ".join(variacoes[:60]))
+
+    termos = [t for t in (_texto_atributo(a) for a in (item.get("sale_terms") or [])) if t]
+    if termos:
+        partes.append("CONDIÇÕES DE VENDA (garantia etc.):\n- " + "\n- ".join(termos))
+
+    envio = item.get("shipping") or {}
+    detalhes_envio = []
+    if envio.get("logistic_type") == "fulfillment":
+        detalhes_envio.append("Mercado Livre Full (produto armazenado e enviado pelo próprio Mercado Livre)")
+    if envio.get("free_shipping"):
+        detalhes_envio.append("frete grátis")
+    if envio.get("local_pick_up"):
+        detalhes_envio.append("aceita retirada no local")
+    if detalhes_envio:
+        partes.append("ENVIO: " + "; ".join(detalhes_envio))
+
+    try:
+        descricao = _get(f"/items/{item_id}/description", access_token, "ler a descrição do anúncio")
+        texto = (descricao.get("plain_text") or "").strip()
+        if texto:
+            partes.append("DESCRIÇÃO DO ANÚNCIO:\n" + texto[:LIMITE_DESCRICAO])
+    except MLApiError as exc:
+        logger.info("Descrição do anúncio %s não lida: %s", item_id, exc)
+
+    # Autopeças: lista de compatibilidades cadastrada no ML (nem todo anúncio tem).
+    try:
+        compat = _get(f"/items/{item_id}/compatibilities", access_token, "ler as compatibilidades do anúncio")
+        nomes = []
+        for produto in (compat.get("products") or compat.get("results") or []) if isinstance(compat, dict) else []:
+            nome = produto.get("name") or produto.get("catalog_product_name")
+            if nome and nome not in nomes:
+                nomes.append(nome)
+        if nomes:
+            partes.append("COMPATIBILIDADES CADASTRADAS NO ANÚNCIO:\n- " + "\n- ".join(nomes[:LIMITE_COMPATIBILIDADES]))
+    except MLApiError:
+        pass  # anúncio sem compatibilidades (normal fora de autopeças)
+
+    ficha = "\n\n".join(partes)
+    if len(_CACHE_FICHA) >= _CACHE_MAX_ITENS:
+        _CACHE_FICHA.clear()
+    _CACHE_FICHA[item_id] = (agora + _CACHE_FICHA_VALIDADE, ficha)
+    return ficha
+
+
 def buscar_sku_do_item(access_token: str, item_id: str) -> str | None:
     """Compatibilidade: SKU principal do anúncio (ver ler_dados_do_anuncio)."""
     return ler_dados_do_anuncio(access_token, item_id)["sku"]

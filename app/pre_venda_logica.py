@@ -9,6 +9,9 @@ pergunta recebida, seguindo a ordem de camadas combinada:
    ela entra aqui automaticamente (ver routers/pre_venda.py) -- assim
    a próxima pergunta parecida sobre o mesmo produto já sai
    automática, sem precisar de humano nem chamar a camada 2 de novo.
+1.6 Dados do anúncio -> ficha técnica, variações, estoque, garantia, envio,
+   descrição e compatibilidades do próprio anúncio (a fonte mais confiável
+   pra dúvida técnica e de compatibilidade).
 1.5 Respostas padrão (tela "Respostas padrão") -> a IA escolhe, pelo
    SENTIDO, a resposta cadastrada que responde a pergunta (as de "todas
    as contas" + as do próprio produto). Cadastradas pela equipe, então
@@ -25,6 +28,7 @@ from app.models import RespostaValidadaSku, ManualSku, PoliticaGeral, RespostaPa
 from app.ia_pre_venda import (
     escolher_resposta_padrao,
     gerar_resposta_com_manual,
+    responder_com_dados_do_anuncio,
     encontrar_indice_resposta_similar,
     buscar_resposta_no_site_fabricante,
 )
@@ -54,6 +58,40 @@ def assunto_exige_humano(texto_pergunta: str) -> bool:
     """True se a pergunta é de um assunto que sempre deve ficar com humano."""
     texto = _sem_acento_minusculo(texto_pergunta)
     return any(p in texto for p in _PALAVRAS_ASSUNTO_HUMANO)
+
+
+# Perguntas de COMPATIBILIDADE ("serve no meu caminhão X?", "é compatível com
+# o modelo Y?"). A fonte certa é o próprio anúncio (lista de aplicação /
+# compatibilidades), não a internet: em autopeça, resposta errada vira
+# devolução. Por isso essas perguntas NÃO usam a busca no fabricante.
+_PALAVRAS_COMPATIBILIDADE = (
+    "compativel", "compatibilidade", "aplicacao", "serve no ", "serve na ", "serve em ",
+    "serve pro ", "serve pra ", "serve para o", "serve para a", "cabe no ", "cabe na ", "cabe em ",
+    "encaixa", "meu carro", "meu caminhao", "minha moto", "meu veiculo", "meu onibus", "meu modelo",
+)
+
+
+# Marcas/modelos de veículo mais comuns nas perguntas de autopeça. Pergunta que
+# cita um deles (ex.: "é do freio dianteiro do vw constellation 31330?") também
+# é de compatibilidade, mesmo sem dizer "serve no".
+_VEICULOS = (
+    "vw", "volks", "volkswagen", "mercedes", "mb ", "scania", "volvo", "iveco", "ford", "fiat",
+    "chevrolet", "gm ", "toyota", "honda", "hyundai", "renault", "peugeot", "citroen", "nissan",
+    "jeep", "mitsubishi", "kia", "daf", "agrale", "constellation", "delivery", "worker", "atego",
+    "axor", "accelo", "actros", "cargo", "tector", "daily", "stralis", "hilux", "strada", "saveiro",
+    "gol", "onix", "hb20", "civic", "corolla", "cg 1", "biz", "caminhao", "carreta", "onibus",
+)
+
+
+def pergunta_de_compatibilidade(texto_pergunta: str) -> bool:
+    import re
+    texto = " " + _sem_acento_minusculo(texto_pergunta) + " "
+    if any(p in texto for p in _PALAVRAS_COMPATIBILIDADE):
+        return True
+    cita_veiculo = any(re.search(r"(?<![a-z0-9])" + re.escape(v.strip()) + r"(?![a-z])", texto) for v in _VEICULOS)
+    cita_ano = re.search(r"\bano\s*\d{2,4}\b|\b(19|20)\d{2}\b", texto) is not None
+    cita_modelo = re.search(r"\b\d{3,5}\b", texto) is not None  # ex.: 31330, 1719
+    return cita_veiculo and (cita_ano or cita_modelo or " do " in texto or " da " in texto)
 
 
 def chave_do_produto(sku: str | None, item_id: str | None) -> str | None:
@@ -162,7 +200,8 @@ def buscar_politica_geral(db, texto_pergunta: str) -> PoliticaGeral | None:
     return None
 
 
-def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: str | None = None, item_id: str | None = None) -> dict:
+def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: str | None = None,
+                     item_id: str | None = None, access_token: str | None = None) -> dict:
     """
     Roda as camadas em ordem e devolve o resultado da decisão:
     {"resposta": str | None, "camada": str | None, "status": str, "precisa_auditoria": bool}
@@ -186,6 +225,22 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
             "precisa_auditoria": False,  # texto escrito pela própria equipe
         }
 
+    # Dados do próprio anúncio (ficha técnica, variações/cores, estoque, garantia,
+    # envio, descrição e compatibilidades) -- responde as dúvidas técnicas e de
+    # compatibilidade com o que o comprador vê no anúncio. Começa marcada pra
+    # revisão, até a equipe ganhar confiança nessa camada.
+    if access_token and item_id:
+        from app.ml_client import ler_ficha_do_anuncio
+        ficha = ler_ficha_do_anuncio(access_token, item_id)
+        resposta_anuncio = responder_com_dados_do_anuncio(texto_pergunta, ficha) if ficha else None
+        if resposta_anuncio:
+            return {
+                "resposta": resposta_anuncio,
+                "camada": "dados_anuncio",
+                "status": "respondida",
+                "precisa_auditoria": True,
+            }
+
     manual = buscar_manual_por_sku(db, sku)
     if manual:
         resposta_ia = gerar_resposta_com_manual(texto_pergunta, manual.titulo, manual.conteudo)
@@ -205,7 +260,11 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
     # fabricante. Só entra aqui quando NÃO existe manual (se existir mas
     # a IA não teve confiança nele, já vai pra fila humana acima -- mais
     # seguro que tentar a internet depois de uma fonte própria falhar).
-    resposta_fabricante = buscar_resposta_no_site_fabricante(texto_pergunta, titulo_produto, sku)
+    # Compatibilidade com modelo/veículo: não arrisca pela internet (vai pra equipe
+    # até a IA ler a lista de aplicação do próprio anúncio).
+    resposta_fabricante = None
+    if not pergunta_de_compatibilidade(texto_pergunta):
+        resposta_fabricante = buscar_resposta_no_site_fabricante(texto_pergunta, titulo_produto, sku)
     if resposta_fabricante:
         return {
             "resposta": resposta_fabricante,
