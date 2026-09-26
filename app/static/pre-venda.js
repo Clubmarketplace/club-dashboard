@@ -25,6 +25,7 @@ function formatarData(isoString) {
 function nomeDaCamada(camada) {
   const nomes = {
     resposta_validada: "Automática (histórico validado)",
+    resposta_padrao: "Automática (resposta padrão)",
     manual_sku_ia: "Automática (IA + manual)",
     politica_geral: "Automática (política geral)",
     busca_site_fabricante: "Automática (site do fabricante)",
