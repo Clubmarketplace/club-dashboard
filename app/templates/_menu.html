@@ -1,0 +1,134 @@
+{#
+  MENU LATERAL ÚNICO -- usado por todas as telas internas com
+  {% include "_menu.html" %}. Mudou o menu? Muda só aqui.
+
+  Regras de quem vê o quê (espelham _AREAS_POR_PAPEL do app/main.py;
+  a trava de verdade continua no servidor -- aqui só esconde o link):
+    - admin e supervisor: tudo;
+    - atendente: Perguntas, Respostas padrão, Mensagens dos pedidos,
+      Solicitações de cancelamento, Reputação das contas e Painéis de TV.
+  Grupos abrem/fecham com um clique; o grupo da tela atual já vem aberto.
+#}
+{% set _papel = usuario_logado.papel if usuario_logado else "" %}
+{% set _restrito = _papel == "atendente" %}
+{% set _caminho = request.url.path if request else "" %}
+
+{% macro item(href, rotulo, nova_aba=false) -%}
+  {%- set ativo = (_caminho == href) or (href != "/" and _caminho.startswith(href ~ "/")) -%}
+  <a class="cmx-nav-item cmx-nav-subitem{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"
+     {%- if nova_aba %} target="_blank" rel="noopener"{% endif %}{% if ativo %} aria-current="page"{% endif %}>
+    {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
+    {%- if nova_aba %} <svg class="cmx-nav-externo" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5"/></svg>{% endif %}
+  </a>
+{%- endmacro %}
+
+{% macro grupo(chave, titulo, hrefs) -%}
+  {%- set ns = namespace(aberto=false) -%}
+  {%- for h in hrefs -%}{%- if _caminho == h or _caminho.startswith(h ~ "/") -%}{%- set ns.aberto = true -%}{%- endif -%}{%- endfor -%}
+  <div class="cmx-grupo{% if ns.aberto %} aberto cmx-grupo--atual{% endif %}" data-grupo="{{ chave }}">
+    <button type="button" class="cmx-grupo-titulo" aria-expanded="{{ 'true' if ns.aberto else 'false' }}" aria-controls="cmx-grupo-{{ chave }}">
+      <span>{{ titulo }}</span>
+      <svg class="cmx-grupo-seta" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg>
+    </button>
+    <div class="cmx-grupo-itens" id="cmx-grupo-{{ chave }}">
+      {{ caller() }}
+    </div>
+  </div>
+{%- endmacro %}
+
+<style>
+  /* Grupos do menu (estilo só do menu; o resto continua em dashboard.css) */
+  .cmx-grupo { display: flex; flex-direction: column; }
+  .cmx-grupo-titulo {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    width: 100%; background: none; border: none; cursor: pointer; font-family: inherit;
+    padding: 9px 10px; border-radius: 7px; margin-top: 4px;
+    color: #dfe5ec; font-size: 13.5px; font-weight: 600; text-align: left;
+  }
+  .cmx-grupo-titulo:hover { background: var(--cmx-marinho-suave); color: #ffffff; }
+  .cmx-grupo-titulo:focus-visible, .cmx-nav-item:focus-visible { outline: 2px solid var(--cmx-ambar); outline-offset: 1px; }
+  .cmx-grupo-seta { transition: transform .15s ease; color: #7f8a97; flex-shrink: 0; }
+  .cmx-grupo.aberto .cmx-grupo-seta { transform: rotate(90deg); }
+  .cmx-grupo-itens { display: none; flex-direction: column; gap: 2px; margin: 2px 0 6px; padding-left: 10px; border-left: 1px solid #26303c; margin-left: 12px; }
+  .cmx-grupo.aberto .cmx-grupo-itens { display: flex; }
+  .cmx-nav-subitem { padding: 7px 10px; font-size: 13px; }
+  .cmx-nav-externo { opacity: .55; margin-left: 2px; }
+  @media (prefers-reduced-motion: reduce) { .cmx-grupo-seta { transition: none; } }
+</style>
+
+<nav class="cmx-nav" aria-label="Menu principal">
+  {% if not _restrito %}
+    {% set _no_dash = _caminho == "/" %}
+    <a class="cmx-nav-item{% if _no_dash %} cmx-nav-item--ativo{% endif %}" href="/" style="font-weight:700; margin-bottom:6px;"{% if _no_dash %} aria-current="page"{% endif %}>
+      {% if _no_dash %}<span class="cmx-nav-dot"></span> {% endif %}Dashboard
+    </a>
+  {% endif %}
+
+  {% call grupo("pre-venda", "Pré-venda", ["/pre-venda", "/respostas-padrao", "/manuais"]) %}
+    {{ item("/pre-venda", "Perguntas (fila)") }}
+    {{ item("/respostas-padrao", "Respostas padrão") }}
+    {% if not _restrito %}{{ item("/manuais", "Manuais") }}{% endif %}
+  {% endcall %}
+
+  {% call grupo("pos-venda", "Pós-venda", ["/pos-venda", "/devolucoes", "/cancelamentos"]) %}
+    {{ item("/pos-venda", "Mensagens dos pedidos") }}
+    {% if not _restrito %}
+      {{ item("/devolucoes", "Devoluções") }}
+      {{ item("/cancelamentos", "Cancelamentos") }}
+    {% endif %}
+  {% endcall %}
+
+  {% call grupo("solicitacoes", "Solicitações de cancelamento", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
+    {{ item("/solicitar-cancelamento", "Nova solicitação", nova_aba=true) }}
+    {{ item("/solicitacoes-painel", "Solicitações") }}
+    {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
+  {% endcall %}
+
+  {% call grupo("contas", "Contas", ["/contas", "/reputacao"]) %}
+    {% if not _restrito %}{{ item("/contas", "Contas conectadas") }}{% endif %}
+    {{ item("/reputacao", "Reputação das contas") }}
+  {% endcall %}
+
+  {% call grupo("paineis", "Painéis de TV", []) %}
+    {{ item("/painel-tv/geral", "Painel Geral", nova_aba=true) }}
+    {{ item("/painel-tv/fila", "Painel da Fila", nova_aba=true) }}
+  {% endcall %}
+
+  {% if not _restrito %}
+    {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook"]) %}
+      {{ item("/usuarios", "Operadores") }}
+      {{ item("/usuarios#novo", "Novo operador") }}
+      {{ item("/eventos-webhook", "Eventos do Webhook") }}
+      <a class="cmx-nav-item cmx-nav-subitem cmx-nav-item--em-breve" href="#" aria-disabled="true">
+        Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
+      </a>
+    {% endcall %}
+  {% endif %}
+</nav>
+
+<script>
+  /* Abre/fecha os grupos e lembra quais ficaram abertos (só neste navegador;
+     se o navegador bloquear o armazenamento, o menu funciona do mesmo jeito). */
+  (function () {
+    var CHAVE = "cmx-menu-grupos-abertos";
+    var abertos = [];
+    try { abertos = JSON.parse(localStorage.getItem(CHAVE) || "[]"); } catch (e) { abertos = []; }
+    document.querySelectorAll(".cmx-grupo").forEach(function (g) {
+      var botao = g.querySelector(".cmx-grupo-titulo");
+      var nome = g.getAttribute("data-grupo");
+      function aplicar(aberto) {
+        g.classList.toggle("aberto", aberto);
+        botao.setAttribute("aria-expanded", aberto ? "true" : "false");
+      }
+      // O grupo da tela atual sempre abre; os outros, como o usuário deixou.
+      if (!g.classList.contains("cmx-grupo--atual") && abertos.indexOf(nome) >= 0) aplicar(true);
+      botao.addEventListener("click", function () {
+        var agora = !g.classList.contains("aberto");
+        aplicar(agora);
+        abertos = abertos.filter(function (n) { return n !== nome; });
+        if (agora) abertos.push(nome);
+        try { localStorage.setItem(CHAVE, JSON.stringify(abertos)); } catch (e) { /* sem armazenamento: ignora */ }
+      });
+    });
+  })();
+</script>

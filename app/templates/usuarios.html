@@ -63,29 +63,7 @@
       <div class="cmx-marca">
         <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
-      <nav class="cmx-nav">
-        <a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>
-        <span class="cmx-nav-secao">Operação</span>
-        <a class="cmx-nav-item" href="/devolucoes">Devoluções</a>
-        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
-        <a class="cmx-nav-item" href="/manuais">Manuais</a>
-        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
-        <a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>
-        <span class="cmx-nav-secao">Contas</span>
-        <a class="cmx-nav-item" href="/contas">Contas conectadas</a>
-        <a class="cmx-nav-item" href="/reputacao">Reputação das contas</a>
-        <span class="cmx-nav-secao">Painéis de TV</span>
-        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>
-        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">Painel da Fila</a>
-        <span class="cmx-nav-secao">Solicitações manuais</span>
-        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
-        <a class="cmx-nav-item" href="/solicitacoes-painel">Solicitações de Cancelamento</a>
-        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
-        <span class="cmx-nav-secao">Operadores</span>
-        <a class="cmx-nav-item cmx-nav-item--ativo" href="/usuarios">
-          <span class="cmx-nav-dot"></span> Operadores
-        </a>
-      </nav>
+      {% include "_menu.html" %}
     </aside>
 
     <div class="cmx-conteudo">
@@ -162,6 +140,18 @@ Use esse código uma vez só, pra criar sua senha pessoal.</div>
           <div class="us-topo-acoes">
             <input type="text" id="busca-usuario" placeholder="Buscar por usuário ou nome..." autocomplete="off" />
             <button id="botao-adicionar" onclick="document.getElementById('painel-adicionar').classList.toggle('aberto')">+ Adicionar operador</button>
+            <script>
+              // Atalho "Novo operador" do menu (/usuarios#novo): já abre o formulário.
+              (function () {
+                function abrirSeNovo() {
+                  if (location.hash !== "#novo") return;
+                  var painel = document.getElementById("painel-adicionar");
+                  if (painel) { painel.classList.add("aberto"); var campo = painel.querySelector("input"); if (campo) campo.focus(); }
+                }
+                document.addEventListener("DOMContentLoaded", abrirSeNovo);
+                window.addEventListener("hashchange", abrirSeNovo); // já estava em /usuarios e clicou no atalho
+              })();
+            </script>
           </div>
 
           <div id="painel-adicionar">

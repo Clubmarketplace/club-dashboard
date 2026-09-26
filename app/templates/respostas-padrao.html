@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Respostas padrão</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    /* Tela "Respostas padrão" -- estilos só desta página (prefixo rs-). */
+    .rs-btn { height:38px; padding:0 14px; border-radius:9px; border:1px solid #d5dbe1; background:#fff; color:var(--cmx-texto); font:600 13.5px Inter,sans-serif; cursor:pointer; }
+    .rs-btn:hover { background:#f7f9fb; }
+    .rs-btn:disabled { opacity:.6; cursor:default; }
+    .rs-btn-escuro { background:#1b2430; border-color:#1b2430; color:#fff; }
+    .rs-btn-escuro:hover { background:#2a3645; }
+    .rs-btn-perigo { color:#96341c; border-color:#f0c9bd; }
+    .rs-topo { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; flex-wrap:wrap; }
+    .rs-filtros { display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin:0 0 14px; }
+    .rs-busca { height:40px; width:300px; max-width:100%; border:1px solid #d5dbe1; border-radius:10px; padding:0 12px; font:14px Inter,sans-serif; }
+    .rs-chip { height:34px; padding:0 14px; border-radius:999px; border:1px solid #d5dbe1; background:#fff; font:600 13px Inter,sans-serif; color:#4a5663; cursor:pointer; }
+    .rs-chip.ativo { background:#1b2430; border-color:#1b2430; color:#fff; }
+    .rs-contador { margin-left:auto; font-size:13px; color:var(--cmx-texto-suave); }
+    .rs-tabela { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; overflow:hidden; }
+    .rs-linha { display:grid; grid-template-columns:190px minmax(0,1fr) 200px 70px 70px 90px; gap:14px; align-items:center; padding:13px 16px; border-top:1px solid #eef1f4; font-size:14px; }
+    .rs-linha.cab { border-top:none; background:#f7f9fb; font-size:12px; font-weight:700; color:#5b6776; text-transform:uppercase; letter-spacing:.04em; }
+    .rs-linha.desligada { background:#fbfbfc; }
+    .rs-linha.desligada .rs-resp, .rs-linha.desligada .rs-tema { opacity:.6; }
+    .rs-tema b { display:block; }
+    .rs-tema small { color:var(--cmx-texto-suave); font-size:12px; }
+    .rs-resp { color:#334155; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rs-tag { font-size:11.5px; font-weight:700; border-radius:6px; padding:3px 8px; display:inline-block; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .rs-sw { width:44px; height:26px; border-radius:13px; border:none; position:relative; cursor:pointer; }
+    .rs-sw span { position:absolute; top:3px; width:20px; height:20px; border-radius:50%; background:#fff; transition:left .15s; }
+    .rs-vazio { padding:36px; text-align:center; color:var(--cmx-texto-suave); }
+    .rs-aviso { margin:0 0 14px; padding:10px 12px; border-radius:10px; font-size:13.5px; display:none; }
+    .rs-info { margin-top:16px; display:flex; gap:10px; align-items:flex-start; background:#eef4fb; border:1px solid #cfe0f3; border-radius:12px; padding:12px 14px; font-size:13.5px; color:#1f3b57; }
+    .rs-fundo { position:fixed; inset:0; background:rgba(15,22,30,.45); z-index:40; }
+    .rs-gaveta { position:fixed; top:0; right:0; bottom:0; width:560px; max-width:100%; background:#fff; z-index:41; padding:24px 26px; overflow-y:auto; box-shadow:-12px 0 30px rgba(0,0,0,.12); display:flex; flex-direction:column; gap:16px; }
+    .rs-lbl { font-size:13px; font-weight:600; margin-bottom:6px; display:block; }
+    .rs-fld { width:100%; border:1px solid #d5dbe1; border-radius:10px; padding:10px 12px; font:14px Inter,sans-serif; box-sizing:border-box; }
+    .rs-dica { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .rs-opt { display:flex; align-items:center; gap:8px; height:40px; padding:0 14px; border-radius:10px; border:1px solid #d5dbe1; background:#fff; font:14px Inter,sans-serif; color:var(--cmx-texto); cursor:pointer; }
+    .rs-opt.ativo { border:2px solid #1b2430; padding:0 13px; }
+    .rs-radio { width:16px; height:16px; border-radius:50%; box-sizing:border-box; border:2px solid #9aa4af; }
+    .rs-opt.ativo .rs-radio { border:5px solid #1b2430; }
+    .rs-produtos { border:1px solid #e2e6ea; border-radius:10px; margin-top:6px; max-height:220px; overflow-y:auto; }
+    .rs-produto { display:block; width:100%; text-align:left; background:#fff; border:none; border-top:1px solid #f0f2f4; padding:9px 12px; font:13.5px Inter,sans-serif; cursor:pointer; }
+    .rs-produto:first-child { border-top:none; }
+    .rs-produto:hover { background:#f7f9fb; }
+    .rs-teste { background:#f7f9fb; border:1px solid #e2e6ea; border-radius:12px; padding:14px; }
+    .rs-resultado { margin-top:10px; font-size:13.5px; border-radius:8px; padding:9px 11px; }
+    @media (max-width: 1100px) {
+      .rs-linha { grid-template-columns: minmax(0,1fr) 110px 60px; }
+      .rs-linha > :nth-child(2), .rs-linha > :nth-child(4) { display:none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+      <header class="cmx-topbar rs-topo">
+        <div>
+          <h1>Respostas padrão</h1>
+          <p class="cmx-subtitulo">Perguntas e respostas que a nossa IA usa quando a IA do ML não respondeu. A IA entende o sentido, não só a palavra exata.</p>
+          <!-- Fica aqui (e não no canto direito) pra não ficar embaixo do menu do usuário. -->
+          <button class="rs-btn rs-btn-escuro" id="rs-nova" type="button" style="margin-top:12px">+ Nova resposta</button>
+        </div>
+      </header>
+
+      <main>
+        <p class="rs-aviso" id="rs-aviso"></p>
+        <div class="rs-filtros">
+          <label for="rs-busca" class="cmx-sr" style="position:absolute;left:-9999px">Buscar</label>
+          <input id="rs-busca" class="rs-busca" type="search" placeholder="Buscar tema ou resposta…" autocomplete="off" />
+          <button class="rs-chip ativo" data-filtro="todas" type="button">Todas</button>
+          <button class="rs-chip" data-filtro="geral" type="button">Todas as contas</button>
+          <button class="rs-chip" data-filtro="produto" type="button">Por produto</button>
+          <button class="rs-chip" data-filtro="desligadas" type="button">Desligadas</button>
+          <span class="rs-contador" id="rs-contador"></span>
+        </div>
+        <div class="rs-tabela">
+          <div class="rs-linha cab"><span>Tema</span><span>Resposta</span><span>Alcance</span><span>Usada</span><span>Ativa</span><span></span></div>
+          <div id="rs-lista"><div class="rs-vazio">Carregando…</div></div>
+        </div>
+        <div class="rs-info">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
+          <div>Ordem da nossa IA (depois de 3 min sem resposta da IA do ML): <b>1.</b> respostas já dadas para o mesmo SKU → <b>2.</b> respostas padrão (esta tela) → <b>3.</b> manual → <b>4.</b> site do fabricante → <b>5.</b> equipe. Desconto, troca, defeito e pedido vão sempre para a equipe.</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="rs-form"></div>
+
+  <script src="/static/respostas-padrao.js?v=1"></script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>
