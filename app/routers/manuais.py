@@ -3,6 +3,8 @@ Rotas da tela de Manuais: upload direto pelo painel (sem precisar de
 acesso ao servidor), lista de tudo já cadastrado, e busca por SKU pra
 saber se um produto já tem manual ou não.
 """
+import re
+
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
@@ -14,6 +16,16 @@ router = APIRouter(prefix="/api/manuais", tags=["manuais"])
 
 EXTENSOES_ACEITAS = (".pdf", ".txt", ".md")
 
+# "SKU 7560025" / "SKU: 7560025" / "sku:7560025" -> "7560025".
+# Só tira a palavra quando vem seguida de espaço ou dois-pontos: um SKU de
+# verdade como "SKU-100" continua intacto.
+_PREFIXO_SKU = re.compile(r"^\s*sku(?:\s*:\s*|\s+)", re.IGNORECASE)
+
+
+def normalizar_sku(texto: str | None) -> str:
+    """SKU como o anúncio tem: sem espaços nas pontas e sem a palavra "SKU" na frente."""
+    return _PREFIXO_SKU.sub("", texto or "").strip()
+
 
 @router.get("/lista")
 def listar_manuais(busca: str | None = None, db: Session = Depends(get_db)):
@@ -24,6 +36,7 @@ def listar_manuais(busca: str | None = None, db: Session = Depends(get_db)):
     "esse SKU já tem manual?" na tela de SKUs.
     """
     query = db.query(ManualSku)
+    busca = normalizar_sku(busca)
     if busca:
         query = query.filter(ManualSku.sku.ilike(f"%{busca}%"))
     manuais = query.order_by(ManualSku.criado_em.desc()).all()
@@ -41,6 +54,7 @@ def listar_manuais(busca: str | None = None, db: Session = Depends(get_db)):
 @router.get("/existe/{sku}")
 def verificar_manual(sku: str, db: Session = Depends(get_db)):
     """Diz se um SKU específico já tem manual cadastrado -- usado pela tela de SKUs."""
+    sku = normalizar_sku(sku)
     manual = db.query(ManualSku).filter(ManualSku.sku == sku).first()
     return {"sku": sku, "tem_manual": manual is not None}
 
@@ -57,7 +71,7 @@ async def upload_manual(
     cadastra/atualiza o ManualSku no banco -- não precisa mais rodar
     o importador manualmente pra manuais enviados por aqui.
     """
-    sku = sku.strip()
+    sku = normalizar_sku(sku)  # "SKU 7560025" vira "7560025", senão a IA não acha o manual
     if not sku:
         raise HTTPException(400, "Informe o SKU.")
 
