@@ -448,6 +448,8 @@ def pagina_solicitar_cancelamento(request: Request):
         usuario = auth.usuario_atual(request, db)
         conta_pre_preenchida = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
         logistica_logado = bool(usuario and usuario.papel == "logistica")
+        # Equipe: abre dentro do sistema (menu à esquerda) e lança por qualquer conta.
+        equipe_logado = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
         nome_usuario = usuario.nome_exibicao if usuario else None
     return templates.TemplateResponse(
         request=request,
@@ -456,6 +458,8 @@ def pagina_solicitar_cancelamento(request: Request):
             "conta_pre_preenchida": conta_pre_preenchida,
             "seller_logado": bool(conta_pre_preenchida),
             "logistica_logado": logistica_logado,
+            "equipe_logado": equipe_logado,
+            "usuario_logado": usuario,
             "nome_usuario": nome_usuario,
         },
     )
