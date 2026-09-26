@@ -140,7 +140,7 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
     # sair da fila -- antes esse aviso era ignorado e a pergunta ficava presa.
     ja_existe = db.query(Pergunta).filter(Pergunta.ml_question_id == question_id).first()
     if ja_existe:
-        if ja_existe.status in ("fila_humana",):
+        if ja_existe.status in ("fila_humana", "aguardando_ml"):
             from app.vigia_perguntas import conferir_pergunta
             try:
                 resultado = conferir_pergunta(ja_existe, garantir_token_valido(conta, db), db)
@@ -186,41 +186,25 @@ async def _processar_pergunta(payload: dict, db: Session) -> dict:
     # Não tem erro nenhum aqui, só não tentamos responder de novo (o
     # Mercado Livre recusaria com 403 "Action not allowed").
     if dados_pergunta.get("status") == "ANSWERED":
+        from app.vigia_perguntas import _data_ml_para_utc
+        resposta_ml = dados_pergunta.get("answer") or {}
         pergunta.status = "respondida_externamente"
         pergunta.camada_resolvida = "externo_ou_ml_nativo"
-        pergunta.respondida_em = datetime.utcnow()
+        pergunta.resposta_enviada = (resposta_ml.get("text") or "").strip() or None
+        pergunta.respondida_em = _data_ml_para_utc(resposta_ml.get("date_created")) or datetime.utcnow()
         db.commit()
         return {"status": "ja_respondida_externamente", "pergunta_id": pergunta.id}
 
-    decisao = decidir_resposta(db, sku, texto, titulo_produto, item_id=item_id)
-
-    if decisao["status"] == "respondida":
-        try:
-            enviar_resposta(access_token, question_id, decisao["resposta"])
-        except MLApiError as exc:
-            # A decisão foi automática, mas o envio falhou de verdade
-            # (ex: pergunta já foi apagada) — não perde a pergunta,
-            # só deixa marcada pra revisão humana em vez de travar.
-            pergunta.status = "fila_humana"
-            db.commit()
-            logger.error("Falha ao enviar resposta automática (pergunta %s): %s", pergunta.id, exc)
-            return {"status": "erro_ao_responder", "pergunta_id": pergunta.id, "detalhe": str(exc)}
-
-        pergunta.status = "respondida"
-        pergunta.camada_resolvida = decisao["camada"]
-        pergunta.resposta_enviada = decisao["resposta"]
-        pergunta.precisa_auditoria = decisao.get("precisa_auditoria", False)
-        pergunta.respondida_em = datetime.utcnow()
-        db.add(AcaoRegistrada(
-            conta_id=conta.id,
-            tipo="pergunta_respondida",
-            sku=sku,
-            detalhe=f"Camada: {decisao['camada']}",
-        ))
+    # Ordem combinada: IA do ML -> nossa IA -> equipe. Por padrão a pergunta
+    # espera alguns minutos pela IA nativa do ML (JANELA_IA_ML_MIN, padrão 3);
+    # depois disso o vigia (app/vigia_perguntas.py) confere: se o ML não
+    # respondeu, a nossa IA tenta; se não souber, vai pra equipe.
+    from app.pre_venda_resposta import janela_ia_ml_min, responder_com_nossa_ia
+    if janela_ia_ml_min() > 0:
+        pergunta.status = "aguardando_ml"
+        db.commit()
     else:
-        pergunta.status = "fila_humana"
-
-    db.commit()
+        responder_com_nossa_ia(pergunta, access_token, db)
 
     return {
         "status": "processada",

@@ -38,6 +38,8 @@ def _resolvida_por(p: Pergunta) -> str:
         return "Por fora (ML/app)"
     if p.status == "encerrada_no_ml":
         return "Encerrada no ML"
+    if p.status == "aguardando_ml":
+        return "Aguardando IA do ML"
     return "—"
 
 
@@ -48,7 +50,7 @@ def _utc_para_br(data_utc_naive: datetime) -> datetime:
 # Camadas que respondem sozinhas (sem humano) — usado só pra classificar
 # estatística no painel de TV; não muda a lógica de decisão em si (essa
 # continua em pre_venda_logica.py).
-CAMADAS_AUTOMATICAS = {"resposta_validada", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
+CAMADAS_AUTOMATICAS = {"resposta_validada", "resposta_padrao", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
 
 
 class RespostaManual(BaseModel):
@@ -313,7 +315,7 @@ def _desfecho(p: Pergunta) -> str:
         return "equipe"
     if p.status == "respondida_externamente":
         return "ml"
-    if p.status in ("fila_humana", "pendente"):
+    if p.status in ("fila_humana", "pendente", "aguardando_ml"):  # aguardando_ml = janela da IA do ML
         return "pendente"
     return "outros"
 
