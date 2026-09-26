@@ -48,6 +48,9 @@
   .kpi .rotulo { font-size:13px; color:var(--dim); }
   .kpi .valor { font-size:38px; font-weight:600; font-family:"IBM Plex Mono", monospace; margin:2px 0; line-height:1.15; }
   .kpi .comp { font-size:13px; color:var(--dim); }
+  /* Etiqueta do período em cada cartão (o filtro do topo vale para o painel todo) */
+  .per { display:inline-block; font-size:11.5px; font-weight:600; color:var(--text); background:#1c2630; border:1px solid var(--line); border-radius:999px; padding:1px 9px; margin-left:4px; vertical-align:1px; }
+  .per.agora { color:#ffd0cc; background:#3a1a18; border-color:#5a2a26; }
   .bom { color:var(--ia) !important; } .ruim { color:var(--pend) !important; } .aten { color:var(--equipe) !important; }
 
   .linha { display:grid; gap:14px; min-height:0; }
@@ -168,10 +171,10 @@
 <div id="aviso-erro"></div>
 
 <section class="kpis">
-  <div class="kpi"><div class="rotulo">Resolvidas sem a equipe (7 dias)</div><div class="valor" id="k-sem-equipe">—</div><div class="divisao" id="k-sem-equipe-div"></div><div class="comp" id="k-sem-equipe-comp"></div></div>
-  <div class="kpi"><div class="rotulo">Tempo médio da equipe (7 dias)</div><div class="valor" id="k-tempo">—</div><div class="comp" id="k-tempo-comp"></div></div>
-  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor clicavel" id="k-pend" role="button" tabindex="0" data-escopo="pendentes_agora" title="Ver as perguntas pendentes">—</div><div class="comp" id="k-pend-comp"></div></div>
-  <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor" id="k-hoje">—</div><div class="comp" id="k-hoje-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Resolvidas sem a equipe <span class="per" data-per></span></div><div class="valor" id="k-sem-equipe">—</div><div class="divisao" id="k-sem-equipe-div"></div><div class="comp" id="k-sem-equipe-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Tempo médio da equipe <span class="per" data-per></span></div><div class="valor" id="k-tempo">—</div><div class="comp" id="k-tempo-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Pendentes <span class="per agora">agora</span></div><div class="valor clicavel" id="k-pend" role="button" tabindex="0" data-escopo="pendentes_agora" title="Ver as perguntas pendentes">—</div><div class="comp" id="k-pend-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Perguntas <span class="per" data-per></span></div><div class="valor" id="k-hoje">—</div><div class="comp" id="k-hoje-comp"></div></div>
 </section>
 
 <div class="linha linha-1">
@@ -179,16 +182,16 @@
     <div class="painel-cab">
       <h2 id="titulo-dias">Últimos 30 dias — quem respondeu</h2>
       <div class="legenda" id="legenda-dias">
-        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="ml"><i style="background:var(--ml)"></i>ML / app</span>
-        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="ia"><i style="background:var(--ia)"></i>Nossa IA</span>
-        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="equipe"><i style="background:var(--equipe)"></i>Equipe</span>
-        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="pendente"><i style="background:var(--pend)"></i>Pendente</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="ml"><i style="background:var(--ml)"></i>ML / app</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="ia"><i style="background:var(--ia)"></i>Nossa IA</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="equipe"><i style="background:var(--equipe)"></i>Equipe</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="pendente"><i style="background:var(--pend)"></i>Pendente</span>
       </div>
     </div>
     <div class="barras" id="grafico-dias"></div>
   </div>
   <div class="painel">
-    <div class="painel-cab"><h2>Hoje — quem respondeu</h2><span class="nota" id="nota-hoje"></span></div>
+    <div class="painel-cab"><h2 id="titulo-rosca">Hoje — quem respondeu</h2><span class="nota" id="nota-hoje"></span></div>
     <div class="rosca-caixa">
       <svg id="rosca" viewBox="0 0 200 200" role="img" aria-label="Quem respondeu hoje"></svg>
       <div class="rosca-leg" id="rosca-leg"></div>
@@ -198,7 +201,7 @@
 
 <div class="linha linha-2">
   <div class="painel">
-    <div class="painel-cab"><h2>Hoje por hora</h2><span class="nota" id="nota-pico"></span></div>
+    <div class="painel-cab"><h2 id="titulo-horas">Hoje por hora</h2><span class="nota" id="nota-pico"></span></div>
     <div class="barras" id="grafico-horas"></div>
   </div>
   <div class="painel">
@@ -279,23 +282,25 @@
   // ---------- Desenho ----------
   // alvo(it) diz o que o clique abre: { escopo:"dia", dia:"AAAA-MM-DD" } ou { escopo:"hora", hora:N }.
   // Clicar numa cor abre só aquele grupo; clicar no resto da coluna abre todas daquele dia/hora.
+  const fmtN = v => Number.isInteger(v) ? String(v) : String(Math.round(v * 10) / 10).replace(".", ",");
   function colunas(containerId, itens, rotulo, indiceHoje, alvo, nomeAlvo) {
     const max = Math.max(1, ...itens.map(i => GRUPOS.reduce((t, [k]) => t + (i[k] || 0), 0)));
     $(containerId).innerHTML = itens.map((it, idx) => {
       const total = GRUPOS.reduce((t, [k]) => t + (it[k] || 0), 0);
       const onde = nomeAlvo(it);
       const segs = GRUPOS.filter(([k]) => it[k] > 0)
-        .map(([k, nome]) => `<div class="seg-b b-${k}" data-grupo="${k}" style="height:${(it[k] / max) * 100}%" title="${escapar(onde)}: ${it[k]} ${nome} — clique para ver"></div>`).join("");
+        .map(([k, nome]) => `<div class="seg-b b-${k}" data-grupo="${k}" style="height:${(it[k] / max) * 100}%" title="${escapar(onde)}: ${fmtN(it[k])} ${nome} — clique para ver"></div>`).join("");
       const classes = ["col"];
       if (idx === indiceHoje) classes.push("hoje");
       if (indiceHoje != null && idx > indiceHoje) classes.push("futuro");
       const a = alvo(it);
-      const dados = total ? ` data-escopo="${a.escopo}"${a.dia ? ` data-dia="${a.dia}"` : ""}${a.hora != null ? ` data-hora="${a.hora}"` : ""} role="button" tabindex="0" aria-label="${escapar(onde)}: ${total} pergunta(s)"` : "";
+      const dados = total ? ` data-escopo="${a.escopo}"${a.dia ? ` data-dia="${a.dia}"` : ""}${a.hora != null ? ` data-hora="${a.hora}"` : ""}${a.faixa ? ` data-faixa="${a.faixa}"` : ""} role="button" tabindex="0" aria-label="${escapar(onde)}: ${fmtN(total)} pergunta(s)"` : "";
       if (total) classes.push("clicavel");
-      return `<div class="${classes.join(" ")}"${dados}><span class="qtd">${total || ""}</span><div class="pilha">${segs}</div><div class="base"></div><span class="rot">${rotulo(it, idx)}</span></div>`;
+      return `<div class="${classes.join(" ")}"${dados}><span class="qtd">${total && Number.isInteger(Math.round(total * 100) / 100) ? total : ""}</span><div class="pilha">${segs}</div><div class="base"></div><span class="rot">${rotulo(it, idx)}</span></div>`;
     }).join("");
   }
 
+  // "hoje" aqui = contagem por grupo do PERÍODO escolhido (nome mantido por simplicidade).
   function rosca(hoje) {
     const total = GRUPOS.reduce((t, [k]) => t + (hoje[k] || 0), 0);
     const r = 78, c = 2 * Math.PI * r;
@@ -304,7 +309,7 @@
       GRUPOS.forEach(([k, , cor]) => {
         const v = hoje[k] || 0; if (!v) return;
         const fatia = (v / total) * c;
-        arcos += `<circle data-grupo="${k}" data-escopo="hoje" cx="100" cy="100" r="${r}" fill="none" stroke="${cor}" stroke-width="24" stroke-dasharray="${fatia} ${c - fatia}" stroke-dashoffset="${-acumulado}" transform="rotate(-90 100 100)"><title>${v} (${Math.round(100 * v / total)}%) — clique para ver</title></circle>`;
+        arcos += `<circle data-grupo="${k}" data-escopo="periodo" cx="100" cy="100" r="${r}" fill="none" stroke="${cor}" stroke-width="24" stroke-dasharray="${fatia} ${c - fatia}" stroke-dashoffset="${-acumulado}" transform="rotate(-90 100 100)"><title>${v} (${Math.round(100 * v / total)}%) — clique para ver</title></circle>`;
         acumulado += fatia;
       });
     } else {
@@ -317,21 +322,30 @@
     // Legenda com quantidade e porcentagem; cada linha abre as perguntas daquele grupo.
     $("rosca-leg").innerHTML = GRUPOS.map(([k, nome, cor]) => {
       const v = hoje[k] || 0;
-      // Porcentagem pequena ao lado de cada cor (proporção de hoje)
+      // Porcentagem pequena ao lado de cada cor (proporção no período)
       const pct = total ? `<small class="pct">${Math.round(100 * v / total)}%</small>` : "";
       return v
-        ? `<span class="clicavel" role="button" tabindex="0" data-escopo="hoje" data-grupo="${k}" title="Ver as perguntas"><i style="background:${cor}"></i>${nome}<b>${v}</b>${pct}</span>`
+        ? `<span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="${k}" title="Ver as perguntas"><i style="background:${cor}"></i>${nome}<b>${v}</b>${pct}</span>`
         : `<span><i style="background:${cor}"></i>${nome}<b>0</b>${pct}</span>`;
     }).join("") + (total ? '<span class="dica">clique numa cor para ver as perguntas</span>' : "");
     $("nota-hoje").textContent = total ? `${total} pergunta(s)` : "sem perguntas ainda";
   }
 
+  // Nome curto do período e do período anterior de mesmo tamanho (base da comparação).
+  function nomesPeriodo(f) {
+    if (f.periodo === "hoje") return { curto: "hoje", anterior: "ontem" };
+    if (f.periodo === "7") return { curto: "7 dias", anterior: "7 dias anteriores" };
+    if (f.periodo === "30") return { curto: "30 dias", anterior: "30 dias anteriores" };
+    return { curto: f.rotulo, anterior: "período anterior" };
+  }
+  let NOME_ANTERIOR = "período anterior";
+
   function comparar(atual, anterior, maiorEhMelhor, formatar) {
     if (atual == null || anterior == null) return { texto: "sem base de comparação ainda", classe: "" };
     const dif = atual - anterior;
-    if (Math.abs(dif) < 0.5) return { texto: "igual à semana anterior", classe: "" };
+    if (Math.abs(dif) < 0.5) return { texto: `igual a ${NOME_ANTERIOR}`, classe: "" };
     const melhorou = maiorEhMelhor ? dif > 0 : dif < 0;
-    return { texto: `${dif > 0 ? "▲" : "▼"} ${formatar(Math.abs(dif))} vs. semana anterior`, classe: melhorou ? "bom" : "ruim" };
+    return { texto: `${dif > 0 ? "▲" : "▼"} ${formatar(Math.abs(dif))} vs. ${NOME_ANTERIOR}`, classe: melhorou ? "bom" : "ruim" };
   }
 
   function render(d) {
@@ -345,12 +359,18 @@
     sel.value = d.filtro.conta || "";
     $("subtitulo").textContent = d.filtro.conta ? `Conta: ${d.filtro.conta}` : (d.filtro.conta_nao_encontrada ? "Conta não encontrada — mostrando nada" : "Todas as contas");
 
+    // Período: vale para o painel todo (menos "Pendentes agora")
+    const f = d.filtro;
+    const nomes = nomesPeriodo(f);
+    NOME_ANTERIOR = nomes.anterior;
+    document.querySelectorAll("[data-per]").forEach(el => { el.textContent = nomes.curto; });
+
     // Indicadores
     $("k-sem-equipe").textContent = ind.sem_equipe_pct == null ? "—" : ind.sem_equipe_pct + "%";
     let c = comparar(ind.sem_equipe_pct, ind.sem_equipe_pct_anterior, true, v => Math.round(v) + " pts");
     $("k-sem-equipe-comp").textContent = c.texto; $("k-sem-equipe-comp").className = "comp " + c.classe;
     $("k-sem-equipe").className = "valor " + (ind.sem_equipe_pct == null ? "" : ind.sem_equipe_pct >= 50 ? "bom" : "aten");
-    // Separação: quanto foi a IA do ML e quanto foi a nossa IA (clicável -> lista dos 7 dias).
+    // Separação: quanto foi a IA do ML e quanto foi a nossa IA (clicável -> lista do período).
     if (ind.sem_equipe_pct == null || ind.sem_equipe_ml_pct == null) {
       $("k-sem-equipe-div").innerHTML = "";
     } else {
@@ -360,8 +380,8 @@
         if (Math.abs(dif) >= 1) compIa = ` <span class="${dif > 0 ? "bom" : "ruim"}">${dif > 0 ? "▲" : "▼"}${Math.abs(dif)}</span>`;
       }
       $("k-sem-equipe-div").innerHTML =
-        `<span class="clicavel" role="button" tabindex="0" data-escopo="semana" data-grupo="ml" title="Ver as respondidas pela IA do ML"><i style="background:var(--ml)"></i>IA do ML ${ind.sem_equipe_ml_pct}%</span>` +
-        `<span class="clicavel" role="button" tabindex="0" data-escopo="semana" data-grupo="ia" title="Ver as respondidas pela nossa IA"><i style="background:var(--ia)"></i>Nossa IA ${ind.sem_equipe_ia_pct}%${compIa}</span>`;
+        `<span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="ml" title="Ver as respondidas pela IA do ML"><i style="background:var(--ml)"></i>IA do ML ${ind.sem_equipe_ml_pct}%</span>` +
+        `<span class="clicavel" role="button" tabindex="0" data-escopo="periodo" data-grupo="ia" title="Ver as respondidas pela nossa IA"><i style="background:var(--ia)"></i>Nossa IA ${ind.sem_equipe_ia_pct}%${compIa}</span>`;
     }
 
     $("k-tempo").textContent = formatarMin(ind.tempo_medio_equipe_min);
@@ -372,12 +392,18 @@
     $("k-pend").className = "valor " + (ind.contas_criticas ? "ruim" : ind.pendentes_agora ? "aten" : "bom");
     $("k-pend-comp").textContent = ind.contas_criticas ? `${ind.contas_criticas} conta(s) com espera de +30 min` : (ind.pendentes_agora ? "nenhuma espera crítica" : "fila zerada 🎉");
 
-    $("k-hoje").textContent = ind.perguntas_hoje;
-    $("k-hoje-comp").textContent = ind.media_por_dia == null ? "" : `média ${String(ind.media_por_dia).replace(".", ",")} por dia`;
+    $("k-hoje").textContent = ind.perguntas_periodo;
+    const media = ind.media_por_dia == null ? "" : String(ind.media_por_dia).replace(".", ",");
+    $("k-hoje-comp").textContent = !media ? "" : (f.periodo === "hoje" ? `média ${media} por dia nos 7 dias anteriores` : `média ${media} por dia`);
 
-    // Gráfico por dia
-    const f = d.filtro;
-    $("titulo-dias").textContent = (f.periodo === "hoje" ? "Últimos 7 dias" : f.rotulo) + " — quem respondeu";
+    const modoHoje = f.periodo === "hoje";
+    if (modoHoje) {
+      // Hoje: o gráfico grande mostra hoje por hora (uma barra só de "hoje" não diria nada)
+      $("titulo-dias").textContent = "Hoje por hora — quem respondeu";
+      colunas("grafico-dias", d.por_hora, (it) => it.hora % 2 === 0 ? it.hora + "h" : "", d.hora_atual,
+        it => ({ escopo: "hora", hora: it.hora, faixa: "hoje" }), it => `Hoje às ${it.hora}h`);
+    } else {
+    $("titulo-dias").textContent = f.rotulo + " — quem respondeu";
     const n = d.por_dia.length;
     const temHoje = n && d.por_dia[n - 1].data === hojeIso();
     const passo = n <= 10 ? 1 : n <= 31 ? 3 : 5;
@@ -388,13 +414,20 @@
     }, temHoje ? n - 1 : null,
     it => ({ escopo: "dia", dia: it.data }),
     it => { const [a, m, dia] = it.data.split("-"); return `${dia}/${m}/${a}`; });
+    }
 
-    // Hoje: rosca e por hora
-    rosca(d.hoje);
-    colunas("grafico-horas", d.por_hora, (it) => it.hora % 3 === 0 ? it.hora + "h" : "", d.hora_atual,
-      it => ({ escopo: "hora", hora: it.hora }), it => `Hoje às ${it.hora}h`);
-    const pico = d.por_hora.reduce((m, h) => { const t = GRUPOS.reduce((s, [k]) => s + (h[k] || 0), 0); return t > m.t ? { h: h.hora, t } : m; }, { h: null, t: 0 });
-    $("nota-pico").textContent = pico.t ? `pico às ${pico.h}h (${pico.t})` : "";
+    // Quem respondeu no período (o círculo bate com o primeiro cartão)
+    $("titulo-rosca").textContent = (modoHoje ? "Hoje" : f.rotulo) + " — quem respondeu";
+    rosca(d.periodo_desfecho);
+
+    // Horário das perguntas: no período; em "Hoje", a média por hora dos 7 dias anteriores (pra comparar)
+    const horas = modoHoje ? d.por_hora_media_7d : d.por_hora_periodo;
+    const faixa = modoHoje ? "anteriores7" : "periodo";
+    $("titulo-horas").textContent = modoHoje ? "Média por hora — 7 dias anteriores" : `Por hora — ${f.rotulo}`;
+    colunas("grafico-horas", horas, (it) => it.hora % 3 === 0 ? it.hora + "h" : "", null,
+      it => ({ escopo: "hora", hora: it.hora, faixa }), it => (modoHoje ? "Média dos 7 dias anteriores" : f.rotulo) + ` às ${it.hora}h`);
+    const pico = horas.reduce((m, h) => { const t = GRUPOS.reduce((s, [k]) => s + (h[k] || 0), 0); return t > m.t ? { h: h.hora, t } : m; }, { h: null, t: 0 });
+    $("nota-pico").textContent = pico.t ? `pico às ${pico.h}h (${fmtN(Math.round(pico.t * 10) / 10)}${modoHoje ? "/dia" : ""})` : "";
 
     // Top 10 produtos (o título mostra o filtro ativo, pra quem olha a TV saber o que está vendo)
     $("ctx-produtos").textContent = `${f.conta || "Todas as contas"} · ${f.rotulo}`;
@@ -464,6 +497,7 @@
     if (alvo.grupo) p.set("grupo", alvo.grupo);
     if (alvo.dia) p.set("dia", alvo.dia);
     if (alvo.hora != null) p.set("hora", alvo.hora);
+    if (alvo.faixa) p.set("faixa", alvo.faixa);
     if (alvo.produto) p.set("produto", alvo.produto);
 
     const cor = alvo.grupo ? (GRUPOS.find(g => g[0] === alvo.grupo) || [])[2] : null;
@@ -560,6 +594,7 @@
     if (grupo) alvo.grupo = grupo;
     if (base.dataset.dia) alvo.dia = base.dataset.dia;
     if (base.dataset.hora != null) alvo.hora = Number(base.dataset.hora);
+    if (base.dataset.faixa) alvo.faixa = base.dataset.faixa;
     if (base.dataset.produto) { alvo.produto = base.dataset.produto; alvo.nome = base.dataset.nome; }
     if (alvo.escopo === "pendentes_agora") alvo.nome = "Pendentes agora";
     return alvo;
