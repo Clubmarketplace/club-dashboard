@@ -148,6 +148,7 @@ class Pergunta(Base):
     resposta_enviada = Column(Text, nullable=True)
     recebida_em = Column(DateTime, default=datetime.utcnow)
     respondida_em = Column(DateTime, nullable=True)
+    respondida_por = Column(String, nullable=True)  # nome do atendente (só quando a equipe respondeu pela nossa tela)
 
     conta = relationship("Conta")
 
