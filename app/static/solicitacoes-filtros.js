@@ -36,7 +36,7 @@
   const CAMPOS_FORM = ["conta", "status", "galpao", "dias", "de", "ate", "plataforma", "origem"];
   const NOMES_STATUS = { todos: "Todos", pendente: "Aguardando", confirmado: "Confirmados" };
   const NOMES_PERIODO = { "1": "Hoje", "7": "Últimos 7 dias", "30": "Últimos 30 dias", personalizado: "Datas" };
-  const NOMES_ORIGEM = { seller: "Sellers", logistica: "Galpão", publico: "Link público" };
+  const NOMES_ORIGEM = { seller: "Sellers", logistica: "Galpão", equipe: "Equipe", publico: "Link público" };
   // Padrões; atualizados pelo servidor (/opcoes e /contas), que são a fonte única.
   let PLATAFORMAS = [["mercado_livre", "Mercado Livre"], ["shopee", "Shopee"], ["magalu", "Magalu"], ["tiktok_shop", "TikTok Shop"]];
   let GALPOES = [[1, "Galpão 1"], [2, "Galpão 2"], [3, "Galpão 3"]];
@@ -152,7 +152,7 @@
             <div class="bf2-pop" data-el="pop-mais">
               <div class="bf2-campo"><label for="bf2-plataforma">Plataforma</label><select id="bf2-plataforma" data-f="plataforma"></select></div>
               ${mostrarOrigem ? `<div class="bf2-campo"><label for="bf2-origem">Origem</label>
-                <select id="bf2-origem" data-f="origem">${opcoes([["", "Todas"], ["seller", "Sellers"], ["logistica", "Galpão"], ["publico", "Link público"]], rascunho.origem)}</select></div>` : ""}
+                <select id="bf2-origem" data-f="origem">${opcoes([["", "Todas"], ["seller", "Sellers"], ["logistica", "Galpão"], ["equipe", "Equipe"], ["publico", "Link público"]], rascunho.origem)}</select></div>` : ""}
             </div>
           </div>
           <button type="button" class="bf2-btn bf2-aplicar" data-el="aplicar">Aplicar filtros</button>
