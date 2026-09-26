@@ -24,6 +24,8 @@
   header { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
   .marca { display:flex; align-items:center; gap:12px; }
   .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--equipe); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  /* Logo da Club numa caixinha branca (a logo tem letras escuras e sumiria no fundo escuro da TV) */
+  .marca .logo-club { height:48px; width:auto; background:#ffffff; border-radius:9px; padding:6px 10px; display:block; }
   h1 { margin:0; font-size:21px; font-weight:600; }
   .subtitulo { color:var(--dim); font-size:13px; margin-top:2px; }
   /* Filtros compactos: conta + período (Hoje · 7 · 30 · Datas) */
@@ -149,7 +151,7 @@
 
 <header>
   <div class="marca">
-    <div class="icone">C</div>
+    <img class="logo-club" src="/static/logo.png?v=2" alt="Club Marketplace" />
     <div>
       <h1>Visão Geral — Pré-venda</h1>
       <div class="subtitulo" id="subtitulo">Todas as contas</div>

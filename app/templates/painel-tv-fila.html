@@ -27,6 +27,8 @@
   header { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:18px; flex-wrap:wrap; gap:14px; }
   .marca { display:flex; align-items:center; gap:12px; }
   .marca .icone { width:40px; height:40px; border-radius:10px; background:var(--amber); color:#1a1206; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:20px; }
+  /* Logo da Club numa caixinha branca (a logo tem letras escuras e sumiria no fundo escuro da TV) */
+  .marca .logo-club { height:48px; width:auto; background:#ffffff; border-radius:9px; padding:6px 10px; display:block; }
   h1 { margin:0; font-size:22px; font-weight:600; }
   .subtitulo { color:var(--text-dim); font-size:13.5px; margin-top:2px; }
   .relogio { font-size:15px; color:var(--text-dim); text-align:right; }
@@ -160,7 +162,7 @@
 
 <header>
   <div class="marca">
-    <div class="icone">C</div>
+    <img class="logo-club" src="/static/logo.png?v=2" alt="Club Marketplace" />
     <div>
       <h1>Fila de Ação — Pré-venda</h1>
       <div class="subtitulo">Todas as contas, ordenado pela espera mais longa primeiro</div>
