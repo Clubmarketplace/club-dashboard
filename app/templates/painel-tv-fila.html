@@ -110,6 +110,29 @@
 
   .rodape-nota { margin-top:10px; font-size:11.5px; color:var(--text-dim); text-align:center; }
 
+  /* ---------- Clique: bolha filtra a conta; pergunta abre o painel de resposta ---------- */
+  .bolha { cursor:pointer; font:inherit; }
+  .bolha:focus-visible, .item-fila:focus-visible { outline:3px solid var(--amber); outline-offset:2px; }
+  #bolhas.filtrando .bolha:not(.selecionada) { opacity:.35; }
+  .bolha.selecionada { box-shadow:0 0 0 4px rgba(255,255,255,.18); }
+  .item-fila.clicavel { cursor:pointer; }
+  .item-fila.clicavel:hover { border-color:#3a4d5e; }
+  .chip-conta { display:none; align-items:center; gap:8px; padding:8px 12px; border-radius:999px; background:var(--panel-2); border:1px solid var(--line); color:var(--text); font:600 13px "Space Grotesk",sans-serif; cursor:pointer; }
+  .chip-conta.ativo { display:inline-flex; }
+  .gaveta-fundo { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; }
+  .gaveta { position:fixed; top:0; right:0; bottom:0; width:min(560px, 100%); background:var(--panel); border-left:1px solid var(--line); z-index:41; padding:26px 28px; overflow-y:auto; display:flex; flex-direction:column; gap:14px; box-shadow:-16px 0 40px rgba(0,0,0,.45); }
+  .gaveta h2 { margin:0; font-size:20px; }
+  .g-meta { font-size:13px; color:var(--text-dim); display:flex; flex-direction:column; gap:3px; }
+  .g-pergunta { font-size:19px; line-height:1.4; background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
+  .g-resposta { width:100%; min-height:130px; resize:vertical; border-radius:10px; border:1px solid var(--line); background:var(--bg); color:var(--text); padding:12px 14px; font:15px "Space Grotesk",sans-serif; }
+  .g-botoes { display:flex; justify-content:space-between; align-items:center; gap:10px; }
+  .g-btn { height:44px; padding:0 18px; border-radius:10px; border:1px solid var(--line); background:var(--panel-2); color:var(--text); font:600 14px "Space Grotesk",sans-serif; cursor:pointer; }
+  .g-btn.primario { background:var(--green); border-color:var(--green); color:#062015; }
+  .g-btn:disabled { opacity:.6; cursor:default; }
+  .g-msg { font-size:13.5px; border-radius:9px; padding:10px 12px; display:none; }
+  .g-msg.erro { display:block; background:var(--red-dim); color:#ffd0cc; }
+  .g-msg.info { display:block; background:var(--blue-dim); color:#cfe6fa; }
+  .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--green); color:#062015; font-weight:600; padding:12px 18px; border-radius:10px; z-index:60; }
   @media (prefers-reduced-motion: reduce) {
     .bolha.critico { animation:none; }
   }
@@ -154,15 +177,21 @@
 </div>
 
 <div class="barra-controles">
-  <input type="text" id="busca-conta" placeholder="Buscar por nome da conta..." />
+  <div style="display:flex; gap:10px; align-items:center; flex:1; flex-wrap:wrap;">
+    <input type="text" id="busca-conta" placeholder="Buscar por nome da conta..." aria-label="Buscar por nome da conta" />
+    <button type="button" class="chip-conta" id="chip-conta" title="Mostrar todas as contas"></button>
+  </div>
   <div class="status-atualizacao"><span class="ponto-vivo"></span> Atualizado há <span id="segundos-atualizacao">0</span>s</div>
 </div>
 
 <div id="fila"></div>
 
-<div class="rodape-nota">Dados reais — clique não responde daqui; use a tela /pre-venda pra responder de verdade.</div>
+<div class="rodape-nota">{% if pode_responder %}Clique numa pergunta para responder · clique numa conta para ver só as perguntas dela{% else %}Acesso de visualização (TV) · clique numa conta para ver só as perguntas dela{% endif %}</div>
+<div id="gaveta"></div>
 
 <script>
+  // Quem está logado pode responder? (admin/supervisor/atendente; o perfil "tv" só olha)
+  const PODE_RESPONDER = {{ "true" if pode_responder else "false" }};
   // ---------- Configuração ----------
   const INTERVALO_BUSCA_MS = 8000;      // busca dados novos no servidor
   const INTERVALO_RELOGIO_MS = 1000;    // recalcula tempos/cores na tela
@@ -219,7 +248,11 @@
     renderizarTudo();
   });
 
-  const casaBusca = item => !termoBusca || String(item.conta || "").toLowerCase().includes(termoBusca);
+  let contaSelecionada = ""; // clique na bolha: mostra só essa conta (chave minúscula)
+  const chaveConta = nome => String(nome || "sem conta").trim().toLowerCase();
+  const casaBusca = item =>
+    (!termoBusca || String(item.conta || "").toLowerCase().includes(termoBusca)) &&
+    (!contaSelecionada || chaveConta(item.conta) === contaSelecionada);
   const filaFiltrada = () => ultimaFila.filter(casaBusca);
 
   const FUSO = "America/Sao_Paulo";
@@ -252,6 +285,15 @@
   }
 
   // ---------- Renderização ----------
+  // Só troca o HTML quando mudou de verdade. A tela se redesenha a cada
+  // segundo (tempos de espera); trocar o HTML sem necessidade "engolia"
+  // cliques que caíam bem no meio da troca.
+  function trocarHtml(el, html) {
+    if (el._htmlAtual === html) return false;
+    el.innerHTML = html;
+    el._htmlAtual = html;
+    return true;
+  }
   function renderizarResumo(fila) {
     let atencao = 0, critico = 0;
     fila.forEach(item => {
@@ -270,9 +312,9 @@
     const emDia = contasEmDia(chavesPendentes);
 
     if (fila.length === 0 && emDia.length === 0) {
-      container.innerHTML = termoBusca
+      trocarHtml(container, termoBusca
         ? `<span style="color:var(--text-dim); font-size:13px; grid-column:1/-1;">Nenhuma conta encontrada pra "${escaparHtml(termoBusca)}".</span>`
-        : '<span style="color:var(--text-dim); font-size:13px; grid-column:1/-1;">Nenhuma conta com pendência agora. 🎉</span>';
+        : '<span style="color:var(--text-dim); font-size:13px; grid-column:1/-1;">Nenhuma conta com pendência agora. 🎉</span>');
       aviso.style.display = "none";
       return;
     }
@@ -288,17 +330,19 @@
     });
     const ordenado = Object.values(porConta).sort((a, b) => b.min - a.min);
 
-    container.innerHTML = ordenado.map(info => `
-      <div class="bolha ${classeUrgencia(info.min)}" title="${escaparHtml(info.nome)} — ${info.qtd} pendente(s)">
+    container.classList.toggle("filtrando", !!contaSelecionada);
+    const sel = nome => (chaveConta(nome) === contaSelecionada ? " selecionada" : "");
+    trocarHtml(container, ordenado.map(info => `
+      <button type="button" class="bolha ${classeUrgencia(info.min)}${sel(info.nome)}" data-conta="${escaparHtml(info.nome)}" title="${escaparHtml(info.nome)} — ${info.qtd} pendente(s). Clique para ver só esta conta.">
         <span class="b-nome">${escaparHtml(info.nome)}</span>
         <span class="b-tempo">${formatarTempo(info.min).replace(" min", "min")}</span>
         <span class="b-qtd">${info.qtd} ${info.qtd === 1 ? "pergunta" : "perguntas"}</span>
-      </div>`).join("") + emDia.map(c => `
-      <div class="bolha ok" title="${escaparHtml(c.conta)} — em dia">
+      </button>`).join("") + emDia.map(c => `
+      <button type="button" class="bolha ok${sel(c.conta)}" data-conta="${escaparHtml(c.conta)}" title="${escaparHtml(c.conta)} — em dia. Clique para ver só esta conta.">
         <span class="b-nome">${escaparHtml(c.conta)}</span>
         <span class="b-tempo">✓ em dia</span>
         <span class="b-qtd">${c.respondidas_hoje} ${c.respondidas_hoje === 1 ? "respondida" : "respondidas"}</span>
-      </div>`).join("");
+      </button>`).join(""));
 
     // Se houver mais contas do que cabe no bloco, avisa quantas ficaram de fora
     requestAnimationFrame(() => {
@@ -314,9 +358,9 @@
     const respondidas = respondidasFiltradas();
 
     if (fila.length === 0 && respondidas.length === 0) {
-      container.innerHTML = termoBusca
+      trocarHtml(container, termoBusca
         ? `<div class="vazio">Nenhuma conta encontrada pra "${escaparHtml(termoBusca)}".</div>`
-        : '<div class="vazio"><div class="emoji">🎉</div>Nenhuma pergunta esperando resposta.</div>';
+        : '<div class="vazio"><div class="emoji">🎉</div>Nenhuma pergunta esperando resposta.</div>');
       return;
     }
 
@@ -327,10 +371,11 @@
       ? ""
       : '<div class="vazio" style="padding:14px;">🎉 Nenhuma pergunta esperando resposta.</div>';
 
-    container.innerHTML = blocoPendentes + fila.map(item => {
+    trocarHtml(container, blocoPendentes + fila.map(item => {
       const min = minutosEsperando(item);
       const classe = classeUrgencia(min);
-      return `<div class="item-fila ${classe}">
+      return `<div class="item-fila ${classe} clicavel" data-pergunta="${item.id}" tabindex="0" role="button"
+                  aria-label="${PODE_RESPONDER ? "Responder" : "Ver"} pergunta de ${escaparHtml(item.conta)}">
         <div class="if-esquerda">
           <span class="if-conta">${escaparHtml(item.conta)}</span>
           <span class="if-texto">${escaparHtml(item.texto)}</span>
@@ -340,10 +385,13 @@
           <div class="if-tempo ${classe}"><span class="rotulo-tempo">Esperando</span>${formatarTempo(min)}</div>
         </div>
       </div>`;
-    }).join("") + blocoRespondidas;
+    }).join("") + blocoRespondidas);
   }
 
   function renderizarTudo() {
+    const chip = document.getElementById("chip-conta");
+    chip.classList.toggle("ativo", !!contaSelecionada);
+    chip.textContent = contaSelecionada ? `Conta: ${nomeContaSelecionada} ✕` : "";
     const fila = filaFiltrada();
     renderizarResumo(ultimaFila); // totais sempre de todas as contas
     if (dadosPainel && dadosPainel.geral) {
@@ -399,6 +447,110 @@
   // Recalcula tempos e cores sem esperar o próximo fetch
   setInterval(renderizarTudo, INTERVALO_RELOGIO_MS);
 
+  // ---------- Clique na bolha: filtra a conta ----------
+  let nomeContaSelecionada = "";
+  document.getElementById("bolhas").addEventListener("click", (e) => {
+    const b = e.target.closest("[data-conta]");
+    if (!b) return;
+    const chave = chaveConta(b.dataset.conta);
+    contaSelecionada = contaSelecionada === chave ? "" : chave;  // clicou de novo: mostra todas
+    nomeContaSelecionada = contaSelecionada ? b.dataset.conta : "";
+    document.getElementById("fila").scrollTop = 0;
+    renderizarTudo();
+  });
+  document.getElementById("chip-conta").addEventListener("click", () => {
+    contaSelecionada = ""; nomeContaSelecionada = ""; renderizarTudo();
+  });
+
+  // ---------- Clique na pergunta: painel lateral pra responder ----------
+  let perguntaAberta = null;
+  function abrirPergunta(id) {
+    const p = ultimaFila.find(x => String(x.id) === String(id));
+    if (!p) return;
+    perguntaAberta = p;
+    const min = minutosEsperando(p);
+    document.getElementById("gaveta").innerHTML = `
+      <div class="gaveta-fundo" data-fechar></div>
+      <aside class="gaveta" role="dialog" aria-label="Pergunta de ${escaparHtml(p.conta)}">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px;">
+          <div>
+            <h2>${escaparHtml(p.conta)}</h2>
+            <div class="g-meta">
+              ${p.titulo ? `<span>${escaparHtml(p.titulo)}</span>` : ""}
+              <span>${p.sku ? "SKU: " + escaparHtml(p.sku) : ""}${p.item_id ? (p.sku ? " · " : "") + escaparHtml(p.item_id) : ""}</span>
+              <span class="if-tempo ${classeUrgencia(min)}" style="text-align:left; font-size:16px;">Esperando há ${formatarTempo(min)}</span>
+            </div>
+          </div>
+          <button type="button" class="g-btn" data-fechar aria-label="Fechar" style="width:44px; padding:0;">✕</button>
+        </div>
+        <div class="g-pergunta">${escaparHtml(p.texto)}</div>
+        ${PODE_RESPONDER ? `
+          <label for="g-resposta" style="font-size:13px; color:var(--text-dim);">Sua resposta (vai direto para o comprador no Mercado Livre)</label>
+          <textarea id="g-resposta" class="g-resposta" maxlength="2000" placeholder="Digite a resposta…"></textarea>
+          <div class="g-msg" id="g-msg"></div>
+          <div class="g-botoes">
+            <span style="font-size:12px; color:var(--text-dim);" id="g-cont">0/2000</span>
+            <div style="display:flex; gap:10px;">
+              <button type="button" class="g-btn" data-fechar>Cancelar</button>
+              <button type="button" class="g-btn primario" id="g-enviar">Enviar resposta</button>
+            </div>
+          </div>
+          <div style="font-size:12px; color:var(--text-dim);">A resposta também ensina a nossa IA: na próxima pergunta parecida sobre este produto, ela responde sozinha.</div>`
+        : `<div class="g-msg info">Este acesso é só de visualização (TV). Para responder, abra o Painel da Fila no computador com o seu usuário.</div>`}
+      </aside>`;
+    const campo = document.getElementById("g-resposta");
+    if (campo) {
+      campo.focus();
+      campo.addEventListener("input", () => { document.getElementById("g-cont").textContent = campo.value.length + "/2000"; });
+      document.getElementById("g-enviar").addEventListener("click", enviarResposta);
+    }
+  }
+  function fecharPergunta() { perguntaAberta = null; document.getElementById("gaveta").innerHTML = ""; }
+
+  async function enviarResposta() {
+    const p = perguntaAberta;
+    const campo = document.getElementById("g-resposta");
+    const msg = document.getElementById("g-msg");
+    const botao = document.getElementById("g-enviar");
+    const texto = (campo.value || "").trim();
+    if (!texto) { msg.className = "g-msg erro"; msg.textContent = "Digite a resposta antes de enviar."; return; }
+    botao.disabled = true; botao.textContent = "Enviando…";
+    try {
+      const r = await fetch(`/api/pre-venda/${p.id}/responder`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto }),
+      });
+      const dados = await r.json().catch(() => ({}));
+      if (r.status === 409 || r.status === 400 && /já foi respondida/i.test(dados.detail || "")) {
+        // respondida por fora (IA do ML / app) ou por outro atendente enquanto estava aberta
+        fecharPergunta(); mostrarToast("Essa pergunta já tinha sido respondida — lista atualizada."); atualizar(); return;
+      }
+      if (!r.ok) throw new Error(dados.detail || ("status " + r.status));
+      ultimaFila = ultimaFila.filter(x => x.id !== p.id);  // sai da fila na hora
+      fecharPergunta(); renderizarTudo(); mostrarToast("✓ Resposta enviada ao comprador");
+      atualizar();
+    } catch (erro) {
+      msg.className = "g-msg erro"; msg.textContent = "Não foi possível enviar: " + erro.message;
+      botao.disabled = false; botao.textContent = "Enviar resposta";
+    }
+  }
+
+  function mostrarToast(texto) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = texto; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  document.getElementById("fila").addEventListener("click", (e) => {
+    const item = e.target.closest("[data-pergunta]");
+    if (item) abrirPergunta(item.dataset.pergunta);
+  });
+  document.getElementById("fila").addEventListener("keydown", (e) => {
+    const item = e.target.closest("[data-pergunta]");
+    if (item && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); abrirPergunta(item.dataset.pergunta); }
+  });
+  document.getElementById("gaveta").addEventListener("click", (e) => { if (e.target.closest("[data-fechar]")) fecharPergunta(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && perguntaAberta) fecharPergunta(); });
+
   // ---------- Rolagem automática da lista ----------
   (function iniciarRolagemAutomatica() {
     if (!ROLAGEM_AUTOMATICA) return;
@@ -417,7 +569,7 @@
       const maximo = lista.scrollHeight - lista.clientHeight;
       if (maximo <= 2) {
         posicao = 0;                     // tudo cabe na tela: não rola
-      } else if (!mouseEmCima && agora >= pausadoAte) {
+      } else if (!mouseEmCima && !perguntaAberta && agora >= pausadoAte) {
         if (Math.abs(posicao - lista.scrollTop) > 2) posicao = lista.scrollTop; // alguém rolou
         posicao += VELOCIDADE_ROLAGEM;
         if (posicao >= maximo) {
