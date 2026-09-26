@@ -44,6 +44,26 @@ def _resolvida_por(p: Pergunta) -> str:
     return "—"
 
 
+_NOMES_CAMADA = {
+    "resposta_validada": "histórico do produto",
+    "resposta_padrao": "resposta padrão",
+    "manual_sku_ia": "manual",
+    "busca_site_fabricante": "site do fabricante",
+    "politica_geral": "política geral",
+}
+
+
+def _origem(p: Pergunta) -> dict:
+    """Quem respondeu, pros painéis: origem (ia|ml|equipe|outros), detalhe e se precisa revisar."""
+    if p.camada_resolvida in CAMADAS_AUTOMATICAS:
+        return {"origem": "ia", "detalhe": _NOMES_CAMADA.get(p.camada_resolvida, ""), "revisar": bool(p.precisa_auditoria)}
+    if p.camada_resolvida == "manual":
+        return {"origem": "equipe", "detalhe": p.respondida_por or "", "revisar": False}
+    if p.status == "respondida_externamente":
+        return {"origem": "ml", "detalhe": "", "revisar": False}
+    return {"origem": "outros", "detalhe": "", "revisar": False}
+
+
 def _utc_para_br(data_utc_naive: datetime) -> datetime:
     """Converte um datetime UTC 'cru' (sem fuso, como vem do banco) pro horário de Brasília."""
     return data_utc_naive.replace(tzinfo=timezone.utc).astimezone(FUSO_BR)
@@ -160,6 +180,7 @@ def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Requ
     pergunta.camada_resolvida = "manual"
     pergunta.resposta_enviada = corpo.texto
     pergunta.respondida_em = datetime.utcnow()
+    pergunta.respondida_por = getattr(usuario, "nome_exibicao", None)  # quem respondeu (mostrado nos painéis)
     db.add(AcaoRegistrada(
         conta_id=conta.id,
         tipo="pergunta_respondida",
@@ -269,10 +290,18 @@ def painel_geral(db: Session = Depends(get_db)):
     contas_hoje: dict[str, dict] = {}
     for p in perguntas_hoje:
         nome = p.conta.apelido if p.conta else "—"
-        registro = contas_hoje.setdefault(nome, {"conta": nome, "total_hoje": 0, "respondidas_hoje": 0})
+        registro = contas_hoje.setdefault(nome, {"conta": nome, "total_hoje": 0, "respondidas_hoje": 0,
+                                                 "ia": 0, "ml": 0, "equipe": 0, "ultima_resposta_em": None})
         registro["total_hoje"] += 1
         if p.status in ("respondida", "respondida_externamente"):
             registro["respondidas_hoje"] += 1
+            origem = _origem(p)["origem"]
+            if origem in ("ia", "ml", "equipe"):
+                registro[origem] += 1
+            if p.respondida_em:
+                iso = p.respondida_em.isoformat()
+                if not registro["ultima_resposta_em"] or iso > registro["ultima_resposta_em"]:
+                    registro["ultima_resposta_em"] = iso
 
     # Últimas perguntas resolvidas hoje (IA, atendente ou por fora), mais
     # recentes primeiro -- aparecem em verde na lista dos painéis.
@@ -291,10 +320,34 @@ def painel_geral(db: Session = Depends(get_db)):
             "texto": p.texto,
             "resposta": p.resposta_enviada,
             "resolvida_por": _resolvida_por(p),
+            **_origem(p),
             "recebida_em": p.recebida_em.isoformat() if p.recebida_em else None,
             "respondida_em": p.respondida_em.isoformat() if p.respondida_em else None,
         }
         for p in resolvidas_hoje
+    ]
+
+    # Perguntas dentro da janela da IA do ML (ainda não é a vez da equipe).
+    # Só pra mostrar no painel: "chegando" -> depois cai pra IA/equipe.
+    from app.pre_venda_resposta import janela_ia_ml_min
+    aguardando = (
+        db.query(Pergunta)
+        .filter(Pergunta.status.in_(["aguardando_ml", "pendente"]))
+        .filter(Pergunta.recebida_em >= agora - timedelta(hours=6))
+        .order_by(Pergunta.recebida_em.asc())
+        .limit(50)
+        .all()
+    )
+    aguardando_ml = [
+        {
+            "id": p.id,
+            "conta": p.conta.apelido if p.conta else "—",
+            "texto": p.texto,
+            "sku": p.sku,
+            "etapa": "nossa_ia" if p.status == "pendente" else "ml",  # pendente = nossa IA decidindo
+            "recebida_em": p.recebida_em.isoformat() if p.recebida_em else None,
+        }
+        for p in aguardando
     ]
 
     return {
@@ -311,6 +364,8 @@ def painel_geral(db: Session = Depends(get_db)):
         "ranking_pendencias": ranking_pendencias,
         "contas_hoje": sorted(contas_hoje.values(), key=lambda c: c["conta"].lower()),
         "respondidas_recentes": respondidas_recentes,
+        "aguardando_ml": aguardando_ml,
+        "janela_ml_min": janela_ia_ml_min(),
         "por_hora": por_hora,
     }
 
