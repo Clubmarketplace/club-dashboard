@@ -148,7 +148,7 @@ _AREAS = {
     "paineis_tv": {
         "paginas": {
             "/painel-tv/geral", "/painel-tv/fila",
-            "/api/pre-venda/fila", "/api/pre-venda/painel-geral", "/api/pre-venda/painel-resumo",
+            "/api/pre-venda/fila", "/api/pre-venda/painel-geral", "/api/pre-venda/painel-resumo", "/api/pre-venda/painel-detalhe",
         },
         "prefixos_api": (),
     },
@@ -419,7 +419,14 @@ def pagina_eventos_webhook(request: Request):
 @app.get("/painel-tv/geral", response_class=HTMLResponse)
 def pagina_painel_tv_geral(request: Request):
     """Tela de TV 1 — visão geral agregada, pra bater o olho de longe (exige login)."""
-    return templates.TemplateResponse(request=request, name="painel-tv-geral.html", context={"usuario_logado": _usuario_logado(request)})
+    # Gráficos clicáveis: admin/supervisor/atendente respondem as pendentes
+    # direto da lista; o perfil "tv" só visualiza.
+    usuario = _usuario_logado(request)
+    pode_responder = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
+    return templates.TemplateResponse(
+        request=request, name="painel-tv-geral.html",
+        context={"usuario_logado": usuario, "pode_responder": pode_responder},
+    )
 
 
 @app.get("/painel-tv/fila", response_class=HTMLResponse)
