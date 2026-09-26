@@ -87,8 +87,17 @@ def _valor_se_assinatura_valida(token: str) -> Optional[str]:
     return None
 
 
-def criar_token_sessao(usuario_id: int) -> str:
-    expira_em = int(time.time()) + DURACAO_SESSAO_SEGUNDOS
+# O perfil "tv" (telas de TV, só visualização) fica logado bem mais tempo:
+# a TV fica ligada o dia inteiro e não tem ninguém pra digitar a senha.
+DURACAO_SESSAO_TV_SEGUNDOS = 60 * 60 * 24 * 30  # 30 dias
+
+
+def duracao_sessao(papel: Optional[str]) -> int:
+    return DURACAO_SESSAO_TV_SEGUNDOS if papel == "tv" else DURACAO_SESSAO_SEGUNDOS
+
+
+def criar_token_sessao(usuario_id: int, duracao_segundos: Optional[int] = None) -> str:
+    expira_em = int(time.time()) + (duracao_segundos or DURACAO_SESSAO_SEGUNDOS)
     return _assinar(f"{usuario_id}:{expira_em}")
 
 

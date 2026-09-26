@@ -119,21 +119,16 @@ async def _iniciar_leitura_reputacao() -> None:
     logging.getLogger(__name__).info("Leitura automática de reputação iniciada.")
 
 # --- Middleware de autenticação ---
-# Tudo exige login por padrão. As exceções abaixo são as páginas/APIs
-# que PRECISAM ficar abertas: as telas de TV (ficam ligadas o dia
-# inteiro, sem ninguém logado), o formulário público de cancelamento
-# (link compartilhado com todas as contas, sem senha), o webhook do
-# Mercado Livre (quem chama é o Mercado Livre, não uma pessoa), e o
-# callback de OAuth.
+# Tudo exige login por padrão, INCLUSIVE os painéis de TV (a TV entra com
+# um usuário do perfil "tv": só visualiza e fica logada 30 dias). As
+# exceções abaixo são só o que PRECISA ficar aberto: login/primeiro acesso,
+# o webhook do Mercado Livre (quem chama é o ML, não uma pessoa), o
+# callback de OAuth e a verificação de saúde. O formulário de solicitação
+# de cancelamento também exige login (seller, logística, atendente...).
 _PUBLICO_EXATO = {
     ("GET", "/login"), ("POST", "/login"),
     ("GET", "/logout"),
     ("GET", "/primeiro-acesso"), ("POST", "/primeiro-acesso"),
-    ("GET", "/solicitar-cancelamento"),
-    ("POST", "/api/solicitacoes-cancelamento"),
-    ("GET", "/painel-tv/geral"), ("GET", "/painel-tv/fila"),
-    ("GET", "/api/pre-venda/fila"), ("GET", "/api/pre-venda/painel-geral"),
-    ("GET", "/api/pre-venda/painel-resumo"),
     ("POST", "/webhook/mercado-livre"),
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),
@@ -149,7 +144,14 @@ _PUBLICO_PREFIXOS = ("/static/",)
 _AREAS = {
     "pre_venda": {"paginas": {"/pre-venda"}, "prefixos_api": ("/api/pre-venda/",)},
     "pos_venda": {"paginas": {"/pos-venda"}, "prefixos_api": ("/api/pos-venda/",)},
-    "paineis_tv": {"paginas": {"/painel-tv/geral", "/painel-tv/fila"}, "prefixos_api": ()},
+    # Painéis de TV + os dados que eles leem (só leitura: endereços EXATOS).
+    "paineis_tv": {
+        "paginas": {
+            "/painel-tv/geral", "/painel-tv/fila",
+            "/api/pre-venda/fila", "/api/pre-venda/painel-geral", "/api/pre-venda/painel-resumo",
+        },
+        "prefixos_api": (),
+    },
     # Termômetro de reputação de todas as contas (só visualizar; o
     # "Atualizar agora" é conferido na própria rota: admin/supervisor).
     "reputacao": {"paginas": {"/reputacao"}, "prefixos_api": ("/api/reputacao/",)},
@@ -160,7 +162,7 @@ _AREAS = {
     # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
     # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
     "solicitacoes_cancelamento": {
-        "paginas": {"/solicitacoes-painel", "/relatorio-cancelamentos", "/api/solicitacoes-cancelamento"},
+        "paginas": {"/solicitacoes-painel", "/relatorio-cancelamentos", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
         "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
     # Galpão: registrar (o formulário e o envio já são públicos) e
@@ -169,6 +171,7 @@ _AREAS = {
     "logistica": {
         "paginas": {
             "/solicitacoes-galpao",
+            "/solicitar-cancelamento", "/api/solicitacoes-cancelamento",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
             "/api/solicitacoes-cancelamento/opcoes",
@@ -183,19 +186,22 @@ _AREAS = {
 _AREAS_POR_PAPEL = {
     "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento", "reputacao", "respostas_padrao"),
     "logistica": ("logistica",),
+    # TV: só enxerga os painéis (não responde nada, não abre outras telas).
+    "tv": ("paineis_tv",),
 }
 _PAGINA_INICIAL_POR_PAPEL = {
     "seller": "/meus-cancelamentos",
     "atendente": "/pre-venda",
     "logistica": "/solicitar-cancelamento",
+    "tv": "/painel-tv/fila",
 }
 
 # Quais perfis cada papel pode criar/editar/resetar/desativar. Usado em
 # TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
 # no servidor, nunca só no <select> da tela.
 PAPEIS_GERENCIAVEIS_POR = {
-    "admin": ("admin", "supervisor", "atendente", "logistica", "seller"),
-    "supervisor": ("atendente", "logistica", "seller"),
+    "admin": ("admin", "supervisor", "atendente", "logistica", "seller", "tv"),
+    "supervisor": ("atendente", "logistica", "seller", "tv"),
 }
 
 
@@ -230,27 +236,34 @@ async def exigir_login(request: Request, call_next):
     if not usuario_id:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Não autenticado"}, status_code=401)
-        return RedirectResponse("/login", status_code=303)
+        # Volta pra onde a pessoa queria ir depois de entrar (ex.: seller abrindo o link do formulário).
+        from urllib.parse import quote
+        destino = caminho + (("?" + request.url.query) if request.url.query else "")
+        return RedirectResponse("/login?proximo=" + quote(destino, safe=""), status_code=303)
 
-    # Seller só pode ver as próprias telas (Meus Cancelamentos e o
-    # formulário de solicitar, que já é público de qualquer forma) --
-    # qualquer outra rota interna é bloqueada, mesmo sabendo a URL.
-    _ROTAS_PERMITIDAS_PARA_SELLER = {"/meus-cancelamentos", "/logout"}
-    if caminho not in _ROTAS_PERMITIDAS_PARA_SELLER:
-        with SessionLocal() as db:
-            usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
-        if usuario_logado and usuario_logado.papel == "seller":
-            if caminho.startswith("/api/"):
-                return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-            return RedirectResponse("/meus-cancelamentos", status_code=303)
+    # Perfis restritos. Cada perfil é conferido SEPARADAMENTE (um atalho
+    # comum deixava outros perfis passarem pelas rotas liberadas ao seller).
+    #  - Seller: as telas dele + o formulário de solicitar cancelamento (a
+    #    conta dele vem preenchida e o servidor não deixa pedir por outra).
+    #  - Atendente, logística, TV...: só o que está nas áreas do perfil.
+    # Qualquer outra rota é bloqueada, mesmo sabendo a URL.
+    _ROTAS_PERMITIDAS_PARA_SELLER = {
+        "/meus-cancelamentos", "/logout",
+        "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
+    }
+    with SessionLocal() as db:
+        usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
+    papel = usuario_logado.papel if usuario_logado else None
 
-        # Atendente (e futuros perfis restritos): só o que está liberado
-        # pras áreas dele; qualquer outra tela volta pra página inicial.
-        if usuario_logado and usuario_logado.papel in _AREAS_POR_PAPEL:
-            if not _papel_pode_acessar(usuario_logado.papel, caminho):
-                if caminho.startswith("/api/"):
-                    return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-                return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(usuario_logado.papel, "/logout"), status_code=303)
+    if papel == "seller" and caminho not in _ROTAS_PERMITIDAS_PARA_SELLER:
+        if caminho.startswith("/api/"):
+            return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
+        return RedirectResponse("/meus-cancelamentos", status_code=303)
+
+    if papel in _AREAS_POR_PAPEL and not _papel_pode_acessar(papel, caminho):
+        if caminho.startswith("/api/"):
+            return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
+        return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(papel, "/logout"), status_code=303)
 
     return await call_next(request)
 
@@ -405,22 +418,31 @@ def pagina_eventos_webhook(request: Request):
 
 @app.get("/painel-tv/geral", response_class=HTMLResponse)
 def pagina_painel_tv_geral(request: Request):
-    """Tela de TV 1 — visão geral agregada, pra bater o olho de longe."""
-    return templates.TemplateResponse(request=request, name="painel-tv-geral.html")
+    """Tela de TV 1 — visão geral agregada, pra bater o olho de longe (exige login)."""
+    return templates.TemplateResponse(request=request, name="painel-tv-geral.html", context={"usuario_logado": _usuario_logado(request)})
 
 
 @app.get("/painel-tv/fila", response_class=HTMLResponse)
 def pagina_painel_tv_fila(request: Request):
-    """Tela de TV 2 — fila de ação, só o que precisa de humano, cross-conta."""
-    return templates.TemplateResponse(request=request, name="painel-tv-fila.html")
+    """
+    Tela de TV 2 — fila de ação, só o que precisa de humano, cross-conta.
+    Exige login. Admin, supervisor e atendente respondem clicando na
+    pergunta; o perfil "tv" só visualiza.
+    """
+    usuario = _usuario_logado(request)
+    pode_responder = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
+    return templates.TemplateResponse(
+        request=request, name="painel-tv-fila.html",
+        context={"usuario_logado": usuario, "pode_responder": pode_responder},
+    )
 
 
 @app.get("/solicitar-cancelamento", response_class=HTMLResponse)
 def pagina_solicitar_cancelamento(request: Request):
     """
-    Página pública (sem login) pra qualquer conta registrar manualmente
-    um pedido de cancelamento. Se quem está acessando for um seller
-    logado, a conta dele já vem pré-preenchida (sem precisar digitar).
+    Formulário pra registrar manualmente um pedido de cancelamento (exige
+    login). Se quem está acessando for um seller, a conta dele já vem
+    pré-preenchida (e o servidor não deixa pedir por outra conta).
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
@@ -759,7 +781,7 @@ def pagina_login(request: Request):
         usuario = auth.usuario_atual(request, db)
         if usuario:
             return _redirecionar_por_papel(usuario.papel)
-    return templates.TemplateResponse(request=request, name="login.html", context={"erro": None})
+    return templates.TemplateResponse(request=request, name="login.html", context={"erro": None, "proximo": _proximo_seguro(request.query_params.get("proximo", ""))})
 
 
 def _buscar_usuario_por_login(db, login: str):
@@ -784,22 +806,34 @@ def _buscar_usuario_por_login(db, login: str):
     return candidatos[0] if candidatos else None
 
 
+def _proximo_seguro(proximo: str) -> str:
+    """Só aceita caminho interno ("/algo"): nunca manda pra outro site depois do login."""
+    proximo = (proximo or "").strip()
+    if proximo.startswith("/") and not proximo.startswith("//") and "\\" not in proximo and proximo != "/login":
+        return proximo
+    return ""
+
+
 @app.post("/login")
-def fazer_login(request: Request, usuario: str = Form(...), senha: str = Form(...)):
+def fazer_login(request: Request, usuario: str = Form(...), senha: str = Form(...), proximo: str = Form("")):
+    proximo = _proximo_seguro(proximo)
     db = SessionLocal()
     try:
         conta = _buscar_usuario_por_login(db, usuario)
 
         if conta is None or not conta.senha_hash:
             erro = "Usuário ou senha incorretos." if conta is None else "Essa conta ainda não concluiu o primeiro acesso — use o link 'Criar sua senha'."
-            return templates.TemplateResponse(request=request, name="login.html", context={"erro": erro}, status_code=401)
+            return templates.TemplateResponse(request=request, name="login.html", context={"erro": erro, "proximo": proximo}, status_code=401)
 
         if not auth.verificar_senha(senha, conta.senha_hash):
-            return templates.TemplateResponse(request=request, name="login.html", context={"erro": "Usuário ou senha incorretos."}, status_code=401)
+            return templates.TemplateResponse(request=request, name="login.html", context={"erro": "Usuário ou senha incorretos.", "proximo": proximo}, status_code=401)
 
-        resposta = _redirecionar_por_papel(conta.papel)
-        token = auth.criar_token_sessao(conta.id)
-        resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=auth.DURACAO_SESSAO_SEGUNDOS)
+        # Voltou pra tela que queria abrir; se o perfil não puder, o próprio
+        # controle de acesso manda pra página inicial dele.
+        resposta = RedirectResponse(proximo, status_code=303) if proximo else _redirecionar_por_papel(conta.papel)
+        duracao = auth.duracao_sessao(conta.papel)
+        token = auth.criar_token_sessao(conta.id, duracao)
+        resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=duracao)
         return resposta
     finally:
         db.close()
@@ -849,8 +883,9 @@ def concluir_primeiro_acesso(
         db.commit()
 
         resposta = _redirecionar_por_papel(conta.papel)
-        token = auth.criar_token_sessao(conta.id)
-        resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=auth.DURACAO_SESSAO_SEGUNDOS)
+        duracao = auth.duracao_sessao(conta.papel)
+        token = auth.criar_token_sessao(conta.id, duracao)
+        resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=duracao)
         return resposta
     finally:
         db.close()
