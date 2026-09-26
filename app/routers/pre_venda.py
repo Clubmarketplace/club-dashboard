@@ -498,6 +498,13 @@ def painel_resumo(
             return None
         return round(100 * sum(1 for p in lista if _desfecho(p) in ("ml", "ia")) / total)
 
+    def pct_de(lista, grupo):
+        """% das perguntas da lista que caíram num grupo (ex.: só IA do ML, só nossa IA)."""
+        total = len(lista)
+        if not total:
+            return None
+        return round(100 * sum(1 for p in lista if _desfecho(p) == grupo) / total)
+
     def tempo_medio_equipe(lista):
         tempos = [
             (p.respondida_em - p.recebida_em).total_seconds() / 60
@@ -553,6 +560,10 @@ def painel_resumo(
         "indicadores": {
             "sem_equipe_pct": pct_sem_equipe(atual),
             "sem_equipe_pct_anterior": pct_sem_equipe(anterior),
+            # Separação do "sem a equipe": quanto foi a IA do ML e quanto foi a nossa IA.
+            "sem_equipe_ml_pct": pct_de(atual, "ml"),
+            "sem_equipe_ia_pct": pct_de(atual, "ia"),
+            "sem_equipe_ia_pct_anterior": pct_de(anterior, "ia"),
             "tempo_medio_equipe_min": tempo_medio_equipe(atual),
             "tempo_medio_equipe_min_anterior": tempo_medio_equipe(anterior),
             "pendentes_agora": len(pendentes),
@@ -564,4 +575,158 @@ def painel_resumo(
         "hoje": hoje,
         "por_hora": por_hora,
         "produtos": produtos,
+    }
+
+
+# ---------------------------------------------------------------------------
+# Painel Geral clicável: "quais perguntas estão atrás deste pedaço do gráfico?"
+# Só leitura. Usa os MESMOS filtros (conta/período) e a MESMA regra de grupos
+# (_desfecho) do /painel-resumo, pra lista bater com o número do gráfico.
+# ---------------------------------------------------------------------------
+LIMITE_DETALHE = 300          # teto de perguntas devolvidas por clique (a tela continua leve)
+GRUPOS_DETALHE = ("ml", "ia", "equipe", "pendente", "outros")
+_NOMES_GRUPO = {"ml": "IA do ML / app", "ia": "Nossa IA", "equipe": "Equipe", "pendente": "Pendente", "outros": "Outros"}
+
+
+def _inicio_dia_utc(dia) -> datetime:
+    """Meia-noite de Brasília daquele dia, em UTC 'cru' (igual ao banco)."""
+    return datetime.combine(dia, datetime.min.time()).replace(tzinfo=FUSO_BR).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def _serializar_detalhe(p: Pergunta, agora: datetime) -> dict:
+    grupo = _desfecho(p)
+    origem = _origem(p)
+    duracao = None
+    if p.respondida_em and p.recebida_em and p.respondida_em >= p.recebida_em:
+        duracao = round((p.respondida_em - p.recebida_em).total_seconds() / 60, 1)
+    espera = None
+    if grupo == "pendente" and p.recebida_em:
+        espera = round((agora - p.recebida_em).total_seconds() / 60, 1)
+    return {
+        "id": p.id,
+        "conta": p.conta.apelido if p.conta else "—",
+        "texto": p.texto,
+        "resposta": p.resposta_enviada,
+        "status": p.status,
+        "grupo": grupo,
+        "detalhe": origem["detalhe"] if origem["origem"] == grupo else "",
+        "revisar": origem["revisar"],
+        "sku": p.sku,
+        "item_id": p.item_id,
+        "titulo": p.titulo_anuncio,
+        "recebida_em": (p.recebida_em.isoformat() + "Z") if p.recebida_em else None,
+        "respondida_em": (p.respondida_em.isoformat() + "Z") if p.respondida_em else None,
+        "duracao_min": duracao,
+        "espera_min": espera,
+        # Só a fila humana aceita resposta pela tela (as outras ainda estão com a IA do ML/nossa IA).
+        "respondivel": p.status == "fila_humana",
+    }
+
+
+@router.get("/painel-detalhe")
+def painel_detalhe(
+    db: Session = Depends(get_db),
+    escopo: str = "hoje",          # hoje | dia | hora | produto | grafico | semana | pendentes_agora
+    grupo: str | None = None,      # ml | ia | equipe | pendente | outros (vários separados por vírgula); vazio = todos
+    dia: str | None = None,        # AAAA-MM-DD (escopo=dia)
+    hora: int | None = None,       # 0-23, de hoje (escopo=hora)
+    produto: str | None = None,    # chave do produto: SKU ou código do anúncio (escopo=produto)
+    conta: str | None = None,
+    periodo: str | None = None,
+    de: str | None = None,
+    ate: str | None = None,
+):
+    """
+    Lista as perguntas por trás de um pedaço do Painel Geral, agrupadas por
+    conta: pergunta, resposta enviada, quem respondeu (e por qual caminho),
+    horário e quanto tempo levou. Só leitura -- responder continua sendo
+    pelo POST /api/pre-venda/{id}/responder.
+    """
+    agora = datetime.utcnow()
+    hoje_br = _utc_para_br(agora).date()
+    _tipo, ini_graf, fim_graf, ini_prod, fim_prod, rotulo = _resolver_periodo(periodo, None, de, ate, hoje_br)
+
+    grupos = {g.strip() for g in (grupo or "").split(",") if g.strip()}
+    if grupos - set(GRUPOS_DETALHE):
+        raise HTTPException(status_code=400, detail="Grupo inválido.")
+
+    # Filtro de conta: mesma regra do /painel-resumo (apelido, sem diferenciar maiúsculas).
+    conta_id = None
+    if conta:
+        alvo = conta.strip().lower()
+        achada = next((c for c in db.query(Conta).all() if (c.apelido or "").strip().lower() == alvo), None)
+        conta_id = achada.id if achada else -1
+
+    consulta = db.query(Pergunta)
+    if conta_id is not None:
+        consulta = consulta.filter(Pergunta.conta_id == conta_id)
+
+    # Qual recorte de datas o clique representa.
+    if escopo == "pendentes_agora":
+        consulta = consulta.filter(Pergunta.status == "fila_humana")   # igual ao cartão "Pendentes agora"
+        titulo = "Pendentes agora (esperando a equipe)"
+        grupos = set()
+    else:
+        if escopo == "hoje":
+            ini, fim, titulo = hoje_br, hoje_br, "Hoje"
+        elif escopo == "hora":
+            if hora is None or not (0 <= hora <= 23):
+                raise HTTPException(status_code=400, detail="Hora inválida.")
+            ini, fim, titulo = hoje_br, hoje_br, f"Hoje, das {hora}h às {hora}h59"
+        elif escopo == "dia":
+            try:
+                d = datetime.strptime(dia or "", "%Y-%m-%d").date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Data inválida -- use o formato AAAA-MM-DD.")
+            ini, fim = d, d
+            titulo = "Hoje" if d == hoje_br else d.strftime("%d/%m/%Y")
+        elif escopo == "produto":
+            if not (produto or "").strip():
+                raise HTTPException(status_code=400, detail="Informe o produto.")
+            ini, fim, titulo = ini_prod, fim_prod, rotulo
+            if not grupos:
+                grupos = {"equipe", "pendente"}   # o ranking conta só o que chegou para a equipe
+        elif escopo == "grafico":
+            ini, fim = ini_graf, fim_graf
+            titulo = "Últimos 7 dias" if _tipo == "hoje" else rotulo
+        elif escopo == "semana":
+            ini, fim, titulo = hoje_br - timedelta(days=6), hoje_br, "Últimos 7 dias"
+        else:
+            raise HTTPException(status_code=400, detail="Escopo inválido.")
+        consulta = consulta.filter(
+            Pergunta.recebida_em >= _inicio_dia_utc(ini),
+            Pergunta.recebida_em < _inicio_dia_utc(fim + timedelta(days=1)),
+        )
+
+    perguntas = consulta.order_by(Pergunta.recebida_em.desc()).all()
+
+    selecionadas = []
+    for p in perguntas:
+        if not p.recebida_em:
+            continue
+        if escopo == "hora" and _utc_para_br(p.recebida_em).hour != hora:
+            continue
+        if escopo == "produto" and chave_do_produto(p.sku, p.item_id) != produto.strip():
+            continue
+        if grupos and _desfecho(p) not in grupos:
+            continue
+        selecionadas.append(p)
+
+    total = len(selecionadas)
+    por_conta: dict[str, dict] = {}
+    for p in selecionadas[:LIMITE_DETALHE]:
+        item = _serializar_detalhe(p, agora)
+        bloco = por_conta.setdefault(item["conta"], {"conta": item["conta"], "total": 0, "perguntas": []})
+        bloco["total"] += 1
+        bloco["perguntas"].append(item)
+
+    nome_grupo = " + ".join(_NOMES_GRUPO[g] for g in GRUPOS_DETALHE if g in grupos) if grupos else "Todas"
+    return {
+        "titulo": titulo,
+        "grupo": nome_grupo,
+        "grupos": sorted(grupos),
+        "produto": produto.strip() if escopo == "produto" and produto else None,
+        "total": total,
+        "mostrando": min(total, LIMITE_DETALHE),
+        "contas": sorted(por_conta.values(), key=lambda b: (-b["total"], b["conta"].lower())),
     }
