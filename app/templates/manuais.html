@@ -56,17 +56,21 @@
       <section class="cmx-tabela-secao" style="margin-top: 0;">
         <h2>Enviar novo manual</h2>
         <form id="form-upload" class="cmx-form-inline" style="flex-wrap: wrap;">
-          <input type="text" id="input-sku" placeholder="SKU (ex: LP320-220V)" required autocomplete="off" style="min-width: 220px;" />
+          <input type="text" id="input-sku" placeholder="Só o código (ex: 7560025)" aria-describedby="dica-sku" required autocomplete="off" style="min-width: 220px;" />
           <input type="file" id="input-arquivo" accept=".pdf,.txt,.md" required />
           <button type="submit" class="cmx-botao-primario">Enviar manual</button>
         </form>
+        <p class="cmx-grafico-nota" id="dica-sku" style="margin-top: 8px;">
+          Digite <strong>só o código do SKU</strong>, igual ao do anúncio (ex.: <strong>7560025</strong>).
+          Não escreva "SKU" na frente: a IA procura o manual pelo código exato.
+        </p>
         <p class="cmx-grafico-nota" id="upload-aviso" style="display: none;"></p>
       </section>
 
       <section class="cmx-tabela-secao">
         <h2>Buscar por SKU</h2>
         <form id="form-busca" class="cmx-form-inline">
-          <input type="text" id="input-busca" placeholder="Digite um SKU pra checar ou filtrar a lista" autocomplete="off" style="min-width: 260px;" />
+          <input type="text" id="input-busca" placeholder="Só o código do SKU (ex: 7560025)" autocomplete="off" style="min-width: 260px;" />
           <button type="submit" class="cmx-botao-secundario">Buscar</button>
           <button type="button" id="btn-limpar-busca" class="cmx-botao-secundario">Limpar</button>
         </form>
