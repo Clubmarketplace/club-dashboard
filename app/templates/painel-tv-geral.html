@@ -78,6 +78,7 @@
   .rosca-leg { display:flex; flex-direction:column; gap:12px; font-size:15px; }
   .rosca-leg i { display:inline-block; width:12px; height:12px; border-radius:50%; margin-right:8px; }
   .rosca-leg b { font-family:"IBM Plex Mono", monospace; font-weight:500; margin-left:6px; }
+  .rosca-leg .pct { font-family:"IBM Plex Mono", monospace; font-size:12px; color:var(--dim); margin-left:8px; }
 
   /* Top 10 produtos: duas colunas de 5 */
   .linha-2 { grid-template-columns:minmax(0,1fr) minmax(0,1.6fr) !important; }
@@ -96,6 +97,52 @@
   @keyframes pisca { 0%,100%{opacity:1;} 50%{opacity:.3;} }
   .erro { color:var(--pend); font-size:13px; text-align:center; }
   @media (prefers-reduced-motion: reduce) { .ponto-vivo { animation:none; } }
+
+  /* ---------- Gráficos clicáveis ---------- */
+  .clicavel { cursor:pointer; }
+  .clicavel:focus-visible { outline:2px solid var(--text); outline-offset:2px; border-radius:4px; }
+  .col.clicavel:hover .pilha { filter:brightness(1.18); }
+  .col .seg-b:hover { filter:brightness(1.35); }
+  .legenda span.clicavel, .rosca-leg span.clicavel { border-radius:6px; padding:2px 6px; margin:-2px -6px; }
+  .legenda span.clicavel:hover, .rosca-leg span.clicavel:hover { background:#1c2630; color:var(--text); }
+  #rosca circle[data-grupo] { cursor:pointer; transition:stroke-width .12s; }
+  #rosca circle[data-grupo]:hover { stroke-width:30; }
+  .produto.clicavel { border-radius:8px; padding:3px 6px; margin:-3px -6px; }
+  .produto.clicavel:hover { background:#1c2630; }
+  .kpi .clicavel:hover { text-decoration:underline; }
+  .divisao { font-size:13px; margin-top:4px; display:flex; gap:12px; flex-wrap:wrap; }
+  .divisao span { white-space:nowrap; }
+  .divisao i { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; }
+  .dica { font-size:11px; color:var(--dim); opacity:.8; }
+
+  /* ---------- Painel lateral com as perguntas ---------- */
+  .gaveta-fundo { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:40; }
+  .gaveta { position:fixed; top:0; right:0; bottom:0; width:min(640px, 100%); background:var(--panel); border-left:1px solid var(--line); z-index:41; display:flex; flex-direction:column; box-shadow:-16px 0 40px rgba(0,0,0,.45); }
+  .g-cab { padding:20px 24px 14px; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .g-cab h2 { margin:0; font-size:19px; display:flex; align-items:center; gap:8px; }
+  .g-cab .g-sub { font-size:13px; color:var(--dim); margin-top:4px; }
+  .g-corpo { flex:1; overflow-y:auto; padding:14px 24px 24px; display:flex; flex-direction:column; gap:16px; }
+  .g-conta h3 { margin:0 0 8px; font-size:14px; display:flex; justify-content:space-between; color:var(--text); position:sticky; top:-14px; background:var(--panel); padding:6px 0; z-index:1; }
+  .g-conta h3 span { color:var(--dim); font-family:"IBM Plex Mono", monospace; font-weight:500; }
+  .g-item { background:#0f141a; border:1px solid var(--line); border-left:4px solid var(--outros); border-radius:10px; padding:11px 14px; display:flex; flex-direction:column; gap:7px; margin-bottom:8px; }
+  .g-item.gr-ml { border-left-color:var(--ml); } .g-item.gr-ia { border-left-color:var(--ia); }
+  .g-item.gr-equipe { border-left-color:var(--equipe); } .g-item.gr-pendente { border-left-color:var(--pend); }
+  .g-p { font-size:15px; line-height:1.4; }
+  .g-r { font-size:14px; line-height:1.4; color:#cfd8e0; background:#141b22; border-radius:8px; padding:8px 10px; white-space:pre-wrap; }
+  .g-r::before { content:"Resposta: "; color:var(--dim); font-size:12px; }
+  .g-info { font-size:12px; color:var(--dim); display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .g-quem { font-weight:600; }
+  .gr-ml .g-quem { color:var(--ml); } .gr-ia .g-quem { color:var(--ia); } .gr-equipe .g-quem { color:var(--equipe); } .gr-pendente .g-quem { color:var(--pend); }
+  .g-revisar { color:var(--equipe); }
+  .g-btn { height:36px; padding:0 14px; border-radius:9px; border:1px solid var(--line); background:#1c2630; color:var(--text); font:600 13px "Space Grotesk",sans-serif; cursor:pointer; }
+  .g-btn.primario { background:var(--ia); border-color:var(--ia); color:#062015; }
+  .g-btn:disabled { opacity:.6; cursor:default; }
+  .g-resp { display:flex; flex-direction:column; gap:8px; }
+  .g-resp textarea { width:100%; min-height:100px; resize:vertical; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--text); padding:10px 12px; font:14px "Space Grotesk",sans-serif; }
+  .g-linha { display:flex; justify-content:space-between; align-items:center; gap:8px; }
+  .g-msg { font-size:13px; border-radius:8px; padding:8px 10px; }
+  .g-msg.erro { background:#3a1a18; color:#ffd0cc; } .g-msg.info { background:#16283a; color:#cfe6fa; }
+  .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--ia); color:#062015; font-weight:600; padding:12px 18px; border-radius:10px; z-index:60; }
 </style>
 </head>
 <body>
@@ -119,9 +166,9 @@
 <div id="aviso-erro"></div>
 
 <section class="kpis">
-  <div class="kpi"><div class="rotulo">Resolvidas sem a equipe (7 dias)</div><div class="valor" id="k-sem-equipe">—</div><div class="comp" id="k-sem-equipe-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Resolvidas sem a equipe (7 dias)</div><div class="valor" id="k-sem-equipe">—</div><div class="divisao" id="k-sem-equipe-div"></div><div class="comp" id="k-sem-equipe-comp"></div></div>
   <div class="kpi"><div class="rotulo">Tempo médio da equipe (7 dias)</div><div class="valor" id="k-tempo">—</div><div class="comp" id="k-tempo-comp"></div></div>
-  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor" id="k-pend">—</div><div class="comp" id="k-pend-comp"></div></div>
+  <div class="kpi"><div class="rotulo">Pendentes agora</div><div class="valor clicavel" id="k-pend" role="button" tabindex="0" data-escopo="pendentes_agora" title="Ver as perguntas pendentes">—</div><div class="comp" id="k-pend-comp"></div></div>
   <div class="kpi"><div class="rotulo">Perguntas hoje</div><div class="valor" id="k-hoje">—</div><div class="comp" id="k-hoje-comp"></div></div>
 </section>
 
@@ -129,11 +176,11 @@
   <div class="painel">
     <div class="painel-cab">
       <h2 id="titulo-dias">Últimos 30 dias — quem respondeu</h2>
-      <div class="legenda">
-        <span><i style="background:var(--ml)"></i>ML / app</span>
-        <span><i style="background:var(--ia)"></i>Nossa IA</span>
-        <span><i style="background:var(--equipe)"></i>Equipe</span>
-        <span><i style="background:var(--pend)"></i>Pendente</span>
+      <div class="legenda" id="legenda-dias">
+        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="ml"><i style="background:var(--ml)"></i>ML / app</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="ia"><i style="background:var(--ia)"></i>Nossa IA</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="equipe"><i style="background:var(--equipe)"></i>Equipe</span>
+        <span class="clicavel" role="button" tabindex="0" data-escopo="grafico" data-grupo="pendente"><i style="background:var(--pend)"></i>Pendente</span>
       </div>
     </div>
     <div class="barras" id="grafico-dias"></div>
@@ -158,10 +205,13 @@
   </div>
 </div>
 
-<div class="rodape"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 30 segundos · o que precisa de resposta agora está no Painel da Fila</div>
+<div class="rodape"><span class="ponto-vivo"></span> Dados reais — atualiza sozinho a cada 30 segundos · clique em qualquer cor, barra ou produto para ver as perguntas{% if pode_responder %} (as pendentes dá para responder ali mesmo){% endif %}</div>
+<div id="gaveta"></div>
 
 <script>
   const INTERVALO_MS = 30000;
+  // Quem está logado pode responder as pendentes? (admin/supervisor/atendente; o perfil "tv" só olha)
+  const PODE_RESPONDER = {{ "true" if pode_responder else "false" }};
   const FUSO = "America/Sao_Paulo";
   const GRUPOS = [
     ["ml", "ML / app", "var(--ml)"], ["ia", "Nossa IA", "var(--ia)"],
@@ -225,16 +275,22 @@
   setInterval(relogio, 1000); relogio();
 
   // ---------- Desenho ----------
-  function colunas(containerId, itens, rotulo, indiceHoje) {
+  // alvo(it) diz o que o clique abre: { escopo:"dia", dia:"AAAA-MM-DD" } ou { escopo:"hora", hora:N }.
+  // Clicar numa cor abre só aquele grupo; clicar no resto da coluna abre todas daquele dia/hora.
+  function colunas(containerId, itens, rotulo, indiceHoje, alvo, nomeAlvo) {
     const max = Math.max(1, ...itens.map(i => GRUPOS.reduce((t, [k]) => t + (i[k] || 0), 0)));
     $(containerId).innerHTML = itens.map((it, idx) => {
       const total = GRUPOS.reduce((t, [k]) => t + (it[k] || 0), 0);
+      const onde = nomeAlvo(it);
       const segs = GRUPOS.filter(([k]) => it[k] > 0)
-        .map(([k, nome]) => `<div class="seg-b b-${k}" style="height:${(it[k] / max) * 100}%" title="${it[k]} ${nome}"></div>`).join("");
+        .map(([k, nome]) => `<div class="seg-b b-${k}" data-grupo="${k}" style="height:${(it[k] / max) * 100}%" title="${escapar(onde)}: ${it[k]} ${nome} — clique para ver"></div>`).join("");
       const classes = ["col"];
       if (idx === indiceHoje) classes.push("hoje");
       if (indiceHoje != null && idx > indiceHoje) classes.push("futuro");
-      return `<div class="${classes.join(" ")}"><span class="qtd">${total || ""}</span><div class="pilha">${segs}</div><div class="base"></div><span class="rot">${rotulo(it, idx)}</span></div>`;
+      const a = alvo(it);
+      const dados = total ? ` data-escopo="${a.escopo}"${a.dia ? ` data-dia="${a.dia}"` : ""}${a.hora != null ? ` data-hora="${a.hora}"` : ""} role="button" tabindex="0" aria-label="${escapar(onde)}: ${total} pergunta(s)"` : "";
+      if (total) classes.push("clicavel");
+      return `<div class="${classes.join(" ")}"${dados}><span class="qtd">${total || ""}</span><div class="pilha">${segs}</div><div class="base"></div><span class="rot">${rotulo(it, idx)}</span></div>`;
     }).join("");
   }
 
@@ -246,7 +302,7 @@
       GRUPOS.forEach(([k, , cor]) => {
         const v = hoje[k] || 0; if (!v) return;
         const fatia = (v / total) * c;
-        arcos += `<circle cx="100" cy="100" r="${r}" fill="none" stroke="${cor}" stroke-width="24" stroke-dasharray="${fatia} ${c - fatia}" stroke-dashoffset="${-acumulado}" transform="rotate(-90 100 100)"/>`;
+        arcos += `<circle data-grupo="${k}" data-escopo="hoje" cx="100" cy="100" r="${r}" fill="none" stroke="${cor}" stroke-width="24" stroke-dasharray="${fatia} ${c - fatia}" stroke-dashoffset="${-acumulado}" transform="rotate(-90 100 100)"><title>${v} (${Math.round(100 * v / total)}%) — clique para ver</title></circle>`;
         acumulado += fatia;
       });
     } else {
@@ -256,8 +312,15 @@
     $("rosca").innerHTML = arcos +
       `<text x="100" y="98" text-anchor="middle" font-size="34" font-weight="600" fill="#eef3f7" font-family="IBM Plex Mono, DejaVu Sans Mono, monospace">${semEquipe == null ? "—" : semEquipe + "%"}</text>` +
       `<text x="100" y="122" text-anchor="middle" font-size="13" fill="#8ea0b0" font-family="Space Grotesk, DejaVu Sans, sans-serif">sem a equipe</text>`;
-    $("rosca-leg").innerHTML = GRUPOS.map(([k, nome, cor]) =>
-      `<span><i style="background:${cor}"></i>${nome}<b>${hoje[k] || 0}</b></span>`).join("");
+    // Legenda com quantidade e porcentagem; cada linha abre as perguntas daquele grupo.
+    $("rosca-leg").innerHTML = GRUPOS.map(([k, nome, cor]) => {
+      const v = hoje[k] || 0;
+      // Porcentagem pequena ao lado de cada cor (proporção de hoje)
+      const pct = total ? `<small class="pct">${Math.round(100 * v / total)}%</small>` : "";
+      return v
+        ? `<span class="clicavel" role="button" tabindex="0" data-escopo="hoje" data-grupo="${k}" title="Ver as perguntas"><i style="background:${cor}"></i>${nome}<b>${v}</b>${pct}</span>`
+        : `<span><i style="background:${cor}"></i>${nome}<b>0</b>${pct}</span>`;
+    }).join("") + (total ? '<span class="dica">clique numa cor para ver as perguntas</span>' : "");
     $("nota-hoje").textContent = total ? `${total} pergunta(s)` : "sem perguntas ainda";
   }
 
@@ -285,6 +348,19 @@
     let c = comparar(ind.sem_equipe_pct, ind.sem_equipe_pct_anterior, true, v => Math.round(v) + " pts");
     $("k-sem-equipe-comp").textContent = c.texto; $("k-sem-equipe-comp").className = "comp " + c.classe;
     $("k-sem-equipe").className = "valor " + (ind.sem_equipe_pct == null ? "" : ind.sem_equipe_pct >= 50 ? "bom" : "aten");
+    // Separação: quanto foi a IA do ML e quanto foi a nossa IA (clicável -> lista dos 7 dias).
+    if (ind.sem_equipe_pct == null || ind.sem_equipe_ml_pct == null) {
+      $("k-sem-equipe-div").innerHTML = "";
+    } else {
+      let compIa = "";
+      if (ind.sem_equipe_ia_pct_anterior != null) {
+        const dif = ind.sem_equipe_ia_pct - ind.sem_equipe_ia_pct_anterior;
+        if (Math.abs(dif) >= 1) compIa = ` <span class="${dif > 0 ? "bom" : "ruim"}">${dif > 0 ? "▲" : "▼"}${Math.abs(dif)}</span>`;
+      }
+      $("k-sem-equipe-div").innerHTML =
+        `<span class="clicavel" role="button" tabindex="0" data-escopo="semana" data-grupo="ml" title="Ver as respondidas pela IA do ML"><i style="background:var(--ml)"></i>IA do ML ${ind.sem_equipe_ml_pct}%</span>` +
+        `<span class="clicavel" role="button" tabindex="0" data-escopo="semana" data-grupo="ia" title="Ver as respondidas pela nossa IA"><i style="background:var(--ia)"></i>Nossa IA ${ind.sem_equipe_ia_pct}%${compIa}</span>`;
+    }
 
     $("k-tempo").textContent = formatarMin(ind.tempo_medio_equipe_min);
     c = comparar(ind.tempo_medio_equipe_min, ind.tempo_medio_equipe_min_anterior, false, formatarMin);
@@ -307,11 +383,14 @@
       if (temHoje && i === n - 1) return "hoje";
       const [, m, dia] = it.data.split("-");
       return i % passo === 0 ? `${dia}/${m}` : "";
-    }, temHoje ? n - 1 : null);
+    }, temHoje ? n - 1 : null,
+    it => ({ escopo: "dia", dia: it.data }),
+    it => { const [a, m, dia] = it.data.split("-"); return `${dia}/${m}/${a}`; });
 
     // Hoje: rosca e por hora
     rosca(d.hoje);
-    colunas("grafico-horas", d.por_hora, (it) => it.hora % 3 === 0 ? it.hora + "h" : "", d.hora_atual);
+    colunas("grafico-horas", d.por_hora, (it) => it.hora % 3 === 0 ? it.hora + "h" : "", d.hora_atual,
+      it => ({ escopo: "hora", hora: it.hora }), it => `Hoje às ${it.hora}h`);
     const pico = d.por_hora.reduce((m, h) => { const t = GRUPOS.reduce((s, [k]) => s + (h[k] || 0), 0); return t > m.t ? { h: h.hora, t } : m; }, { h: null, t: 0 });
     $("nota-pico").textContent = pico.t ? `pico às ${pico.h}h (${pico.t})` : "";
 
@@ -322,7 +401,8 @@
       // Com a leitura de anúncios liberada, aparece o nome; até lá, o SKU ou o código do anúncio.
       const nome = p.titulo || (p.sku ? "SKU " + p.sku : "Anúncio " + p.item_id);
       const codigo = p.titulo ? (p.sku || p.item_id) : (p.sku ? p.item_id : "");
-      return `<div class="produto">
+      const chave = p.chave || p.sku || p.item_id;
+      return `<div class="produto clicavel" role="button" tabindex="0" data-escopo="produto" data-produto="${escapar(chave)}" data-nome="${escapar(nome)}" title="Ver as perguntas deste produto">
         <span class="pos">${i + 1}</span>
         <span class="nome" title="${escapar(nome)}">${escapar(nome)}${codigo ? `<span class="cod">${escapar(codigo)}</span>` : ""}</span>
         <span class="n">${p.quantidade}</span>
@@ -330,6 +410,178 @@
       </div>`;
     }).join("") : '<div class="vazio" style="grid-column:1/-1;">Nenhuma pergunta foi para a equipe nesse período.</div>';
   }
+
+  // ---------- Clique no gráfico: painel lateral com as perguntas ----------
+  const NOMES = { ml: "IA do ML / app", ia: "Nossa IA", equipe: "Equipe", pendente: "Pendente", outros: "Outros" };
+  let consultaAberta = null;   // o que está aberto no painel (pra recarregar depois de responder)
+  let itensAbertos = {};       // id -> pergunta, pra achar ao clicar em "Responder"
+
+  function horaCurta(iso) {
+    if (!iso) return "";
+    const d = new Date(iso);
+    const hoje = new Date().toLocaleDateString("pt-BR", { timeZone: FUSO });
+    const dia = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", timeZone: FUSO });
+    const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: FUSO });
+    return d.toLocaleDateString("pt-BR", { timeZone: FUSO }) === hoje ? hora : `${dia} ${hora}`;
+  }
+
+  function quemRespondeu(q) {
+    if (q.grupo === "ia") return `Nossa IA${q.detalhe ? " · " + escapar(q.detalhe) : ""}`;
+    if (q.grupo === "equipe") return `Equipe${q.detalhe ? " · " + escapar(q.detalhe) : ""}`;
+    if (q.grupo === "ml") return "IA do ML / app do vendedor";
+    if (q.grupo === "pendente") {
+      if (q.status === "aguardando_ml") return "Chegando — vez da IA do ML";
+      if (q.status === "pendente") return "Nossa IA analisando";
+      return "Pendente — esperando a equipe";
+    }
+    return q.status === "encerrada_no_ml" ? "Encerrada no ML" : "Outros";
+  }
+
+  function cartao(q) {
+    itensAbertos[q.id] = q;
+    const produto = q.titulo || (q.sku ? "SKU " + q.sku : (q.item_id || ""));
+    const tempo = q.grupo === "pendente"
+      ? (q.espera_min != null ? `esperando há ${formatarMin(q.espera_min)}` : "")
+      : (q.duracao_min != null ? `respondida em ${formatarMin(q.duracao_min)}` : "");
+    return `<div class="g-item gr-${q.grupo}" data-item="${q.id}">
+      <div class="g-info"><span class="g-quem">${quemRespondeu(q)}</span>${q.revisar ? '<span class="g-revisar">⚠ revisar</span>' : ""}
+        <span>chegou ${horaCurta(q.recebida_em)}</span>${tempo ? `<span>${tempo}</span>` : ""}</div>
+      <div class="g-p">${escapar(q.texto)}</div>
+      ${q.resposta ? `<div class="g-r">${escapar(q.resposta)}</div>` : ""}
+      <div class="g-info">${produto ? `<span>${escapar(produto)}</span>` : ""}${q.sku && q.titulo ? `<span class="mono">${escapar(q.sku)}</span>` : ""}</div>
+      ${q.respondivel && PODE_RESPONDER ? `<div class="g-linha"><span></span><button type="button" class="g-btn primario" data-responder="${q.id}">Responder</button></div>` : ""}
+    </div>`;
+  }
+
+  async function abrirDetalhe(alvo) {
+    consultaAberta = alvo;
+    itensAbertos = {};
+    const p = new URLSearchParams({ escopo: alvo.escopo, periodo: filtroPeriodo });
+    if (filtroConta) p.set("conta", filtroConta);
+    if (filtroPeriodo === "datas") { if (filtroDe) p.set("de", filtroDe); if (filtroAte) p.set("ate", filtroAte); }
+    if (alvo.grupo) p.set("grupo", alvo.grupo);
+    if (alvo.dia) p.set("dia", alvo.dia);
+    if (alvo.hora != null) p.set("hora", alvo.hora);
+    if (alvo.produto) p.set("produto", alvo.produto);
+
+    const cor = alvo.grupo ? (GRUPOS.find(g => g[0] === alvo.grupo) || [])[2] : null;
+    const titulo = alvo.nome ? escapar(alvo.nome) : (alvo.grupo ? NOMES[alvo.grupo] : "Todas as perguntas");
+    const esqueleto = corpo => `
+      <div class="gaveta-fundo" data-fechar></div>
+      <aside class="gaveta" role="dialog" aria-label="Perguntas">
+        <div class="g-cab">
+          <div>
+            <h2>${cor ? `<i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${cor}"></i>` : ""}${titulo}</h2>
+            <div class="g-sub" id="g-sub">carregando…</div>
+          </div>
+          <button type="button" class="g-btn" data-fechar aria-label="Fechar" style="width:40px; padding:0;">✕</button>
+        </div>
+        <div class="g-corpo" id="g-corpo">${corpo}</div>
+      </aside>`;
+    if (!$("gaveta").innerHTML) $("gaveta").innerHTML = esqueleto('<div class="vazio">Carregando…</div>');
+
+    try {
+      const r = await fetch("/api/pre-venda/painel-detalhe?" + p, { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || ("status " + r.status));
+      if (consultaAberta !== alvo) return;   // outro clique chegou antes
+      const contas = d.contas.map(b => `<section class="g-conta"><h3>${escapar(b.conta)} <span>${b.total}</span></h3>${b.perguntas.map(cartao).join("")}</section>`).join("");
+      $("gaveta").innerHTML = esqueleto(contas || '<div class="vazio">Nenhuma pergunta aqui.</div>');
+      const extra = alvo.grupo === undefined && alvo.escopo === "produto" ? " · Equipe + Pendente" : "";
+      $("g-sub").textContent = `${d.titulo}${extra} · ${filtroConta || "Todas as contas"} · ${d.total} pergunta(s)` +
+        (d.mostrando < d.total ? ` (mostrando as ${d.mostrando} mais recentes)` : "") +
+        (d.contas.length > 1 ? ` em ${d.contas.length} contas` : "");
+    } catch (erro) {
+      $("gaveta").innerHTML = esqueleto(`<div class="g-msg erro">Não consegui carregar as perguntas: ${escapar(erro.message)}</div>`);
+      $("g-sub").textContent = "";
+    }
+  }
+  function fecharDetalhe() { consultaAberta = null; $("gaveta").innerHTML = ""; }
+
+  function abrirResposta(id) {
+    const q = itensAbertos[id];
+    const caixa = document.querySelector(`[data-item="${id}"]`);
+    if (!q || !caixa || caixa.querySelector(".g-resp")) return;
+    caixa.querySelector("[data-responder]").closest(".g-linha").remove();
+    caixa.insertAdjacentHTML("beforeend", `<div class="g-resp">
+      <textarea maxlength="2000" placeholder="Digite a resposta (vai direto para o comprador no Mercado Livre)…" aria-label="Resposta"></textarea>
+      <div class="g-msg" hidden></div>
+      <div class="g-linha"><span class="nota" data-cont>0/2000</span>
+        <span style="display:flex; gap:8px;"><button type="button" class="g-btn" data-cancelar="${id}">Cancelar</button><button type="button" class="g-btn primario" data-enviar="${id}">Enviar resposta</button></span></div>
+      <span class="nota">A resposta também ensina a nossa IA para as próximas perguntas parecidas deste produto.</span>
+    </div>`);
+    const campo = caixa.querySelector("textarea");
+    campo.focus();
+    campo.addEventListener("input", () => { caixa.querySelector("[data-cont]").textContent = campo.value.length + "/2000"; });
+  }
+
+  async function enviarResposta(id) {
+    const caixa = document.querySelector(`[data-item="${id}"]`);
+    const campo = caixa.querySelector("textarea");
+    const msg = caixa.querySelector(".g-msg");
+    const botao = caixa.querySelector("[data-enviar]");
+    const texto = (campo.value || "").trim();
+    if (!texto) { msg.hidden = false; msg.className = "g-msg erro"; msg.textContent = "Digite a resposta antes de enviar."; return; }
+    botao.disabled = true; botao.textContent = "Enviando…";
+    try {
+      const r = await fetch(`/api/pre-venda/${id}/responder`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto }),
+      });
+      const dados = await r.json().catch(() => ({}));
+      if (r.status === 409 || (r.status === 400 && /já foi respondida/i.test(dados.detail || ""))) {
+        mostrarToast("Essa pergunta já tinha sido respondida — lista atualizada.");
+      } else if (!r.ok) {
+        throw new Error(dados.detail || ("status " + r.status));
+      } else {
+        mostrarToast("✓ Resposta enviada ao comprador");
+      }
+      abrirDetalhe({ ...consultaAberta }); atualizar();
+    } catch (erro) {
+      msg.hidden = false; msg.className = "g-msg erro"; msg.textContent = "Não foi possível enviar: " + erro.message;
+      botao.disabled = false; botao.textContent = "Enviar resposta";
+    }
+  }
+
+  function mostrarToast(texto) {
+    const t = document.createElement("div");
+    t.className = "toast"; t.textContent = texto; document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+
+  // Um único "ouvinte" pra página toda: qualquer elemento com data-escopo abre o painel.
+  function alvoDoClique(el) {
+    const seg = el.closest("[data-grupo]");
+    const base = el.closest("[data-escopo]");
+    if (!base) return null;
+    const alvo = { escopo: base.dataset.escopo };
+    const grupo = (seg && base.contains(seg) ? seg : base).dataset.grupo;
+    if (grupo) alvo.grupo = grupo;
+    if (base.dataset.dia) alvo.dia = base.dataset.dia;
+    if (base.dataset.hora != null) alvo.hora = Number(base.dataset.hora);
+    if (base.dataset.produto) { alvo.produto = base.dataset.produto; alvo.nome = base.dataset.nome; }
+    if (alvo.escopo === "pendentes_agora") alvo.nome = "Pendentes agora";
+    return alvo;
+  }
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("#gaveta")) {
+      if (e.target.closest("[data-fechar]")) return fecharDetalhe();
+      const b = e.target.closest("[data-responder],[data-enviar],[data-cancelar]");
+      if (!b) return;
+      if (b.dataset.responder) abrirResposta(b.dataset.responder);
+      else if (b.dataset.enviar) enviarResposta(b.dataset.enviar);
+      else abrirDetalhe({ ...consultaAberta });
+      return;
+    }
+    const alvo = alvoDoClique(e.target);
+    if (alvo) abrirDetalhe(alvo);
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && consultaAberta) return fecharDetalhe();
+    if ((e.key === "Enter" || e.key === " ") && !e.target.closest("#gaveta") && e.target.matches("[data-escopo][tabindex], [data-grupo][tabindex]")) {
+      const alvo = alvoDoClique(e.target);
+      if (alvo) { e.preventDefault(); abrirDetalhe(alvo); }
+    }
+  });
 
   // ---------- Dados ----------
   async function atualizar() {
