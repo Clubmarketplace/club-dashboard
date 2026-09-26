@@ -389,7 +389,8 @@
     $("k-tempo-comp").textContent = c.texto; $("k-tempo-comp").className = "comp " + c.classe;
 
     $("k-pend").textContent = ind.pendentes_agora;
-    $("k-pend").className = "valor " + (ind.contas_criticas ? "ruim" : ind.pendentes_agora ? "aten" : "bom");
+    // "clicavel" fica sempre: é o que mostra a mãozinha (a cor muda conforme a espera)
+    $("k-pend").className = "valor clicavel " + (ind.contas_criticas ? "ruim" : ind.pendentes_agora ? "aten" : "bom");
     $("k-pend-comp").textContent = ind.contas_criticas ? `${ind.contas_criticas} conta(s) com espera de +30 min` : (ind.pendentes_agora ? "nenhuma espera crítica" : "fila zerada 🎉");
 
     $("k-hoje").textContent = ind.perguntas_periodo;
