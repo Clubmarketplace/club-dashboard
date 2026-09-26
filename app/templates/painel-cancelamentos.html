@@ -24,7 +24,7 @@
     .sl-pill svg { flex-shrink:0; }
     .pl-ml { background:#fff3a8; color:#5c4d00; } .pl-shopee { background:#fde4e0; color:#a83a1f; }
     .pl-magalu { background:#e1efff; color:#0b4f96; } .pl-tiktok { background:#111; color:#ff4d73; }
-    .or-seller { background:#e2f4e9; color:#1a6641; } .or-galpao { background:#eee6fb; color:#5b2fa6; } .or-publico { background:#eceff2; color:#46525e; }
+    .or-seller { background:#e2f4e9; color:#1a6641; } .or-galpao { background:#eee6fb; color:#5b2fa6; } .or-publico { background:#eceff2; color:#46525e; } .or-equipe { background:#fff1dc; color:#8a4b00; }
     .st-livre { background:#f1f3f5; color:#4a5663; } .st-outro { background:#fff0d6; color:#8a4f00; }
     .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; }
 
@@ -284,7 +284,7 @@
 
   <div class="sl-aviso" id="aviso" role="status" aria-live="polite"></div>
 
-  <script src="/static/solicitacoes-filtros.js?v=5"></script>
+  <script src="/static/solicitacoes-filtros.js?v=6"></script>
   <script>
     const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok Shop" };
     const CURTO_PLATAFORMA = { mercado_livre: "ML", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok" };
@@ -337,12 +337,14 @@
     function htmlOrigem(s) {
       if (s.origem === "logistica") return `<span class="sl-pill or-galpao">${ICONE.galpao}${esc(s.galpao_nome || "Galpão " + (s.galpao || "?"))}${s.solicitado_por ? " · " + esc(s.solicitado_por) : ""}</span>`;
       if (s.origem === "seller") return `<span class="sl-pill or-seller">${ICONE.seller}Seller${s.solicitado_por ? " · " + esc(s.solicitado_por) : ""}</span>`;
+      if (s.origem === "equipe") return `<span class="sl-pill or-equipe">Equipe${s.solicitado_por ? " · " + esc(s.solicitado_por) : ""}${s.galpao_nome ? " · " + esc(s.galpao_nome) : ""}</span>`;
       if (s.origem === "publico") return `<span class="sl-pill or-publico">${ICONE.link}Link público</span>`;
       return `<span class="sl-pill or-publico">${ICONE.link}Seller / link público</span>`; // registros antigos
     }
     function textoOrigem(s) {
       if (s.origem === "logistica") return `${s.galpao_nome || "Galpão"}${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
       if (s.origem === "seller") return `Seller${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
+      if (s.origem === "equipe") return `Equipe${s.solicitado_por ? " · " + s.solicitado_por : ""}`;
       return "Link público";
     }
     // Há quanto tempo o pedido está com o operador (desde que assumiu).

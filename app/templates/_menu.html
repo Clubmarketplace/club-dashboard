@@ -79,7 +79,7 @@
   {% endcall %}
 
   {% call grupo("solicitacoes", "Solicitações de cancelamento", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
-    {{ item("/solicitar-cancelamento", "Nova solicitação", nova_aba=true) }}
+    {{ item("/solicitar-cancelamento", "Nova solicitação") }}
     {{ item("/solicitacoes-painel", "Solicitações") }}
     {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
   {% endcall %}

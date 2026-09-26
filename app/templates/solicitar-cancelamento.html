@@ -169,8 +169,33 @@
   .tela-sucesso p { font-size:13.5px; color:var(--text-dim); margin:0 0 22px 0; }
   .tela-sucesso button { padding:10px 20px; border-radius:9px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
 </style>
+{% if equipe_logado %}
+<!-- Equipe (admin/supervisor/atendente): formulário dentro do sistema, com o menu à esquerda.
+     Seller e logística continuam com a tela cheia de sempre. -->
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  body.modo-equipe { display:block; padding:0 !important; background:var(--bg); }
+  .modo-equipe .area-formulario { padding:28px 32px 60px; }
+  .modo-equipe .cartao { max-width:1100px; margin:0; }
+  .modo-equipe .cartao > .marca { display:none; } /* a logo já está no menu */
+  .modo-equipe .form-titulo-equipe { margin:0 0 4px; }
+  .modo-equipe .tela-sucesso .acoes-sucesso { display:flex; gap:10px; justify-content:center; flex-wrap:wrap; }
+  .modo-equipe .link-ver-solic { display:inline-flex; align-items:center; padding:10px 16px; border-radius:10px; border:1px solid var(--line); color:var(--text); text-decoration:none; font-weight:600; font-size:14px; }
+  @media (max-width: 980px) { .modo-equipe .area-formulario { padding:74px 14px 40px; } }
+</style>
+{% endif %}
 </head>
-<body class="modo-largo"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
+<body class="modo-largo{% if equipe_logado %} modo-equipe{% endif %}"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
+{% if equipe_logado %}
+<div class="cmx-shell">
+  <aside class="cmx-sidebar">
+    <div class="cmx-marca">
+      <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+    </div>
+    {% include "_menu.html" %}
+  </aside>
+  <div class="cmx-conteudo"><div class="area-formulario">
+{% endif %}
 
 <div class="cartao">
   <div class="marca">
@@ -180,12 +205,16 @@
   <div id="tela-formulario">
     <div class="topo-form">
       <div>
-        <h1>Solicitar cancelamento</h1>
+        <h1>{% if equipe_logado %}Nova solicitação de cancelamento{% else %}Solicitar cancelamento{% endif %}</h1>
         <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
       </div>
       <div class="links-direita">
         {% if seller_logado %}
         <p style="margin:-16px 0 22px;"><a href="/meus-cancelamentos" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver minhas solicitações</a></p>
+        {% endif %}
+        {% if equipe_logado %}
+        <p style="margin:-16px 0 8px;"><a href="/solicitacoes-painel" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">Ver solicitações →</a></p>
+        <p class="logado-como">Lançando pela equipe · <b>{{ nome_usuario }}</b></p>
         {% endif %}
         {% if logistica_logado %}
         <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
@@ -196,11 +225,11 @@
 
     <form id="form-cancelamento">
       <div class="linha-selecao">
-      {% if logistica_logado %}
+      {% if logistica_logado or equipe_logado %}
       <div class="grupo grupo-galpao">
-      <label for="campo-galpao">Galpão</label>
+      <label for="campo-galpao">Galpão{% if equipe_logado %} <span style="font-weight:400; color:var(--text-dim);">(opcional)</span>{% endif %}</label>
       <select id="campo-galpao" class="campo-galpao">
-        <option value="">Escolha o galpão...</option>
+        <option value="">{% if equipe_logado %}Não sei / sem galpão{% else %}Escolha o galpão...{% endif %}</option>
         {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
       </select>
       </div>
@@ -232,7 +261,7 @@
       <div class="grupo grupo-conta">
       <label for="conta">Conta</label>
       <div class="campo-conta-caixa">
-        <input type="text" id="conta" name="conta" placeholder="{% if logistica_logado %}Digite para buscar a conta (ex: vel){% else %}Ex: Velasco{% endif %}" required autocomplete="off"
+        <input type="text" id="conta" name="conta" placeholder="{% if logistica_logado or equipe_logado %}Digite para buscar a conta (ex: vel){% else %}Ex: Velasco{% endif %}" required autocomplete="off"
           value="{{ conta_pre_preenchida or '' }}" {% if seller_logado %}readonly style="background:#f6f7f9;"{% endif %} />
         <div class="sugestoes-conta" id="sugestoes-conta"></div>
       </div>
@@ -261,6 +290,11 @@
   </div>
 </div>
 
+{% if equipe_logado %}
+  </div></div>
+</div>
+<script src="/static/menu-celular.js?v=1"></script>
+{% endif %}
 <script>
   const opcoesPlataforma = document.querySelectorAll(".opcao-plataforma");
   opcoesPlataforma.forEach(opcao => {
@@ -281,6 +315,9 @@
 
   const MODO_LOGISTICA = {{ 'true' if logistica_logado else 'false' }};
   const MODO_SELLER = {{ 'true' if seller_logado else 'false' }};
+  // Equipe (admin/supervisor/atendente) lança por qualquer conta, como o galpão; galpão opcional.
+  const MODO_EQUIPE = {{ 'true' if equipe_logado else 'false' }};
+  const CONTA_COM_BUSCA = MODO_LOGISTICA || MODO_EQUIPE;
   const NOME_USUARIO = {{ (nome_usuario or '') | tojson }};
 
   function escaparHtml(t) {
@@ -334,7 +371,7 @@
     caixaSugestoes.classList.toggle("aberta", !!html);
   }
 
-  if (MODO_LOGISTICA) {
+  if (CONTA_COM_BUSCA) {
     carregarContas();
     campoConta.addEventListener("input", mostrarSugestoes);
     campoConta.addEventListener("focus", mostrarSugestoes);
@@ -468,6 +505,8 @@
     if (MODO_LOGISTICA) {
       if (!campoGalpao || !campoGalpao.value) return mostrarErro("Escolha o galpão.");
       galpao = Number(campoGalpao.value);
+    } else if (MODO_EQUIPE && campoGalpao && campoGalpao.value) {
+      galpao = Number(campoGalpao.value);  // equipe: opcional
     }
 
     const plataformaSelecionada = form.querySelector('input[name="plataforma"]:checked');
@@ -483,8 +522,8 @@
     }));
     if (itens.some(i => !i.numero_venda || !i.motivo)) return mostrarErro("Preencha o número da venda e o motivo de todas as vendas.");
 
-    // --- Checagens de conta (só Logística; o seller tem a conta fixa) ---
-    if (MODO_LOGISTICA) {
+    // --- Checagens de conta (Logística e Equipe; o seller tem a conta fixa) ---
+    if (CONTA_COM_BUSCA) {
       const sufixo = sufixoPlataforma(contaDigitada);
       if (sufixo) return mostrarErro(`Use só o nome da loja, sem "${sufixo.toUpperCase()}" -- a plataforma já é escolhida nos botões.`);
 
@@ -554,12 +593,22 @@
       const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
       const textoConfirmacao = MODO_LOGISTICA
         ? `Registrado no ${resultado.galpao_nome || "Galpão " + resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
-        : `Conta ${resultado.conta || dados.conta} — ${plural}.`;
+        : MODO_EQUIPE
+          ? `Registrado pela equipe (${resultado.solicitado_por || NOME_USUARIO}) — Conta ${resultado.conta || dados.conta} — ${plural}.`
+          : `Conta ${resultado.conta || dados.conta} — ${plural}.`;
       document.getElementById("texto-confirmacao").textContent = textoConfirmacao;
       document.getElementById("tela-formulario").style.display = "none";
       document.getElementById("tela-sucesso").style.display = "block";
       contaConfirmadaComoNova = null;
-      if (MODO_LOGISTICA) carregarContas(); // conta nova passa a aparecer na lista
+      if (CONTA_COM_BUSCA) carregarContas(); // conta nova passa a aparecer na lista
+      if (MODO_EQUIPE && !document.getElementById("link-ver-solic")) {
+        // Equipe: fica na confirmação, com "Registrar outra" e "Ver solicitações"
+        const link = document.createElement("a");
+        link.id = "link-ver-solic"; link.className = "link-ver-solic"; link.href = "/solicitacoes-painel";
+        link.textContent = "Ver solicitações";
+        link.style.marginLeft = "10px";
+        document.getElementById("botao-nova").insertAdjacentElement("afterend", link);
+      }
 
       const destino = MODO_SELLER ? "/meus-cancelamentos" : (MODO_LOGISTICA ? "/solicitacoes-galpao" : null);
       if (destino) {
