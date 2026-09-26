@@ -47,6 +47,7 @@ def _resolvida_por(p: Pergunta) -> str:
 _NOMES_CAMADA = {
     "resposta_validada": "histórico do produto",
     "resposta_padrao": "resposta padrão",
+    "dados_anuncio": "dados do anúncio",
     "manual_sku_ia": "manual",
     "busca_site_fabricante": "site do fabricante",
     "politica_geral": "política geral",
@@ -71,7 +72,7 @@ def _utc_para_br(data_utc_naive: datetime) -> datetime:
 # Camadas que respondem sozinhas (sem humano) — usado só pra classificar
 # estatística no painel de TV; não muda a lógica de decisão em si (essa
 # continua em pre_venda_logica.py).
-CAMADAS_AUTOMATICAS = {"resposta_validada", "resposta_padrao", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
+CAMADAS_AUTOMATICAS = {"resposta_validada", "resposta_padrao", "dados_anuncio", "manual_sku_ia", "politica_geral", "busca_site_fabricante"}
 
 
 class RespostaManual(BaseModel):
