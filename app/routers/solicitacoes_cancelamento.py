@@ -9,7 +9,9 @@ Quem pode registrar (a ORIGEM é decidida pelo servidor, pela sessão --
 nunca pelo que vem do formulário):
   - "seller":    seller logado; a conta é SEMPRE a vinculada a ele.
   - "logistica": operador de galpão logado; escolhe a conta e o galpão.
-  - "publico":   link sem login (continua funcionando como antes).
+  - "equipe":    admin/supervisor/atendente lançando em nome de uma conta
+                 (ex.: seller ligou e ainda não tem login); galpão opcional.
+  - "publico":   registros antigos do link sem login (hoje o formulário exige login).
 
 A data é sempre gerada pelo servidor (datetime.utcnow), nunca vem do
 formulário. Um envio pode ter VÁRIAS vendas da mesma conta/plataforma;
@@ -54,7 +56,7 @@ GALPOES = {
 }
 PLATAFORMAS_VALIDAS = set(PLATAFORMAS)
 GALPOES_VALIDOS = set(GALPOES)
-ORIGENS_VALIDAS = {"seller", "logistica", "publico"}
+ORIGENS_VALIDAS = {"seller", "logistica", "equipe", "publico"}
 
 # Horário de Brasília pros filtros de período. O Brasil não tem horário
 # de verão desde 2019, então UTC-3 fixo é exato e não depende de tzdata.
@@ -272,6 +274,20 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 status_code=400,
                 detail=f"Use só o nome da loja, sem \"{sufixo.upper()}\" -- a plataforma já é escolhida nos botões.",
             )
+    elif papel in ("admin", "supervisor", "atendente"):
+        # Equipe lançando em nome de uma conta: escolhe a conta (como o galpão);
+        # galpão é opcional (preenche se souber de qual galpão sai a venda).
+        origem = "equipe"
+        conta_digitada = corpo.conta
+        if corpo.galpao is not None and corpo.galpao not in GALPOES_VALIDOS:
+            raise HTTPException(status_code=400, detail="Galpão inválido.")
+        galpao = corpo.galpao
+        sufixo = sufixo_de_plataforma(conta_digitada)
+        if sufixo:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Use só o nome da loja, sem \"{sufixo.upper()}\" -- a plataforma já é escolhida nos botões.",
+            )
     else:
         origem = "publico"
         conta_digitada = corpo.conta
@@ -280,7 +296,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     # Conta conhecida -> sempre o nome oficial; conta nova -> nome padronizado.
     nome_conta = mapa_contas.get(chave) or nome_exibicao_novo(conta_digitada)
 
-    estrito = origem == "logistica"
+    estrito = origem in ("logistica", "equipe")
     numeros = [_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito) for i in corpo.itens]
 
     # --- Aviso de duplicidade (mesma venda + mesma plataforma) ---
@@ -329,7 +345,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
             db.add(solicitacao)
             criadas.append(solicitacao)
         db.flush()  # gera os ids, pra registrar o histórico na mesma transação
-        rotulo_origem = {"seller": "Seller", "logistica": GALPOES.get(galpao, "Galpão"), "publico": "Link público"}.get(origem, origem)
+        rotulo_origem = {"seller": "Seller", "logistica": GALPOES.get(galpao, "Galpão"), "equipe": "Equipe",
+                         "publico": "Link público"}.get(origem, origem)
         for s in criadas:
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
                              detalhe=f"{rotulo_origem} · motivo: {s.motivo}")
@@ -906,7 +923,8 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
             info["plataforma_nome"],
             info["numero_venda"],
             info["motivo"],
-            {"seller": "Seller", "logistica": info["galpao_nome"] or "Logística", "publico": "Link público"}.get(info["origem"], "Seller / link público"),
+            {"seller": "Seller", "logistica": info["galpao_nome"] or "Logística", "equipe": "Equipe",
+             "publico": "Link público"}.get(info["origem"], "Seller / link público"),
             info["confirmado_por"],
             # Horário de Brasília (o banco guarda em UTC).
             datetime.fromisoformat(info["confirmado_em"]).replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%d/%m/%Y %H:%M") if info["confirmado_em"] else "",
