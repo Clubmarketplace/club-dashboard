@@ -26,6 +26,7 @@ function nomeDaCamada(camada) {
   const nomes = {
     resposta_validada: "Automática (histórico validado)",
     resposta_padrao: "Automática (resposta padrão)",
+    dados_anuncio: "Automática (dados do anúncio)",
     manual_sku_ia: "Automática (IA + manual)",
     politica_geral: "Automática (política geral)",
     busca_site_fabricante: "Automática (site do fabricante)",
