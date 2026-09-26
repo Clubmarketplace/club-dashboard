@@ -57,7 +57,9 @@
   /* Campo Conta com busca (Logística) */
   .campo-conta-caixa { position:relative; }
   .sugestoes-conta { display:none; position:absolute; left:0; right:0; top:calc(100% + 4px); z-index:5; background:#fff;
-    border:1.5px solid var(--line); border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,.08); max-height:240px; overflow-y:auto; }
+    border:1.5px solid var(--line); border-radius:9px; box-shadow:0 6px 18px rgba(0,0,0,.08); max-height:300px; overflow-y:auto; }
+  /* Quantas contas a lista tem (fica fixo no topo enquanto rola) */
+  .sugestoes-total { position:sticky; top:0; background:#f7f9fb; border-bottom:1px solid var(--line); padding:6px 13px; font-size:11.5px; color:var(--text-dim); }
   .sugestoes-conta.aberta { display:block; }
   .sugestao-conta { padding:9px 13px; font-size:13.5px; cursor:pointer; }
   .sugestao-conta:hover, .sugestao-conta.ativa { background:#f4f6f8; }
@@ -361,9 +363,12 @@
 
   function mostrarSugestoes() {
     const termo = chaveConta(campoConta.value);
-    const achadas = contasConhecidas.filter(c => !termo || c.chave.includes(termo)).slice(0, 8);
+    // Todas as contas (rolando a lista); digitando, filtra entre todas.
+    const achadas = contasConhecidas.filter(c => !termo || c.chave.includes(termo));
     const exata = contasConhecidas.some(c => c.chave === termo);
-    let html = achadas.map(c => `<div class="sugestao-conta" data-nome="${escaparHtml(c.nome)}">${escaparHtml(c.nome)}</div>`).join("");
+    let html = (achadas.length
+      ? `<div class="sugestoes-total">${termo ? achadas.length + " de " + contasConhecidas.length + " contas" : contasConhecidas.length + " contas · role para ver todas"}</div>`
+      : "") + achadas.map(c => `<div class="sugestao-conta" data-nome="${escaparHtml(c.nome)}">${escaparHtml(c.nome)}</div>`).join("");
     if (termo && !exata) {
       html += `<div class="sugestao-conta nova" data-nome="${escaparHtml(campoConta.value.trim())}">+ Usar nova conta: "${escaparHtml(campoConta.value.trim())}"</div>`;
     }
@@ -376,9 +381,9 @@
     campoConta.addEventListener("input", mostrarSugestoes);
     campoConta.addEventListener("focus", mostrarSugestoes);
     caixaSugestoes.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // não tira o foco do campo (senão arrastar a barra de rolagem fechava a lista)
       const item = e.target.closest(".sugestao-conta");
       if (!item) return;
-      e.preventDefault();
       campoConta.value = item.dataset.nome;
       caixaSugestoes.classList.remove("aberta");
     });
