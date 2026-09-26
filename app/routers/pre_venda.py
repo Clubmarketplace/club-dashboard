@@ -438,17 +438,24 @@ def painel_resumo(
     dias: int | None = None,      # compatibilidade com a versão anterior
 ):
     """
-    Dados do Painel Geral: indicadores com comparação à semana anterior,
-    últimos N dias por desfecho, hoje (por desfecho e por hora) e os
-    produtos que mais chegam para a equipe. Filtro opcional por conta
-    (apelido, sem diferenciar maiúsculas). Datas no horário de Brasília.
+    Dados do Painel Geral. O filtro de período (Hoje/7/30/Datas) vale para
+    o painel TODO -- indicadores, "quem respondeu", horários e Top 10 --,
+    sempre comparando com o período anterior de mesmo tamanho (Hoje x ontem,
+    7 dias x 7 dias anteriores...). Exceção: "Pendentes agora", que é a
+    situação do momento. Filtro opcional por conta (apelido, sem diferenciar
+    maiúsculas). Datas no horário de Brasília.
     """
     agora = datetime.utcnow()
     hoje_br = _utc_para_br(agora).date()
     tipo, ini_graf, fim_graf, ini_prod, fim_prod, rotulo = _resolver_periodo(periodo, dias, de, ate, hoje_br)
 
-    # Janela da consulta: cobre o período escolhido e as 2 semanas da comparação.
-    inicio_janela = min(ini_graf, hoje_br - timedelta(days=13))
+    # Período escolhido e o anterior de mesmo tamanho (base da comparação).
+    dias_periodo = (fim_prod - ini_prod).days + 1
+    ini_ant, fim_ant = ini_prod - timedelta(days=dias_periodo), ini_prod - timedelta(days=1)
+
+    # Janela da consulta: cobre o gráfico, o período anterior e os 7 dias
+    # antes de hoje (média por hora usada no modo "Hoje").
+    inicio_janela = min(ini_graf, ini_ant, hoje_br - timedelta(days=7))
     inicio_br = datetime.combine(inicio_janela, datetime.min.time()).replace(tzinfo=FUSO_BR)
     inicio_utc = inicio_br.astimezone(timezone.utc).replace(tzinfo=None)
 
@@ -486,11 +493,10 @@ def painel_resumo(
         hoje[grupo] += 1
         por_hora[_utc_para_br(p.recebida_em).hour][grupo] += 1
 
-    # --- Indicadores: últimos 7 dias x 7 dias anteriores ---
-    def semana(ini: int, fim: int):
-        """Perguntas de (hoje - fim) até (hoje - ini) dias atrás, inclusive."""
-        dias_semana = {hoje_br - timedelta(days=i) for i in range(ini, fim + 1)}
-        return [p for p in perguntas if p.recebida_em and _dia_br(p.recebida_em) in dias_semana]
+    # --- Indicadores: período escolhido x período anterior de mesmo tamanho ---
+    def entre(ini, fim):
+        """Perguntas recebidas entre os dois dias (horário de Brasília), inclusive."""
+        return [p for p in perguntas if p.recebida_em and ini <= _dia_br(p.recebida_em) <= fim]
 
     def pct_sem_equipe(lista):
         total = len(lista)
@@ -513,7 +519,24 @@ def painel_resumo(
         ]
         return round(sum(tempos) / len(tempos), 1) if tempos else None
 
-    atual, anterior = semana(0, 6), semana(7, 13)
+    atual, anterior = entre(ini_prod, fim_prod), entre(ini_ant, fim_ant)
+
+    # Quem respondeu no período (o círculo) e em que horário as perguntas chegam.
+    no_periodo = {"ml": 0, "ia": 0, "equipe": 0, "pendente": 0, "outros": 0}
+    por_hora_periodo = [{"hora": h, "ml": 0, "ia": 0, "equipe": 0, "pendente": 0, "outros": 0} for h in range(24)]
+    for p in atual:
+        grupo = _desfecho(p)
+        no_periodo[grupo] += 1
+        por_hora_periodo[_utc_para_br(p.recebida_em).hour][grupo] += 1
+
+    # Modo "Hoje": média por hora dos 7 dias anteriores, pra comparar com hoje.
+    sete_antes = entre(hoje_br - timedelta(days=7), hoje_br - timedelta(days=1))
+    por_hora_media_7d = [{"hora": h, "ml": 0.0, "ia": 0.0, "equipe": 0.0, "pendente": 0.0, "outros": 0.0} for h in range(24)]
+    for p in sete_antes:
+        por_hora_media_7d[_utc_para_br(p.recebida_em).hour][_desfecho(p)] += 1 / 7
+    for linha in por_hora_media_7d:
+        for k in ("ml", "ia", "equipe", "pendente", "outros"):
+            linha[k] = round(linha[k], 2)
 
     # Pendentes agora: de qualquer data (não só da janela), respeitando o filtro de conta.
     pendentes_q = db.query(Pergunta).filter(Pergunta.status == "fila_humana")
@@ -525,8 +548,12 @@ def painel_resumo(
         if p.recebida_em and (agora - p.recebida_em).total_seconds() > 30 * 60
     })
 
-    dias_anteriores = [d for d in por_dia if d["data"] != hoje_br.isoformat()]
-    media_dia = round(sum(d["total"] for d in dias_anteriores) / len(dias_anteriores), 1) if dias_anteriores else None
+    # Média por dia: no modo Hoje, a dos 7 dias anteriores (referência pro dia);
+    # nos outros, a do próprio período.
+    if tipo == "hoje":
+        media_dia = round(len(sete_antes) / 7, 1) if sete_antes else None
+    else:
+        media_dia = round(len(atual) / dias_periodo, 1) if atual else None
 
     # --- Top 10 produtos que mais chegam para a equipe (no período escolhido) ---
     contagem: dict[str, dict] = {}
@@ -552,6 +579,9 @@ def painel_resumo(
             "de": ini_prod.isoformat(),
             "ate": fim_prod.isoformat(),
             "rotulo": rotulo,
+            "dias": dias_periodo,
+            "anterior_de": ini_ant.isoformat(),
+            "anterior_ate": fim_ant.isoformat(),
             "grafico_de": ini_graf.isoformat(),
             "grafico_ate": fim_graf.isoformat(),
         },
@@ -562,6 +592,7 @@ def painel_resumo(
             "sem_equipe_pct_anterior": pct_sem_equipe(anterior),
             # Separação do "sem a equipe": quanto foi a IA do ML e quanto foi a nossa IA.
             "sem_equipe_ml_pct": pct_de(atual, "ml"),
+            "sem_equipe_ml_pct_anterior": pct_de(anterior, "ml"),
             "sem_equipe_ia_pct": pct_de(atual, "ia"),
             "sem_equipe_ia_pct_anterior": pct_de(anterior, "ia"),
             "tempo_medio_equipe_min": tempo_medio_equipe(atual),
@@ -569,11 +600,16 @@ def painel_resumo(
             "pendentes_agora": len(pendentes),
             "contas_criticas": contas_criticas,
             "perguntas_hoje": len(de_hoje),
+            "perguntas_periodo": len(atual),
+            "perguntas_periodo_anterior": len(anterior) if anterior else None,
             "media_por_dia": media_dia,
         },
         "por_dia": por_dia,
         "hoje": hoje,
         "por_hora": por_hora,
+        "periodo_desfecho": no_periodo,
+        "por_hora_periodo": por_hora_periodo,
+        "por_hora_media_7d": por_hora_media_7d,
         "produtos": produtos,
     }
 
@@ -626,10 +662,11 @@ def _serializar_detalhe(p: Pergunta, agora: datetime) -> dict:
 @router.get("/painel-detalhe")
 def painel_detalhe(
     db: Session = Depends(get_db),
-    escopo: str = "hoje",          # hoje | dia | hora | produto | grafico | semana | pendentes_agora
+    escopo: str = "hoje",          # hoje | periodo | dia | hora | produto | grafico | semana | pendentes_agora
     grupo: str | None = None,      # ml | ia | equipe | pendente | outros (vários separados por vírgula); vazio = todos
     dia: str | None = None,        # AAAA-MM-DD (escopo=dia)
-    hora: int | None = None,       # 0-23, de hoje (escopo=hora)
+    hora: int | None = None,       # 0-23 (escopo=hora)
+    faixa: str = "hoje",           # escopo=hora: hoje | periodo | anteriores7 (os 7 dias antes de hoje)
     produto: str | None = None,    # chave do produto: SKU ou código do anúncio (escopo=produto)
     conta: str | None = None,
     periodo: str | None = None,
@@ -669,10 +706,18 @@ def painel_detalhe(
     else:
         if escopo == "hoje":
             ini, fim, titulo = hoje_br, hoje_br, "Hoje"
+        elif escopo == "periodo":
+            ini, fim, titulo = ini_prod, fim_prod, rotulo
         elif escopo == "hora":
             if hora is None or not (0 <= hora <= 23):
                 raise HTTPException(status_code=400, detail="Hora inválida.")
-            ini, fim, titulo = hoje_br, hoje_br, f"Hoje, das {hora}h às {hora}h59"
+            if faixa == "periodo":
+                ini, fim, quando = ini_prod, fim_prod, rotulo
+            elif faixa == "anteriores7":
+                ini, fim, quando = hoje_br - timedelta(days=7), hoje_br - timedelta(days=1), "7 dias antes de hoje"
+            else:
+                ini, fim, quando = hoje_br, hoje_br, "Hoje"
+            titulo = f"{quando}, das {hora}h às {hora}h59"
         elif escopo == "dia":
             try:
                 d = datetime.strptime(dia or "", "%Y-%m-%d").date()
