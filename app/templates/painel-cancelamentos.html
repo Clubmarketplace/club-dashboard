@@ -150,32 +150,7 @@
       <div class="cmx-marca">
         <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
-      {% set eh_atendente = usuario_logado and usuario_logado.papel == "atendente" %}
-      <nav class="cmx-nav">
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/" style="font-weight:700; margin-bottom:6px;">Dashboard</a>{% endif %}
-        <span class="cmx-nav-secao">Operação</span>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/devolucoes">Devoluções</a>{% endif %}
-        <a class="cmx-nav-item" href="/pre-venda">Pré-venda</a>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/manuais">Manuais</a>{% endif %}
-        <a class="cmx-nav-item" href="/pos-venda">Pós-venda</a>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/cancelamentos">Cancelamentos</a>{% endif %}
-        <span class="cmx-nav-secao">Contas</span>
-        {% if not eh_atendente %}<a class="cmx-nav-item" href="/contas">Contas conectadas</a>{% endif %}
-        <a class="cmx-nav-item" href="/reputacao">Reputação das contas</a>
-        {% if not eh_atendente %}<span class="cmx-nav-secao">Diagnóstico</span>
-        <a class="cmx-nav-item" href="/eventos-webhook">Eventos do Webhook</a>{% endif %}
-        <span class="cmx-nav-secao">Painéis de TV</span>
-        <a class="cmx-nav-item" href="/painel-tv/geral" target="_blank" rel="noopener">Painel Geral</a>
-        <a class="cmx-nav-item" href="/painel-tv/fila" target="_blank" rel="noopener">Painel da Fila</a>
-        <span class="cmx-nav-secao">Solicitações manuais</span>
-        <a class="cmx-nav-item" href="/solicitar-cancelamento" target="_blank" rel="noopener">Nova solicitação</a>
-        <a class="cmx-nav-item cmx-nav-item--ativo" href="/solicitacoes-painel">
-          <span class="cmx-nav-dot"></span> Solicitações de Cancelamento
-        </a>
-        <a class="cmx-nav-item" href="/relatorio-cancelamentos">Relatório de cancelamentos</a>
-        {% if not eh_atendente %}<span class="cmx-nav-secao">Operadores</span>
-        <a class="cmx-nav-item" href="/usuarios">Operadores</a>{% endif %}
-      </nav>
+      {% include "_menu.html" %}
     </aside>
 
     <div class="cmx-conteudo">
