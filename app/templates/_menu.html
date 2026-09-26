@@ -97,7 +97,6 @@
   {% if not _restrito %}
     {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook"]) %}
       {{ item("/usuarios", "Operadores") }}
-      {{ item("/usuarios#novo", "Novo operador") }}
       {{ item("/eventos-webhook", "Eventos do Webhook") }}
       <a class="cmx-nav-item cmx-nav-subitem cmx-nav-item--em-breve" href="#" aria-disabled="true">
         Relatório por conta <span class="cmx-selo-em-breve">em breve</span>
