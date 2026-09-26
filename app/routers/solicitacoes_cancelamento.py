@@ -383,8 +383,13 @@ def listar_opcoes():
 
 
 @router.get("/contas")
-def listar_contas(db: Session = Depends(get_db)):
+def listar_contas(request: Request, db: Session = Depends(get_db)):
     """Lista de contas conhecidas pro campo "Conta" (com busca) e pros filtros."""
+    # Seller só enxerga a própria conta (não vê o nome das outras lojas).
+    usuario = auth.usuario_atual(request, db)
+    if usuario and usuario.papel == "seller":
+        nome = (usuario.conta_vinculada or "").strip()
+        return [{"chave": chave_conta(nome), "nome": nome}] if nome else []
     mapa = _mapa_contas_conhecidas(db)
     return sorted(({"chave": k, "nome": v} for k, v in mapa.items()), key=lambda c: c["chave"])
 

@@ -5,10 +5,11 @@ na fila.
 """
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from app import auth
 from app.database import get_db
 from app.models import Pergunta, Conta, AcaoRegistrada, RespostaValidadaSku
 from app.ml_client import MLAuthError, MLApiError, garantir_token_valido, buscar_pergunta, enviar_resposta
@@ -72,6 +73,7 @@ def listar_fila(db: Session = Depends(get_db)):
             "conta": p.conta.apelido if p.conta else "—",
             "item_id": p.item_id,
             "sku": p.sku,
+            "titulo": p.titulo_anuncio,  # nome do produto (pro detalhe no Painel da Fila)
             "texto": p.texto,
             "recebida_em": p.recebida_em.isoformat() if p.recebida_em else None,
         }
@@ -109,11 +111,22 @@ def listar_resolvidas(db: Session = Depends(get_db), limite: int = 50):
 
 
 @router.post("/{pergunta_id}/responder")
-def responder_manualmente(pergunta_id: int, corpo: RespostaManual, db: Session = Depends(get_db)):
+def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Request, db: Session = Depends(get_db)):
     """
     Envia a resposta digitada por um humano pro Mercado Livre, e marca
     a pergunta como resolvida (sem camada automática associada).
+    Usada pela tela de Pré-venda e pelo Painel da Fila (clicando na pergunta).
+    Só admin, supervisor e atendente respondem (o perfil "tv" só olha).
     """
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin", "supervisor", "atendente")):
+        raise HTTPException(status_code=403, detail="Seu perfil não pode responder perguntas.")
+    texto_resposta = (corpo.texto or "").strip()
+    if not texto_resposta:
+        raise HTTPException(status_code=400, detail="Digite a resposta.")
+    if len(texto_resposta) > 2000:
+        raise HTTPException(status_code=400, detail="Resposta muito longa (o Mercado Livre aceita até 2000 caracteres).")
+    corpo.texto = texto_resposta
     pergunta = db.query(Pergunta).filter(Pergunta.id == pergunta_id).first()
     if pergunta is None:
         raise HTTPException(status_code=404, detail="Pergunta não encontrada")
