@@ -29,7 +29,11 @@ REGRAS_DE_ESCRITA = (
     "'encontrei', 'minha função'), não fale de fontes, sites ou pesquisa, e não use formatação "
     "(sem negrito, asteriscos, listas, títulos ou links). Nunca sugira ao comprador procurar o "
     "fabricante, outra loja ou outro canal. Se não tiver certeza da resposta, não escreva nada "
-    f"além de: {SINALIZADOR_SEM_CONTEXTO}"
+    f"além de: {SINALIZADOR_SEM_CONTEXTO}. "
+    "IMPORTANTE: se a informação pedida NÃO estiver nos dados, NUNCA responda dizendo que ela não "
+    "consta, não é informada ou não foi encontrada, e NUNCA mande o comprador ver a embalagem, o "
+    "manual, o site ou falar com o fabricante: nesse caso responda somente "
+    f"{SINALIZADOR_SEM_CONTEXTO} (assim o sistema procura em outra fonte)."
 )
 
 # Frases que denunciam "raciocínio" da IA ou resposta em dúvida. Se aparecerem,
@@ -46,6 +50,27 @@ _FRASES_BLOQUEADAS = (
     "contato com o fabricante", "entre em contato", "contatar diretamente", "site do fabricante",
     SINALIZADOR_SEM_CONTEXTO.lower(), "semcontexto", "sem contexto",
 )
+
+
+# Padrões (regex, no texto sem acento e minúsculo) que pegam a IDEIA de "não sei /
+# procure em outro lugar", mesmo escrita de outro jeito. Caso real que passou pela
+# lista de frases: "Os dados do anúncio não informam a cobertura (...) recomendo
+# verificar na embalagem ou entrar em contato diretamente com o fabricante".
+_PADROES_BLOQUEADOS = tuple(__import__("re").compile(p) for p in (
+    # "não informa / não consta / não menciona..." -> a IA está dizendo que não sabe
+    r"\bnao (informa|informam|informado|informada|consta|constam|menciona|mencionam|mencionado"
+    r"|especifica|especificam|especificado|detalha|detalham|indica|indicam|traz|trazem|apresenta|apresentam"
+    r"|disponibiliza|disponibilizam|possui informac|possuimos informac|temos informac|temos essa|temos esse)\b",
+    r"\bnao (ha|existe|existem) (essa |esta |a |o )?(informac|dado|detalhe|mencao)",
+    r"\b(dados|ficha|descricao|informacoes) do anuncio\b",          # fala das próprias fontes
+    r"\b(anuncio|descricao|ficha) (nao|nada)\b",
+    # manda o comprador procurar em outro lugar
+    r"\b(verificar|verifique|confira|conferir|consultar|consulte|checar|cheque|olhar|veja)\b.{0,50}"
+    r"\b(embalagem|rotulo|fabricante|manual|site|fornecedor)\b",
+    r"\b(entrar|entre|entrando) em contato\b",
+    r"\bcontato (direto|diretamente)\b",
+    r"\bpara (maior |mais )?(precisao|seguranca na informacao)\b",
+))
 
 
 def _sem_acento(texto: str) -> str:
@@ -94,7 +119,7 @@ def resposta_segura(texto: str | None) -> str | None:
     if not limpo or len(limpo) > 2000:
         return None
     normal = _sem_acento(limpo)
-    if any(frase in normal for frase in _FRASES_BLOQUEADAS):
+    if any(frase in normal for frase in _FRASES_BLOQUEADAS) or any(p.search(normal) for p in _PADROES_BLOQUEADOS):
         logger.warning("Resposta da IA bloqueada pela trava de segurança: %s", limpo[:200])
         return None
     return limpo
