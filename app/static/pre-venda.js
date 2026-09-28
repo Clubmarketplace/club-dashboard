@@ -29,7 +29,7 @@ function nomeDaCamada(camada) {
     dados_anuncio: "Automática (dados do anúncio)",
     manual_sku_ia: "Automática (IA + manual)",
     politica_geral: "Automática (política geral)",
-    busca_site_fabricante: "Automática (site do fabricante)",
+    busca_site_fabricante: "Automática (pesquisa na internet)",
     manual: "Atendente",
     // Respondida fora do nosso sistema (IA do Mercado Livre ou o seller pelo app).
     externo_ou_ml_nativo: "Por fora (ML / app)",
