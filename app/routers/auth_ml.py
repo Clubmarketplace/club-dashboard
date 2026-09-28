@@ -64,29 +64,106 @@ def listar_contas_conectadas(db: Session = Depends(get_db)):
     ]
 
 
+PLATAFORMAS_EMPRESA = {"mercado_livre": "Mercado Livre", "shopee": "Shopee", "magalu": "Magalu", "tiktok": "TikTok Shop"}
+PAPEIS_EMPRESAS = ("admin", "supervisor")
+
+
+def _exigir_gestor(request: Request, db: Session):
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, PAPEIS_EMPRESAS):
+        raise HTTPException(status_code=403, detail="Só admin e supervisor incluem ou removem empresas.")
+    return usuario
+
+
 @router.get("/progresso")
 def progresso_autorizacao(db: Session = Depends(get_db)):
     """
-    Cruza a lista de empresas planejadas (dados/empresas.txt, importada
-    via app/importar_empresas.py) com as contas já conectadas, pra
-    tela acompanhar quais faltam autorizar. Cruza por nome, ignorando
-    maiúsculas/minúsculas.
+    Cruza a lista de empresas do Club (as antigas vieram do dados/empresas.txt;
+    as novas são incluídas pela própria tela) com as contas já conectadas, pra
+    acompanhar quais faltam autorizar. Cruza pelo nome, ignorando maiúsculas,
+    acentos e espaços extras. Empresas removidas não aparecem.
     """
-    empresas = db.query(EmpresaPlanejada).order_by(EmpresaPlanejada.nome).all()
-    contas_por_nome = {c.apelido.strip().lower(): c for c in db.query(Conta).all()}
+    from app.contas_util import chave_conta
+    empresas = (
+        db.query(EmpresaPlanejada)
+        .filter(EmpresaPlanejada.removida_em.is_(None))
+        .order_by(EmpresaPlanejada.nome)
+        .all()
+    )
+    # Mesma chave pode ter conta velha e nova (ex.: reconectada): vale a conectada.
+    contas_por_chave: dict = {}
+    for c in db.query(Conta).all():
+        k = chave_conta(c.apelido or "")
+        if k not in contas_por_chave or (c.access_token and not contas_por_chave[k].access_token):
+            contas_por_chave[k] = c
 
     resultado = []
     for empresa in empresas:
-        conta = contas_por_nome.get(empresa.nome.strip().lower())
+        conta = contas_por_chave.get(chave_conta(empresa.nome))
+        autorizada = bool(conta and conta.access_token)
         resultado.append({
+            "id": empresa.id,
             "nome": empresa.nome,
-            "autorizada": bool(conta and conta.access_token),
-            "conectada_em": conta.conectada_em.isoformat() if conta and conta.conectada_em else None,
+            "autorizada": autorizada,
+            # Data só quando está autorizada de verdade (conta desconectada fica "Pendente", sem data).
+            "conectada_em": conta.conectada_em.isoformat() if autorizada and conta.conectada_em else None,
+            "plataformas": [x for x in (empresa.plataformas or "").split(",") if x],
+            "observacao": empresa.observacao,
         })
 
     total = len(resultado)
     autorizadas = sum(1 for r in resultado if r["autorizada"])
-    return {"total": total, "autorizadas": autorizadas, "empresas": resultado}
+    return {"total": total, "autorizadas": autorizadas, "empresas": resultado,
+            "plataformas_opcoes": PLATAFORMAS_EMPRESA}
+
+
+@router.post("/empresas")
+def incluir_empresa(request: Request, dados: dict = Body(...), db: Session = Depends(get_db)):
+    """
+    Inclui uma empresa nova na lista do Club (tela Contas › "+ Incluir empresa").
+    Depois é só gerar o link de autorização do Mercado Livre pra ela, no mesmo
+    fluxo das outras. Nome repetido (mesmo com outra grafia) é recusado; se a
+    empresa tinha sido removida, volta pra lista.
+    """
+    from app.contas_util import chave_conta, limpar_espacos
+    usuario = _exigir_gestor(request, db)
+    nome = limpar_espacos(str(dados.get("nome") or ""))
+    if not nome:
+        raise HTTPException(status_code=400, detail="Informe o nome da empresa.")
+    if len(nome) > 80:
+        raise HTTPException(status_code=400, detail="Nome muito longo (máximo 80 caracteres).")
+    plataformas = [p for p in (dados.get("plataformas") or []) if p in PLATAFORMAS_EMPRESA]
+    observacao = limpar_espacos(str(dados.get("observacao") or ""))[:200] or None
+
+    chave = chave_conta(nome)
+    existente = next((e for e in db.query(EmpresaPlanejada).all() if chave_conta(e.nome) == chave), None)
+    if existente and existente.removida_em is None:
+        raise HTTPException(status_code=409, detail=f'Essa empresa já está na lista como "{existente.nome}".')
+    if existente:  # tinha saído do Club e voltou
+        existente.removida_em = None
+        existente.plataformas = ",".join(plataformas) or existente.plataformas
+        existente.observacao = observacao or existente.observacao
+        empresa = existente
+    else:
+        empresa = EmpresaPlanejada(nome=nome, plataformas=",".join(plataformas) or None, observacao=observacao,
+                                   criado_por=getattr(usuario, "nome_exibicao", None))
+        db.add(empresa)
+    db.commit()
+    logger.info("Empresa incluída na lista por %s: %s", getattr(usuario, "nome_exibicao", "?"), empresa.nome)
+    return {"id": empresa.id, "nome": empresa.nome, "reativada": bool(existente)}
+
+
+@router.post("/empresas/{empresa_id}/remover")
+def remover_empresa(empresa_id: int, request: Request, db: Session = Depends(get_db)):
+    """Tira a empresa da lista (saiu do Club). Não apaga contas nem histórico."""
+    usuario = _exigir_gestor(request, db)
+    empresa = db.query(EmpresaPlanejada).filter(EmpresaPlanejada.id == empresa_id).first()
+    if empresa is None:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada.")
+    empresa.removida_em = datetime.utcnow()
+    db.commit()
+    logger.info("Empresa removida da lista por %s: %s", getattr(usuario, "nome_exibicao", "?"), empresa.nome)
+    return {"status": "removida"}
 
 
 @router.get("/link/{apelido}")

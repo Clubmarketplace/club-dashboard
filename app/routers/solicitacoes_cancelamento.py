@@ -36,7 +36,7 @@ from app import auth
 from app.cancelamento_apoio import preencher_produtos_em_segundo_plano, registrar_evento
 from app.contas_util import chave_conta, limpar_espacos, nome_exibicao_novo, sufixo_de_plataforma
 from app.database import get_db
-from app.models import Conta, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
+from app.models import Conta, EmpresaPlanejada, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
 
@@ -178,6 +178,10 @@ def _mapa_contas_conhecidas(db: Session) -> dict[str, str]:
         registrar(c.apelido)
     for (vinculada,) in db.query(Usuario.conta_vinculada).filter(Usuario.papel == "seller").all():
         registrar(vinculada)
+    # Empresas da lista do Club (incluídas na tela Contas), mesmo antes de
+    # autorizarem o Mercado Livre -- pra já poderem ter solicitações.
+    for (nome_empresa,) in db.query(EmpresaPlanejada.nome).filter(EmpresaPlanejada.removida_em.is_(None)).all():
+        registrar(nome_empresa)
     for (nome,) in db.query(SolicitacaoCancelamento.conta).order_by(SolicitacaoCancelamento.criado_em.asc()).all():
         registrar(nome)
 
@@ -618,7 +622,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
     solicitacao.em_atendimento_desde = None
     registrar_evento(
         db, solicitacao.id, "confirmou", usuario=usuario_logado,
-        detalhe=f"{'Sem protocolo' if corpo.sem_protocolo else 'Protocolo ' + corpo.protocolo} · {LABEL_RESULTADO_IMPACTO.get(corpo.resultado_impacto, corpo.resultado_impacto)}",
+        detalhe=f"{TEXTO_PELO_PAINEL_ML if corpo.sem_protocolo else 'Protocolo ' + corpo.protocolo} · {LABEL_RESULTADO_IMPACTO.get(corpo.resultado_impacto, corpo.resultado_impacto)}",
     )
     db.commit()
     db.refresh(solicitacao)
@@ -929,7 +933,7 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
             # Horário de Brasília (o banco guarda em UTC).
             datetime.fromisoformat(info["confirmado_em"]).replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%d/%m/%Y %H:%M") if info["confirmado_em"] else "",
             LABEL_RESULTADO_IMPACTO.get(info["resultado_impacto"], "Não informado"),
-            "Sem protocolo" if info["protocolo"] == "" else (info["protocolo"] or ""),
+            TEXTO_PELO_PAINEL_ML if info["protocolo"] == "" else (info["protocolo"] or ""),
         ])
     larguras = [18, 14, 18, 30, 18, 18, 18, 26, 20]
     for indice, largura in enumerate(larguras, start=1):
@@ -985,9 +989,14 @@ def _hora_br_texto(data_utc: Optional[datetime]) -> str:
     return data_utc.replace(tzinfo=timezone.utc).astimezone(FUSO_BR).strftime("%d/%m/%Y %H:%M")
 
 
+# Confirmado sem protocolo = a venda foi cancelada direto pelo painel do
+# Mercado Livre (sem abrir atendimento). O texto diz COMO foi cancelado.
+TEXTO_PELO_PAINEL_ML = "Cancelado pelo painel do ML (sem protocolo)"
+
+
 def _texto_protocolo(s: SolicitacaoCancelamento) -> str:
     if s.protocolo == "":
-        return "Sem protocolo"
+        return TEXTO_PELO_PAINEL_ML
     return s.protocolo or ""
 
 
