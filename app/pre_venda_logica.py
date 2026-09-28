@@ -30,8 +30,9 @@ from app.ia_pre_venda import (
     gerar_resposta_com_manual,
     responder_com_dados_do_anuncio,
     encontrar_indice_resposta_similar,
-    buscar_resposta_no_site_fabricante,
+    pesquisar_na_internet,
 )
+from app import config_ia
 
 LIMITE_HISTORICO_CONSULTADO = 20  # não deixa a chamada de IA crescer sem limite pra SKUs com muito histórico
 
@@ -200,6 +201,21 @@ def buscar_politica_geral(db, texto_pergunta: str) -> PoliticaGeral | None:
     return None
 
 
+def _resumo_para_pesquisa(ficha: str | None) -> str | None:
+    """Título + ficha técnica (marca, modelo...) do anúncio, curto, pra orientar a pesquisa."""
+    if not ficha:
+        return None
+    manter, secao = [], None
+    for linha in ficha.split("\n"):
+        if not linha.startswith("- "):  # linha de título de seção ("TÍTULO: ...", "FICHA TÉCNICA:", ...)
+            secao = linha.split(":")[0].strip().upper()
+            if secao in ("TÍTULO", "FICHA TÉCNICA"):
+                manter.append(linha)
+        elif secao == "FICHA TÉCNICA":
+            manter.append(linha)
+    return "\n".join(manter)[:1500] or None
+
+
 def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: str | None = None,
                      item_id: str | None = None, access_token: str | None = None) -> dict:
     """
@@ -215,7 +231,10 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
             "precisa_auditoria": False,
         }
 
-    padrao = buscar_resposta_padrao(db, sku, texto_pergunta, item_id=item_id)
+    # Fontes ligadas/desligadas em Administração › Calibrar IA (o banco da equipe, acima, é sempre usado).
+    cfg = config_ia.obter()
+
+    padrao = buscar_resposta_padrao(db, sku, texto_pergunta, item_id=item_id) if cfg["fonte_respostas_padrao"] else None
     if padrao:
         padrao.usada = (padrao.usada or 0) + 1  # quem chama faz o commit
         return {
@@ -229,10 +248,12 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
     # envio, descrição e compatibilidades) -- responde as dúvidas técnicas e de
     # compatibilidade com o que o comprador vê no anúncio. Começa marcada pra
     # revisão, até a equipe ganhar confiança nessa camada.
-    if access_token and item_id:
+    ficha = None  # guardada: marca/modelo também ajudam a pesquisa na internet, mais abaixo
+    if access_token and item_id and (cfg["fonte_dados_anuncio"] or cfg["fonte_internet"]):
         from app.ml_client import ler_ficha_do_anuncio
         ficha = ler_ficha_do_anuncio(access_token, item_id)
-        resposta_anuncio = responder_com_dados_do_anuncio(texto_pergunta, ficha) if ficha else None
+        resposta_anuncio = (responder_com_dados_do_anuncio(texto_pergunta, ficha)
+                            if ficha and cfg["fonte_dados_anuncio"] else None)
         if resposta_anuncio:
             return {
                 "resposta": resposta_anuncio,
@@ -241,7 +262,7 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
                 "precisa_auditoria": True,
             }
 
-    manual = buscar_manual_por_sku(db, sku)
+    manual = buscar_manual_por_sku(db, sku) if cfg["fonte_manuais"] else None
     if manual:
         resposta_ia = gerar_resposta_com_manual(texto_pergunta, manual.titulo, manual.conteudo)
         if resposta_ia:
@@ -262,15 +283,18 @@ def decidir_resposta(db, sku: str | None, texto_pergunta: str, titulo_produto: s
     # seguro que tentar a internet depois de uma fonte própria falhar).
     # Compatibilidade com modelo/veículo: não arrisca pela internet (vai pra equipe
     # até a IA ler a lista de aplicação do próprio anúncio).
-    resposta_fabricante = None
-    if not pergunta_de_compatibilidade(texto_pergunta):
-        resposta_fabricante = buscar_resposta_no_site_fabricante(texto_pergunta, titulo_produto, sku)
+    resposta_fabricante, degrau = None, None
+    if cfg["fonte_internet"] and not pergunta_de_compatibilidade(texto_pergunta):
+        # Pesquisa em escada: fabricante -> manual em PDF -> lojas grandes... (os degraus ligados).
+        resposta_fabricante, degrau = pesquisar_na_internet(
+            texto_pergunta, titulo_produto, sku, dados_produto=_resumo_para_pesquisa(ficha))
     if resposta_fabricante:
         return {
             "resposta": resposta_fabricante,
             "camada": "busca_site_fabricante",
             "status": "respondida",
             "precisa_auditoria": True,  # veio da internet -- sempre revisar depois
+            "fonte_detalhe": degrau,    # ex.: "2 · manual em PDF" (aparece nos painéis)
         }
 
     politica = buscar_politica_geral(db, texto_pergunta)

@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -280,6 +280,7 @@ app.include_router(eventos_webhook.router)
 app.include_router(solicitacoes_cancelamento.router)
 app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
+app.include_router(calibrar_ia_rotas.router)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -378,6 +379,15 @@ def pagina_contas(request: Request):
 @app.get("/respostas-padrao", response_class=HTMLResponse)
 def pagina_respostas_padrao(request: Request):
     return templates.TemplateResponse(request=request, name="respostas-padrao.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/calibrar-ia", response_class=HTMLResponse)
+def pagina_calibrar_ia(request: Request):
+    """Administração › Calibrar IA -- só admin e supervisor (a API confere de novo)."""
+    usuario = _usuario_logado(request)
+    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+        return RedirectResponse(url="/", status_code=303)
+    return templates.TemplateResponse(request=request, name="calibrar-ia.html", context={"usuario_logado": usuario})
 
 
 @app.get("/reputacao", response_class=HTMLResponse)

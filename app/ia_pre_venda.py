@@ -70,7 +70,20 @@ _PADROES_BLOQUEADOS = tuple(__import__("re").compile(p) for p in (
     r"\b(entrar|entre|entrando) em contato\b",
     r"\bcontato (direto|diretamente)\b",
     r"\bpara (maior |mais )?(precisao|seguranca na informacao)\b",
+    # "não consigo confirmar / não posso ajudar / desculpe não poder ajudar"
+    r"\bnao (consigo|conseguimos|posso|podemos) (confirmar|informar|ajudar|responder|garantir|dizer|afirmar)\b",
+    r"\bnao poder (ajudar|informar|confirmar|responder)\b",
+    r"\bdesculpe\b",
 ))
+
+
+def _estilo() -> str:
+    """Tom e tamanho escolhidos em Calibrar IA (padrão: cordial e direto, 2-3 frases)."""
+    try:
+        from app import config_ia
+        return config_ia.estilo()
+    except Exception:
+        return "num tom cordial e direto, em no máximo 2-3 frases"
 
 
 def _sem_acento(texto: str) -> str:
@@ -205,7 +218,7 @@ def gerar_resposta_com_manual(pergunta_texto: str, manual_titulo: str | None, ma
 
     prompt_sistema = (
         "Você responde perguntas de pré-venda de um anúncio no Mercado Livre, "
-        "em português do Brasil, num tom cordial e direto, em no máximo 2-3 frases. "
+        f"em português do Brasil, {_estilo()}. "
         "Use APENAS as informações do manual técnico abaixo -- nunca invente "
         "especificação, prazo, compatibilidade, cor, tamanho ou qualquer dado que "
         "não esteja explicitamente no manual. Se o manual não contiver informação "
@@ -229,63 +242,98 @@ def gerar_resposta_com_manual(pergunta_texto: str, manual_titulo: str | None, ma
     return resposta_segura(_texto_final(resposta))
 
 
-def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str | None, sku: str | None) -> str | None:
-    """
-    Camada 2.5 (busca no site do fabricante): só é chamada quando NÃO
-    existe manual próprio cadastrado pra esse SKU. Deixa o Claude usar
-    a ferramenta de busca na web (restrita, ele decide quais sites
-    abrir) pra achar a especificação técnica real do produto e
-    responder com base nisso.
+# O que cada degrau da escada de pesquisa pode usar (ver config_ia.DEGRAUS).
+_FONTES_DO_DEGRAU = {
+    "fabricante": "SOMENTE o site oficial do fabricante/marca do produto (domínio da própria marca).",
+    "pdf": ("SOMENTE manual, ficha técnica, catálogo ou boletim técnico em PDF do fabricante, deste "
+            "mesmo modelo -- o PDF pode estar hospedado em qualquer site, inclusive de loja."),
+    "lojas": ("SOMENTE a página do produto (descrição/ficha técnica) em lojas grandes e conhecidas do Brasil, "
+              "como Leroy Merlin, Magazine Luiza, Casas Bahia, Amazon, Americanas ou Carrefour "
+              "(só a ficha técnica/descrição, nunca as perguntas de compradores)."),
+    "videos": ("SOMENTE vídeos do canal oficial do fabricante (título, descrição ou transcrição). "
+               "Se a informação só aparecer na imagem do vídeo, você não tem como saber: não responda."),
+    "tecnicos": ("SOMENTE sites técnicos especializados no tipo de produto: catálogos de autopeças "
+                 "(aplicação, código original), distribuidores e portais técnicos."),
+    "aberta": "Qualquer site confiável.",
+}
+_DEGRAUS_QUE_EXIGEM_DUAS_FONTES = ("lojas", "videos", "tecnicos", "aberta")
 
-    Mais arriscado que o manual próprio (site errado, página tirada do
-    ar, versão errada do produto) -- por isso quem chama essa função
-    (pre_venda_logica.decidir_resposta) sempre marca a resposta como
-    "precisa_auditoria", nunca dispensa revisão humana depois.
 
-    Devolve None (cai pra próxima camada) se não tiver produto
-    suficiente pra pesquisar, se a API falhar, ou se o Claude não
-    achar informação confiável o bastante.
-    """
-    if not titulo_produto:
-        return None  # sem nome/modelo do produto, não dá pra pesquisar direito
-
-    cliente = _obter_cliente()
-    if cliente is None:
-        return None
-
-    identificador = f"{titulo_produto}" + (f" (SKU/código: {sku})" if sku else "")
+def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: str, detalhes: str) -> str | None:
+    """Uma tentativa de pesquisa, limitada às fontes de UM degrau. Devolve o texto pronto ou None."""
+    from app import config_ia
+    cfg = config_ia.obter()
+    duas = (cfg["duas_fontes"] and degrau in _DEGRAUS_QUE_EXIGEM_DUAS_FONTES)
     prompt_sistema = (
         "Você responde perguntas de pré-venda de um anúncio no Mercado Livre, "
-        "em português do Brasil, num tom cordial e direto, em no máximo 2-3 frases. "
-        "Você tem acesso a busca na web -- use-a pra procurar a ficha técnica, manual "
-        "ou página oficial do FABRICANTE do produto abaixo (não do próprio Mercado "
-        "Livre nem de lojas revendedoras -- a fonte tem que ser o fabricante). "
-        "Baseie a resposta SOMENTE no que encontrar no site oficial do fabricante -- "
-        "nunca invente especificação, compatibilidade, cor, tamanho, voltagem ou "
-        "qualquer dado que não esteja explicitamente lá. Se não encontrar o site do "
-        "fabricante, se o produto exato não bater com o que achou, ou se a informação "
-        "encontrada não for suficiente pra responder com segurança, responda EXATA e "
-        f"SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n"
-        "Se a pergunta for sobre COMPATIBILIDADE com um modelo/veículo específico e o "
-        "fabricante não citar exatamente esse modelo, também responda só "
-        f"{SINALIZADOR_SEM_CONTEXTO}.\n" + REGRAS_DE_ESCRITA + "\n\n"
-        f"--- PRODUTO: {identificador} ---"
+        f"em português do Brasil, {config_ia.estilo()}. "
+        "Você tem acesso a busca na web. Procure a informação deste produto EXATO (mesma marca e "
+        f"modelo) usando {_FONTES_DO_DEGRAU[degrau]} "
+        "Nunca use como fonte comentários, avaliações, perguntas de outros compradores ou fóruns. "
+        + ("Só responda se pelo menos DUAS fontes diferentes disserem a mesma coisa. " if duas else "")
+        + "Nunca invente especificação, compatibilidade, cor, tamanho, voltagem ou qualquer dado "
+        "que não esteja explicitamente na fonte. Se não achar nessas fontes, se o produto exato não "
+        "bater com o que achou, ou se a informação não for suficiente pra responder com segurança, "
+        f"responda EXATA e SOMENTE com o texto: {SINALIZADOR_SEM_CONTEXTO}\n"
+        "Se a pergunta for sobre COMPATIBILIDADE com um modelo/veículo específico e a fonte não "
+        f"citar exatamente esse modelo, também responda só {SINALIZADOR_SEM_CONTEXTO}.\n"
+        + REGRAS_DE_ESCRITA + "\n\n"
+        f"--- PRODUTO: {identificador} ---" + detalhes
     )
-
+    parametros = dict(
+        max_tokens=1024,
+        system=prompt_sistema,
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": cfg["buscas_por_degrau"]}],
+        messages=[{"role": "user", "content": pergunta_texto}],
+    )
+    modelo = config_ia.modelo_pesquisa(CLAUDE_MODEL_PRE_VENDA)
     try:
-        resposta = cliente.messages.create(
-            model=CLAUDE_MODEL_PRE_VENDA,
-            max_tokens=500,
-            system=prompt_sistema,
-            tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}],
-            messages=[{"role": "user", "content": pergunta_texto}],
-        )
+        resposta = cliente.messages.create(model=modelo, **parametros)
     except Exception as exc:
-        logger.error("Falha ao chamar a API do Claude pra busca no site do fabricante: %s", exc)
-        return None
-
-    # Só o texto final (sem o "raciocínio" da busca), limpo e conferido.
+        if modelo == CLAUDE_MODEL_PRE_VENDA:
+            logger.error("Falha na pesquisa na internet (degrau %s): %s", degrau, exc)
+            return None
+        # Modelo "mais preciso" indisponível (nome errado, conta sem acesso...): tenta
+        # com o modelo padrão, pra pesquisa nunca parar por causa disso.
+        logger.warning("Modelo de pesquisa %s falhou (%s) -- tentando com %s", modelo, exc, CLAUDE_MODEL_PRE_VENDA)
+        try:
+            resposta = cliente.messages.create(model=CLAUDE_MODEL_PRE_VENDA, **parametros)
+        except Exception as exc2:
+            logger.error("Falha na pesquisa na internet (degrau %s): %s", degrau, exc2)
+            return None
     return resposta_segura(_texto_final(resposta))
+
+
+def pesquisar_na_internet(pergunta_texto: str, titulo_produto: str | None, sku: str | None,
+                          dados_produto: str | None = None) -> tuple[str | None, str | None]:
+    """
+    Pesquisa em ESCADA (ver Administração › Calibrar IA): tenta os degraus
+    ligados, na ordem, e para no primeiro que responder com segurança.
+    Devolve (resposta, "2 · manual em PDF") ou (None, None).
+
+    Mais arriscado que o manual próprio -- por isso quem chama sempre marca a
+    resposta como "precisa_auditoria" (⚠ revisar).
+    """
+    from app import config_ia
+    if not titulo_produto:
+        return None, None  # sem nome/modelo do produto, não dá pra pesquisar direito
+    cliente = _obter_cliente()
+    if cliente is None:
+        return None, None
+    identificador = f"{titulo_produto}" + (f" (SKU/código: {sku})" if sku else "")
+    # Marca/modelo da ficha do anúncio ajudam a achar o produto EXATO.
+    detalhes = f"\n--- DADOS DO PRODUTO (do anúncio) ---\n{dados_produto}" if dados_produto else ""
+    for degrau in config_ia.degraus_ativos():
+        texto = _pesquisar_degrau(cliente, degrau, pergunta_texto, identificador, detalhes)
+        if texto:
+            return texto, config_ia.NOME_DEGRAU[degrau]
+    return None, None
+
+
+def buscar_resposta_no_site_fabricante(pergunta_texto: str, titulo_produto: str | None, sku: str | None,
+                                       dados_produto: str | None = None) -> str | None:
+    """Compatibilidade com o código antigo: só o texto da pesquisa em escada."""
+    return pesquisar_na_internet(pergunta_texto, titulo_produto, sku, dados_produto)[0]
 
 
 def escolher_resposta_padrao(pergunta_texto: str, candidatas: list[dict]) -> int | None:
@@ -348,8 +396,8 @@ def responder_com_dados_do_anuncio(pergunta_texto: str, ficha_anuncio: str) -> s
         return None
 
     prompt_sistema = (
-        "Você responde perguntas de pré-venda de um anúncio no Mercado Livre, num tom cordial "
-        "e direto, em no máximo 2-3 frases, começando com 'Olá!'. Use APENAS os DADOS DO "
+        f"Você responde perguntas de pré-venda de um anúncio no Mercado Livre, {_estilo()}, "
+        "começando com 'Olá!'. Use APENAS os DADOS DO "
         "ANÚNCIO abaixo. Regras:\n"
         "- Cor, tamanho, voltagem ou modelo à venda: só os que aparecem nas VARIAÇÕES como "
         "disponível (ou no título/ficha, se o anúncio não tiver variações).\n"

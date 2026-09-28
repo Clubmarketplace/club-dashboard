@@ -150,6 +150,16 @@ class Pergunta(Base):
     respondida_em = Column(DateTime, nullable=True)
     respondida_por = Column(String, nullable=True)  # nome do atendente (só quando a equipe respondeu pela nossa tela)
 
+    # Revisão das respostas da nossa IA marcadas "revisar" (ficha do anúncio,
+    # manual ou internet): "certa" | "corrigida" | "errada". A resposta que o
+    # cliente recebeu não muda (o ML não deixa editar); a revisão ensina o banco.
+    revisao = Column(String, nullable=True)
+    revisado_por = Column(String, nullable=True)
+    revisado_em = Column(DateTime, nullable=True)
+    resposta_corrigida = Column(Text, nullable=True)
+    # De onde a pesquisa na internet tirou a resposta (ex.: "2 · manual em PDF").
+    fonte_detalhe = Column(String, nullable=True)
+
     conta = relationship("Conta")
 
 
@@ -475,3 +485,32 @@ class RespostaPadrao(Base):
     criado_por = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+
+class ConfigIA(Base):
+    """
+    Ajustes da nossa IA feitos na tela "Administração › Calibrar IA".
+    Uma linha por ajuste (chave -> valor em JSON). Ajuste sem linha aqui usa
+    o valor padrão de app/config_ia.py.
+    """
+
+    __tablename__ = "config_ia"
+
+    chave = Column(String, primary_key=True)
+    valor = Column(Text, nullable=False)  # JSON
+    atualizado_por = Column(String, nullable=True)
+    atualizado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class HistoricoConfigIA(Base):
+    """Quem mudou qual ajuste da IA, de quê para quê e quando."""
+
+    __tablename__ = "historico_config_ia"
+
+    id = Column(Integer, primary_key=True, index=True)
+    chave = Column(String, nullable=False)
+    valor_antigo = Column(Text, nullable=True)
+    valor_novo = Column(Text, nullable=True)
+    alterado_por = Column(String, nullable=True)
+    alterado_em = Column(DateTime, default=datetime.utcnow, index=True)

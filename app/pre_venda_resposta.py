@@ -21,11 +21,12 @@ logger = logging.getLogger(__name__)
 
 
 def janela_ia_ml_min() -> int:
-    """Minutos que a pergunta espera a IA do ML antes da nossa IA agir (0 = não espera)."""
-    try:
-        return max(0, min(60, int(os.getenv("JANELA_IA_ML_MIN", "3"))))
-    except ValueError:
-        return 3
+    """
+    Minutos que a pergunta espera a IA do ML antes da nossa IA agir (0 = não espera).
+    Vem de Administração › Calibrar IA (padrão: variável JANELA_IA_ML_MIN, ou 3).
+    """
+    from app import config_ia
+    return config_ia.obter()["janela_ml_min"]
 
 
 def responder_com_nossa_ia(pergunta: Pergunta, access_token: str, db) -> str:
@@ -39,6 +40,13 @@ def responder_com_nossa_ia(pergunta: Pergunta, access_token: str, db) -> str:
     # Desconto, troca, defeito, pedido já feito... sempre com a equipe --
     # a nossa IA nunca responde esses assuntos, nem se achar resposta.
     if assunto_exige_humano(pergunta.texto or ""):
+        pergunta.status = "fila_humana"
+        db.commit()
+        return "fila_humana"
+
+    # Nossa IA pausada em Administração › Calibrar IA: tudo vai direto pra equipe.
+    from app import config_ia
+    if not config_ia.obter()["ia_ativa"]:
         pergunta.status = "fila_humana"
         db.commit()
         return "fila_humana"
@@ -75,6 +83,7 @@ def responder_com_nossa_ia(pergunta: Pergunta, access_token: str, db) -> str:
     pergunta.camada_resolvida = decisao["camada"]
     pergunta.resposta_enviada = decisao["resposta"]
     pergunta.precisa_auditoria = decisao.get("precisa_auditoria", False)
+    pergunta.fonte_detalhe = decisao.get("fonte_detalhe")
     pergunta.respondida_em = datetime.utcnow()
     db.add(AcaoRegistrada(
         conta_id=pergunta.conta_id,

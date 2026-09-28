@@ -46,6 +46,11 @@ _COLUNAS_ADICIONAIS = {
         "skus_anuncio": "VARCHAR",
         "titulo_anuncio": "VARCHAR",
         "respondida_por": "VARCHAR",
+        "revisao": "VARCHAR",
+        "revisado_por": "VARCHAR",
+        "revisado_em": "TIMESTAMP",
+        "resposta_corrigida": "TEXT",
+        "fonte_detalhe": "VARCHAR",
     },
     "solicitacoes_cancelamento": {
         "origem": "VARCHAR",
