@@ -79,15 +79,32 @@
         <section class="cmx-tabela-secao">
           <h2>Progresso de autorização <span id="progresso-contador" style="color: var(--cmx-texto-suave); font-weight: 400;"></span></h2>
           <p class="cmx-grafico-nota">
-            Lista de empresas da Central Financeira (dados/empresas.txt) -- atualize rodando
-            <code>python -m app.importar_empresas</code> depois de editar o arquivo.
+            Empresas do Club e se já autorizaram o Mercado Livre. Empresa nova: clique em
+            <strong>+ Incluir empresa</strong> e depois em <strong>Gerar link</strong> na linha dela.
           </p>
+          <button type="button" id="btn-incluir-empresa" class="cmx-botao-primario" style="margin-bottom:12px;">+ Incluir empresa</button>
+          <div id="form-empresa-box" style="display:none; margin-bottom:16px; padding:16px; border:1px solid var(--cmx-borda); border-radius:12px; background:var(--cmx-bg);">
+            <form id="form-empresa" style="display:flex; flex-direction:column; gap:12px;">
+              <label style="display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600;">Nome da empresa
+                <input type="text" id="empresa-nome" maxlength="80" required autocomplete="off" placeholder="Como está na Central Financeira (ex.: CASA DAS FERRAMENTAS)" style="padding:9px 12px; border-radius:8px; border:1px solid var(--cmx-borda); font-size:14px; max-width:420px;" />
+              </label>
+              <label style="display:flex; flex-direction:column; gap:6px; font-size:13px; font-weight:600;">Observação (opcional)
+                <input type="text" id="empresa-obs" maxlength="200" autocomplete="off" placeholder="Ex.: entrou em outubro · responsável: Fulano" style="padding:9px 12px; border-radius:8px; border:1px solid var(--cmx-borda); font-size:14px; max-width:420px;" />
+              </label>
+              <p class="cmx-grafico-nota" id="empresa-aviso" style="display:none; margin:0;"></p>
+              <div style="display:flex; gap:8px;">
+                <button type="submit" class="cmx-botao-primario" id="btn-salvar-empresa">Incluir na lista</button>
+                <button type="button" class="cmx-botao-secundario" id="btn-cancelar-empresa">Cancelar</button>
+              </div>
+            </form>
+          </div>
           <table class="cmx-tabela" id="tabela-progresso">
             <thead>
               <tr>
                 <th>Empresa</th>
                 <th>Status</th>
                 <th>Autorizada em</th>
+                <th></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -133,7 +150,7 @@
   </div>
 
   <script>window.CMX_PAPEL = {{ (usuario_logado.papel if usuario_logado else "")|tojson }};</script>
-  <script src="/static/contas.js?v=2"></script>
+  <script src="/static/contas.js?v=4"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
