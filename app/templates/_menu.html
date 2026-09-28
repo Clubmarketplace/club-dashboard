@@ -67,6 +67,7 @@
   {% call grupo("pre-venda", "Pré-venda", ["/pre-venda", "/respostas-padrao", "/manuais"]) %}
     {{ item("/pre-venda", "Perguntas (fila)") }}
     {{ item("/respostas-padrao", "Respostas padrão") }}
+    {{ item("/painel-tv/geral?revisar=1", "Revisar respostas da IA", nova_aba=true) }}
     {% if not _restrito %}{{ item("/manuais", "Manuais") }}{% endif %}
   {% endcall %}
 
@@ -95,8 +96,9 @@
   {% endcall %}
 
   {% if not _restrito %}
-    {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook"]) %}
+    {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook", "/calibrar-ia"]) %}
       {{ item("/usuarios", "Operadores") }}
+      {{ item("/calibrar-ia", "Calibrar IA") }}
       {{ item("/eventos-webhook", "Eventos do Webhook") }}
       <a class="cmx-nav-item cmx-nav-subitem cmx-nav-item--em-breve" href="#" aria-disabled="true">
         Relatório por conta <span class="cmx-selo-em-breve">em breve</span>

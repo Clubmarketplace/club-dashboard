@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Calibrar IA</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    /* Tela "Calibrar IA" -- estilos só desta página (prefixo ci-). */
+    .ci-grade { display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:16px; align-items:start; }
+    .ci-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:18px 20px; display:flex; flex-direction:column; gap:12px; }
+    .ci-card h2 { margin:0; font-size:16px; }
+    .ci-card .ci-sub { margin:-6px 0 0; font-size:13px; color:var(--cmx-texto-suave); }
+    .ci-linha { display:flex; align-items:flex-start; gap:12px; padding:9px 0; border-top:1px solid #eef1f4; }
+    .ci-linha:first-of-type { border-top:none; }
+    .ci-linha label { flex:1; cursor:pointer; font-size:14px; }
+    .ci-linha label small { display:block; color:var(--cmx-texto-suave); font-size:12.5px; margin-top:2px; line-height:1.35; }
+    .ci-linha input[type="checkbox"] { width:18px; height:18px; margin-top:2px; accent-color:#1b2430; cursor:pointer; flex-shrink:0; }
+    .ci-linha input:disabled { cursor:not-allowed; }
+    .ci-num { width:26px; height:26px; border-radius:50%; background:#eef4fb; color:#1f3b57; font-weight:700; font-size:13px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .ci-campo { display:flex; flex-direction:column; gap:6px; font-size:14px; }
+    .ci-campo select { height:38px; border:1px solid #d5dbe1; border-radius:9px; padding:0 10px; font:14px Inter,sans-serif; max-width:320px; }
+    .ci-opcoes { display:flex; gap:8px; flex-wrap:wrap; }
+    .ci-opcao { border:1px solid #d5dbe1; border-radius:10px; padding:9px 12px; cursor:pointer; font-size:13.5px; background:#fff; }
+    .ci-opcao input { margin-right:6px; accent-color:#1b2430; }
+    .ci-opcao small { display:block; color:var(--cmx-texto-suave); font-size:12px; margin-top:2px; }
+    .ci-proibido { font-size:12.5px; color:#96341c; background:#fdf3f0; border:1px solid #f0c9bd; border-radius:9px; padding:8px 10px; }
+    .ci-status { display:flex; align-items:center; gap:14px; }
+    .ci-sw { width:52px; height:30px; border-radius:15px; border:none; position:relative; cursor:pointer; flex-shrink:0; }
+    .ci-sw span { position:absolute; top:4px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .15s; }
+    .ci-barra { position:sticky; bottom:0; margin-top:16px; background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:12px 16px; display:flex; align-items:center; gap:12px; justify-content:space-between; box-shadow:0 -6px 18px rgba(0,0,0,.05); }
+    .ci-btn { height:40px; padding:0 18px; border-radius:9px; border:1px solid #1b2430; background:#1b2430; color:#fff; font:600 14px Inter,sans-serif; cursor:pointer; }
+    .ci-btn:disabled { opacity:.5; cursor:default; }
+    .ci-btn-claro { background:#fff; color:#1b2430; border-color:#d5dbe1; }
+    .ci-aviso { font-size:13.5px; border-radius:10px; padding:10px 12px; display:none; margin:0 0 14px; }
+    .ci-hist { width:100%; border-collapse:collapse; font-size:13px; }
+    .ci-hist th, .ci-hist td { text-align:left; padding:8px 10px; border-top:1px solid #eef1f4; vertical-align:top; }
+    .ci-hist th { color:#5b6776; font-size:12px; text-transform:uppercase; letter-spacing:.04em; border-top:none; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+      <header class="cmx-topbar">
+        <div>
+          <h1>Calibrar IA</h1>
+          <p class="cmx-subtitulo">Como a nossa IA responde as perguntas de pré-venda. As mudanças valem em até 30 segundos e ficam registradas no histórico.</p>
+        </div>
+      </header>
+
+      <main>
+        <p class="ci-aviso" id="ci-aviso" role="status"></p>
+        <div class="ci-grade">
+          <section class="ci-card" aria-labelledby="t-status">
+            <h2 id="t-status">Nossa IA</h2>
+            <div class="ci-status">
+              <button type="button" class="ci-sw" id="ci-ativa" role="switch" aria-checked="true" aria-label="Nossa IA ligada"><span></span></button>
+              <div><b id="ci-ativa-txt">Ligada</b><div class="ci-sub" id="ci-ativa-info" style="margin:2px 0 0"></div></div>
+            </div>
+            <p class="ci-sub" style="margin:0">Pausada, todas as perguntas que a IA do ML não responder vão direto para a equipe.</p>
+            <div class="ci-campo">
+              <b>A IA do ML sempre responde primeiro</b>
+              <span class="ci-sub" style="margin:0">A nossa IA só entra <b id="ci-janela-txt">3 minutos</b> depois da pergunta chegar, se a IA do ML não tiver respondido. Esse tempo é fixo.</span>
+            </div>
+          </section>
+
+          <section class="ci-card" aria-labelledby="t-fontes">
+            <h2 id="t-fontes">Onde a nossa IA procura a resposta</h2>
+            <p class="ci-sub">Nesta ordem. Parou na primeira que responde com segurança.</p>
+            <div>
+              <div class="ci-linha"><input type="checkbox" checked disabled id="f-banco" /><label for="f-banco">O que a equipe já respondeu <small>Sempre ligado: respostas dos operadores e revisões, por produto, em todas as contas.</small></label></div>
+              <div class="ci-linha"><input type="checkbox" id="f-padrao" data-chave="fonte_respostas_padrao" /><label for="f-padrao">Respostas padrão <small>Nota fiscal, prazo, garantia… cadastradas pela equipe.</small></label></div>
+              <div class="ci-linha"><input type="checkbox" id="f-anuncio" data-chave="fonte_dados_anuncio" /><label for="f-anuncio">Ficha e descrição do anúncio <small>Sai marcada "⚠ revisar".</small></label></div>
+              <div class="ci-linha"><input type="checkbox" id="f-manual" data-chave="fonte_manuais" /><label for="f-manual">Manuais cadastrados <small>PDFs enviados em Pré-venda › Manuais. Sai marcada "⚠ revisar".</small></label></div>
+              <div class="ci-linha"><input type="checkbox" id="f-internet" data-chave="fonte_internet" /><label for="f-internet">Pesquisa na internet <small>Em escada, conforme o quadro ao lado. Sai marcada "⚠ revisar". Nunca usada para compatibilidade com veículo.</small></label></div>
+            </div>
+          </section>
+
+          <section class="ci-card" aria-labelledby="t-escada">
+            <h2 id="t-escada">Pesquisa na internet (escada)</h2>
+            <p class="ci-sub">A IA tenta os degraus ligados, na ordem, e para no primeiro que responder com segurança. Quanto maior o número, mais ela acha, mas maior a chance de erro.</p>
+            <div id="ci-degraus"></div>
+            <div class="ci-proibido">Sempre proibido: comentários, avaliações, perguntas de outros compradores e fóruns.</div>
+            <div class="ci-linha" style="border-top:none; padding-top:0"><input type="checkbox" id="ci-duas" data-chave="duas_fontes" /><label for="ci-duas">A partir do degrau 3, só responder se <b>duas fontes</b> disserem a mesma coisa</label></div>
+            <div class="ci-campo">
+              <label for="ci-buscas"><b>Buscas por degrau</b></label>
+              <select id="ci-buscas"></select>
+              <span class="ci-sub" style="margin:0">Cada busca tem custo (cerca de US$ 0,01). Só é gasta quando os degraus anteriores não resolveram.</span>
+            </div>
+            <div class="ci-campo">
+              <b>Modelo da pesquisa</b>
+              <div class="ci-opcoes" role="radiogroup" aria-label="Modelo da pesquisa">
+                <label class="ci-opcao"><input type="radio" name="modelo" value="preciso" />Mais preciso<small>Entende melhor manuais longos. Custa mais por pesquisa.</small></label>
+                <label class="ci-opcao"><input type="radio" name="modelo" value="economico" />Econômico<small>O mesmo modelo das outras etapas.</small></label>
+              </div>
+            </div>
+          </section>
+
+          <section class="ci-card" aria-labelledby="t-estilo">
+            <h2 id="t-estilo">Jeito de responder</h2>
+            <p class="ci-sub">Vale para as respostas que a IA escreve (anúncio, manual e internet). Respostas padrão e da equipe saem como foram escritas.</p>
+            <div class="ci-campo">
+              <b>Tom</b>
+              <div class="ci-opcoes" role="radiogroup" aria-label="Tom">
+                <label class="ci-opcao"><input type="radio" name="tom" value="cordial" />Cordial<small>"Olá! Sim, acompanha…"</small></label>
+                <label class="ci-opcao"><input type="radio" name="tom" value="profissional" />Profissional<small>Mais formal e objetivo.</small></label>
+                <label class="ci-opcao"><input type="radio" name="tom" value="direto" />Direto<small>Curto e simples.</small></label>
+              </div>
+            </div>
+            <div class="ci-campo">
+              <b>Tamanho</b>
+              <div class="ci-opcoes" role="radiogroup" aria-label="Tamanho">
+                <label class="ci-opcao"><input type="radio" name="tamanho" value="curta" />Curta<small>1 a 2 frases</small></label>
+                <label class="ci-opcao"><input type="radio" name="tamanho" value="normal" />Normal<small>2 a 3 frases</small></label>
+                <label class="ci-opcao"><input type="radio" name="tamanho" value="detalhada" />Detalhada<small>4 a 5 frases</small></label>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="ci-barra">
+          <span class="ci-sub" style="margin:0" id="ci-mudancas">Nenhuma alteração.</span>
+          <span style="display:flex; gap:8px;">
+            <button type="button" class="ci-btn ci-btn-claro" id="ci-desfazer" disabled>Desfazer</button>
+            <button type="button" class="ci-btn" id="ci-salvar" disabled>Salvar ajustes</button>
+          </span>
+        </div>
+
+        <section class="ci-card" style="margin-top:16px" aria-labelledby="t-hist">
+          <h2 id="t-hist">Histórico de alterações</h2>
+          <div style="overflow-x:auto"><table class="ci-hist"><thead><tr><th>Quando</th><th>Quem</th><th>Ajuste</th><th>Antes</th><th>Depois</th></tr></thead><tbody id="ci-hist"><tr><td colspan="5">Carregando…</td></tr></tbody></table></div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/calibrar-ia.js?v=2"></script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>

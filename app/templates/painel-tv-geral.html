@@ -139,6 +139,16 @@
   .g-quem { font-weight:600; }
   .gr-ml .g-quem { color:var(--ml); } .gr-ia .g-quem { color:var(--ia); } .gr-equipe .g-quem { color:var(--equipe); } .gr-pendente .g-quem { color:var(--pend); }
   .g-revisar { color:var(--equipe); }
+  /* Revisão das respostas da nossa IA */
+  .pill-revisar { height:32px; padding:0 14px; border-radius:999px; border:1px solid #6b4a12; background:#2c2110; color:#ffd48a; font:600 13px "Space Grotesk",sans-serif; cursor:pointer; }
+  .pill-revisar:hover { background:#3a2b14; }
+  .pill-revisar[hidden] { display:none; }
+  .g-rev { display:flex; flex-wrap:wrap; gap:8px; align-items:center; border-top:1px dashed var(--line); padding-top:9px; }
+  .g-rev .nota { flex-basis:100%; }
+  .g-btn.certa { border-color:#1f6b4b; color:#8ff0c4; } .g-btn.errada { border-color:#6b2a26; color:#ffb3ad; }
+  .g-revisado { font-size:12.5px; font-weight:600; }
+  .g-revisado.certa { color:var(--ia); } .g-revisado.corrigida { color:#8fc7ff; } .g-revisado.errada { color:var(--pend); }
+  .g-r.corrigida::before { content:"Corrigida para: "; }
   .g-btn { height:36px; padding:0 14px; border-radius:9px; border:1px solid var(--line); background:#1c2630; color:var(--text); font:600 13px "Space Grotesk",sans-serif; cursor:pointer; }
   .g-btn.primario { background:var(--ia); border-color:var(--ia); color:#062015; }
   .g-btn:disabled { opacity:.6; cursor:default; }
@@ -161,6 +171,7 @@
     </div>
   </div>
   <div class="controles">
+    <button type="button" id="aviso-revisar" class="pill-revisar" hidden data-escopo="revisar" title="Respostas da nossa IA que ainda precisam ser conferidas">⚠ <span id="aviso-revisar-n">0</span> para revisar</button>
     <select id="filtro-conta" aria-label="Filtrar por conta"><option value="">Todas as contas</option></select>
     <span class="seg" id="filtro-periodo"><button data-v="hoje">Hoje</button><button data-v="7">7 dias</button><button data-v="30">30 dias</button><button data-v="datas">Datas</button></span>
     <span class="datas" id="caixa-datas"><input type="date" id="data-de" aria-label="De" /> até <input type="date" id="data-ate" aria-label="Até" /></span>
@@ -388,6 +399,11 @@
     c = comparar(ind.tempo_medio_equipe_min, ind.tempo_medio_equipe_min_anterior, false, formatarMin);
     $("k-tempo-comp").textContent = c.texto; $("k-tempo-comp").className = "comp " + c.classe;
 
+    // Aviso de respostas da nossa IA esperando revisão (qualquer data)
+    const nRev = ind.para_revisar || 0;
+    $("aviso-revisar").hidden = !nRev;
+    $("aviso-revisar-n").textContent = nRev;
+
     $("k-pend").textContent = ind.pendentes_agora;
     // "clicavel" fica sempre: é o que mostra a mãozinha (a cor muda conforme a espera)
     $("k-pend").className = "valor clicavel " + (ind.contas_criticas ? "ruim" : ind.pendentes_agora ? "aten" : "bom");
@@ -484,7 +500,15 @@
         <span>chegou ${horaCurta(q.recebida_em)}</span>${tempo ? `<span>${tempo}</span>` : ""}</div>
       <div class="g-p">${escapar(q.texto)}</div>
       ${q.resposta ? `<div class="g-r">${escapar(q.resposta)}</div>` : ""}
+      ${q.revisao === "corrigida" && q.resposta_corrigida ? `<div class="g-r corrigida">${escapar(q.resposta_corrigida)}</div>` : ""}
       <div class="g-info">${produto ? `<span>${escapar(produto)}</span>` : ""}${q.sku && q.titulo ? `<span class="mono">${escapar(q.sku)}</span>` : ""}</div>
+      ${q.revisao ? `<div class="g-revisado ${q.revisao}">${({ certa: "✓ Revisada: está certa", corrigida: "✏️ Corrigida", errada: "✗ Marcada como errada" })[q.revisao] || "Revisada"}${q.revisado_por ? " por " + escapar(q.revisado_por) : ""}</div>` : ""}
+      ${q.revisar && PODE_RESPONDER ? `<div class="g-rev" data-revbox="${q.id}">
+        <button type="button" class="g-btn certa" data-rev="certa" data-id="${q.id}">✓ Está certa</button>
+        <button type="button" class="g-btn" data-rev="abrir-correcao" data-id="${q.id}">✏️ Corrigir</button>
+        <button type="button" class="g-btn errada" data-rev="errada" data-id="${q.id}">✗ Está errada</button>
+        <span class="nota">A revisão ensina a nossa IA: certa ou corrigida, a resposta vale para as próximas perguntas deste produto em todas as contas.</span>
+      </div>` : ""}
       ${q.respondivel && PODE_RESPONDER ? `<div class="g-linha"><span></span><button type="button" class="g-btn primario" data-responder="${q.id}">Responder</button></div>` : ""}
     </div>`;
   }
@@ -579,6 +603,46 @@
     }
   }
 
+  // ---------- Revisão das respostas da nossa IA ----------
+  function abrirCorrecao(id) {
+    const q = itensAbertos[id];
+    const caixa = document.querySelector(`[data-revbox="${id}"]`);
+    if (!q || !caixa) return;
+    caixa.innerHTML = `
+      <textarea maxlength="2000" aria-label="Resposta correta" style="width:100%; min-height:90px; resize:vertical; border-radius:9px; border:1px solid var(--line); background:var(--bg); color:var(--text); padding:10px 12px; font:14px 'Space Grotesk',sans-serif;"></textarea>
+      <div class="g-msg" hidden></div>
+      <div class="g-linha" style="width:100%;"><span class="nota">Escreva como deve ser respondido das próximas vezes (sem links).</span>
+        <span style="display:flex; gap:8px;"><button type="button" class="g-btn" data-rev="cancelar" data-id="${id}">Cancelar</button><button type="button" class="g-btn primario" data-rev="corrigir" data-id="${id}">Salvar correção</button></span></div>`;
+    const campo = caixa.querySelector("textarea");
+    campo.value = q.resposta || "";
+    campo.focus();
+  }
+
+  async function enviarRevisao(id, acao) {
+    const caixa = document.querySelector(`[data-revbox="${id}"]`);
+    const corpo = { acao };
+    if (acao === "corrigir") corpo.texto = (caixa.querySelector("textarea").value || "").trim();
+    caixa.querySelectorAll("button").forEach(b => b.disabled = true);
+    try {
+      const r = await fetch(`/api/pre-venda/${id}/revisao`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo),
+      });
+      const dados = await r.json().catch(() => ({}));
+      if (r.status === 409) { mostrarToast("Essa resposta já tinha sido revisada — lista atualizada."); }
+      else if (!r.ok) { throw new Error(dados.detail || ("status " + r.status)); }
+      else {
+        mostrarToast(acao === "errada" ? "✗ Marcada como errada — não vai para o banco"
+          : (dados.guardada_no_banco ? "✓ Revisada — a IA vai usar esta resposta nas próximas" : "✓ Revisada"));
+      }
+      abrirDetalhe({ ...consultaAberta }); atualizar();
+    } catch (erro) {
+      caixa.querySelectorAll("button").forEach(b => b.disabled = false);
+      const msg = caixa.querySelector(".g-msg");
+      if (msg) { msg.hidden = false; msg.className = "g-msg erro"; msg.textContent = "Não foi possível salvar: " + erro.message; }
+      else mostrarToast("Não foi possível salvar: " + erro.message);
+    }
+  }
+
   function mostrarToast(texto) {
     const t = document.createElement("div");
     t.className = "toast"; t.textContent = texto; document.body.appendChild(t);
@@ -598,11 +662,20 @@
     if (base.dataset.faixa) alvo.faixa = base.dataset.faixa;
     if (base.dataset.produto) { alvo.produto = base.dataset.produto; alvo.nome = base.dataset.nome; }
     if (alvo.escopo === "pendentes_agora") alvo.nome = "Pendentes agora";
+    if (alvo.escopo === "revisar") alvo.nome = "Para revisar";
     return alvo;
   }
   document.addEventListener("click", (e) => {
     if (e.target.closest("#gaveta")) {
       if (e.target.closest("[data-fechar]")) return fecharDetalhe();
+      const rv = e.target.closest("[data-rev]");
+      if (rv) {
+        const acao = rv.dataset.rev, id = rv.dataset.id;
+        if (acao === "abrir-correcao") abrirCorrecao(id);
+        else if (acao === "cancelar") abrirDetalhe({ ...consultaAberta });
+        else enviarRevisao(id, acao);
+        return;
+      }
       const b = e.target.closest("[data-responder],[data-enviar],[data-cancelar]");
       if (!b) return;
       if (b.dataset.responder) abrirResposta(b.dataset.responder);
@@ -639,6 +712,8 @@
   }
   atualizar();
   setInterval(atualizar, INTERVALO_MS);
+  // Link do menu "Revisar respostas da IA" (?revisar=1): já abre a lista
+  if (url.get("revisar")) abrirDetalhe({ escopo: "revisar", nome: "Para revisar" });
 </script>
 </body>
 </html>
