@@ -49,7 +49,7 @@ _NOMES_CAMADA = {
     "resposta_padrao": "resposta padrão",
     "dados_anuncio": "dados do anúncio",
     "manual_sku_ia": "manual",
-    "busca_site_fabricante": "site do fabricante",
+    "busca_site_fabricante": "internet",
     "politica_geral": "política geral",
 }
 
@@ -57,7 +57,10 @@ _NOMES_CAMADA = {
 def _origem(p: Pergunta) -> dict:
     """Quem respondeu, pros painéis: origem (ia|ml|equipe|outros), detalhe e se precisa revisar."""
     if p.camada_resolvida in CAMADAS_AUTOMATICAS:
-        return {"origem": "ia", "detalhe": _NOMES_CAMADA.get(p.camada_resolvida, ""), "revisar": bool(p.precisa_auditoria)}
+        detalhe = _NOMES_CAMADA.get(p.camada_resolvida, "")
+        if p.fonte_detalhe:  # degrau da pesquisa que respondeu (ex.: "internet · 2 · manual em PDF")
+            detalhe = f"{detalhe} · {p.fonte_detalhe}"
+        return {"origem": "ia", "detalhe": detalhe, "revisar": bool(p.precisa_auditoria)}
     if p.camada_resolvida == "manual":
         return {"origem": "equipe", "detalhe": p.respondida_por or "", "revisar": False}
     if p.status == "respondida_externamente":
@@ -543,6 +546,12 @@ def painel_resumo(
     if conta:
         pendentes_q = pendentes_q.filter(Pergunta.conta_id == (conta_filtrada.id if conta_filtrada else -1))
     pendentes = pendentes_q.all()
+    # Respostas da nossa IA ainda esperando revisão (qualquer data, mesmo filtro de conta).
+    revisar_q = db.query(Pergunta).filter(Pergunta.precisa_auditoria.is_(True))
+    if conta:
+        revisar_q = revisar_q.filter(Pergunta.conta_id == (conta_filtrada.id if conta_filtrada else -1))
+    para_revisar = revisar_q.count()
+
     contas_criticas = len({
         p.conta_id for p in pendentes
         if p.recebida_em and (agora - p.recebida_em).total_seconds() > 30 * 60
@@ -598,6 +607,7 @@ def painel_resumo(
             "tempo_medio_equipe_min": tempo_medio_equipe(atual),
             "tempo_medio_equipe_min_anterior": tempo_medio_equipe(anterior),
             "pendentes_agora": len(pendentes),
+            "para_revisar": para_revisar,
             "contas_criticas": contas_criticas,
             "perguntas_hoje": len(de_hoje),
             "perguntas_periodo": len(atual),
@@ -647,6 +657,9 @@ def _serializar_detalhe(p: Pergunta, agora: datetime) -> dict:
         "grupo": grupo,
         "detalhe": origem["detalhe"] if origem["origem"] == grupo else "",
         "revisar": origem["revisar"],
+        "revisao": p.revisao,
+        "revisado_por": p.revisado_por,
+        "resposta_corrigida": p.resposta_corrigida,
         "sku": p.sku,
         "item_id": p.item_id,
         "titulo": p.titulo_anuncio,
@@ -662,7 +675,7 @@ def _serializar_detalhe(p: Pergunta, agora: datetime) -> dict:
 @router.get("/painel-detalhe")
 def painel_detalhe(
     db: Session = Depends(get_db),
-    escopo: str = "hoje",          # hoje | periodo | dia | hora | produto | grafico | semana | pendentes_agora
+    escopo: str = "hoje",          # hoje | periodo | dia | hora | produto | grafico | semana | pendentes_agora | revisar
     grupo: str | None = None,      # ml | ia | equipe | pendente | outros (vários separados por vírgula); vazio = todos
     dia: str | None = None,        # AAAA-MM-DD (escopo=dia)
     hora: int | None = None,       # 0-23 (escopo=hora)
@@ -699,7 +712,12 @@ def painel_detalhe(
         consulta = consulta.filter(Pergunta.conta_id == conta_id)
 
     # Qual recorte de datas o clique representa.
-    if escopo == "pendentes_agora":
+    if escopo == "revisar":
+        # Respostas da nossa IA ainda marcadas "revisar" (de qualquer data).
+        consulta = consulta.filter(Pergunta.precisa_auditoria.is_(True))
+        titulo = "Respostas da nossa IA para revisar"
+        grupos = set()
+    elif escopo == "pendentes_agora":
         consulta = consulta.filter(Pergunta.status == "fila_humana")   # igual ao cartão "Pendentes agora"
         titulo = "Pendentes agora (esperando a equipe)"
         grupos = set()
@@ -775,3 +793,73 @@ def painel_detalhe(
         "mostrando": min(total, LIMITE_DETALHE),
         "contas": sorted(por_conta.values(), key=lambda b: (-b["total"], b["conta"].lower())),
     }
+
+
+# ---------------------------------------------------------------------------
+# Revisão das respostas da nossa IA marcadas "revisar".
+#   certa     -> tira a marca e guarda a resposta no banco do produto
+#   corrigir  -> tira a marca e guarda o texto CORRIGIDO no banco do produto
+#   errada    -> tira a marca e não guarda nada
+# A resposta que o comprador recebeu não muda (o Mercado Livre não permite
+# editar); a revisão serve pra nossa IA acertar nas próximas perguntas.
+# ---------------------------------------------------------------------------
+class Revisao(BaseModel):
+    acao: str
+    texto: str | None = None
+
+
+_ROTULO_REVISAO = {"certa": "certa", "corrigir": "corrigida", "errada": "errada"}
+
+
+@router.post("/{pergunta_id}/revisao")
+def revisar_resposta(pergunta_id: int, corpo: Revisao, request: Request, db: Session = Depends(get_db)):
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin", "supervisor", "atendente")):
+        raise HTTPException(status_code=403, detail="Seu perfil não pode revisar respostas.")
+    if corpo.acao not in _ROTULO_REVISAO:
+        raise HTTPException(status_code=400, detail="Ação inválida.")
+
+    pergunta = db.query(Pergunta).filter(Pergunta.id == pergunta_id).first()
+    if pergunta is None:
+        raise HTTPException(status_code=404, detail="Pergunta não encontrada.")
+    if not pergunta.precisa_auditoria:
+        raise HTTPException(status_code=409, detail="Essa resposta já foi revisada.")
+
+    texto_banco = None
+    if corpo.acao == "corrigir":
+        texto_banco = (corpo.texto or "").strip()
+        if not texto_banco:
+            raise HTTPException(status_code=400, detail="Escreva a resposta correta.")
+        if len(texto_banco) > 2000:
+            raise HTTPException(status_code=400, detail="Resposta muito longa (o Mercado Livre aceita até 2000 caracteres).")
+        pergunta.resposta_corrigida = texto_banco
+    elif corpo.acao == "certa":
+        texto_banco = (pergunta.resposta_enviada or "").strip() or None
+
+    pergunta.precisa_auditoria = False
+    pergunta.revisao = _ROTULO_REVISAO[corpo.acao]
+    pergunta.revisado_por = getattr(usuario, "nome_exibicao", None)
+    pergunta.revisado_em = datetime.utcnow()
+
+    # Mesma regra das respostas da equipe: entra no banco do produto (SKU, ou o
+    # código do anúncio sem SKU), menos assuntos que sempre exigem humano.
+    guardada = False
+    chave = chave_do_produto(pergunta.sku, pergunta.item_id)
+    if texto_banco and chave and not assunto_exige_humano(pergunta.texto or ""):
+        ja_existe = (
+            db.query(RespostaValidadaSku)
+            .filter(RespostaValidadaSku.sku == chave,
+                    RespostaValidadaSku.pergunta_exemplo == pergunta.texto,
+                    RespostaValidadaSku.resposta == texto_banco)
+            .first()
+        )
+        if not ja_existe:
+            db.add(RespostaValidadaSku(sku=chave, pergunta_exemplo=pergunta.texto, resposta=texto_banco))
+        guardada = True
+
+    db.add(AcaoRegistrada(
+        conta_id=pergunta.conta_id, tipo="resposta_ia_revisada", sku=pergunta.sku,
+        detalhe=f"Revisão: {pergunta.revisao} por {pergunta.revisado_por or '—'}",
+    ))
+    db.commit()
+    return {"status": "revisada", "revisao": pergunta.revisao, "guardada_no_banco": guardada}
