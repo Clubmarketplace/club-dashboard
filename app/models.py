@@ -43,6 +43,11 @@ class EmpresaPlanejada(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, unique=True, index=True, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
+    # Incluídas pela tela Contas (as antigas vieram do dados/empresas.txt):
+    plataformas = Column(String, nullable=True)   # "mercado_livre,shopee,..." (só informativo por enquanto)
+    observacao = Column(String, nullable=True)
+    criado_por = Column(String, nullable=True)
+    removida_em = Column(DateTime, nullable=True)  # saiu do Club: some das listas (o histórico fica)
 
 
 class Conta(Base):
