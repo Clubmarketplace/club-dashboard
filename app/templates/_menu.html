@@ -7,7 +7,7 @@
     - admin e supervisor: tudo;
     - atendente: Perguntas, Respostas padrão, Mensagens dos pedidos,
       Solicitações de cancelamento, Reputação das contas e Painéis de TV.
-  Grupos abrem/fecham com um clique; o grupo da tela atual já vem aberto.
+  Grupos em sanfona: só o grupo da tela atual vem aberto; abrir um fecha os outros.
 #}
 {% set _papel = usuario_logado.papel if usuario_logado else "" %}
 {% set _restrito = _papel == "atendente" %}
@@ -108,27 +108,22 @@
 </nav>
 
 <script>
-  /* Abre/fecha os grupos e lembra quais ficaram abertos (só neste navegador;
-     se o navegador bloquear o armazenamento, o menu funciona do mesmo jeito). */
+  /* Menu em "sanfona" (padrão dos sistemas maiores): ao abrir/atualizar a
+     página, fica aberto só o grupo da tela atual (o servidor já manda ele
+     aberto); abrir outro grupo fecha o que estava aberto. Não guarda nada no
+     navegador -- por isso o menu nunca volta "explodido". */
   (function () {
-    var CHAVE = "cmx-menu-grupos-abertos";
-    var abertos = [];
-    try { abertos = JSON.parse(localStorage.getItem(CHAVE) || "[]"); } catch (e) { abertos = []; }
-    document.querySelectorAll(".cmx-grupo").forEach(function (g) {
-      var botao = g.querySelector(".cmx-grupo-titulo");
-      var nome = g.getAttribute("data-grupo");
-      function aplicar(aberto) {
-        g.classList.toggle("aberto", aberto);
-        botao.setAttribute("aria-expanded", aberto ? "true" : "false");
-      }
-      // O grupo da tela atual sempre abre; os outros, como o usuário deixou.
-      if (!g.classList.contains("cmx-grupo--atual") && abertos.indexOf(nome) >= 0) aplicar(true);
-      botao.addEventListener("click", function () {
-        var agora = !g.classList.contains("aberto");
-        aplicar(agora);
-        abertos = abertos.filter(function (n) { return n !== nome; });
-        if (agora) abertos.push(nome);
-        try { localStorage.setItem(CHAVE, JSON.stringify(abertos)); } catch (e) { /* sem armazenamento: ignora */ }
+    try { localStorage.removeItem("cmx-menu-grupos-abertos"); } catch (e) { /* sem armazenamento: ignora */ }
+    var grupos = Array.prototype.slice.call(document.querySelectorAll(".cmx-grupo"));
+    function aplicar(g, aberto) {
+      g.classList.toggle("aberto", aberto);
+      g.querySelector(".cmx-grupo-titulo").setAttribute("aria-expanded", aberto ? "true" : "false");
+    }
+    grupos.forEach(function (g) {
+      g.querySelector(".cmx-grupo-titulo").addEventListener("click", function () {
+        var abrir = !g.classList.contains("aberto");
+        grupos.forEach(function (outro) { if (outro !== g) aplicar(outro, false); });
+        aplicar(g, abrir);
       });
     });
   })();

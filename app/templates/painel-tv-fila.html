@@ -153,6 +153,31 @@
   .g-msg.erro { display:block; background:var(--red-dim); color:#ffd0cc; }
   .g-msg.info { display:block; background:var(--blue-dim); color:#cfe6fa; }
   .toast { position:fixed; bottom:26px; left:50%; transform:translateX(-50%); background:var(--green); color:#062015; font-weight:600; padding:12px 18px; border-radius:10px; z-index:60; }
+  /* ---------- Celular (até 760 px): tudo em uma coluna, com rolagem ----------
+     Na TV e no computador nada muda: essas regras só valem em tela pequena. */
+  @media (max-width: 760px) {
+    html, body { height:auto; }
+    body { overflow:auto; padding:14px 14px 18px; }
+    header { align-items:flex-start; margin-bottom:12px; }
+    .marca .logo-club { height:38px; padding:5px 8px; }
+    h1 { font-size:18px; } .subtitulo { font-size:12px; }
+    .relogio { display:none; }  /* o celular já mostra a hora */
+    .resumo { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:10px; margin-bottom:12px; }
+    .resumo .item { padding:10px 12px; }
+    .resumo .item .valor { font-size:24px; }
+    .bolhas-bloco { padding:12px; }
+    .legenda { flex-wrap:wrap; gap:6px 12px; }
+    #bolhas { grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:10px; max-height:none; }
+    .bolha .b-nome { font-size:10.5px; } .bolha .b-tempo { font-size:14px; } .bolha .b-qtd, .b-origens { font-size:10px; }
+    #busca-conta { max-width:none; }
+    #fila { flex:none; overflow:visible; padding-right:0; }
+    .item-fila { flex-direction:column; align-items:stretch; padding:12px 14px; gap:10px; }
+    .if-texto { font-size:15px; }
+    .if-direita { justify-content:space-between; gap:12px; }
+    .if-tempo { font-size:18px; text-align:left; }
+    .gaveta { padding:18px 16px; }
+    .g-pergunta { font-size:16px; }
+  }
   @media (prefers-reduced-motion: reduce) {
     .bolha.critico { animation:none; }
   }
