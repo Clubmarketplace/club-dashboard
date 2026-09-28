@@ -19,28 +19,44 @@ async function carregarProgresso() {
   return resposta.json();
 }
 
+let PLATAFORMAS_OPCOES = {};
+
+function escaparHtml(t) {
+  return String(t ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
 function renderizarProgresso(dados) {
+  PLATAFORMAS_OPCOES = dados.plataformas_opcoes || {};
   document.getElementById("progresso-contador").textContent = `(${dados.autorizadas} de ${dados.total})`;
   const corpo = document.querySelector("#tabela-progresso tbody");
   corpo.innerHTML = "";
 
   if (dados.empresas.length === 0) {
     corpo.innerHTML = `
-      <tr><td colspan="3" style="text-align:center; color: var(--cmx-texto-suave);">
-        Nenhuma empresa na lista ainda -- edite dados/empresas.txt e rode o importador.
+      <tr><td colspan="4" style="text-align:center; color: var(--cmx-texto-suave);">
+        Nenhuma empresa na lista ainda -- clique em "+ Incluir empresa".
       </td></tr>`;
     return;
   }
 
-  dados.empresas.forEach((empresa) => {
+  // Pendentes primeiro (é o que falta fazer); dentro de cada grupo, por nome.
+  const ordenadas = [...dados.empresas].sort((a, b) => (a.autorizada - b.autorizada) || a.nome.localeCompare(b.nome, "pt-BR"));
+  ordenadas.forEach((empresa) => {
     const tr = document.createElement("tr");
+    // Verde = autorizada (em dia); laranja = pendente (falta fazer).
     const selo = empresa.autorizada
-      ? `<span class="cmx-selo cmx-selo-aberto">Autorizada</span>`
-      : `<span class="cmx-selo cmx-selo-encerrado">Pendente</span>`;
+      ? `<span class="cmx-selo cmx-selo-encerrado">Autorizada</span>`
+      : `<span class="cmx-selo cmx-selo-alerta">Pendente</span>`;
+    const nome = escaparHtml(empresa.nome);
+    const obs = empresa.observacao ? `<div style="font-size:12px; color:var(--cmx-texto-suave);">${escaparHtml(empresa.observacao)}</div>` : "";
     tr.innerHTML = `
-      <td>${empresa.nome}</td>
+      <td>${nome}${obs}</td>
       <td>${selo}</td>
       <td>${formatarData(empresa.conectada_em)}</td>
+      <td style="white-space:nowrap;">
+        ${empresa.autorizada ? "" : `<button type="button" data-gerar-link="${nome}" style="background:none; border:none; padding:0; font:inherit; font-size:13px; font-weight:600; color:var(--cmx-verde); text-decoration:underline; cursor:pointer;">Gerar link</button>`}
+        <button type="button" class="cmx-botao-link-perigo" data-remover-empresa="${empresa.id}" data-nome="${nome}" style="margin-left:10px;">Remover da lista</button>
+      </td>
     `;
     corpo.appendChild(tr);
   });
@@ -281,6 +297,73 @@ async function inicializar() {
   } catch (erro) {
     console.error(erro);
   }
+
+  // ---------- Incluir / remover empresa da lista ----------
+  const boxEmpresa = document.getElementById("form-empresa-box");
+  const avisoEmpresa = document.getElementById("empresa-aviso");
+  function avisarEmpresa(texto, erro) {
+    avisoEmpresa.textContent = texto;
+    avisoEmpresa.style.display = texto ? "block" : "none";
+    avisoEmpresa.style.color = erro ? "var(--cmx-rust)" : "var(--cmx-verde)";
+  }
+  document.getElementById("btn-incluir-empresa").addEventListener("click", () => {
+    avisarEmpresa("");
+    boxEmpresa.style.display = "block";
+    document.getElementById("empresa-nome").focus();
+  });
+  document.getElementById("btn-cancelar-empresa").addEventListener("click", () => {
+    boxEmpresa.style.display = "none";
+    document.getElementById("form-empresa").reset();
+  });
+  document.getElementById("form-empresa").addEventListener("submit", async (evento) => {
+    evento.preventDefault();
+    const nome = document.getElementById("empresa-nome").value.trim();
+    if (!nome) { avisarEmpresa("Informe o nome da empresa.", true); return; }
+    const plataformas = ["mercado_livre"];  // por enquanto só Mercado Livre, igual às empresas que já estão na lista
+    const botao = document.getElementById("btn-salvar-empresa");
+    botao.disabled = true;
+    try {
+      const r = await fetch("/auth/empresas", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome, plataformas, observacao: document.getElementById("empresa-obs").value.trim() }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `status ${r.status}`);
+      boxEmpresa.style.display = "none";
+      document.getElementById("form-empresa").reset();
+      renderizarProgresso(await carregarProgresso());
+      // Já deixa o link de autorização pronto pra copiar e mandar.
+      document.getElementById("input-apelido").value = d.nome;
+      await gerarLink();
+      mostrarAviso(`"${d.nome}" ${d.reativada ? "voltou para" : "incluída na"} lista. O link de autorização está pronto logo acima — copie e envie.`);
+      document.getElementById("conectar-aviso").classList.remove("cmx-aviso-erro");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (erro) {
+      avisarEmpresa("Não foi possível incluir: " + erro.message, true);
+    } finally {
+      botao.disabled = false;
+    }
+  });
+  document.getElementById("tabela-progresso").addEventListener("click", async (evento) => {
+    const gerar = evento.target.closest("[data-gerar-link]");
+    if (gerar) {
+      document.getElementById("input-apelido").value = gerar.dataset.gerarLink;
+      await gerarLink();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    const remover = evento.target.closest("[data-remover-empresa]");
+    if (!remover) return;
+    if (!confirm(`Remover "${remover.dataset.nome}" da lista do Club?\n\nEla some da lista e dos formulários. As contas conectadas e o histórico NÃO são apagados.`)) return;
+    try {
+      const r = await fetch(`/auth/empresas/${remover.dataset.removerEmpresa}/remover`, { method: "POST" });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || `status ${r.status}`);
+      renderizarProgresso(await carregarProgresso());
+    } catch (erro) {
+      mostrarAviso("Não foi possível remover: " + erro.message);
+    }
+  });
 
   async function gerarLink() {
     const apelido = document.getElementById("input-apelido").value.trim();
