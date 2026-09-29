@@ -401,6 +401,62 @@ class SolicitacaoEvento(Base):
     quando = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
+class AtendimentoReputacao(Base):
+    """
+    Atendimento de uma conta que entrou na zona de atenção da reputação
+    (tela "Reputação das contas"). Mesmo padrão das solicitações: alguém
+    ASSUME, pode passar pra outra pessoa, anota o que fez e CONCLUI.
+
+    Uma conta pode ter vários atendimentos ao longo do tempo (um por vez
+    aberto). Quem abre/fecha automaticamente é app/reputacao_atendimento.py
+    (sincronizar), a partir da classificação do termômetro.
+    """
+
+    __tablename__ = "atendimentos_reputacao"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    # "aberto" (na fila / com alguém) | "concluido" (tratado por alguém) |
+    # "encerrado" (saiu sozinho: a conta voltou a ficar em dia sem ninguém ter assumido)
+    status = Column(String, nullable=False, default="aberto", index=True)
+    aberto_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+    situacao_abertura = Column(String, nullable=True)   # "critico" | "atencao"
+    motivo_abertura = Column(Text, nullable=True)        # ex.: "Reclamações 2,4% de 1,0%"
+    metricas_abertura = Column(Text, nullable=True)      # JSON {chave: taxa em %} na hora em que entrou na fila
+
+    # Quem está com a conta agora (vazio = livre).
+    em_atendimento_por = Column(String, nullable=True)
+    em_atendimento_por_id = Column(Integer, nullable=True, index=True)
+    em_atendimento_desde = Column(DateTime, nullable=True)
+    assumido_primeiro_em = Column(DateTime, nullable=True)
+
+    concluido_por = Column(String, nullable=True)
+    concluido_por_id = Column(Integer, nullable=True)
+    concluido_em = Column(DateTime, nullable=True, index=True)
+    conclusao = Column(Text, nullable=True)              # o que foi feito (obrigatório ao concluir)
+    protocolo = Column(String, nullable=True)
+    situacao_conclusao = Column(String, nullable=True)   # situação da conta no momento da conclusão
+    encerrado_em = Column(DateTime, nullable=True)
+
+
+class AtendimentoReputacaoEvento(Base):
+    """
+    Histórico de cada atendimento de reputação (só acrescenta, nunca altera):
+    entrou_na_fila | reabriu | assumiu | assumiu_no_lugar | liberou | anotou |
+    concluiu | saiu_da_fila. Base do "tempo com cada pessoa" e do histórico da tela.
+    """
+
+    __tablename__ = "atendimento_reputacao_eventos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    atendimento_id = Column(Integer, ForeignKey("atendimentos_reputacao.id"), nullable=False, index=True)
+    tipo = Column(String, nullable=False)
+    usuario_id = Column(Integer, nullable=True)
+    usuario_nome = Column(String, nullable=True)
+    detalhe = Column(Text, nullable=True)
+    quando = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
 class Usuario(Base):
     """
     Conta de acesso ao painel interno. Três papéis:
