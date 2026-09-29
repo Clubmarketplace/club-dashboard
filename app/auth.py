@@ -91,6 +91,13 @@ def _valor_se_assinatura_valida(token: str) -> Optional[str]:
 # a TV fica ligada o dia inteiro e não tem ninguém pra digitar a senha.
 DURACAO_SESSAO_TV_SEGUNDOS = 60 * 60 * 24 * 30  # 30 dias
 
+# Sessão da extensão ClubMarketplaceX (token guardado em chrome.storage.local,
+# não em cookie do navegador). Também fica longa -- o seller não deveria
+# precisar logar de novo toda semana só pra extensão continuar calculando
+# margem; quem revoga o acesso é a desativação do usuário (ver
+# app/routers/cmx.py), não a expiração natural do token.
+DURACAO_SESSAO_CMX_SEGUNDOS = 60 * 60 * 24 * 30  # 30 dias
+
 
 def duracao_sessao(papel: Optional[str]) -> int:
     return DURACAO_SESSAO_TV_SEGUNDOS if papel == "tv" else DURACAO_SESSAO_SEGUNDOS
@@ -131,3 +138,20 @@ def usuario_atual(request: Request, db: Session = Depends(get_db)) -> Optional[U
 def papel_permite(usuario: Optional[Usuario], papeis_permitidos: tuple) -> bool:
     """Confere se o usuário (já logado) tem um dos papéis permitidos pra essa ação."""
     return usuario is not None and usuario.papel in papeis_permitidos
+
+
+def usuario_por_token(token: str, db: Session) -> Optional[Usuario]:
+    """
+    Igual a usuario_atual, mas para quando o token não vem no cookie do
+    navegador -- caso da extensão ClubMarketplaceX, que manda o token
+    assinado no cabeçalho "Authorization: Bearer ...". Reaproveita a
+    mesma verificação de assinatura/validade e o mesmo filtro
+    Usuario.ativo: se o usuário for desativado/removido no cadastro,
+    o próximo uso do token já para de funcionar aqui.
+    """
+    if not token:
+        return None
+    usuario_id = ler_usuario_id_da_sessao(token)
+    if not usuario_id:
+        return None
+    return db.query(Usuario).filter(Usuario.id == usuario_id, Usuario.ativo.is_(True)).first()

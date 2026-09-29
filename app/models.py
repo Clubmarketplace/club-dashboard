@@ -23,6 +23,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Boolean,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -43,11 +44,6 @@ class EmpresaPlanejada(Base):
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, unique=True, index=True, nullable=False)
     criado_em = Column(DateTime, default=datetime.utcnow)
-    # Incluídas pela tela Contas (as antigas vieram do dados/empresas.txt):
-    plataformas = Column(String, nullable=True)   # "mercado_livre,shopee,..." (só informativo por enquanto)
-    observacao = Column(String, nullable=True)
-    criado_por = Column(String, nullable=True)
-    removida_em = Column(DateTime, nullable=True)  # saiu do Club: some das listas (o histórico fica)
 
 
 class Conta(Base):
@@ -375,11 +371,6 @@ class SolicitacaoCancelamento(Base):
     sku = Column(String, nullable=True, index=True)
     produto_titulo = Column(String, nullable=True)
 
-    # Tipo da solicitação: "cancelamento" ou "reputacao" (pedido pra
-    # contestar/retirar um impacto de reputação no marketplace).
-    # Nulo = registro antigo, tratado como "cancelamento".
-    tipo = Column(String, nullable=True, index=True)
-
 
 class SolicitacaoEvento(Base):
     """
@@ -395,62 +386,6 @@ class SolicitacaoEvento(Base):
     solicitacao_id = Column(Integer, ForeignKey("solicitacoes_cancelamento.id"), nullable=False, index=True)
     # registrou | assumiu | assumiu_no_lugar | liberou | confirmou | confirmou_automatico
     tipo = Column(String, nullable=False, index=True)
-    usuario_id = Column(Integer, nullable=True)
-    usuario_nome = Column(String, nullable=True)
-    detalhe = Column(Text, nullable=True)
-    quando = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
-
-
-class AtendimentoReputacao(Base):
-    """
-    Atendimento de uma conta que entrou na zona de atenção da reputação
-    (tela "Reputação das contas"). Mesmo padrão das solicitações: alguém
-    ASSUME, pode passar pra outra pessoa, anota o que fez e CONCLUI.
-
-    Uma conta pode ter vários atendimentos ao longo do tempo (um por vez
-    aberto). Quem abre/fecha automaticamente é app/reputacao_atendimento.py
-    (sincronizar), a partir da classificação do termômetro.
-    """
-
-    __tablename__ = "atendimentos_reputacao"
-
-    id = Column(Integer, primary_key=True, index=True)
-    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
-    # "aberto" (na fila / com alguém) | "concluido" (tratado por alguém) |
-    # "encerrado" (saiu sozinho: a conta voltou a ficar em dia sem ninguém ter assumido)
-    status = Column(String, nullable=False, default="aberto", index=True)
-    aberto_em = Column(DateTime, default=datetime.utcnow, nullable=False)
-    situacao_abertura = Column(String, nullable=True)   # "critico" | "atencao"
-    motivo_abertura = Column(Text, nullable=True)        # ex.: "Reclamações 2,4% de 1,0%"
-    metricas_abertura = Column(Text, nullable=True)      # JSON {chave: taxa em %} na hora em que entrou na fila
-
-    # Quem está com a conta agora (vazio = livre).
-    em_atendimento_por = Column(String, nullable=True)
-    em_atendimento_por_id = Column(Integer, nullable=True, index=True)
-    em_atendimento_desde = Column(DateTime, nullable=True)
-    assumido_primeiro_em = Column(DateTime, nullable=True)
-
-    concluido_por = Column(String, nullable=True)
-    concluido_por_id = Column(Integer, nullable=True)
-    concluido_em = Column(DateTime, nullable=True, index=True)
-    conclusao = Column(Text, nullable=True)              # o que foi feito (obrigatório ao concluir)
-    protocolo = Column(String, nullable=True)
-    situacao_conclusao = Column(String, nullable=True)   # situação da conta no momento da conclusão
-    encerrado_em = Column(DateTime, nullable=True)
-
-
-class AtendimentoReputacaoEvento(Base):
-    """
-    Histórico de cada atendimento de reputação (só acrescenta, nunca altera):
-    entrou_na_fila | reabriu | assumiu | assumiu_no_lugar | liberou | anotou |
-    concluiu | saiu_da_fila. Base do "tempo com cada pessoa" e do histórico da tela.
-    """
-
-    __tablename__ = "atendimento_reputacao_eventos"
-
-    id = Column(Integer, primary_key=True, index=True)
-    atendimento_id = Column(Integer, ForeignKey("atendimentos_reputacao.id"), nullable=False, index=True)
-    tipo = Column(String, nullable=False)
     usuario_id = Column(Integer, nullable=True)
     usuario_nome = Column(String, nullable=True)
     detalhe = Column(Text, nullable=True)
@@ -567,6 +502,35 @@ class ConfigIA(Base):
     valor = Column(Text, nullable=False)  # JSON
     atualizado_por = Column(String, nullable=True)
     atualizado_em = Column(DateTime, default=datetime.utcnow)
+
+
+class CustoSku(Base):
+    """
+    Custo de cada SKU, por conta -- usado pela extensão ClubMarketplaceX
+    (calcula margem e "injeta" o custo na tela de Promoções do Mercado
+    Livre) e pela futura tela "Produtos > Custos" do painel.
+
+    Isolamento por conta é o ponto central aqui: um mesmo SKU pode
+    existir em contas diferentes com custos diferentes, e uma conta
+    NUNCA pode ler ou alterar o custo de outra -- toda consulta feita
+    pelos endpoints em app/routers/cmx.py filtra por conta_id, nunca
+    por sku sozinho. A restrição UNIQUE (conta_id, sku) garante que não
+    existam duas linhas pro mesmo produto na mesma conta.
+    """
+
+    __tablename__ = "custos_sku"
+    __table_args__ = (UniqueConstraint("conta_id", "sku", name="uq_custo_sku_conta_sku"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    sku = Column(String, nullable=False, index=True)
+    custo = Column(Float, nullable=False)
+    nome_produto = Column(String, nullable=True)  # só informativo (vem da varredura ou da planilha)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Quem fez a última alteração: nome de exibição do usuário logado, ou
+    # "planilha" quando veio de uma importação em lote sem usuário identificado
+    # linha a linha (a importação em si sempre exige login).
+    atualizado_por = Column(String, nullable=True)
 
 
 class HistoricoConfigIA(Base):

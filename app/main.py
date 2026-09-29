@@ -4,12 +4,12 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func, or_
+from sqlalchemy import func
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -133,7 +133,13 @@ _PUBLICO_EXATO = {
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),
 }
-_PUBLICO_PREFIXOS = ("/static/",)
+# /api/cmx/ (extensão ClubMarketplaceX) também fica de fora daqui: ela não
+# usa o cookie de sessão do painel, manda o token no cabeçalho
+# "Authorization: Bearer ..." -- a verificação desse token acontece dentro
+# de cada rota (ver app/routers/cmx.py:usuario_logado_cmx), não aqui no
+# middleware. Sem essa exceção, toda chamada da extensão cairia como
+# "Não autenticado" antes mesmo de chegar na rota.
+_PUBLICO_PREFIXOS = ("/static/", "/api/cmx/")
 
 
 # --- Permissões por perfil ---
@@ -281,6 +287,7 @@ app.include_router(solicitacoes_cancelamento.router)
 app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
 app.include_router(calibrar_ia_rotas.router)
+app.include_router(cmx_rotas.router)  # login/validação da extensão ClubMarketplaceX
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -339,15 +346,9 @@ def pagina_dashboard(request: Request):
             if p.recebida_em and (agora - p.recebida_em).total_seconds() / 60 > 30
         )
 
-        # Cancelamentos manuais desta semana (segunda a agora). Só o tipo
-        # "cancelamento" (nulo = registro antigo); reputação não entra aqui.
+        # Cancelamentos manuais desta semana (segunda a agora)
         inicio_semana = (agora - timedelta(days=agora.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        cancelamentos_semana = (
-            db.query(SolicitacaoCancelamento)
-            .filter(SolicitacaoCancelamento.criado_em >= inicio_semana)
-            .filter(or_(SolicitacaoCancelamento.tipo.is_(None), SolicitacaoCancelamento.tipo == "cancelamento"))
-            .all()
-        )
+        cancelamentos_semana = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.criado_em >= inicio_semana).all()
         cancelamentos_total = len(cancelamentos_semana)
         cancelamentos_tratados = sum(1 for s in cancelamentos_semana if s.confirmado_por)
 
@@ -502,7 +503,7 @@ def pagina_solicitacoes_galpao(request: Request):
 
 @app.get("/meus-cancelamentos", response_class=HTMLResponse)
 def pagina_meus_cancelamentos(request: Request):
-    """Tela do seller: só as solicitações (cancelamento e reputação) da conta vinculada a ele."""
+    """Tela do seller: só as solicitações da conta vinculada a ele."""
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         if not usuario or usuario.papel != "seller" or not usuario.conta_vinculada:
