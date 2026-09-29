@@ -375,6 +375,11 @@ class SolicitacaoCancelamento(Base):
     sku = Column(String, nullable=True, index=True)
     produto_titulo = Column(String, nullable=True)
 
+    # Tipo da solicitação: "cancelamento" ou "reputacao" (pedido pra
+    # contestar/retirar um impacto de reputação no marketplace).
+    # Nulo = registro antigo, tratado como "cancelamento".
+    tipo = Column(String, nullable=True, index=True)
+
 
 class SolicitacaoEvento(Base):
     """

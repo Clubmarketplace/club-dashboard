@@ -27,6 +27,7 @@ import asyncio
 import logging
 from datetime import datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.contas_util import chave_conta
@@ -161,6 +162,9 @@ def verificar_pendentes() -> None:
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.plataforma == "mercado_livre")
             .filter(SolicitacaoCancelamento.confirmado_por.is_(None))
+            # Só CANCELAMENTOS (tipo nulo = registro antigo = cancelamento).
+            # Reputação não aparece no pedido do ML: é confirmada à mão.
+            .filter(or_(SolicitacaoCancelamento.tipo.is_(None), SolicitacaoCancelamento.tipo == "cancelamento"))
             .all()
         )
         confirmadas = 0

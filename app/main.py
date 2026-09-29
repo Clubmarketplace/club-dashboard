@@ -4,7 +4,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
@@ -339,9 +339,15 @@ def pagina_dashboard(request: Request):
             if p.recebida_em and (agora - p.recebida_em).total_seconds() / 60 > 30
         )
 
-        # Cancelamentos manuais desta semana (segunda a agora)
+        # Cancelamentos manuais desta semana (segunda a agora). Só o tipo
+        # "cancelamento" (nulo = registro antigo); reputação não entra aqui.
         inicio_semana = (agora - timedelta(days=agora.weekday())).replace(hour=0, minute=0, second=0, microsecond=0)
-        cancelamentos_semana = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.criado_em >= inicio_semana).all()
+        cancelamentos_semana = (
+            db.query(SolicitacaoCancelamento)
+            .filter(SolicitacaoCancelamento.criado_em >= inicio_semana)
+            .filter(or_(SolicitacaoCancelamento.tipo.is_(None), SolicitacaoCancelamento.tipo == "cancelamento"))
+            .all()
+        )
         cancelamentos_total = len(cancelamentos_semana)
         cancelamentos_tratados = sum(1 for s in cancelamentos_semana if s.confirmado_por)
 
@@ -496,7 +502,7 @@ def pagina_solicitacoes_galpao(request: Request):
 
 @app.get("/meus-cancelamentos", response_class=HTMLResponse)
 def pagina_meus_cancelamentos(request: Request):
-    """Tela do seller: só as solicitações da conta vinculada a ele."""
+    """Tela do seller: só as solicitações (cancelamento e reputação) da conta vinculada a ele."""
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         if not usuario or usuario.papel != "seller" or not usuario.conta_vinculada:

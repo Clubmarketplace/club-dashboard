@@ -72,6 +72,8 @@ _COLUNAS_ADICIONAIS = {
         "assumido_primeiro_em": "TIMESTAMP",
         "sku": "VARCHAR",
         "produto_titulo": "VARCHAR",
+        # Tipo da solicitação ("cancelamento" | "reputacao"); nulo = cancelamento.
+        "tipo": "VARCHAR",
     },
 }
 
@@ -83,6 +85,7 @@ _INDICES_ADICIONAIS = [
     # existe (IF NOT EXISTS ignora); em banco antigo é criado aqui.
     ("ix_solicitacoes_cancelamento_conta_chave", "solicitacoes_cancelamento", "conta_chave"),
     ("ix_solicitacoes_cancelamento_sku", "solicitacoes_cancelamento", "sku"),
+    ("ix_solicitacoes_cancelamento_tipo", "solicitacoes_cancelamento", "tipo"),
 ]
 
 
