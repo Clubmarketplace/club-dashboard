@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Club Marketplace — Solicitações de Cancelamento</title>
+  <title>Club Marketplace — Solicitações sellers</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -26,6 +26,8 @@
     .pl-magalu { background:#e1efff; color:#0b4f96; } .pl-tiktok { background:#111; color:#ff4d73; }
     .or-seller { background:#e2f4e9; color:#1a6641; } .or-galpao { background:#eee6fb; color:#5b2fa6; } .or-publico { background:#eceff2; color:#46525e; } .or-equipe { background:#fff1dc; color:#8a4b00; }
     .st-livre { background:#f1f3f5; color:#4a5663; } .st-outro { background:#fff0d6; color:#8a4f00; }
+    /* Tipo da solicitação */
+    .tp-cancelamento { background:#eceff2; color:#1b2430; } .tp-reputacao { background:#efeafd; color:#5a3cc4; }
     .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; }
 
     /* Aqui a barra de filtros "cola" na lista, formando um cartão só */
@@ -177,8 +179,8 @@
       </script>
       {% endif %}      <header class="cmx-topbar">
         <div>
-          <h1>Solicitações de Cancelamento</h1>
-          <p class="cmx-subtitulo">Pedidos manuais de todas as contas</p>
+          <h1>Solicitações sellers</h1>
+          <p class="cmx-subtitulo">Pedidos de cancelamento e de reputação de todas as contas</p>
         </div>
       </header>
 
@@ -186,7 +188,7 @@
         <div id="aviso-erro"></div>
 
         <div class="sl-kpis">
-          <div class="sl-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div></div>
+          <div class="sl-kpi"><div class="rotulo">Total registrado</div><div class="valor" id="kpi-total">—</div><div class="chips" id="kpi-tipos" style="margin-top:4px"></div></div>
           <div class="sl-kpi"><div class="rotulo">Contas com pedidos</div><div class="valor" id="kpi-contas">—</div></div>
           <div class="sl-kpi"><div class="rotulo">Por plataforma</div><div class="chips" id="kpi-plataformas">—</div></div>
         </div>
@@ -216,9 +218,9 @@
     <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="conf-titulo">
       <h3 id="conf-titulo">Confirmar cancelamento</h3>
       <p class="desc" id="conf-detalhe"></p>
-      <label class="t" for="conf-protocolo">Nº do protocolo do cancelamento</label>
+      <label class="t" for="conf-protocolo" id="conf-rotulo-protocolo">Nº do protocolo do cancelamento</label>
       <input type="text" id="conf-protocolo" placeholder="Ex: SAC-548812" maxlength="80" autocomplete="off" />
-      <label class="check"><input type="checkbox" id="conf-sem-protocolo" /> Cancelado direto no painel do ML (sem protocolo)</label>
+      <label class="check"><input type="checkbox" id="conf-sem-protocolo" /> <span id="conf-rotulo-sem-protocolo">Cancelado direto no painel do ML (sem protocolo)</span></label>
       <label class="t" for="conf-impacto">Impacto na reputação</label>
       <select id="conf-impacto">
         <option value="">Selecione…</option>
@@ -238,7 +240,7 @@
   <div class="sl-modal-fundo" id="modal-relatorio">
     <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="rel-titulo" style="max-width:500px">
       <h3 id="rel-titulo">Gerar relatório</h3>
-      <p class="desc">Usa os filtros aplicados na tela; dá pra ajustar aqui.</p>
+      <p class="desc">Usa os filtros aplicados na tela; dá pra ajustar aqui. O relatório considera só as solicitações de <b>cancelamento</b>.</p>
       <div class="sl-tipos">
         <button class="sl-tipo on" data-tipo="canc"><b>Cancelamentos</b><span>Por conta e período, com total por SKU</span></button>
         <button class="sl-tipo" data-tipo="dia"><b>Controle do dia</b><span>Registradas e tratadas no dia (Excel)</span></button>
@@ -284,7 +286,7 @@
 
   <div class="sl-aviso" id="aviso" role="status" aria-live="polite"></div>
 
-  <script src="/static/solicitacoes-filtros.js?v=6"></script>
+  <script src="/static/solicitacoes-filtros.js?v=7"></script>
   <script>
     const NOMES_PLATAFORMA = { mercado_livre: "Mercado Livre", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok Shop" };
     const CURTO_PLATAFORMA = { mercado_livre: "ML", shopee: "Shopee", magalu: "Magalu", tiktok_shop: "TikTok" };
@@ -298,6 +300,15 @@
       impressora: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V3h12v6"/><rect x="6" y="14" width="12" height="7" rx="1"/><path d="M6 18H4a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2"/></svg>',
     };
     const LOGO = "/static/logo.png?v=2";
+
+    // ---------- Tipo da solicitação ----------
+    // tipo nulo (registro antigo) = cancelamento. O fluxo é o mesmo; mudam os textos.
+    const NOMES_TIPO = { cancelamento: "Cancelamento", reputacao: "Reputação" };
+    const tipoDe = (s) => (s.tipo === "reputacao" ? "reputacao" : "cancelamento");
+    const ehReputacao = (s) => tipoDe(s) === "reputacao";
+    const htmlTipo = (s) => `<span class="sl-pill tp-${tipoDe(s)}">${NOMES_TIPO[tipoDe(s)]}</span>`;
+    // "Confirmar cancelamento" / "Confirmar reputação" (botões e título da janela)
+    const textoConfirmar = (s) => (ehReputacao(s) ? "Confirmar reputação" : "Confirmar cancelamento");
 
     let itens = [];            // o que está na tela
     let ultimaResposta = null;
@@ -353,18 +364,22 @@
       return min < 1 ? "agora" : textoEspera(min);
     }
     function situacao(s) {
-      if (s.confirmado_por) return ["✓ Cancelado", "st-ok"];
+      if (s.confirmado_por) return [ehReputacao(s) ? "✓ Resolvido" : "✓ Cancelado", "st-ok"];
       if (ehMeu(s)) return ["Com você · " + tempoComOperador(s), "st-meu"];
       if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por + " · " + tempoComOperador(s), "st-outro"];
       return ["Livre", "st-livre"];
     }
-    function textoProtocolo(s) { return s.protocolo === "" ? "Sem protocolo" : s.protocolo; }
+    // Protocolo vazio = cancelado direto pelo painel do ML (sem atendimento, sem protocolo).
+    // Reputação: "Resolvido pelo painel do ML (sem protocolo)" (mesmo texto do servidor).
+    function textoProtocolo(s) { return s.protocolo === "" ? `${ehReputacao(s) ? "Resolvido" : "Cancelado"} pelo painel do ML (sem protocolo)` : s.protocolo; }
 
     // ---------- Cartões do topo ----------
     function renderizarKpis() {
       const contas = new Set(itens.map((s) => s.conta_chave || (s.conta || "").trim().toLowerCase()));
       $("kpi-total").textContent = ultimaResposta ? ultimaResposta.contadores.total : itens.length;
       $("kpi-contas").textContent = contas.size;
+      $("kpi-tipos").innerHTML = Object.keys(NOMES_TIPO).map((t) =>
+        `<span class="sl-pill tp-${t}">${NOMES_TIPO[t]}: ${itens.filter((s) => tipoDe(s) === t).length}</span>`).join("");
       $("kpi-plataformas").innerHTML = Object.keys(NOMES_PLATAFORMA).map((p) =>
         `<span class="sl-pill ${CLASSE_PLATAFORMA[p]}">${NOMES_PLATAFORMA[p]}: ${itens.filter((s) => s.plataforma === p).length}</span>`).join("");
     }
@@ -385,25 +400,26 @@
       const menu = `
         <div class="sl-menu${menuAberto === s.id ? " aberto" : ""}" data-menu="${s.id}">
           ${pendente ? `
-            ${!ehMeu(s) ? `<button data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>` : ""}
+            ${!ehMeu(s) ? `<button data-acao="confirmar" data-id="${s.id}">${textoConfirmar(s)}</button>` : ""}
             ${s.plataforma === "mercado_livre" ? `
               <button data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
               <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
-              <button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}
+              ${!ehReputacao(s) ? `<button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
             ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
           <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
         </div>`;
       return `
         <div class="sl-row">
           <div class="c-venda">
-            <div class="sl-venda"><button class="sl-num" data-acao="abrir" data-id="${s.id}">${esc(s.numero_venda)}</button><span class="sl-pill ${CLASSE_PLATAFORMA[s.plataforma] || ""}">${CURTO_PLATAFORMA[s.plataforma] || esc(s.plataforma)}</span></div>
+            <div class="sl-venda"><button class="sl-num" data-acao="abrir" data-id="${s.id}">${esc(s.numero_venda)}</button><span class="sl-pill ${CLASSE_PLATAFORMA[s.plataforma] || ""}">${CURTO_PLATAFORMA[s.plataforma] || esc(s.plataforma)}</span>${htmlTipo(s)}</div>
             <div class="sl-conta">${esc(s.conta)}</div>
             ${sku}
           </div>
           <div class="c-motivo">
             <div class="sl-motivo">${esc(s.motivo)}</div>
             <div style="margin-top:6px">${htmlOrigem(s)}</div>
-            ${s.confirmado_por && s.protocolo != null ? `<div class="sl-sub">Protocolo: <b>${esc(textoProtocolo(s))}</b></div>` : ""}
+            ${s.confirmado_por && s.protocolo === "" ? `<div class="sl-sub"><b>${ehReputacao(s) ? "Resolvido" : "Cancelado"} pelo painel do ML</b> (sem protocolo)</div>`
+              : s.confirmado_por && s.protocolo != null ? `<div class="sl-sub">Protocolo: <b>${esc(textoProtocolo(s))}</b></div>` : ""}
           </div>
           <div class="c-espera sl-espera ${clsEspera}">${pendente ? textoEspera(min) : `<span class="sl-sub" style="margin:0">pedido em<br>${formatarData(s.criado_em)}</span>`}</div>
           <div class="c-sit">
@@ -490,7 +506,9 @@
     async function copiarMensagem(s) {
       // Copiar é sinal de que começou a tratar: assume o pedido.
       if (ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está com esse pedido. Assumir no lugar e copiar a mensagem?`)) return renderizarLista();
-      const mensagem = `Olá! Preciso cancelar o pedido nº ${s.numero_venda} (conta ${s.conta}) antes do despacho. Motivo: ${s.motivo}. O envio ainda não foi despachado -- pode me orientar a cancelar sem impactar a reputação da conta?`;
+      const mensagem = ehReputacao(s)
+        ? `Olá! Gostaria de solicitar a revisão do impacto na reputação referente à venda nº ${s.numero_venda} (conta ${s.conta}). Motivo: ${s.motivo}. Pode analisar e retirar esse impacto da reputação da conta?`
+        : `Olá! Preciso cancelar o pedido nº ${s.numero_venda} (conta ${s.conta}) antes do despacho. Motivo: ${s.motivo}. O envio ainda não foi despachado -- pode me orientar a cancelar sem impactar a reputação da conta?`;
       try {
         await navigator.clipboard.writeText(mensagem);
         avisar("Mensagem copiada. Cole no atendimento do Mercado Livre.");
@@ -532,27 +550,27 @@
       const [sitTxt, sitCls] = situacao(s);
       const pendente = !s.confirmado_por;
       $("p-venda").textContent = s.numero_venda;
-      $("p-conta").textContent = `${s.conta} · ${NOMES_PLATAFORMA[s.plataforma] || s.plataforma}`;
+      $("p-conta").textContent = `${s.conta} · ${NOMES_PLATAFORMA[s.plataforma] || s.plataforma} · ${NOMES_TIPO[tipoDe(s)]}`;
       let acoes = "";
       if (pendente) {
         acoes = `<div class="sl-acoes-painel">
-          ${ehMeu(s) ? `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`
+          ${ehMeu(s) ? `<button class="sl-btn pri" data-acao="confirmar" data-id="${s.id}">${textoConfirmar(s)}</button>`
             : `<button class="sl-btn pri" data-acao="${ehDeOutro(s) ? "assumir-lugar" : "assumir"}" data-id="${s.id}">${ehDeOutro(s) ? "Assumir (está com " + esc(s.em_atendimento_por) + ")" : "Assumir atendimento"}</button>
-               <button class="sl-btn" data-acao="confirmar" data-id="${s.id}">Confirmar cancelamento</button>`}
+               <button class="sl-btn" data-acao="confirmar" data-id="${s.id}">${textoConfirmar(s)}</button>`}
           ${s.plataforma === "mercado_livre" ? `
             <button class="sl-btn" data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
             <a class="sl-btn" href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}" style="text-decoration:none">Abrir atendimento ML</a>
-            <button class="sl-btn" data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}
+            ${!ehReputacao(s) ? `<button class="sl-btn" data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
           ${ehMeu(s) ? `<button class="sl-btn" data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}
         </div>`;
       }
       $("p-corpo").innerHTML = `
-        <div><span class="sl-pill ${sitCls}">${esc(sitTxt)}</span></div>
+        <div><span class="sl-pill ${sitCls}">${esc(sitTxt)}</span> ${htmlTipo(s)}</div>
         <div class="sl-campo"><div class="r">Motivo</div>${esc(s.motivo)}</div>
         <div class="sl-campo"><div class="r">Solicitado por</div>${esc(textoOrigem(s))} · ${formatarData(s.criado_em)}</div>
         <div class="sl-campo"><div class="r">Produto (SKU)</div>${s.sku ? esc(s.sku.replace(/,/g, ", ")) + (s.produto_titulo ? " · " + esc(s.produto_titulo) : "") : '<span class="sl-sub">Não identificado</span>'}</div>
         ${s.confirmado_por ? `
-          <div class="sl-campo"><div class="r">Cancelado</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
+          <div class="sl-campo"><div class="r">${ehReputacao(s) ? "Resolvido" : "Cancelado"}</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
           <div class="sl-campo"><div class="r">Protocolo</div>${s.protocolo != null ? esc(textoProtocolo(s)) : "—"}${s.resultado_impacto ? " · " + esc(ROTULO_IMPACTO[s.resultado_impacto] || s.resultado_impacto) : ""}</div>` : ""}
         ${acoes}
         <div class="sl-campo" style="margin-top:22px"><div class="r" style="font-weight:600; color:var(--cmx-texto); font-size:13px">Tempo</div><div id="p-tempos" class="sl-sub">Carregando…</div></div>
@@ -591,9 +609,18 @@
 
     // ---------- Confirmar cancelamento ----------
     let confirmandoId = null;
+    let confirmandoReputacao = false;
     function abrirConfirmacao(s) {
       confirmandoId = s.id;
-      $("conf-detalhe").textContent = `Conta ${s.conta} · venda ${s.numero_venda}. Confirme que já foi cancelado de verdade na plataforma.`;
+      confirmandoReputacao = ehReputacao(s);
+      // Mesmo formulário pros dois tipos (protocolo + impacto); só os textos mudam.
+      $("conf-titulo").textContent = textoConfirmar(s);
+      $("conf-ok").textContent = textoConfirmar(s);
+      $("conf-rotulo-protocolo").textContent = confirmandoReputacao ? "Nº do protocolo da solicitação de reputação" : "Nº do protocolo do cancelamento";
+      $("conf-rotulo-sem-protocolo").textContent = confirmandoReputacao ? "Resolvido direto no painel do ML (sem protocolo)" : "Cancelado direto no painel do ML (sem protocolo)";
+      $("conf-detalhe").textContent = confirmandoReputacao
+        ? `Conta ${s.conta} · venda ${s.numero_venda}. Confirme que a solicitação de reputação já foi tratada na plataforma.`
+        : `Conta ${s.conta} · venda ${s.numero_venda}. Confirme que já foi cancelado de verdade na plataforma.`;
       $("conf-protocolo").value = ""; $("conf-protocolo").disabled = false;
       $("conf-sem-protocolo").checked = false;
       $("conf-impacto").value = "";
@@ -615,7 +642,7 @@
       const semProtocolo = $("conf-sem-protocolo").checked;
       const impacto = $("conf-impacto").value;
       const erro = (t) => { $("conf-erro").textContent = t; $("conf-erro").style.display = "block"; };
-      if (!protocolo && !semProtocolo) { $("conf-protocolo").focus(); return erro("Informe o nº do protocolo (ou marque que foi cancelado sem protocolo)."); }
+      if (!protocolo && !semProtocolo) { $("conf-protocolo").focus(); return erro(`Informe o nº do protocolo (ou marque que foi ${confirmandoReputacao ? "resolvido" : "cancelado"} sem protocolo).`); }
       if (!impacto) return erro("Selecione o impacto na reputação.");
       const botao = $("conf-ok");
       botao.disabled = true;
@@ -627,7 +654,7 @@
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível confirmar.");
         fecharModal("modal-confirmar");
-        avisar('Cancelamento confirmado. Ele está na aba "Confirmados".');
+        avisar(`${confirmandoReputacao ? "Reputação confirmada" : "Cancelamento confirmado"}. Está no status "Confirmados".`);
         await atualizar();
         if (painelDe) { desenharPainel(); carregarHistorico(painelDe); }
       } catch (e) { erro(e.message); }
@@ -784,6 +811,7 @@
       container: $("barra-filtros"),
       mostrarAtendimento: true,
       mostrarOrigem: true,
+      mostrarTipo: true,   // filtro Cancelamento / Reputação
       ordem: "espera", // pendentes primeiro (espera mais longa no topo), depois os confirmados
       acaoDireita: botaoRelatorio,
       onChange: () => { menuAberto = null; atualizar(); },

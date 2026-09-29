@@ -6,7 +6,7 @@
   a trava de verdade continua no servidor -- aqui só esconde o link):
     - admin e supervisor: tudo;
     - atendente: Perguntas, Respostas padrão, Mensagens dos pedidos,
-      Solicitações de cancelamento, Reputação das contas e Painéis de TV.
+      Solicitações sellers (cancelamento e reputação), Reputação das contas e Painéis de TV.
   Grupos em sanfona: só o grupo da tela atual vem aberto; abrir um fecha os outros.
 #}
 {% set _papel = usuario_logado.papel if usuario_logado else "" %}
@@ -79,7 +79,7 @@
     {% endif %}
   {% endcall %}
 
-  {% call grupo("solicitacoes", "Solicitações de cancelamento", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
+  {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
     {{ item("/solicitar-cancelamento", "Nova solicitação") }}
     {{ item("/solicitacoes-painel", "Solicitações") }}
     {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}

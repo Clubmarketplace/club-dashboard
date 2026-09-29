@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Club Marketplace — Solicitar Cancelamento (manual)</title>
+<title>Club Marketplace — Nova solicitação (cancelamento ou reputação)</title>
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -103,6 +103,17 @@
   }
   button[type="submit"]:hover { background:#2a3644; }
   button[type="submit"]:disabled { background:#a9b2bb; cursor:default; }
+
+  /* Tipo da solicitação (Cancelamento / Reputação) -- mesmo visual dos botões de plataforma */
+  .grupo-tipo { margin-bottom:18px; }
+  .opcoes-tipo { display:flex; gap:10px; max-width:420px; }
+  .opcao-tipo { flex:1 1 0; min-width:0; height:46px; margin:0 !important; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
+    display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:600; font-size:13.5px; color:var(--text-dim);
+    transition:border-color .15s, background .15s, color .15s; }
+  .opcao-tipo input { display:none; }
+  .opcao-tipo.selecionada { border-color:#1b2430; background:#1b2430; color:#fff; }
+  .opcao-tipo#tipo-reputacao.selecionada { border-color:#6d4bd8; background:#6d4bd8; color:#fff; }
+  .dica-tipo { font-size:12px; color:var(--text-dim); margin:6px 0 0; }
 
   .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
   .aviso.erro { color:var(--red); }
@@ -207,8 +218,8 @@
   <div id="tela-formulario">
     <div class="topo-form">
       <div>
-        <h1>{% if equipe_logado %}Nova solicitação de cancelamento{% else %}Solicitar cancelamento{% endif %}</h1>
-        <p class="subtitulo">Plataforma para envio de produtos a cancelar. Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
+        <h1 id="titulo-form">{% if logistica_logado %}Solicitar cancelamento{% else %}Nova solicitação{% endif %}</h1>
+        <p class="subtitulo">{% if logistica_logado %}Plataforma para envio de produtos a cancelar.{% else %}Peça um cancelamento ou uma revisão de reputação.{% endif %} Preencha os dados abaixo — a data é registrada automaticamente. Se tiver mais de uma venda da mesma conta, adicione todas antes de enviar.</p>
       </div>
       <div class="links-direita">
         {% if seller_logado %}
@@ -226,6 +237,23 @@
     </div>
 
     <form id="form-cancelamento">
+      {% if not logistica_logado %}
+      <!-- Tipo da solicitação. Galpão só pede cancelamento (o servidor também trava). -->
+      <div class="grupo-tipo">
+        <label>Tipo de solicitação</label>
+        <div class="opcoes-tipo">
+          <label class="opcao-tipo selecionada" id="tipo-cancelamento">
+            <input type="radio" name="tipo" value="cancelamento" checked />
+            Cancelamento
+          </label>
+          <label class="opcao-tipo" id="tipo-reputacao">
+            <input type="radio" name="tipo" value="reputacao" />
+            Reputação
+          </label>
+        </div>
+        <p class="dica-tipo" id="dica-tipo"></p>
+      </div>
+      {% endif %}
       <div class="linha-selecao">
       {% if logistica_logado or equipe_logado %}
       <div class="grupo grupo-galpao">
@@ -270,7 +298,7 @@
       </div>
       </div>
 
-      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span class="cab-sku">SKU (opcional)</span><span>Motivo do cancelamento</span><span></span></div>
+      <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span class="cab-sku">SKU (opcional)</span><span class="cab-motivo">Motivo do cancelamento</span><span></span></div>
 
       <div class="bloco-itens" id="bloco-itens"></div>
 
@@ -321,6 +349,46 @@
   const MODO_EQUIPE = {{ 'true' if equipe_logado else 'false' }};
   const CONTA_COM_BUSCA = MODO_LOGISTICA || MODO_EQUIPE;
   const NOME_USUARIO = {{ (nome_usuario or '') | tojson }};
+
+  // ---------- Tipo da solicitação (Cancelamento / Reputação) ----------
+  // Mesmo fluxo pros dois; muda só o texto do motivo e as mensagens.
+  const TEXTOS_TIPO = {
+    cancelamento: {
+      nome: "Cancelamento",
+      rotulo: "Motivo do cancelamento",
+      placeholder: "Ex: Etiqueta não foi gerada, CEP errado, sem estoque...",
+      dica: "Pedir o cancelamento de uma venda.",
+    },
+    reputacao: {
+      nome: "Reputação",
+      rotulo: "Motivo da solicitação de reputação",
+      placeholder: "Ex.: reclamação indevida, atraso da transportadora, mediação sem culpa do vendedor…",
+      dica: "Pedir para a equipe contestar/retirar um impacto na reputação causado por essa venda.",
+    },
+  };
+  function tipoAtual() {
+    const marcado = document.querySelector('input[name="tipo"]:checked');
+    return marcado ? marcado.value : "cancelamento";  // logística: sempre cancelamento
+  }
+  function aplicarTipo() {
+    const t = TEXTOS_TIPO[tipoAtual()];
+    document.querySelectorAll(".opcao-tipo").forEach(o => o.classList.toggle("selecionada", o.querySelector("input").checked));
+    document.querySelectorAll(".rotulo-motivo").forEach(el => el.textContent = t.rotulo);
+    document.querySelectorAll(".campo-motivo").forEach(el => el.placeholder = t.placeholder);
+    const cab = document.querySelector(".cab-motivo");
+    if (cab) cab.textContent = t.rotulo;
+    const dica = document.getElementById("dica-tipo");
+    if (dica) dica.textContent = t.dica;
+  }
+  document.querySelectorAll(".opcao-tipo").forEach(opcao => {
+    opcao.addEventListener("click", () => { opcao.querySelector("input").checked = true; aplicarTipo(); });
+  });
+  // Link direto já escolhendo o tipo: /solicitar-cancelamento?tipo=reputacao
+  (function tipoPelaUrl() {
+    const pedido = new URLSearchParams(location.search).get("tipo");
+    const radio = pedido && document.querySelector(`input[name="tipo"][value="${pedido === "reputacao" ? "reputacao" : "cancelamento"}"]`);
+    if (radio) radio.checked = true;
+  })();
 
   function escaparHtml(t) {
     return String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
@@ -451,8 +519,8 @@
       <input type="text" class="campo-numero-venda" placeholder="Número do pedido" required autocomplete="off" />
       <label class="rotulo-sku">SKU do produto (opcional)</label>
       <input type="text" class="campo-sku" placeholder="SKU (opcional)" autocomplete="off" maxlength="60" />
-      <label>Motivo do cancelamento</label>
-      <textarea class="campo-motivo" placeholder="Ex: Etiqueta não foi gerada, CEP errado, sem estoque..." required></textarea>
+      <label class="rotulo-motivo">${TEXTOS_TIPO[tipoAtual()].rotulo}</label>
+      <textarea class="campo-motivo" placeholder="${TEXTOS_TIPO[tipoAtual()].placeholder}" required></textarea>
     `;
     // No layout horizontal o motivo começa com 1 linha e cresce se precisar.
     const motivo = div.querySelector(".campo-motivo");
@@ -483,6 +551,7 @@
 
   document.getElementById("botao-adicionar").addEventListener("click", adicionarItem);
   adicionarItem(); // sempre começa com 1 item pronto pra preencher
+  aplicarTipo();
 
   const form = document.getElementById("form-cancelamento");
   const botaoEnviar = document.getElementById("botao-enviar");
@@ -551,6 +620,7 @@
     }
 
     const dados = {
+      tipo: tipoAtual(),
       plataforma: plataformaSelecionada.value,
       conta: campoConta.value.trim(),
       itens,
@@ -574,11 +644,13 @@
         const dup = (erro.detail && erro.detail.duplicadas) || [];
         const linhas = dup.map(d => {
           const quem = d.galpao ? `Galpão ${d.galpao}${d.solicitado_por ? " · " + d.solicitado_por : ""}` : (d.solicitado_por || d.conta);
-          const status = d.confirmado_por ? ` — ✓ já cancelada por ${d.confirmado_por}` : " — pendente";
+          const status = d.confirmado_por
+            ? (dados.tipo === "reputacao" ? ` — ✓ já resolvida por ${d.confirmado_por}` : ` — ✓ já cancelada por ${d.confirmado_por}`)
+            : " — pendente";
           return `<li>Venda <b>${escaparHtml(d.numero_venda)}</b> (${escaparHtml(d.conta)}): pedida em ${formatarDataBR(d.criado_em)} por ${escaparHtml(quem)}${escaparHtml(status)}</li>`;
         }).join("");
         return mostrarAvisoCaixa(
-          `<b>Essa venda já tem solicitação de cancelamento.</b><ul>${linhas}</ul>Enviar de novo pode gerar pedido duplicado.`,
+          `<b>Essa venda já tem solicitação de ${dados.tipo === "reputacao" ? "reputação" : "cancelamento"}.</b><ul>${linhas}</ul>Enviar de novo pode gerar pedido duplicado.`,
           [
             { texto: "Não enviar", principal: true, acao: () => {} },
             { texto: "Enviar mesmo assim", acao: () => enviar(true) },
@@ -595,7 +667,8 @@
       }
 
       const resultado = await resposta.json();
-      const plural = resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada";
+      const plural = (resultado.quantidade > 1 ? `${resultado.quantidade} vendas registradas` : "1 venda registrada")
+        + ` (${resultado.tipo_nome || TEXTOS_TIPO[dados.tipo].nome})`;
       const textoConfirmacao = MODO_LOGISTICA
         ? `Registrado no ${resultado.galpao_nome || "Galpão " + resultado.galpao} por ${resultado.solicitado_por} — Conta ${resultado.conta} — ${plural}.`
         : MODO_EQUIPE
@@ -621,7 +694,7 @@
         document.getElementById("botao-nova").style.display = "none";
         const avisoVoltar = document.createElement("p");
         avisoVoltar.style.cssText = "font-size:12.5px; color:var(--text-dim); margin-top:10px;";
-        avisoVoltar.textContent = MODO_SELLER ? "Voltando pra Meus Cancelamentos..." : "Voltando pras solicitações do galpão...";
+        avisoVoltar.textContent = MODO_SELLER ? "Voltando pra Minhas solicitações..." : "Voltando pras solicitações do galpão...";
         document.getElementById("tela-sucesso").appendChild(avisoVoltar);
         setTimeout(() => { window.location.href = destino; }, MODO_LOGISTICA ? 2400 : 1600);
       }
@@ -634,11 +707,15 @@
   }
 
   document.getElementById("botao-nova").addEventListener("click", () => {
+    const tipoAnterior = tipoAtual();  // "Registrar outra" mantém o tipo escolhido
     form.reset();
+    const radioTipo = document.querySelector(`input[name="tipo"][value="${tipoAnterior}"]`);
+    if (radioTipo) radioTipo.checked = true;
     opcoesPlataforma.forEach(o => o.classList.remove("selecionada"));
     blocoItens.innerHTML = "";
     contadorItens = 0;
     adicionarItem();
+    aplicarTipo();
     document.getElementById("tela-sucesso").style.display = "none";
     document.getElementById("tela-formulario").style.display = "block";
   });

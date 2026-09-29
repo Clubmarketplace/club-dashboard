@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Club Marketplace — Meus Cancelamentos</title>
+  <title>Club Marketplace — Minhas solicitações</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -51,6 +51,28 @@
     .badge.tiktok { background:#111; color:#fe2c55; }
     .status-pendente { font-size:11.5px; font-weight:600; color:var(--cmx-atencao); background:var(--cmx-leve); padding:3px 9px; border-radius:999px; }
     .status-confirmado { font-size:11.5px; color:#2f6f4f; }
+    /* Tipo da solicitação */
+    .badge.tipo-cancelamento { background:#eef1f4; color:#1b2430; }
+    .badge.tipo-reputacao { background:#efeafd; color:#5a3cc4; }
+    .filtro-tipo { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+    .filtro-tipo button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:999px; padding:7px 14px;
+      font-family:inherit; font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; }
+    .filtro-tipo button.ativo { border-color:var(--cmx-texto); background:var(--cmx-texto); color:#fff; }
+    .vazio-filtro { display:none; text-align:center; padding:30px 20px; color:var(--cmx-texto-suave); }
+    /* Celular: cada solicitação vira um cartão (rótulo à esquerda, valor à direita) */
+    @media (max-width: 700px) {
+      header { padding:14px 16px; }
+      main { padding:20px 14px 50px; }
+      .resumo { gap:8px; }
+      .resumo .item { padding:12px 8px; }
+      table thead { display:none; }
+      table, tbody, tbody tr, tbody td { display:block; width:100%; }
+      tbody tr { padding:10px 14px; border-bottom:1px solid var(--cmx-borda); }
+      tbody tr:last-child { border-bottom:none; }
+      tbody td { display:flex; gap:12px; padding:5px 0; border-bottom:none; }
+      tbody td::before { content:attr(data-rotulo); flex:0 0 92px; font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); padding-top:2px; }
+      tbody td > * { min-width:0; }
+    }
     .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
     .vazio .emoji { font-size:36px; margin-bottom:10px; }
   </style>
@@ -89,41 +111,55 @@
   <main>
     <div class="topo-pagina">
       <div>
-        <h1>Meus Cancelamentos</h1>
-        <p>Pedidos de cancelamento registrados pela sua conta</p>
+        <h1>Minhas solicitações</h1>
+        <p>Pedidos de cancelamento e de reputação registrados pela sua conta</p>
       </div>
       <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
     </div>
 
     <div class="resumo">
-      <div class="item"><div class="valor">{{ solicitacoes|length }}</div><div class="rotulo">Total</div></div>
-      <div class="item"><div class="valor">{{ solicitacoes|selectattr("confirmado_por")|list|length }}</div><div class="rotulo">Confirmados</div></div>
-      <div class="item"><div class="valor">{{ solicitacoes|rejectattr("confirmado_por")|list|length }}</div><div class="rotulo">Pendentes</div></div>
+      <div class="item"><div class="valor" id="resumo-total">{{ solicitacoes|length }}</div><div class="rotulo">Total</div></div>
+      <div class="item"><div class="valor" id="resumo-confirmados">{{ solicitacoes|selectattr("confirmado_por")|list|length }}</div><div class="rotulo">Resolvidas</div></div>
+      <div class="item"><div class="valor" id="resumo-pendentes">{{ solicitacoes|rejectattr("confirmado_por")|list|length }}</div><div class="rotulo">Pendentes</div></div>
     </div>
+
+    {% if solicitacoes %}
+    {# Filtro por tipo (feito aqui na tela: a lista já vem só com a conta do seller) #}
+    {% set qtd_reputacao = solicitacoes|selectattr("tipo", "equalto", "reputacao")|list|length %}
+    <div class="filtro-tipo" id="filtro-tipo">
+      <button type="button" data-tipo="" class="ativo">Todas ({{ solicitacoes|length }})</button>
+      <button type="button" data-tipo="cancelamento">Cancelamento ({{ solicitacoes|length - qtd_reputacao }})</button>
+      <button type="button" data-tipo="reputacao">Reputação ({{ qtd_reputacao }})</button>
+    </div>
+    {% endif %}
 
     <div class="lista-cartao">
       {% if solicitacoes %}
       <table>
-        <thead><tr><th>Data</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
+        <thead><tr><th>Data</th><th>Tipo</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
         <tbody>
           {% for s in solicitacoes %}
-          <tr>
-            <td>{{ s.criado_em | hora_br }}</td>
-            <td><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></td>
-            <td>{{ s.numero_venda }}</td>
-            <td>{{ s.motivo }}</td>
-            <td>
+          {% set reputacao = s.tipo == "reputacao" %}
+          <tr data-tipo="{{ 'reputacao' if reputacao else 'cancelamento' }}" data-confirmado="{{ '1' if s.confirmado_por else '0' }}">
+            <td data-rotulo="Data">{{ s.criado_em | hora_br }}</td>
+            <td data-rotulo="Tipo"><span class="badge {{ 'tipo-reputacao' if reputacao else 'tipo-cancelamento' }}">{{ 'Reputação' if reputacao else 'Cancelamento' }}</span></td>
+            <td data-rotulo="Plataforma"><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></td>
+            <td data-rotulo="Nº da venda">{{ s.numero_venda }}</td>
+            <td data-rotulo="Motivo">{{ s.motivo }}</td>
+            <td data-rotulo="Status"><div>
               {% if s.confirmado_por %}
-              <span class="status-confirmado">✓ Cancelado por {{ s.confirmado_por }}</span>
-              {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>{% endif %}
+              <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
+              {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>
+              {% elif s.protocolo == "" and s.confirmado_por %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} pelo painel do ML</b> (sem protocolo)</div>{% endif %}
               {% else %}
               <span class="status-pendente">Pendente</span>
               {% endif %}
-            </td>
+            </div></td>
           </tr>
           {% endfor %}
         </tbody>
       </table>
+      <div class="vazio-filtro" id="vazio-filtro">Nenhuma solicitação desse tipo.</div>
       {% else %}
       <div class="vazio">
         <div class="emoji">📋</div>
@@ -133,5 +169,27 @@
       {% endif %}
     </div>
   </main>
+  <script>
+    // Filtro por tipo: esconde/mostra as linhas e recalcula o resumo.
+    (function () {
+      var barra = document.getElementById("filtro-tipo");
+      if (!barra) return;
+      barra.addEventListener("click", function (e) {
+        var botao = e.target.closest("button");
+        if (!botao) return;
+        barra.querySelectorAll("button").forEach(function (b) { b.classList.toggle("ativo", b === botao); });
+        var tipo = botao.dataset.tipo, total = 0, confirmados = 0;
+        document.querySelectorAll("tbody tr[data-tipo]").forEach(function (tr) {
+          var mostra = !tipo || tr.dataset.tipo === tipo;
+          tr.style.display = mostra ? "" : "none";
+          if (mostra) { total++; if (tr.dataset.confirmado === "1") confirmados++; }
+        });
+        document.getElementById("resumo-total").textContent = total;
+        document.getElementById("resumo-confirmados").textContent = confirmados;
+        document.getElementById("resumo-pendentes").textContent = total - confirmados;
+        document.getElementById("vazio-filtro").style.display = total ? "none" : "block";
+      });
+    })();
+  </script>
 </body>
 </html>

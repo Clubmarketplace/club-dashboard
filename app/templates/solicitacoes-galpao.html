@@ -123,7 +123,7 @@
     <div id="lista-rodape"></div>
   </main>
 
-  <script src="/static/solicitacoes-filtros.js?v=6"></script>
+  <script src="/static/solicitacoes-filtros.js?v=7"></script>
   <script>
     // Só leitura: o galpão acompanha, quem confirma é a equipe interna.
     // O servidor já devolve apenas solicitações de origem "logística".
@@ -162,7 +162,7 @@
     function linha(s) {
       const plataforma = `<span class="badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${escaparHtml(s.plataforma_nome || s.plataforma)}</span>`;
       const status = s.confirmado_por
-        ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>${s.protocolo ? `<div class="quem">Protocolo: ${escaparHtml(s.protocolo)}</div>` : ""}`
+        ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>${s.protocolo ? `<div class="quem">Protocolo: ${escaparHtml(s.protocolo)}</div>` : (s.protocolo === "" ? `<div class="quem">Cancelado pelo painel do ML</div>` : "")}`
         : '<span class="status-pendente">Pendente</span>';
       return `<tr>
         <td class="nowrap">${formatarData(s.criado_em)}</td>
