@@ -1,5 +1,5 @@
 /**
- * Barra de filtros das Solicitações de Cancelamento (v5).
+ * Barra de filtros das Solicitações sellers (v6: + filtro de Tipo).
  *
  * Usada em duas telas: Solicitações de Cancelamento (interna) e
  * Solicitações do galpão (logística).
@@ -24,6 +24,7 @@
  *     container, onChange,              // onChange: recarrega a lista
  *     mostrarAtendimento: true,         // abas Todos / Em atendimento / Meus
  *     mostrarOrigem: true,              // "origem" dentro de Mais filtros
+ *     mostrarTipo: true,                // "Tipo" (Cancelamento / Reputação) -- só na tela interna
  *     ordem: "espera",                  // "espera" (pendentes primeiro) | "recentes"
  *     acaoDireita: elemento,            // ex.: botão "Gerar relatório"
  *   });
@@ -32,10 +33,12 @@
  *   barra.atualizarContadores(contadores, atendimento)  -> também marca "atualizado às…"
  */
 (function () {
-  const PADRAO = { aba: "todos", conta: "", status: "todos", galpao: "", dias: "30", de: "", ate: "", plataforma: "", origem: "", busca: "" };
-  const CAMPOS_FORM = ["conta", "status", "galpao", "dias", "de", "ate", "plataforma", "origem"];
+  const PADRAO = { aba: "todos", conta: "", tipo: "", status: "todos", galpao: "", dias: "30", de: "", ate: "", plataforma: "", origem: "", busca: "" };
+  const CAMPOS_FORM = ["conta", "tipo", "status", "galpao", "dias", "de", "ate", "plataforma", "origem"];
   const NOMES_STATUS = { todos: "Todos", pendente: "Aguardando", confirmado: "Confirmados" };
   const NOMES_PERIODO = { "1": "Hoje", "7": "Últimos 7 dias", "30": "Últimos 30 dias", personalizado: "Datas" };
+  // Tipos de solicitação (fonte única no servidor: TIPOS em solicitacoes_cancelamento.py, via /opcoes).
+  let TIPOS = [["cancelamento", "Cancelamento"], ["reputacao", "Reputação"]];
   const NOMES_ORIGEM = { seller: "Sellers", logistica: "Galpão", equipe: "Equipe", publico: "Link público" };
   // Padrões; atualizados pelo servidor (/opcoes e /contas), que são a fonte única.
   let PLATAFORMAS = [["mercado_livre", "Mercado Livre"], ["shopee", "Shopee"], ["magalu", "Magalu"], ["tiktok_shop", "TikTok Shop"]];
@@ -114,7 +117,7 @@
   const opcoes = (lista, atual) => lista.map(([v, n]) => `<option value="${escapar(v)}"${String(atual) === String(v) ? " selected" : ""}>${escapar(n)}</option>`).join("");
   const dataCurta = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
 
-  window.criarBarraFiltros = function ({ container, onChange, mostrarAtendimento = false, mostrarOrigem = false, ordem = "recentes", acaoDireita = null, titulo = "Filtros" }) {
+  window.criarBarraFiltros = function ({ container, onChange, mostrarAtendimento = false, mostrarOrigem = false, mostrarTipo = false, ordem = "recentes", acaoDireita = null, titulo = "Filtros" }) {
     injetarEstilo();
     const ABAS = [["todos", "Todos"], ["atendimento", "Em atendimento"], ["meus", "Meus"]];
 
@@ -140,6 +143,7 @@
         </div>
         <div class="bf2-form">
           <div class="bf2-campo conta"><label for="bf2-conta">Conta</label><select id="bf2-conta" data-f="conta"></select></div>
+          ${mostrarTipo ? '<div class="bf2-campo"><label for="bf2-tipo">Tipo</label><select id="bf2-tipo" data-f="tipo"></select></div>' : ""}
           <div class="bf2-campo"><label for="bf2-status">Status</label>
             <select id="bf2-status" data-f="status">${opcoes([["todos", "Todos"], ["pendente", "Aguardando"], ["confirmado", "Confirmados"]], rascunho.status)}</select></div>
           <div class="bf2-campo"><label for="bf2-galpao">Galpão</label><select id="bf2-galpao" data-f="galpao"></select></div>
@@ -181,6 +185,7 @@
       campo("conta").innerHTML = opcoes([["", "Todas as contas"]].concat(lista.map((c) => [c, c])), contaAtual);
       campo("galpao").innerHTML = opcoes([["", "Todos"]].concat(GALPOES), rascunho.galpao);
       campo("plataforma").innerHTML = opcoes([["", "Todas"]].concat(PLATAFORMAS), rascunho.plataforma);
+      if (mostrarTipo) campo("tipo").innerHTML = opcoes([["", "Todos"]].concat(TIPOS), rascunho.tipo);
     }
 
     function pendentes() { return CAMPOS_FORM.filter((k) => String(rascunho[k] || "") !== String(aplicado[k] || "")).length; }
@@ -213,6 +218,7 @@
         ? `<span class="bf2-chip">${escapar(texto)}<button type="button" data-rem="${remover}" aria-label="Remover filtro">✕</button></span>`
         : `<span class="bf2-chip fixo">${escapar(texto)}</span>`);
       chip(aplicado.conta || "Todas as contas", aplicado.conta ? "conta" : null);
+      if (mostrarTipo && aplicado.tipo) chip((TIPOS.find(([v]) => v === aplicado.tipo) || [0, aplicado.tipo])[1], "tipo");
       if (aplicado.status !== "todos") chip(NOMES_STATUS[aplicado.status], "status");
       if (aplicado.galpao) chip((GALPOES.find(([v]) => String(v) === String(aplicado.galpao)) || [0, "Galpão " + aplicado.galpao])[1], "galpao");
       if (aplicado.busca) chip(`Venda: ${aplicado.busca} (todo o histórico)`, "busca");
@@ -292,6 +298,7 @@
         if (!op) return;
         if (Array.isArray(op.galpoes) && op.galpoes.length) GALPOES = op.galpoes.map((g) => [g.valor, g.nome]);
         if (Array.isArray(op.plataformas) && op.plataformas.length) PLATAFORMAS = op.plataformas.map((p) => [p.valor, p.nome]);
+        if (Array.isArray(op.tipos) && op.tipos.length) TIPOS = op.tipos.map((t) => [t.valor, t.nome]);
         preencherListas(); pintarChips();
       }).catch((erro) => console.error("Não consegui carregar as opções", erro));
     fetch("/api/solicitacoes-cancelamento/contas", { cache: "no-store" })
@@ -309,6 +316,7 @@
       if (aplicado.aba === "meus") { status = "pendente"; p.atendimento = "meus"; }
       p.status = status;
       if (aplicado.conta) p.conta = aplicado.conta;
+      if (mostrarTipo && aplicado.tipo) p.tipo = aplicado.tipo;
       if (aplicado.galpao) p.galpao = aplicado.galpao;
       if (aplicado.plataforma) p.plataforma = aplicado.plataforma;
       if (mostrarOrigem && aplicado.origem) p.origem = aplicado.origem;
