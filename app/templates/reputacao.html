@@ -65,6 +65,57 @@
     .rp-barra { height:8px; border-radius:4px; background:#eef1f4; margin:8px 0 6px; overflow:hidden; }
     .rp-barra div { height:100%; border-radius:4px; }
     .rp-aviso { margin:12px 0 0; padding:10px 12px; border-radius:10px; font-size:13.5px; background:#fdf3e3; color:#8a4200; display:none; }
+    /* ---------- Atendimento (quem está com a conta) ---------- */
+    .rp-card { position:relative; }
+    .rp-card:focus-visible { outline:3px solid rgba(43,175,242,.5); outline-offset:2px; }
+    .rp-atd { border-top:1px dashed var(--cmx-borda); padding-top:9px; display:flex; flex-direction:column; gap:6px; }
+    .rp-atd-linha { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+    .rp-atd-quem { display:flex; flex-direction:column; align-items:flex-start; gap:3px; min-width:0; }
+    .rp-atd-quem small { font-size:11.5px; color:var(--cmx-texto-suave); }
+    .rp-atd-btns { display:flex; gap:6px; flex-shrink:0; }
+    .rp-btn-p { height:30px; padding:0 11px; font-size:12.5px; }
+    .rp-alerta { color:#b3261e !important; font-weight:700; }
+    .rp-pill { display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 10px; border-radius:999px; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+    .rp-p-livre { background:#e2f4e9; color:#1a6641; } .rp-p-verde { background:#dff5e9; color:#0c6b44; }
+    .rp-p-azul { background:#e1efff; color:#17589a; } .rp-p-meu { background:#1b2430; color:#fff; }
+    .rp-p-verm { background:#fde6e4; color:#b3261e; } .rp-p-cinza { background:#eceff2; color:#46525e; }
+    .rp-p-roxo { background:#efeafd; color:#5a3cc4; }
+    .rp-solic { font-size:11.5px; font-weight:600; color:#5a3cc4; }
+    .rp-sub { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .rp-select { height:34px; border:1px solid #d5dbe1; border-radius:999px; padding:0 12px; font:600 12.5px Inter,sans-serif; color:#4a5663; background:#fff; }
+    /* Quadro "Equipe agora" (supervisão) */
+    .rp-equipe { background:#fff; border:2px solid #1b2430; border-radius:16px; padding:16px 20px 10px; margin:18px 0 0; }
+    .rp-equipe-cab { display:flex; justify-content:space-between; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px; }
+    .rp-equipe-cab h2 { font-size:15px; margin:0; } .rp-equipe-cab p { margin:2px 0 0; font-size:12.5px; color:var(--cmx-texto-suave); max-width:420px; }
+    .rp-kpis { display:flex; gap:10px; flex-wrap:wrap; }
+    .rp-kpi { border:1px solid var(--cmx-borda); background:#fff; border-radius:12px; padding:8px 14px; min-width:118px; text-align:left; cursor:pointer; font-family:Inter,sans-serif; color:var(--cmx-texto); }
+    .rp-kpi:hover { border-color:#9fb0c0; } .rp-kpi.ativo { border:2px solid #1b2430; padding:7px 13px; }
+    .rp-kpi b { font-size:22px; display:block; line-height:1.15; } .rp-kpi span { font-size:11.5px; color:var(--cmx-texto-suave); }
+    .rp-kpi.alerta { border-color:#f3c3bf; background:#fff5f4; } .rp-kpi.alerta b { color:#d64541; }
+    .rp-tabela-rolagem { overflow-x:auto; }
+    .rp-eq { width:100%; border-collapse:collapse; font-size:13.5px; min-width:760px; }
+    .rp-eq th { text-align:left; font-size:11.5px; color:var(--cmx-texto-suave); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--cmx-borda); }
+    .rp-eq td { padding:9px 10px; border-bottom:1px solid #f0f2f4; vertical-align:middle; }
+    .rp-eq tr:last-child td { border-bottom:none; }
+    .rp-eq tr.clic[data-operador]:hover td { background:#f7f9fb; cursor:pointer; }
+    .rp-op { display:flex; align-items:center; gap:9px; font-weight:600; }
+    .rp-av { width:26px; height:26px; border-radius:50%; background:#2baff2; color:#fff; font-size:12px; display:flex; align-items:center; justify-content:center; font-weight:700; flex-shrink:0; }
+    .rp-contas-op { color:var(--cmx-texto-suave); font-size:12.5px; }
+    .rp-mini { font-size:12px; color:#2baff2; font-weight:600; }
+    /* Gaveta */
+    .rp-atd-gaveta { margin-top:16px; padding-top:14px; border-top:1px solid var(--cmx-borda); }
+    .rp-acoes-gaveta { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+    .rp-bloco { margin-top:14px; font-size:13.5px; }
+    .rp-rot { font-size:12px; color:var(--cmx-texto-suave); margin-bottom:5px; }
+    .rp-comp { width:100%; border-collapse:collapse; font-size:13px; border:1px solid var(--cmx-borda); border-radius:10px; overflow:hidden; }
+    .rp-comp th { background:#f7f9fb; text-align:left; font-size:11.5px; color:var(--cmx-texto-suave); padding:6px 10px; }
+    .rp-comp td { padding:6px 10px; border-top:1px solid #f0f2f4; }
+    .rp-hist > div { padding:7px 0; border-bottom:1px solid #f0f2f4; }
+    .rp-hist .q { color:var(--cmx-texto-suave); font-size:12px; margin-right:8px; }
+    .rp-hist .d { color:#4a5663; font-size:12.5px; margin-top:2px; white-space:pre-wrap; }
+    .rp-form textarea { width:100%; min-height:74px; border:1px solid #d5dbe1; border-radius:9px; padding:9px 10px; font:13.5px Inter,sans-serif; resize:vertical; }
+    .rp-form textarea:focus, .rp-form input:focus { outline:none; border-color:#1b2430; }
+    .rp-erro { color:#b3261e; font-size:12.5px; margin-top:6px; min-height:0; }
     @media (max-width: 1100px) {
       .rp-resumo { grid-template-columns:1fr; }
       .rp-inds { grid-template-columns:repeat(2,minmax(0,1fr)); }
@@ -129,7 +180,7 @@
 
   <div id="rp-detalhe"></div>
 
-  <script src="/static/reputacao.js?v=1"></script>
+  <script src="/static/reputacao.js?v=2"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
