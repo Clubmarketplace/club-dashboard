@@ -58,6 +58,28 @@ PLATAFORMAS_VALIDAS = set(PLATAFORMAS)
 GALPOES_VALIDOS = set(GALPOES)
 ORIGENS_VALIDAS = {"seller", "logistica", "equipe", "publico"}
 
+# Tipos de solicitação. Mesmo fluxo (pedir -> operador resolve -> confirma
+# com protocolo); só muda o que está sendo pedido. A chave é o que fica
+# gravado no banco -- NUNCA mudar uma chave existente, só o nome.
+# Registros antigos (tipo nulo) contam como "cancelamento".
+TIPO_PADRAO = "cancelamento"
+TIPOS = {
+    "cancelamento": "Cancelamento",
+    "reputacao": "Reputação",
+}
+TIPOS_VALIDOS = set(TIPOS)
+
+
+def filtro_tipo(tipo: str):
+    """
+    Condição SQL pra filtrar por tipo. "cancelamento" inclui os registros
+    antigos (tipo nulo). Usada aqui e em quem só trata cancelamentos
+    (relatórios, verificação automática no ML, contagem do dashboard).
+    """
+    if tipo == TIPO_PADRAO:
+        return or_(SolicitacaoCancelamento.tipo == TIPO_PADRAO, SolicitacaoCancelamento.tipo.is_(None))
+    return SolicitacaoCancelamento.tipo == tipo
+
 # Horário de Brasília pros filtros de período. O Brasil não tem horário
 # de verão desde 2019, então UTC-3 fixo é exato e não depende de tzdata.
 FUSO_BR = timezone(timedelta(hours=-3))
@@ -108,6 +130,8 @@ class NovaSolicitacaoLote(BaseModel):
     conta: str
     itens: list[ItemCancelamento]
     galpao: Optional[int] = None  # obrigatório só pra logística
+    # "cancelamento" (padrão) ou "reputacao". Logística só pede cancelamento.
+    tipo: str = TIPO_PADRAO
     # Quando o formulário já avisou "essa venda já foi solicitada" e a
     # pessoa decidiu enviar mesmo assim.
     confirmar_duplicadas: bool = False
@@ -125,6 +149,14 @@ class NovaSolicitacaoLote(BaseModel):
         valor = limpar_espacos(valor)
         if not valor:
             raise ValueError("Campo obrigatório não pode ficar em branco.")
+        return valor
+
+    @field_validator("tipo")
+    @classmethod
+    def validar_tipo(cls, valor: str) -> str:
+        valor = (valor or TIPO_PADRAO).strip()
+        if valor not in TIPOS_VALIDOS:
+            raise ValueError(f"Tipo inválido. Use um de: {', '.join(TIPOS_VALIDOS)}")
         return valor
 
     @field_validator("itens")
@@ -197,8 +229,11 @@ def _mapa_contas_conhecidas(db: Session) -> dict[str, str]:
 
 def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) -> dict:
     chave = s.conta_chave or chave_conta(s.conta)
+    tipo = s.tipo or TIPO_PADRAO
     return {
         "id": s.id,
+        "tipo": tipo,
+        "tipo_nome": TIPOS.get(tipo, tipo),
         "plataforma": s.plataforma,
         "conta": s.conta,
         "conta_chave": chave,
@@ -269,6 +304,9 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     elif papel == "logistica":
         origem = "logistica"
         conta_digitada = corpo.conta
+        # Galpão só lida com cancelamento (reputação é assunto do seller/equipe).
+        if corpo.tipo != TIPO_PADRAO:
+            raise HTTPException(status_code=400, detail="O galpão só pode registrar solicitações de cancelamento.")
         if corpo.galpao not in GALPOES_VALIDOS:
             raise HTTPException(status_code=400, detail="Escolha o galpão.")
         galpao = corpo.galpao
@@ -303,11 +341,13 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     estrito = origem in ("logistica", "equipe")
     numeros = [_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito) for i in corpo.itens]
 
-    # --- Aviso de duplicidade (mesma venda + mesma plataforma) ---
+    # --- Aviso de duplicidade (mesma venda + mesma plataforma + mesmo tipo) ---
+    # Pedir cancelamento e depois reputação da MESMA venda é normal: não avisa.
     if not corpo.confirmar_duplicadas:
         existentes = (
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.plataforma == corpo.plataforma)
+            .filter(filtro_tipo(corpo.tipo))
             .filter(SolicitacaoCancelamento.numero_venda.in_(numeros))
             .order_by(SolicitacaoCancelamento.criado_em.asc())
             .all()
@@ -336,6 +376,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         criadas = []
         for item, numero in zip(corpo.itens, numeros):
             solicitacao = SolicitacaoCancelamento(
+                tipo=corpo.tipo,
                 plataforma=corpo.plataforma,
                 conta=nome_conta,
                 conta_chave=chave,
@@ -353,7 +394,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                          "publico": "Link público"}.get(origem, origem)
         for s in criadas:
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
-                             detalhe=f"{rotulo_origem} · motivo: {s.motivo}")
+                             detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}")
         db.commit()
         for s in criadas:
             db.refresh(s)
@@ -369,6 +410,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 
     return {
         "status": "registrado",
+        "tipo": corpo.tipo,
+        "tipo_nome": TIPOS[corpo.tipo],
         "quantidade": len(criadas),
         "conta": nome_conta,
         "origem": origem,
@@ -398,6 +441,7 @@ def listar_solicitacoes(db: Session = Depends(get_db), limite: int = 500):
 def listar_opcoes():
     """Plataformas e galpões disponíveis (pro formulário e pros filtros)."""
     return {
+        "tipos": [{"valor": k, "nome": v} for k, v in TIPOS.items()],
         "plataformas": [{"valor": k, "nome": v} for k, v in PLATAFORMAS.items()],
         "galpoes": [{"valor": k, "nome": v} for k, v in GALPOES.items()],
     }
@@ -424,6 +468,7 @@ def buscar_solicitacoes(
     conta: Optional[str] = None,       # nome ou chave -- comparado pela chave
     plataforma: Optional[str] = None,
     origem: Optional[str] = None,      # seller | logistica | publico
+    tipo: Optional[str] = None,        # cancelamento | reputacao (vazio = todos)
     dias: Optional[int] = 30,          # atalho de período (ignorado se de/ate)
     de: Optional[str] = None,          # AAAA-MM-DD (horário de Brasília)
     ate: Optional[str] = None,
@@ -444,8 +489,12 @@ def buscar_solicitacoes(
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
     if usuario.papel == "logistica":
         origem = "logistica"
+        tipo = TIPO_PADRAO  # galpão só enxerga cancelamentos
 
     consulta = db.query(SolicitacaoCancelamento)
+
+    if tipo in TIPOS_VALIDOS:
+        consulta = consulta.filter(filtro_tipo(tipo))
 
     if galpao in GALPOES_VALIDOS:
         consulta = consulta.filter(SolicitacaoCancelamento.galpao == galpao)
@@ -592,7 +641,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
     if usuario_logado is None:
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
     if usuario_logado.papel not in PAPEIS_QUE_CONFIRMAM:
-        raise HTTPException(status_code=403, detail="Seu perfil não pode confirmar cancelamentos.")
+        raise HTTPException(status_code=403, detail="Seu perfil não pode confirmar solicitações.")
 
     solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
     if solicitacao is None:
@@ -600,7 +649,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
     if not corpo.sem_protocolo and not corpo.protocolo:
-        raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi cancelado sem protocolo).")
+        raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi resolvido sem protocolo).")
 
     # Confirmou direto, sem ter assumido: o histórico registra os dois passos.
     atual = _dados_atendimento(solicitacao)
@@ -622,7 +671,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
     solicitacao.em_atendimento_desde = None
     registrar_evento(
         db, solicitacao.id, "confirmou", usuario=usuario_logado,
-        detalhe=f"{TEXTO_PELO_PAINEL_ML if corpo.sem_protocolo else 'Protocolo ' + corpo.protocolo} · {LABEL_RESULTADO_IMPACTO.get(corpo.resultado_impacto, corpo.resultado_impacto)}",
+        detalhe=f"{_texto_sem_protocolo(solicitacao) if corpo.sem_protocolo else 'Protocolo ' + corpo.protocolo} · {LABEL_RESULTADO_IMPACTO.get(corpo.resultado_impacto, corpo.resultado_impacto)}",
     )
     db.commit()
     db.refresh(solicitacao)
@@ -830,6 +879,9 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
     if solicitacao.plataforma != "mercado_livre":
         raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
+    if (solicitacao.tipo or TIPO_PADRAO) != TIPO_PADRAO:
+        # Reputação não tem como ser conferida pela API do ML: é confirmada à mão.
+        raise HTTPException(status_code=400, detail="Verificação automática só existe pra solicitações de cancelamento.")
 
     from app.verificacao_cancelamento import verificar_uma_solicitacao
     resultado = verificar_uma_solicitacao(solicitacao, db)
@@ -881,15 +933,22 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
     tratadas_no_dia = (
         db.query(SolicitacaoCancelamento)
         .filter(SolicitacaoCancelamento.confirmado_em >= inicio_dia, SolicitacaoCancelamento.confirmado_em < fim_dia)
+        .filter(filtro_tipo(TIPO_PADRAO))  # relatório de cancelamentos: reputação fica de fora
         .order_by(SolicitacaoCancelamento.confirmado_em.asc())
         .all()
     )
     registradas_no_dia = (
         db.query(SolicitacaoCancelamento)
         .filter(SolicitacaoCancelamento.criado_em >= inicio_dia, SolicitacaoCancelamento.criado_em < fim_dia)
+        .filter(filtro_tipo(TIPO_PADRAO))
         .count()
     )
-    pendentes_total = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.confirmado_por.is_(None)).count()
+    pendentes_total = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.confirmado_por.is_(None))
+        .filter(filtro_tipo(TIPO_PADRAO))
+        .count()
+    )
 
     contagem_impacto = {"sem_impacto": 0, "com_impacto": 0, "aguardando_confirmacao": 0, "nao_informado": 0}
     for s in tratadas_no_dia:
@@ -992,11 +1051,18 @@ def _hora_br_texto(data_utc: Optional[datetime]) -> str:
 # Confirmado sem protocolo = a venda foi cancelada direto pelo painel do
 # Mercado Livre (sem abrir atendimento). O texto diz COMO foi cancelado.
 TEXTO_PELO_PAINEL_ML = "Cancelado pelo painel do ML (sem protocolo)"
+# Mesma ideia pra reputação: resolvido direto no painel, sem abrir atendimento.
+TEXTO_REPUTACAO_SEM_PROTOCOLO = "Resolvido pelo painel do ML (sem protocolo)"
+
+
+def _texto_sem_protocolo(s: SolicitacaoCancelamento) -> str:
+    """Texto do "sem protocolo" conforme o tipo da solicitação."""
+    return TEXTO_REPUTACAO_SEM_PROTOCOLO if s.tipo == "reputacao" else TEXTO_PELO_PAINEL_ML
 
 
 def _texto_protocolo(s: SolicitacaoCancelamento) -> str:
     if s.protocolo == "":
-        return TEXTO_PELO_PAINEL_ML
+        return _texto_sem_protocolo(s)
     return s.protocolo or ""
 
 
@@ -1030,6 +1096,7 @@ def relatorio_por_conta(
     consulta = db.query(SolicitacaoCancelamento).filter(
         SolicitacaoCancelamento.criado_em >= _inicio_do_dia_br_em_utc(datetime.combine(inicio, datetime.min.time())),
         SolicitacaoCancelamento.criado_em < _inicio_do_dia_br_em_utc(datetime.combine(fim + timedelta(days=1), datetime.min.time())),
+        filtro_tipo(TIPO_PADRAO),  # relatório de cancelamentos: reputação fica de fora
     )
     mapa_contas = _mapa_contas_conhecidas(db)
     conta_nome = None
@@ -1203,11 +1270,13 @@ def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Sessio
     registradas = (
         db.query(SolicitacaoCancelamento)
         .filter(SolicitacaoCancelamento.criado_em >= inicio, SolicitacaoCancelamento.criado_em < fim)
+        .filter(filtro_tipo(TIPO_PADRAO))  # só cancelamentos
         .order_by(SolicitacaoCancelamento.criado_em.asc()).all()
     )
     tratadas = (
         db.query(SolicitacaoCancelamento)
         .filter(SolicitacaoCancelamento.confirmado_em >= inicio, SolicitacaoCancelamento.confirmado_em < fim)
+        .filter(filtro_tipo(TIPO_PADRAO))
         .order_by(SolicitacaoCancelamento.confirmado_em.asc()).all()
     )
     # Histórico das tratadas numa consulta só (pro "tempo por operador").
