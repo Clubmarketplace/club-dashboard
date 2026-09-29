@@ -16,14 +16,20 @@ ou remover a conta vinculada, o próximo /api/cmx/validar já nega, e a
 extensão para de funcionar pra essa pessoa.
 """
 from fastapi import APIRouter, Depends, Header, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import auth
 from app.contas_util import chave_conta
 from app.database import get_db
-from app.models import Conta, Usuario
+from app.models import Conta, CustoSku, Usuario
+
+# Razão (para mais ou para menos) a partir da qual uma mudança de custo é
+# marcada como "suspeita" na resposta -- não bloqueia a gravação (quem
+# decide é sempre quem está do outro lado, extensão ou painel), só avisa,
+# igual ao mesmo alerta que já existe na importação de planilha do popup.js.
+RAZAO_CUSTO_SUSPEITO = 5
 
 router = APIRouter(prefix="/api/cmx", tags=["cmx-extensao"])
 
@@ -128,6 +134,126 @@ def login_extensao(dados: LoginCmxEntrada, db: Session = Depends(get_db)):
         "usuario": {"nome_exibicao": usuario.nome_exibicao},
         "conta": _serializar_conta(conta),
     }
+
+
+class CustoSkuEntrada(BaseModel):
+    sku: str
+    custo: float
+    nome_produto: str | None = None
+
+    @field_validator("sku")
+    @classmethod
+    def _sku_nao_vazio(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("SKU não pode ser vazio.")
+        return v
+
+    @field_validator("custo")
+    @classmethod
+    def _custo_positivo(cls, v: float) -> float:
+        # Regra dura, de propósito: custo errado infla/derruba margem de
+        # verdade na tela de vendas -- não existe "custo zero ou negativo"
+        # válido aqui. Vazio/inválido é rejeitado pelo próprio Pydantic
+        # antes disso (campo é float obrigatório).
+        if v <= 0:
+            raise ValueError("Custo precisa ser maior que zero.")
+        return v
+
+
+class CustosEntrada(BaseModel):
+    itens: list[CustoSkuEntrada]
+
+
+@router.get("/custos")
+def listar_custos(usuario: Usuario = Depends(usuario_logado_cmx), db: Session = Depends(get_db)):
+    """
+    Devolve TODOS os custos cadastrados da conta do usuário logado, numa
+    chamada só (nunca uma por SKU) -- é o que a extensão usa pra calcular
+    margem na tela de Promoções, e o que a tela "Produtos > Custos" do
+    painel vai usar pra listar/gerar planilha.
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    custos = db.query(CustoSku).filter(CustoSku.conta_id == conta.id).order_by(CustoSku.sku).all()
+    return {
+        "conta": _serializar_conta(conta),
+        "itens": [
+            {
+                "sku": c.sku,
+                "custo": c.custo,
+                "nome_produto": c.nome_produto,
+                "atualizado_em": c.atualizado_em.isoformat() if c.atualizado_em else None,
+                "atualizado_por": c.atualizado_por,
+            }
+            for c in custos
+        ],
+    }
+
+
+@router.post("/custos")
+def atualizar_custos(
+    dados: CustosEntrada,
+    usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
+):
+    """
+    Grava custos em lote (1 item ou centenas, sempre a mesma chamada --
+    nunca uma requisição por SKU, ver conversa sobre desempenho com
+    100+ contas usando ao mesmo tempo). Sempre isolado pela conta do
+    usuário logado: mesmo que o payload tentasse, não existe campo
+    conta_id vindo de fora, então não tem como um seller gravar custo
+    em outra conta por engano ou de propósito.
+
+    Cada item devolve o custo antigo x novo e uma marcação "suspeito"
+    (variação de 5x ou mais) -- quem chamou (extensão ou painel) decide
+    o que fazer com isso; esta rota não bloqueia a gravação sozinha.
+    """
+    if not dados.itens:
+        raise HTTPException(status_code=400, detail="Nenhum item enviado.")
+
+    conta = _conta_vinculada_do_usuario(usuario, db)
+
+    existentes = {
+        c.sku: c
+        for c in db.query(CustoSku).filter(CustoSku.conta_id == conta.id).all()
+    }
+
+    resultado = []
+    for item in dados.itens:
+        registro = existentes.get(item.sku)
+        custo_anterior = registro.custo if registro else None
+
+        suspeito = False
+        if custo_anterior and custo_anterior > 0:
+            razao = (
+                item.custo / custo_anterior
+                if item.custo >= custo_anterior
+                else custo_anterior / item.custo
+            )
+            suspeito = razao >= RAZAO_CUSTO_SUSPEITO
+
+        if registro is None:
+            registro = CustoSku(conta_id=conta.id, sku=item.sku)
+            db.add(registro)
+            existentes[item.sku] = registro  # evita duplicar se o SKU repetir no mesmo lote
+
+        registro.custo = item.custo
+        if item.nome_produto:
+            registro.nome_produto = item.nome_produto
+        registro.atualizado_por = usuario.nome_exibicao
+
+        resultado.append(
+            {
+                "sku": item.sku,
+                "custo_anterior": custo_anterior,
+                "custo_novo": item.custo,
+                "alterado": custo_anterior != item.custo,
+                "suspeito": suspeito,
+            }
+        )
+
+    db.commit()
+    return {"total_processados": len(resultado), "itens": resultado}
 
 
 @router.get("/validar")
