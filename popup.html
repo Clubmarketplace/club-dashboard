@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sistema de Precificação — ClubMarketplace</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>Sistema de Precificação</h1>
+    <span class="subtitulo" id="subtitulo-header">Precificador Club Marketplace</span>
+  </header>
+
+  <!-- Tela de login: some quando a sessão já está válida (ver popup.js) -->
+  <div id="tela-login" class="bloco">
+    <h2>Entrar</h2>
+    <p class="ajuda">
+      Entre com o usuário e senha do seu acesso ao Club Marketplace. A
+      extensão identifica sozinha a qual conta você pertence e carrega os
+      custos dela automaticamente.
+    </p>
+    <div class="form-login">
+      <input type="text" id="login-usuario" placeholder="Usuário" autocomplete="username" />
+      <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" />
+      <button id="btn-login" class="btn-primario">Entrar</button>
+    </div>
+    <p id="msg-login" class="mensagem"></p>
+  </div>
+
+  <!-- Conteúdo normal do popup: só aparece depois de logado -->
+  <div id="app-principal" style="display: none;">
+    <div class="bloco" id="bloco-conta-logada">
+      <div class="linha-conta-logada">
+        <span id="texto-conta-logada"></span>
+        <button id="btn-sair" class="link-sair">Sair</button>
+      </div>
+    </div>
+
+    <div class="bloco">
+      <h2>Custos por SKU (conta)</h2>
+      <p class="ajuda">
+        Custos cadastrados no servidor do Club Marketplace pra essa conta.
+        Atualizados automaticamente sempre que alguém sobe uma planilha ou
+        edita um custo no painel.
+      </p>
+      <p id="resumo-custos-servidor" class="ajuda"></p>
+      <button id="btn-atualizar-custos" class="btn-primario">🔄 Atualizar custos agora</button>
+      <p id="msg-custos-servidor" class="mensagem"></p>
+    </div>
+
+    <div class="bloco">
+      <h2>Taxas cadastradas</h2>
+    <p class="ajuda">
+      Cadastre as taxas que valem pra essa conta (ex: Simples Nacional,
+      ICMS, Taxa Clube). Elas são aplicadas como % sobre o preço final de
+      cada proposta, junto com o custo, pra calcular o lucro líquido.
+    </p>
+    <div id="lista-taxas" class="lista-taxas"></div>
+
+    <div class="form-nova-taxa">
+      <input type="text" id="nova-taxa-nome" placeholder="Nome da taxa (ex: Simples Nacional)" />
+      <input type="number" id="nova-taxa-percentual" placeholder="%" step="0.01" min="0" />
+      <button id="btn-add-taxa" class="btn-primario">+ Adicionar taxa</button>
+    </div>
+  </div>
+
+  <div class="bloco">
+    <h2>Planilha de custos por SKU</h2>
+    <p class="ajuda">
+      Baixe o modelo abaixo, preencha com <strong>SKU</strong> e
+      <strong>Custo</strong> (nessa ordem, sem mudar o cabeçalho) e depois
+      importe o mesmo arquivo aqui. Aceita <strong>.xlsx</strong> (recomendado —
+      lido direto, sem depender de configuração de exportação do Excel) ou
+      <strong>.csv</strong>. O custo pode ser digitado com ou sem "R$",
+      com vírgula ou ponto decimal — a extensão reconhece os formatos
+      comuns. Os valores viram o preenchimento automático do campo de
+      custo na tela de Promoções — mas se você digitar algo manualmente
+      por cima, o manual sempre tem prioridade.
+    </p>
+    <button id="btn-baixar-modelo" class="btn-primario">⬇ Baixar modelo de planilha (.xlsx)</button>
+    <div style="height: 10px;"></div>
+    <input type="file" id="input-arquivo-csv" accept=".csv,text/csv,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+    <button id="btn-importar-csv" class="btn-primario">Importar planilha</button>
+    <p id="msg-importar" class="mensagem"></p>
+    <p id="resumo-planilha" class="ajuda"></p>
+    <button id="btn-limpar-planilha" class="btn-perigo">Limpar planilha importada</button>
+  </div>
+
+  <div class="bloco">
+    <h2>Custos por anúncio</h2>
+    <p class="ajuda">
+      O custo de cada anúncio é digitado direto na tela de Promoções do
+      Mercado Livre e fica salvo automaticamente aqui.
+    </p>
+    <button id="btn-limpar-custos" class="btn-perigo">Limpar todos os custos salvos</button>
+    <p id="msg-limpar" class="mensagem"></p>
+  </div>
+  </div><!-- fim #app-principal -->
+
+  <script src="xlsx.full.min.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,32 @@
+{
+  "manifest_version": 3,
+  "name": "Sistema de Precificação — ClubMarketplace",
+  "version": "3.2.0",
+  "description": "Mostra a margem de lucro em tempo real embaixo de cada proposta de promoção do Mercado Livre. Login vinculado à sua conta do Club Marketplace, com sincronização automática de custos.",
+  "permissions": ["storage", "tabs", "scripting", "alarms"],
+  "host_permissions": [
+    "*://*.mercadolivre.com.br/*",
+    "*://*.mercadolibre.com/*",
+    "https://api.mercadolibre.com/*",
+    "https://auth.mercadolivre.com.br/*",
+    "https://backend-production-f9196.up.railway.app/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Sistema de Precificação — ClubMarketplace"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://vendedores.mercadolivre.com.br/anuncios/*",
+        "*://vendedores.mercadolibre.com/anuncios/*"
+      ],
+      "js": ["content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}
