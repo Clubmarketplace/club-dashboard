@@ -105,11 +105,6 @@
       </header>
 
   <main>
-    <div class="topo-pagina">
-      <div></div>
-      <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
-    </div>
-
     <div class="resumo">
       <div class="item"><div class="valor" id="resumo-total">{{ solicitacoes|length }}</div><div class="rotulo">Total</div></div>
       <div class="item"><div class="valor" id="resumo-confirmados">{{ solicitacoes|selectattr("confirmado_por")|list|length }}</div><div class="rotulo">Resolvidas</div></div>
