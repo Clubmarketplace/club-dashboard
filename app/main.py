@@ -256,6 +256,7 @@ async def exigir_login(request: Request, call_next):
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/meus-cancelamentos", "/logout",
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
+        "/extensao",
     }
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
@@ -491,6 +492,31 @@ def pagina_solicitar_cancelamento(request: Request):
             "equipe_logado": equipe_logado,
             "usuario_logado": usuario,
             "nome_usuario": nome_usuario,
+        },
+    )
+
+
+@app.get("/extensao", response_class=HTMLResponse)
+def pagina_extensao(request: Request):
+    """
+    Tela de instalação/apresentação do "Sistema de Precificação" (extensão
+    do Chrome). Reaproveita a sessão por cookie que o seller já tem no
+    painel -- sem login separado. O link do botão "Instalar" aponta pra
+    Chrome Web Store (Chrome não deixa instalar extensão de outro lugar).
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="extensao.html",
+        context={
+            "conta_logada": conta_logada,
+            "seller_logado": seller_logado,
+            # TODO: trocar pelo link real assim que a extensão for publicada
+            # (unlisted) na Chrome Web Store.
+            "url_extensao": None,
         },
     )
 
