@@ -182,11 +182,10 @@
   .tela-sucesso p { font-size:13.5px; color:var(--text-dim); margin:0 0 22px 0; }
   .tela-sucesso button { padding:10px 20px; border-radius:9px; border:1.5px solid var(--line); background:#fff; font-weight:600; font-size:13.5px; cursor:pointer; }
 </style>
-{% if equipe_logado or seller_logado %}
-<!-- Equipe (admin/supervisor/atendente) e seller: formulário dentro do
-     sistema, com o menu à esquerda (cada um vê só os itens do seu papel --
-     _menu.html pra equipe, _menu_seller.html pro seller). Logística
-     continua com a tela cheia de sempre. -->
+{% if equipe_logado or seller_logado or logistica_logado %}
+<!-- Equipe (admin/supervisor/atendente), seller e logística: formulário
+     dentro do sistema, com o menu à esquerda (cada um vê só os itens do
+     seu papel -- _menu.html, _menu_seller.html ou _menu_logistica.html). -->
 <link rel="stylesheet" href="/static/dashboard.css?v=7" />
 <style>
   body.modo-shell { display:block; padding:0 !important; background:var(--bg); }
@@ -200,14 +199,14 @@
 </style>
 {% endif %}
 </head>
-<body class="modo-largo{% if equipe_logado or seller_logado %} modo-shell{% endif %}"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
-{% if equipe_logado or seller_logado %}
+<body class="modo-largo{% if equipe_logado or seller_logado or logistica_logado %} modo-shell{% endif %}"><!-- horizontal no computador pra todos; no celular fica vertical (media query) -->
+{% if equipe_logado or seller_logado or logistica_logado %}
 <div class="cmx-shell">
   <aside class="cmx-sidebar">
     <div class="cmx-marca">
       <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
     </div>
-    {% if equipe_logado %}{% include "_menu.html" %}{% else %}{% include "_menu_seller.html" %}{% endif %}
+    {% if equipe_logado %}{% include "_menu.html" %}{% elif seller_logado %}{% include "_menu_seller.html" %}{% else %}{% include "_menu_logistica.html" %}{% endif %}
   </aside>
   <div class="cmx-conteudo"><div class="area-formulario">
 {% endif %}
@@ -229,7 +228,6 @@
         <p class="logado-como">Lançando pela equipe · <b>{{ nome_usuario }}</b></p>
         {% endif %}
         {% if logistica_logado %}
-        <p style="margin:-16px 0 8px;"><a href="/solicitacoes-galpao" style="color:#2baff2; font-weight:600; font-size:13px; text-decoration:none;">← Ver solicitações do galpão</a></p>
         <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
         {% endif %}
       </div>
@@ -319,7 +317,7 @@
   </div>
 </div>
 
-{% if equipe_logado or seller_logado %}
+{% if equipe_logado or seller_logado or logistica_logado %}
   </div></div>
 </div>
 <script src="/static/menu-celular.js?v=1"></script>

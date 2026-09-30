@@ -1,0 +1,18 @@
+{#
+  MENU LATERAL DA LOGÍSTICA -- mesmo visual do menu da equipe/seller
+  (classes cmx-nav-item/cmx-nav-dot do dashboard.css), só com os 2 itens
+  que esse perfil usa hoje. Mudou o que a logística vê? Muda só aqui.
+#}
+{% set _caminho = request.url.path if request else "" %}
+
+{% macro item(href, rotulo) -%}
+  {%- set ativo = (_caminho == href) -%}
+  <a class="cmx-nav-item{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"{% if ativo %} aria-current="page"{% endif %}>
+    {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
+  </a>
+{%- endmacro %}
+
+<nav class="cmx-nav" aria-label="Menu principal">
+  {{ item("/solicitar-cancelamento", "Solicitar cancelamento") }}
+  {{ item("/solicitacoes-galpao", "Acompanhar solicitações") }}
+</nav>
