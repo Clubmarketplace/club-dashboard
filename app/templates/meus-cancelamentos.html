@@ -7,23 +7,12 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
   <style>
     :root {
-      --cmx-marinho:#12181f; --cmx-bg:#f6f7f9; --cmx-papel:#ffffff;
-      --cmx-texto:#1b2430; --cmx-texto-suave:#6b7684; --cmx-borda:#e4e7eb;
-      --cmx-azul:#2baff2; --cmx-azul-fundo:#e6f7ff;
       --cmx-leve:#fdf3e3; --cmx-atencao:#d98e2f; --cmx-critico:#c1502e; --cmx-critico-fundo:#fbe9e3;
+      --cmx-azul:#2baff2; --cmx-azul-fundo:#e6f7ff;
     }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:"Inter",sans-serif; background:var(--cmx-bg); color:var(--cmx-texto); font-size:14.5px; }
-    header { background:#fff; border-bottom:1px solid var(--cmx-borda); padding:18px 32px; display:flex; align-items:center; justify-content:space-between; }
-    .marca { display:flex; align-items:center; gap:12px; }
-    .marca img { height:32px; }
-    .saudacao { font-size:13.5px; color:var(--cmx-texto-suave); }
-    .saudacao b { color:var(--cmx-texto); }
-    a.sair { font-size:12.5px; color:var(--cmx-texto-suave); text-decoration:none; margin-left:16px; }
-    a.sair:hover { text-decoration:underline; }
-
     main { max-width:820px; margin:0 auto; padding:28px 24px 60px; }
     .topo-pagina { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
     .topo-pagina h1 { font-size:20px; margin:0; }
@@ -78,46 +67,47 @@
   </style>
 </head>
 <body>
-  <header style="position:relative;">
-    <div class="marca">
-      <img src="/static/logo.png?v=2" alt="Club Marketplace" />
-    </div>
-    <div style="position:relative;">
-      <div style="display:flex; align-items:center; gap:10px; cursor:pointer; padding:6px 12px; border-radius:10px; border:1px solid var(--cmx-borda);" onclick="document.getElementById('mc-dropdown-usuario').classList.toggle('aberto')">
-        <div style="width:30px; height:30px; border-radius:50%; background:var(--cmx-azul); color:#fff; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:13px; flex-shrink:0;">{{ usuario.nome_exibicao[0]|upper }}</div>
-        <div>
-          <div style="font-size:13px; font-weight:600; line-height:1.2;">{{ usuario.nome_exibicao }}</div>
-          <div style="font-size:11px; color:var(--cmx-texto-suave); line-height:1.2;">{{ usuario.conta_vinculada }}</div>
-        </div>
-        <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
-      <div id="mc-dropdown-usuario" style="display:none; position:absolute; right:0; top:calc(100% + 6px); background:#fff; border:1px solid var(--cmx-borda); border-radius:10px; box-shadow:0 10px 30px -10px rgba(0,0,0,.2); min-width:160px; overflow:hidden; z-index:20;">
-        <a href="/logout" style="display:block; padding:11px 16px; font-size:13.5px; color:var(--cmx-critico); text-decoration:none; font-weight:600;">🚪 Sair</a>
-      </div>
-    </div>
-  </header>
-  <script>
-    document.addEventListener("click", function(e) {
-      var dropdown = document.getElementById("mc-dropdown-usuario");
-      if (dropdown && !e.target.closest("header")) dropdown.classList.remove("aberto");
-    });
-  </script>
-  <style>#mc-dropdown-usuario.aberto { display: block !important; }</style>
+      {% include "_menu_seller.html" %}
+    </aside>
 
-  <div style="background:#fff; padding:10px 32px;">
-    <span style="font-size:15px; font-weight:700; color:var(--cmx-azul);">Conta: {{ usuario.conta_vinculada }}</span>
-  </div>
+    <div class="cmx-conteudo">
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario.conta_vinculada }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Minhas solicitações</h1>
+          <p class="cmx-subtitulo">Pedidos de cancelamento e de reputação da conta {{ usuario.conta_vinculada }}</p>
+        </div>
+      </header>
 
   <main>
     <div class="topo-pagina">
-      <div>
-        <h1>Minhas solicitações</h1>
-        <p>Pedidos de cancelamento e de reputação registrados pela sua conta</p>
-      </div>
-      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-        <a href="/extensao" style="font-size:13.5px; font-weight:600; color:var(--cmx-azul); text-decoration:none;">🧩 Instalar Sistema de Precificação</a>
-        <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
-      </div>
+      <div></div>
+      <a class="botao-nova" href="/solicitar-cancelamento">+ Nova solicitação</a>
     </div>
 
     <div class="resumo">
@@ -172,6 +162,9 @@
       {% endif %}
     </div>
   </main>
+    </div>
+  </div>
+  <script src="/static/menu-celular.js?v=1"></script>
   <script>
     // Filtro por tipo: esconde/mostra as linhas e recalcula o resumo.
     (function () {

@@ -1,0 +1,20 @@
+{#
+  MENU LATERAL DO SELLER -- mesmo visual do menu da equipe (_menu.html:
+  mesmas classes cmx-nav-item/cmx-nav-dot do dashboard.css), mas com só
+  os itens que um seller pode abrir. Mudou o que o seller vê? Muda só
+  aqui -- os outros papéis usam _menu.html e não são afetados.
+#}
+{% set _caminho = request.url.path if request else "" %}
+
+{% macro item(href, rotulo) -%}
+  {%- set ativo = (_caminho == href) -%}
+  <a class="cmx-nav-item{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"{% if ativo %} aria-current="page"{% endif %}>
+    {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
+  </a>
+{%- endmacro %}
+
+<nav class="cmx-nav" aria-label="Menu principal">
+  {{ item("/meus-cancelamentos", "Minhas solicitações") }}
+  {{ item("/solicitar-cancelamento", "Nova solicitação") }}
+  {{ item("/extensao", "🧩 Instalar Sistema de Precificação") }}
+</nav>
