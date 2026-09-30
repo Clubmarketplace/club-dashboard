@@ -599,6 +599,33 @@ class CustoSku(Base):
     atualizado_por = Column(String, nullable=True)
 
 
+class VariavelConta(Base):
+    """
+    "Variáveis" (taxas) de cada conta, usadas pra calcular a margem de
+    lucro na extensão ClubMarketplaceX -- ex: "imposto" 2%, "club" 1%.
+    Antes ficavam só no chrome.storage.local do computador de cada
+    seller (perdia tudo se trocasse de PC, e cada instalação tinha o
+    próprio valor sem ninguém no Club Marketplace conseguir ver ou
+    ajustar). Agora seguem o mesmo modelo do CustoSku: isolado por
+    conta_id, nunca por nome sozinho -- toda consulta filtra pela conta
+    do usuário logado (ver app/routers/cmx.py).
+
+    Por enquanto só suporta percentual (aplicado sobre o preço, igual a
+    extensão já fazia localmente). Valor fixo (ex: "contador R$500/mês")
+    pode entrar depois como campo adicional, sem quebrar o que existe.
+    """
+
+    __tablename__ = "variaveis_conta"
+    __table_args__ = (UniqueConstraint("conta_id", "nome", name="uq_variavel_conta_nome"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    nome = Column(String, nullable=False)
+    percentual = Column(Float, nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_por = Column(String, nullable=True)
+
+
 class HistoricoConfigIA(Base):
     """Quem mudou qual ajuste da IA, de quê para quê e quando."""
 

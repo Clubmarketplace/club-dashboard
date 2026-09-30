@@ -19,6 +19,18 @@ ML_CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET", "")
 # Livre Devs (ex: https://SEU-NGROK.ngrok-free.dev/auth/callback).
 ML_REDIRECT_URI = os.getenv("ML_REDIRECT_URI", "")
 
+# Credenciais do app "ClubMarketplaceX" no Mercado Livre Devs -- um app
+# DIFERENTE do app mestre acima (usado pelo pré/pós-venda). Antes
+# ficavam escritas direto no código da extensão (background.js), o que
+# significa que qualquer pessoa que instalasse a extensão conseguia
+# abrir o "Inspecionar" e ler o CLIENT_SECRET em texto puro. Movido pra
+# cá: agora só o servidor troca código por token / renova token (ver
+# app/routers/cmx.py, rotas /api/cmx/ml/trocar-codigo e
+# /api/cmx/ml/renovar-token) -- o secret nunca mais viaja dentro do
+# pacote publicado na Chrome Web Store.
+CMX_ML_CLIENT_ID = os.getenv("CMX_ML_CLIENT_ID", "")
+CMX_ML_CLIENT_SECRET = os.getenv("CMX_ML_CLIENT_SECRET", "")
+
 # URLs fixas da API do Mercado Livre (não mudam por conta).
 ML_AUTH_BASE_URL = "https://auth.mercadolivre.com.br/authorization"
 ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
