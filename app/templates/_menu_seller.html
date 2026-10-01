@@ -13,8 +13,18 @@
   </a>
 {%- endmacro %}
 
+{% macro subitem(href, rotulo) -%}
+  {%- set ativo = (_caminho == href) -%}
+  <a class="cmx-nav-item cmx-nav-item--sub{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"{% if ativo %} aria-current="page"{% endif %}>
+    {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
+  </a>
+{%- endmacro %}
+
 <nav class="cmx-nav" aria-label="Menu principal">
   {{ item("/meus-cancelamentos", "Minhas solicitações") }}
   {{ item("/solicitar-cancelamento", "Nova solicitação") }}
+  <div class="cmx-nav-secao">📦 Produtos</div>
+  {{ subitem("/produtos/lista", "Lista") }}
+  {{ subitem("/custos", "Custos") }}
   {{ item("/extensao", "🧩 Instalar Sistema de Precificação") }}
 </nav>

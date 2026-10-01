@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Custos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  main { max-width:920px; margin:0 auto; padding:28px 24px 60px; }
+
+  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+  .cartao h2 { margin:0 0 4px; font-size:16px; }
+  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+
+  /* Busca */
+  .linha-busca { display:flex; gap:10px; flex-wrap:wrap; }
+  .linha-busca input[type="text"] {
+    flex:1 1 260px; padding:11px 14px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit;
+  }
+  .btn { border:none; border-radius:9px; padding:11px 18px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .btn-primario { background:#1b2430; color:#fff; }
+  .btn-primario:hover { background:#111826; }
+  .btn-secundario { background:#eef1f4; color:#1b2430; }
+  .btn-secundario:hover { background:#e2e6eb; }
+  .btn-perigo { background:#fff; color:var(--vermelho); border:1px solid #f0c8ba; }
+  .btn-perigo:hover { background:#fbe9e3; }
+  .btn:disabled { opacity:.55; cursor:default; }
+
+  /* Tabela de resultados */
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:16px; }
+  thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:10px 12px; border-bottom:1px solid var(--cmx-borda); }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fafbfc; }
+  .col-acoes { text-align:right; white-space:nowrap; }
+  .col-acoes button { margin-left:6px; }
+  .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+  .meta-atualizacao { font-size:11.5px; color:var(--cmx-texto-suave); }
+
+  /* Formulário de edição/novo custo */
+  .form-custo { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .form-custo .campo { display:flex; flex-direction:column; gap:5px; }
+  .form-custo label { font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); }
+  .form-custo input { padding:10px 12px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit; }
+  .form-custo input[readonly] { background:#f4f5f7; color:var(--cmx-texto-suave); }
+  .form-custo .campo-sku { flex:1 1 220px; }
+  .form-custo .campo-custo { flex:0 1 150px; }
+  .form-custo .campo-nome { flex:1 1 220px; }
+  .msg { margin-top:12px; font-size:13px; }
+  .msg.ok { color:var(--green); }
+  .msg.erro { color:var(--vermelho); }
+
+  /* Importar planilha */
+  .bloco-importar {
+    border:1px dashed var(--cmx-borda); border-radius:12px; padding:20px;
+    display:flex; align-items:center; gap:16px; background:#fafbfc; flex-wrap:wrap;
+  }
+  .bloco-importar .icone {
+    width:44px; height:44px; border-radius:10px; background:#1b2430;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .bloco-importar .info { flex:1 1 220px; min-width:0; }
+  .bloco-importar .info .nome { font-size:13.5px; font-weight:700; color:var(--cmx-texto); }
+  .bloco-importar .info .meta { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+  .bloco-importar .acoes { display:flex; gap:8px; flex-wrap:wrap; }
+  #input-planilha { display:none; }
+  #resultado-importacao { margin-top:14px; font-size:13px; }
+  #resultado-importacao.oculto { display:none; }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">seller</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Custos</h1>
+          <p class="cmx-subtitulo">Custo de cada SKU da sua conta -- usado pelo Sistema de Precificação pra calcular a margem</p>
+        </div>
+      </header>
+
+      <main>
+        <!-- Gerar / importar planilha de custos -->
+        <div class="cartao">
+          <h2>Planilha de custos</h2>
+          <p class="sub">
+            Gere uma planilha com os custos já cadastrados (pra conferir ou editar em massa), ou envie uma
+            planilha pra atualizar vários SKUs de uma vez. Formato: colunas "SKU", "Custo" e "Produto"
+            (produto é opcional) -- o mesmo que a extensão já gera na varredura.
+            Pra buscar, editar ou ver o estoque de um SKU específico, use
+            <a href="/produtos/lista">Produtos &gt; Lista</a>.
+          </p>
+          <div class="bloco-importar">
+            <div class="icone">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                <path d="M12 3v12" stroke="#f0a93d" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="m7 11 5 5 5-5" stroke="#f0a93d" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M5 20h14" stroke="#f0a93d" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="info">
+              <div class="nome">Planilha de custos (.xlsx ou .csv)</div>
+              <div class="meta">Enviar atualiza só os SKUs que aparecerem nela -- os demais continuam como estão.</div>
+            </div>
+            <div class="acoes">
+              <button class="btn btn-secundario" id="btn-gerar-planilha">Gerar planilha</button>
+              <button class="btn btn-primario" id="btn-escolher-arquivo">Enviar planilha</button>
+              <input type="file" id="input-planilha" accept=".xlsx,.xls,.csv" />
+            </div>
+          </div>
+          <div id="resultado-importacao" class="oculto"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script src="https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="/static/custos.js?v=1"></script>
+</body>
+</html>

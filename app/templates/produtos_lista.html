@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Produtos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  main { max-width:1120px; margin:0 auto; padding:28px 24px 60px; }
+
+  /* Cards de resumo */
+  .cards-resumo { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; margin-bottom:22px; }
+  .card-resumo { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:16px 18px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+  .card-resumo .rotulo { font-size:11px; font-weight:600; color:var(--cmx-texto-suave); text-transform:uppercase; letter-spacing:.02em; }
+  .card-resumo .valor { font-size:21px; font-weight:700; color:var(--cmx-texto); margin-top:6px; }
+  .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+  .card-resumo.alerta .valor { color:var(--vermelho); }
+
+  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+  .cartao h2 { margin:0 0 4px; font-size:16px; }
+  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+
+  .barra-topo-cartao { display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:0; }
+
+  /* Busca */
+  .linha-busca { display:flex; gap:10px; flex-wrap:wrap; }
+  .linha-busca input[type="text"] {
+    flex:1 1 260px; padding:11px 14px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit;
+  }
+  .btn { border:none; border-radius:9px; padding:11px 18px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .btn-primario { background:#1b2430; color:#fff; }
+  .btn-primario:hover { background:#111826; }
+  .btn-secundario { background:#eef1f4; color:#1b2430; }
+  .btn-secundario:hover { background:#e2e6eb; }
+  .btn-perigo { background:#fff; color:var(--vermelho); border:1px solid #f0c8ba; }
+  .btn-perigo:hover { background:#fbe9e3; }
+  .btn:disabled { opacity:.55; cursor:default; }
+
+  /* Tabela de resultados */
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:16px; }
+  thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:10px 12px; border-bottom:1px solid var(--cmx-borda); }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fafbfc; }
+  .col-numero { text-align:right; white-space:nowrap; }
+  .col-acoes { text-align:right; white-space:nowrap; }
+  .col-acoes button { margin-left:6px; }
+  .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+  .tag-sem-custo, .tag-sem-estoque { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; margin-left:6px; vertical-align:middle; }
+  .tag-sem-custo { background:#fdecdb; color:#a3631b; }
+  .tag-sem-estoque { background:#fbe3dd; color:var(--vermelho); }
+
+  /* Aviso de estoque indisponível */
+  .aviso-estoque { display:none; background:#fdf3dc; border:1px solid #f0d9a0; color:#8a6116; border-radius:10px; padding:12px 16px; font-size:13px; margin-bottom:18px; }
+  .aviso-estoque.visivel { display:block; }
+
+  /* Formulário de edição/novo custo */
+  .form-custo { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .form-custo .campo { display:flex; flex-direction:column; gap:5px; }
+  .form-custo label { font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); }
+  .form-custo input { padding:10px 12px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit; }
+  .form-custo input[readonly] { background:#f4f5f7; color:var(--cmx-texto-suave); }
+  .form-custo .campo-sku { flex:1 1 220px; }
+  .form-custo .campo-custo { flex:0 1 150px; }
+  .form-custo .campo-nome { flex:1 1 220px; }
+  .msg { margin-top:12px; font-size:13px; }
+  .msg.ok { color:var(--green); }
+  .msg.erro { color:var(--vermelho); }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">seller</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Produtos</h1>
+          <p class="cmx-subtitulo">Estoque ao vivo (lido do Mercado Livre) x custo de cada SKU -- pra ver o valor parado no estoque e achar SKU sem custo ou sem estoque</p>
+        </div>
+      </header>
+
+      <main>
+        <div id="aviso-estoque" class="aviso-estoque">⚠️ Não consegui consultar o estoque no Mercado Livre agora. Os custos abaixo estão certos, mas a quantidade pode estar desatualizada ou em branco.</div>
+
+        <div class="cards-resumo">
+          <div class="card-resumo">
+            <div class="rotulo">Qtd. total de estoque</div>
+            <div class="valor" id="card-estoque-total">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Valor total de estoque (custo)</div>
+            <div class="valor" id="card-valor-total">-</div>
+          </div>
+          <div class="card-resumo alerta">
+            <div class="rotulo">Produtos sem estoque</div>
+            <div class="valor" id="card-sem-estoque">-</div>
+          </div>
+          <div class="card-resumo alerta">
+            <div class="rotulo">Sem custo cadastrado</div>
+            <div class="valor" id="card-sem-custo">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Total de SKUs</div>
+            <div class="valor" id="card-total-skus">-</div>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <div class="barra-topo-cartao">
+            <div>
+              <h2>Lista de produtos</h2>
+              <p class="sub">Pesquise por SKU pra ver ou editar o custo. A quantidade vem direto do Mercado Livre (soma as variações do mesmo SKU, ex: 127V + 220V).</p>
+            </div>
+          </div>
+          <div class="linha-busca">
+            <input type="text" id="busca-sku" placeholder="Pesquisar por SKU..." />
+            <button class="btn btn-secundario" id="btn-buscar">Pesquisar</button>
+            <button class="btn btn-primario" id="btn-novo">+ Novo produto</button>
+          </div>
+
+          <table id="tabela-resultados" style="display:none;">
+            <thead>
+              <tr>
+                <th>SKU</th>
+                <th>Produto</th>
+                <th class="col-numero">Custo</th>
+                <th class="col-numero">Estoque</th>
+                <th class="col-numero">Valor total</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="corpo-resultados"></tbody>
+          </table>
+          <div class="vazio" id="mensagem-vazia" style="display:none;">Nenhum produto encontrado.</div>
+        </div>
+
+        <!-- Formulário de edição/novo custo (reaproveita a API de custos) -->
+        <div class="cartao" id="form-edicao" style="display:none;">
+          <h2 id="titulo-form">Novo produto</h2>
+          <p class="sub">A quantidade em estoque vem sempre do Mercado Livre -- aqui você só define o custo do SKU.</p>
+          <div class="form-custo">
+            <div class="campo campo-sku">
+              <label for="campo-sku-valor">SKU</label>
+              <input type="text" id="campo-sku-valor" placeholder="Ex: ABC-123" />
+            </div>
+            <div class="campo campo-custo">
+              <label for="campo-custo-valor">Custo (R$)</label>
+              <input type="text" id="campo-custo-valor" placeholder="Ex: 25,90" />
+            </div>
+            <div class="campo campo-nome">
+              <label for="campo-nome-valor">Produto (opcional)</label>
+              <input type="text" id="campo-nome-valor" placeholder="Nome do produto" />
+            </div>
+            <button class="btn btn-primario" id="btn-salvar-custo">Salvar</button>
+            <button class="btn btn-secundario" id="btn-cancelar-edicao">Cancelar</button>
+          </div>
+          <div class="msg" id="msg-salvar"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script src="/static/produtos_lista.js?v=1"></script>
+</body>
+</html>
