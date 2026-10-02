@@ -8,6 +8,7 @@
   const API_LISTA = "/api/painel/produtos/lista";
   const API_ATUALIZAR_ESTOQUE = "/api/painel/produtos/lista/atualizar-estoque";
   const API_CUSTOS = "/api/painel/custos";
+  const API_LOG_CUSTOS = "/api/painel/custos/log";
 
   const campoBusca = document.getElementById("busca-sku");
   const btnBuscar = document.getElementById("btn-buscar");
@@ -36,6 +37,11 @@
   const btnSalvar = document.getElementById("btn-salvar-custo");
   const btnCancelar = document.getElementById("btn-cancelar-edicao");
   const msgSalvar = document.getElementById("msg-salvar");
+
+  const modalHistorico = document.getElementById("modal-historico");
+  const modalHistoricoTitulo = document.getElementById("modal-historico-titulo");
+  const modalHistoricoCorpo = document.getElementById("modal-historico-corpo");
+  const btnFecharHistorico = document.getElementById("btn-fechar-historico");
 
   let editandoSkuOriginal = null; // null = criando novo
   let ultimosItens = []; // última lista recebida do servidor, pra aplicar o filtro "sem custo" sem precisar buscar de novo
@@ -101,7 +107,19 @@
       const tr = document.createElement("tr");
 
       const tdSku = document.createElement("td");
-      tdSku.textContent = item.sku;
+
+      const btnIconeHistorico = document.createElement("button");
+      btnIconeHistorico.className = "icone-historico";
+      btnIconeHistorico.title = "Ver histórico de alterações de custo";
+      btnIconeHistorico.innerHTML =
+        '<svg width="13" height="13" viewBox="0 0 24 24" fill="none">' +
+        '<path d="M4 5.5C4 4.67 4.67 4 5.5 4H11v16H5.5A1.5 1.5 0 0 1 4 18.5v-13Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+        '<path d="M20 5.5c0-.83-.67-1.5-1.5-1.5H13v16h5.5a1.5 1.5 0 0 0 1.5-1.5v-13Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>' +
+        "</svg>";
+      btnIconeHistorico.onclick = function () { abrirHistorico(item.sku); };
+      tdSku.appendChild(btnIconeHistorico);
+
+      tdSku.appendChild(document.createTextNode(item.sku));
       if (item.custo === null) {
         const tag = document.createElement("span");
         tag.className = "tag-sem-custo";
@@ -203,6 +221,67 @@
     aplicarFiltroEExibir();
   }
 
+  function formatarDataHora(isoString) {
+    if (!isoString) return "";
+    const data = new Date(isoString.endsWith("Z") ? isoString : isoString + "Z");
+    if (isNaN(data.getTime())) return "";
+    return data.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
+
+  function renderizarHistorico(itens) {
+    modalHistoricoCorpo.innerHTML = "";
+    if (itens.length === 0) {
+      modalHistoricoCorpo.innerHTML = '<p class="sub" style="margin:10px 0;">Nenhuma alteração registrada pra esse SKU ainda.</p>';
+      return;
+    }
+    itens.forEach(function (registro) {
+      const linha = document.createElement("div");
+      linha.className = "historico-linha";
+
+      const origemTexto = registro.origem === "extensao" ? "extensão" : "painel";
+      const quemQuando = document.createElement("div");
+      quemQuando.className = "quem-quando";
+      quemQuando.textContent = (registro.alterado_por || "desconhecido") + " -- " + formatarDataHora(registro.criado_em);
+      const tagOrigem = document.createElement("span");
+      tagOrigem.className = "origem-tag";
+      tagOrigem.textContent = origemTexto;
+      quemQuando.appendChild(tagOrigem);
+      linha.appendChild(quemQuando);
+
+      const deAte = document.createElement("div");
+      deAte.className = "de-para";
+      if (registro.custo_anterior === null) {
+        deAte.innerHTML = "Cadastrou o custo: <strong>" + formatarMoeda(registro.custo_novo) + "</strong>";
+      } else if (registro.custo_novo === null) {
+        deAte.innerHTML = "Removeu o custo (era <strong>" + formatarMoeda(registro.custo_anterior) + "</strong>)";
+      } else {
+        deAte.innerHTML = "De <strong>" + formatarMoeda(registro.custo_anterior) + "</strong> para <strong>" + formatarMoeda(registro.custo_novo) + "</strong>";
+      }
+      linha.appendChild(deAte);
+
+      modalHistoricoCorpo.appendChild(linha);
+    });
+  }
+
+  function abrirHistorico(sku) {
+    modalHistoricoTitulo.textContent = "Histórico -- " + sku;
+    modalHistoricoCorpo.innerHTML = '<p class="sub" style="margin:10px 0;">Carregando...</p>';
+    modalHistorico.style.display = "flex";
+    fetch(API_LOG_CUSTOS + "?sku=" + encodeURIComponent(sku))
+      .then(function (r) {
+        if (!r.ok) throw new Error("Não consegui buscar o histórico.");
+        return r.json();
+      })
+      .then(function (dados) { renderizarHistorico(dados.itens || []); })
+      .catch(function (erro) {
+        modalHistoricoCorpo.innerHTML = '<p class="sub" style="margin:10px 0;">' + erro.message + "</p>";
+      });
+  }
+
+  function fecharHistorico() {
+    modalHistorico.style.display = "none";
+  }
+
   function atualizarEstoqueAgora() {
     btnAtualizarEstoque.disabled = true;
     btnAtualizarEstoque.textContent = "Atualizando...";
@@ -281,6 +360,10 @@
     e.preventDefault();
     filtroSemCusto = false;
     aplicarFiltroEExibir();
+  });
+  btnFecharHistorico.addEventListener("click", fecharHistorico);
+  modalHistorico.addEventListener("click", function (e) {
+    if (e.target === modalHistorico) fecharHistorico(); // clicou fora da caixa
   });
   btnCancelar.addEventListener("click", fecharFormulario);
   btnSalvar.addEventListener("click", salvarCustoAtual);
