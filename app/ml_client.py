@@ -459,7 +459,17 @@ _CACHE_ESTOQUE_VALIDADE = timedelta(minutes=3)
 def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
     """
     Varre os anúncios ativos da conta no Mercado Livre e devolve, por
-    SKU, a quantidade total disponível: {sku: {"quantidade": int, "titulo": str}}.
+    SKU, a quantidade disponível: {sku: {"quantidade": int, "titulo": str}}.
+
+    CORREÇÃO (02/10): quando o mesmo SKU aparece em mais de um anúncio
+    (comum nessa conta -- anúncios clonados do mesmo produto pra manter
+    visibilidade/ranking), a quantidade NÃO é mais somada entre os
+    anúncios -- é usado o valor de um só. Confirmado com o cliente que o
+    Mercado Livre compartilha o mesmo estoque físico entre esses clones
+    (vender em um desconta em todos), então somar multiplicava o valor
+    real pela quantidade de clones ativos daquele SKU. Variações dentro
+    do MESMO anúncio (ex: 127V e 220V) continuam sendo somadas
+    normalmente -- isso sim costuma ser estoque fisicamente separado.
 
     Nunca levanta erro por causa de UM anúncio que falhar ao ler -- só
     pula ele e segue (registrado no log). Se a conta não tiver token
@@ -505,6 +515,16 @@ def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
                 continue
 
             titulo = item.get("title")
+
+            # CORREÇÃO (02/10): primeiro soma por SKU só DENTRO deste anúncio
+            # (variações como 127V/220V do MESMO anúncio continuam somadas
+            # normalmente -- ali é estoque realmente distinto). A quantidade
+            # final por SKU, entre anúncios DIFERENTES, não é mais somada
+            # (ver abaixo) -- confirmado com o cliente que anúncios clonados
+            # do mesmo produto compartilham o MESMO estoque físico no Mercado
+            # Livre (vender em um desconta em todos), então somar entre
+            # anúncios multiplicava o valor real pela quantidade de clones.
+            qtd_por_sku_neste_anuncio: dict[str, int] = {}
             variacoes = item.get("variations") or []
             if variacoes:
                 for variacao in variacoes:
@@ -513,20 +533,24 @@ def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
                     skus, _ = _extrair_skus({"attributes": [], "seller_custom_field": None, "variations": [variacao]})
                     quantidade = variacao.get("available_quantity", 0) or 0
                     for sku in skus:
-                        entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo, "anuncios": set()})
-                        entrada["quantidade"] += quantidade
-                        # DIAGNÓSTICO (02/10): registra de qual anúncio veio essa
-                        # quantidade -- se um SKU aparecer em mais de um item_id
-                        # diferente, a soma abaixo pode estar juntando dois
-                        # produtos distintos que por engano usam o mesmo SKU.
-                        entrada["anuncios"].add(item_id)
+                        qtd_por_sku_neste_anuncio[sku] = qtd_por_sku_neste_anuncio.get(sku, 0) + quantidade
             else:
                 skus, _ = _extrair_skus(item)
                 quantidade = item.get("available_quantity", 0) or 0
                 for sku in skus:
-                    entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo, "anuncios": set()})
-                    entrada["quantidade"] += quantidade
-                    entrada["anuncios"].add(item_id)
+                    qtd_por_sku_neste_anuncio[sku] = qtd_por_sku_neste_anuncio.get(sku, 0) + quantidade
+
+            for sku, quantidade_neste_anuncio in qtd_por_sku_neste_anuncio.items():
+                entrada = estoque_por_sku.setdefault(
+                    sku, {"quantidade": 0, "titulo": titulo, "anuncios": set(), "qtd_por_anuncio": {}}
+                )
+                entrada["anuncios"].add(item_id)
+                entrada["qtd_por_anuncio"][item_id] = quantidade_neste_anuncio
+                # Não soma entre anúncios -- usa o maior valor visto (na
+                # prática todos os clones mostram o mesmo número; o "maior"
+                # é só uma margem de segurança contra um clone desatualizado
+                # com valor momentaneamente menor que os outros).
+                entrada["quantidade"] = max(entrada["quantidade"], quantidade_neste_anuncio)
 
         offset += limite
 
