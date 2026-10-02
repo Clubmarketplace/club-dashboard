@@ -444,14 +444,14 @@ def buscar_pedido(access_token: str, order_id: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Estoque ao vivo por SKU (tela "Produtos > Lista" do painel). Nunca
-# guardamos quantidade no banco -- cada vez que a tela "Produtos > Lista"
+# Estoque ao vivo por SKU (tela "Produtos > Lista" do painel)
+# ---------------------------------------------------------------------------
+# Não guardamos quantidade nenhuma no nosso banco -- cada vez que a tela
 # é aberta, varremos os anúncios ATIVOS da conta no Mercado Livre e
 # somamos a quantidade disponível por SKU (um SKU pode ter mais de uma
 # variação/anúncio -- ex: a mesma peça em 127V e 220V -- nesse caso a
 # quantidade de cada uma é somada). Cache curto (poucos minutos) só pra
 # não varrer a conta inteira de novo a cada atualização de tela.
-# ---------------------------------------------------------------------------
 _CACHE_ESTOQUE_POR_CONTA: dict[int, tuple[datetime, dict]] = {}
 _CACHE_ESTOQUE_VALIDADE = timedelta(minutes=3)
 
@@ -513,14 +513,20 @@ def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
                     skus, _ = _extrair_skus({"attributes": [], "seller_custom_field": None, "variations": [variacao]})
                     quantidade = variacao.get("available_quantity", 0) or 0
                     for sku in skus:
-                        entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo})
+                        entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo, "anuncios": set()})
                         entrada["quantidade"] += quantidade
+                        # DIAGNÓSTICO (02/10): registra de qual anúncio veio essa
+                        # quantidade -- se um SKU aparecer em mais de um item_id
+                        # diferente, a soma abaixo pode estar juntando dois
+                        # produtos distintos que por engano usam o mesmo SKU.
+                        entrada["anuncios"].add(item_id)
             else:
                 skus, _ = _extrair_skus(item)
                 quantidade = item.get("available_quantity", 0) or 0
                 for sku in skus:
-                    entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo})
+                    entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo, "anuncios": set()})
                     entrada["quantidade"] += quantidade
+                    entrada["anuncios"].add(item_id)
 
         offset += limite
 
