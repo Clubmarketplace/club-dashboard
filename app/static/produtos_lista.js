@@ -139,14 +139,6 @@
       btnEditar.onclick = function () { abrirFormulario(item); };
       tdAcoes.appendChild(btnEditar);
 
-      if (item.custo !== null) {
-        const btnRemover = document.createElement("button");
-        btnRemover.className = "btn btn-perigo";
-        btnRemover.textContent = "Remover";
-        btnRemover.onclick = function () { removerCusto(item.sku); };
-        tdAcoes.appendChild(btnRemover);
-      }
-
       tr.appendChild(tdAcoes);
       corpoTabela.appendChild(tr);
     });
