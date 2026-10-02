@@ -24,6 +24,9 @@
   const cardSemEstoque = document.getElementById("card-sem-estoque");
   const cardSemCusto = document.getElementById("card-sem-custo");
   const cardTotalSkus = document.getElementById("card-total-skus");
+  const cardSemCustoClicavel = document.getElementById("card-sem-custo-clicavel");
+  const filtroAtivoAviso = document.getElementById("filtro-ativo-aviso");
+  const linkLimparFiltro = document.getElementById("link-limpar-filtro");
 
   const formEdicao = document.getElementById("form-edicao");
   const tituloForm = document.getElementById("titulo-form");
@@ -35,6 +38,8 @@
   const msgSalvar = document.getElementById("msg-salvar");
 
   let editandoSkuOriginal = null; // null = criando novo
+  let ultimosItens = []; // última lista recebida do servidor, pra aplicar o filtro "sem custo" sem precisar buscar de novo
+  let filtroSemCusto = false;
 
   function formatarMoeda(valor) {
     if (valor === null || valor === undefined) return "-";
@@ -157,15 +162,25 @@
     return "Estoque atualizado " + quando + ".";
   }
 
+  // Reaplica o filtro "só sem custo" (se estiver ativo) em cima da
+  // última lista recebida, sem precisar buscar no servidor de novo.
+  function aplicarFiltroEExibir() {
+    filtroAtivoAviso.style.display = filtroSemCusto ? "block" : "none";
+    const itensExibidos = filtroSemCusto ? ultimosItens.filter(function (i) { return i.custo === null; }) : ultimosItens;
+    renderizarResultados(itensExibidos);
+  }
+
   function renderizarDados(dados) {
     avisoEstoque.classList.toggle("visivel", !!dados.aviso_estoque);
     if (dados.aviso_estoque) avisoEstoque.textContent = "⚠️ " + dados.aviso_estoque;
     renderizarResumo(dados.resumo || {}, dados.estoque_indisponivel);
-    renderizarResultados(dados.itens || []);
+    ultimosItens = dados.itens || [];
+    aplicarFiltroEExibir();
     estoqueAtualizadoEm.textContent = formatarAtualizadoEm(dados.estoque_atualizado_em);
   }
 
   function buscar() {
+    filtroSemCusto = false; // pesquisar por SKU sempre sai do modo "só sem custo"
     const termo = campoBusca.value.trim();
     const url = termo ? API_LISTA + "?sku=" + encodeURIComponent(termo) : API_LISTA;
     fetch(url)
@@ -180,6 +195,12 @@
         mensagemVazia.style.display = "block";
         mensagemVazia.textContent = erro.message || "Não consegui buscar os produtos.";
       });
+  }
+
+  function mostrarApenasSemCusto() {
+    filtroSemCusto = true;
+    campoBusca.value = "";
+    aplicarFiltroEExibir();
   }
 
   function atualizarEstoqueAgora() {
@@ -255,6 +276,12 @@
   campoBusca.addEventListener("keydown", function (e) { if (e.key === "Enter") buscar(); });
   btnAtualizarEstoque.addEventListener("click", atualizarEstoqueAgora);
   btnNovo.addEventListener("click", function () { abrirFormulario(null); });
+  cardSemCustoClicavel.addEventListener("click", mostrarApenasSemCusto);
+  linkLimparFiltro.addEventListener("click", function (e) {
+    e.preventDefault();
+    filtroSemCusto = false;
+    aplicarFiltroEExibir();
+  });
   btnCancelar.addEventListener("click", fecharFormulario);
   btnSalvar.addEventListener("click", salvarCustoAtual);
 
