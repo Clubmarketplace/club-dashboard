@@ -599,6 +599,41 @@ class CustoSku(Base):
     atualizado_por = Column(String, nullable=True)
 
 
+class EstoqueSku(Base):
+    """
+    Espelho em banco da ÚLTIMA quantidade conhecida de cada SKU, por
+    conta, lida do Mercado Livre (CORREÇÃO 02/10 -- antes a tela
+    "Produtos > Lista" consultava o Mercado Livre AO VIVO toda vez que
+    abria, o que era lento com muitos anúncios e dependia da API estar
+    disponível na hora).
+
+    Preenchida por `ml_client.sincronizar_estoque_sku`, chamada: (a) na
+    primeira vez que a conta abre a tela (sem cache ainda, só essa vez é
+    lento), e (b) em segundo plano toda vez que a tela é aberta depois
+    disso -- a tela sempre LÊ daqui (rápido), nunca espera o Mercado
+    Livre responder.
+
+    Isolamento por conta igual ao CustoSku: UNIQUE (conta_id, sku), toda
+    consulta filtra por conta_id, nunca por sku sozinho.
+
+    `ativo=False` quando o SKU não apareceu mais na última varredura
+    (anúncio pausado/removido) -- mantemos o registro (em vez de
+    apagar) só pra não perder o histórico de custo/nome associado, mas
+    ele some da tela como se tivesse zerado o estoque.
+    """
+
+    __tablename__ = "estoque_sku"
+    __table_args__ = (UniqueConstraint("conta_id", "sku", name="uq_estoque_sku_conta_sku"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    sku = Column(String, nullable=False, index=True)
+    quantidade = Column(Integer, nullable=False, default=0)
+    titulo = Column(String, nullable=True)
+    ativo = Column(Boolean, nullable=False, default=True)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class VariavelConta(Base):
     """
     "Variáveis" (taxas) de cada conta, usadas pra calcular a margem de

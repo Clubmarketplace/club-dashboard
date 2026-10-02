@@ -558,6 +558,64 @@ def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
     return estoque_por_sku
 
 
+def sincronizar_estoque_sku(conta, db) -> None:
+    """
+    NOVO (02/10): varre o Mercado Livre (listar_estoque_por_sku) e grava
+    o resultado na tabela EstoqueSku -- é o que permite a tela "Produtos
+    > Lista" parar de depender do Mercado Livre pra carregar (ela passa
+    a ler só esta tabela) e ficar rápida mesmo com muitos anúncios.
+
+    Escreve só o que mudou (evita updates/commits à toa quando nada
+    mudou): quantidade diferente -> atualiza; SKU novo -> insere; SKU
+    que sumiu da varredura (pausado/removido) -> marca ativo=False e
+    quantidade 0, sem apagar a linha (preserva o histórico de
+    custo/nome associado ao mesmo SKU).
+
+    Propositalmente NÃO usa o cache de 3 min de listar_estoque_por_sku
+    (usar_cache=False) -- quem chama esta função já decidiu que quer
+    dado fresco agora (primeira carga da conta, ou a sincronização em
+    segundo plano disparada a cada abertura da tela).
+
+    Deixa subir MLAuthError/MLApiError pra quem chamou decidir o que
+    mostrar (mesmo padrão de listar_estoque_por_sku) -- não grava nada
+    parcial no banco se a varredura falhar logo no início.
+    """
+    from app.models import EstoqueSku  # import local: evita ciclo (models não importa ml_client)
+
+    estoque_por_sku = listar_estoque_por_sku(conta, db, usar_cache=False)
+
+    existentes = {
+        e.sku: e
+        for e in db.query(EstoqueSku).filter(EstoqueSku.conta_id == conta.id).all()
+    }
+
+    vistos_agora = set()
+    for sku, info in estoque_por_sku.items():
+        vistos_agora.add(sku)
+        registro = existentes.get(sku)
+        if registro is None:
+            db.add(EstoqueSku(
+                conta_id=conta.id,
+                sku=sku,
+                quantidade=info["quantidade"],
+                titulo=info.get("titulo"),
+                ativo=True,
+            ))
+        elif registro.quantidade != info["quantidade"] or registro.titulo != info.get("titulo") or not registro.ativo:
+            registro.quantidade = info["quantidade"]
+            registro.titulo = info.get("titulo")
+            registro.ativo = True
+
+    # SKUs que estavam ativos antes mas não apareceram nesta varredura --
+    # anúncio pausado/removido do Mercado Livre.
+    for sku, registro in existentes.items():
+        if sku not in vistos_agora and registro.ativo:
+            registro.ativo = False
+            registro.quantidade = 0
+
+    db.commit()
+
+
 def repor_estoque_item(access_token: str, item_id: str, quantidade_a_somar: int, variation_id: str | None = None) -> dict:
     """
     Soma `quantidade_a_somar` ao estoque disponível de um anúncio (ou
