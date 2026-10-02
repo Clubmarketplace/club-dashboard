@@ -132,6 +132,7 @@ _PUBLICO_EXATO = {
     ("POST", "/webhook/mercado-livre"),
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),
+    ("GET", "/privacidade-extensao"),
 }
 # /api/cmx/ (extensão ClubMarketplaceX) também fica de fora daqui: ela não
 # usa o cookie de sessão do painel, manda o token no cabeçalho
@@ -827,6 +828,17 @@ def pagina_relatorio_cancelamentos(request: Request):
 def saude():
     """Endpoint simples pra confirmar que o backend está de pé."""
     return {"status": "ok"}
+
+
+@app.get("/privacidade-extensao", response_class=HTMLResponse)
+def pagina_privacidade_extensao(request: Request):
+    """
+    Política de privacidade da extensão "Sistema de Precificação" -- página
+    pública (sem login), exigida pelo formulário de publicação da Chrome
+    Web Store. Hospedada aqui (em vez de um documento externo) pra ficar
+    sob o mesmo domínio e não depender de outro serviço.
+    """
+    return templates.TemplateResponse(request=request, name="privacidade-extensao.html", context={})
 
 
 def _redirecionar_por_papel(papel: str) -> RedirectResponse:
