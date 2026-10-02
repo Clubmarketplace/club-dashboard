@@ -19,6 +19,8 @@
   .card-resumo .valor { font-size:21px; font-weight:700; color:var(--cmx-texto); margin-top:6px; }
   .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
   .card-resumo.alerta .valor { color:var(--vermelho); }
+  .card-resumo.clicavel { cursor:pointer; transition:box-shadow .15s; }
+  .card-resumo.clicavel:hover { box-shadow:0 4px 14px rgba(0,0,0,.08); }
 
   .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
   .cartao h2 { margin:0 0 4px; font-size:16px; }
@@ -128,7 +130,7 @@
             <div class="rotulo">Produtos sem estoque</div>
             <div class="valor" id="card-sem-estoque">-</div>
           </div>
-          <div class="card-resumo alerta">
+          <div class="card-resumo alerta clicavel" id="card-sem-custo-clicavel" title="Clique pra ver só esses">
             <div class="rotulo">Sem custo cadastrado</div>
             <div class="valor" id="card-sem-custo">-</div>
           </div>
@@ -152,6 +154,9 @@
             <button class="btn btn-primario" id="btn-novo">+ Novo produto</button>
           </div>
           <p class="sub" id="estoque-atualizado-em" style="margin-top:8px;"></p>
+          <p class="sub" id="filtro-ativo-aviso" style="display:none; margin-top:2px;">
+            Mostrando só SKUs sem custo cadastrado. <a href="#" id="link-limpar-filtro">Ver todos</a>
+          </p>
 
           <table id="tabela-resultados" style="display:none;">
             <thead>
