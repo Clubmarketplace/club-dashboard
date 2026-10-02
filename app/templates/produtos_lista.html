@@ -52,6 +52,11 @@
   .col-acoes { text-align:right; white-space:nowrap; }
   .col-acoes button { margin-left:6px; }
   .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+  .icone-historico {
+    background:none; border:none; padding:0; margin-right:7px; cursor:pointer;
+    color:#aab1bb; vertical-align:middle; display:inline-flex; line-height:0;
+  }
+  .icone-historico:hover { color:#1b2430; }
   .tag-sem-custo, .tag-sem-estoque { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; margin-left:6px; vertical-align:middle; }
   .tag-sem-custo { background:#fdecdb; color:#a3631b; }
   .tag-sem-estoque { background:#fbe3dd; color:var(--vermelho); }
@@ -59,6 +64,31 @@
   /* Aviso de estoque indisponível */
   .aviso-estoque { display:none; background:#fdf3dc; border:1px solid #f0d9a0; color:#8a6116; border-radius:10px; padding:12px 16px; font-size:13px; margin-bottom:18px; }
   .aviso-estoque.visivel { display:block; }
+
+  /* Modal de histórico de alterações */
+  .modal-overlay {
+    position:fixed; inset:0; background:rgba(17,24,38,.45); display:flex;
+    align-items:flex-start; justify-content:center; padding:48px 16px; z-index:50;
+  }
+  .modal-caixa {
+    background:#fff; border-radius:14px; max-width:620px; width:100%; max-height:80vh;
+    overflow-y:auto; box-shadow:0 12px 40px rgba(0,0,0,.18);
+  }
+  .modal-topo {
+    display:flex; align-items:center; justify-content:space-between; padding:18px 22px;
+    border-bottom:1px solid var(--cmx-borda); position:sticky; top:0; background:#fff;
+  }
+  .modal-topo h3 { margin:0; font-size:15px; }
+  .modal-corpo { padding:10px 22px 22px; }
+  .historico-linha { padding:11px 0; border-bottom:1px solid var(--cmx-borda); font-size:13px; }
+  .historico-linha:last-child { border-bottom:none; }
+  .historico-linha .quem-quando { font-weight:600; color:var(--cmx-texto); }
+  .historico-linha .origem-tag {
+    display:inline-block; font-size:10.5px; font-weight:700; padding:1px 7px; border-radius:6px;
+    background:#eef1f4; color:#1b2430; margin-left:6px; vertical-align:middle;
+  }
+  .historico-linha .de-para { color:var(--cmx-texto-suave); margin-top:3px; }
+  .historico-linha .de-para strong { color:var(--cmx-texto); }
 
   /* Formulário de edição/novo custo */
   .form-custo { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
@@ -195,6 +225,17 @@
             <button class="btn btn-secundario" id="btn-cancelar-edicao">Cancelar</button>
           </div>
           <div class="msg" id="msg-salvar"></div>
+        </div>
+
+        <!-- Modal: histórico de alterações de custo de um SKU -->
+        <div class="modal-overlay" id="modal-historico" style="display:none;">
+          <div class="modal-caixa">
+            <div class="modal-topo">
+              <h3 id="modal-historico-titulo">Histórico</h3>
+              <button class="btn btn-secundario" id="btn-fechar-historico">Fechar</button>
+            </div>
+            <div class="modal-corpo" id="modal-historico-corpo"></div>
+          </div>
         </div>
       </main>
     </div>
