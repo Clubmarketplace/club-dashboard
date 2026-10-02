@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -258,12 +258,18 @@ async def exigir_login(request: Request, call_next):
         "/meus-cancelamentos", "/logout",
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/extensao",
+        "/custos", "/api/painel/custos",
+        "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
     }
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     papel = usuario_logado.papel if usuario_logado else None
 
-    if papel == "seller" and caminho not in _ROTAS_PERMITIDAS_PARA_SELLER:
+    # "/api/painel/custos/" com .startswith (não só ==) por causa do DELETE
+    # /api/painel/custos/{sku} -- o SKU vai dentro da própria URL, então
+    # nunca bate exatamente com a string cadastrada no conjunto acima.
+    _seller_liberado = caminho in _ROTAS_PERMITIDAS_PARA_SELLER or caminho.startswith("/api/painel/custos/")
+    if papel == "seller" and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
         return RedirectResponse("/meus-cancelamentos", status_code=303)
@@ -290,6 +296,8 @@ app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
 app.include_router(calibrar_ia_rotas.router)
 app.include_router(cmx_rotas.router)  # login/validação da extensão ClubMarketplaceX
+app.include_router(custos_painel_rotas.router)  # API de custo por SKU (seller, cookie)
+app.include_router(produtos_rotas.router)  # tela "Produtos > Lista" do painel (seller, cookie)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -519,6 +527,48 @@ def pagina_extensao(request: Request):
             # (unlisted) na Chrome Web Store.
             "url_extensao": None,
         },
+    )
+
+
+@app.get("/custos", response_class=HTMLResponse)
+def pagina_custos(request: Request):
+    """
+    Tela "Produtos > Custos" do seller: gerar/baixar o modelo de
+    planilha e importar uma planilha de custos inteira de uma vez --
+    gravado direto na mesma tabela que a extensão lê (CustoSku), pelo
+    cookie de sessão do painel (a API fica em app/routers/custos_painel.py).
+    A busca/edição de um SKU individual mora agora em "Produtos > Lista"
+    (/produtos/lista), ao lado do estoque ao vivo.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="custos.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+    )
+
+
+@app.get("/produtos/lista", response_class=HTMLResponse)
+def pagina_produtos_lista(request: Request):
+    """
+    Tela "Produtos > Lista": pra cada SKU, mostra custo (nosso banco) +
+    quantidade em estoque (lida ao vivo da API do Mercado Livre, nunca
+    guardada aqui) + valor total (quantidade x custo), com busca por
+    SKU e edição de custo individual. A API fica em
+    app/routers/produtos.py; reaproveita a mesma API de custo
+    (app/routers/custos_painel.py) pra criar/editar um SKU.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="produtos_lista.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
     )
 
 
