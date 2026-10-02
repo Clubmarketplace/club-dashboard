@@ -119,7 +119,7 @@ def listar_produtos(
         {
             "sku": sku_atual,
             "quantidade_somada": info["quantidade"],
-            "anuncios": sorted(info.get("anuncios", [])),
+            "qtd_por_anuncio": info.get("qtd_por_anuncio", {}),
         }
         for sku_atual, info in estoque_por_sku.items()
         if len(info.get("anuncios", [])) > 1
