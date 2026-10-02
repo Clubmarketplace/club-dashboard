@@ -1,65 +1,86 @@
 """
 Tela "Produtos > Lista" do painel do seller: junta o custo (guardado no
-nosso banco, tabela CustoSku) com o estoque ATUAL de cada SKU, lido ao
-vivo da API do Mercado Livre -- nunca guardamos quantidade nenhuma no
-nosso banco, é sempre um espelho em tempo real do que está lá.
+nosso banco, tabela CustoSku) com o estoque de cada SKU -- lido do
+Mercado Livre, mas agora passando por um espelho em banco (EstoqueSku)
+em vez de consultar o Mercado Livre ao vivo a cada abertura da tela.
+
+CORREÇÃO (02/10): antes, cada abertura dessa tela disparava uma
+varredura completa no Mercado Livre (uma chamada por anúncio ativo --
+lento com muitos anúncios, e travava a tela se o Mercado Livre
+demorasse ou estivesse fora do ar). Agora:
+  - A tela sempre LÊ da tabela EstoqueSku (rápido, sem depender do
+    Mercado Livre pra carregar).
+  - Na primeira vez que uma conta usa a tela (tabela ainda vazia pra
+    ela), a varredura roda na hora mesmo (só essa vez é mais lenta).
+  - Em toda abertura seguinte, depois de responder com o dado já salvo,
+    dispara a varredura de novo EM SEGUNDO PLANO -- a próxima abertura
+    já vem com o dado atualizado, sem ninguém esperar.
+  - O botão "Atualizar agora" (POST /lista/atualizar-estoque) força a
+    varredura na hora e espera terminar, pra quem não quiser esperar a
+    próxima abertura.
+
+Também corrigido nessa mesma data, em ml_client.listar_estoque_por_sku:
+a quantidade não é mais SOMADA entre anúncios diferentes que usam o
+mesmo SKU (anúncios clonados do mesmo produto compartilham o mesmo
+estoque físico no Mercado Livre -- vender em um desconta em todos).
 
 Reaproveita:
   - `_conta_vinculada_do_usuario` / `_seller_logado`, iguais ao resto do
     painel (cmx.py / custos_painel.py), pra nunca misturar dado de uma
     conta com outra.
-  - `ml_client.listar_estoque_por_sku`, que faz a varredura no Mercado
-    Livre e soma a quantidade por SKU (somando variações, ex: 127V e
-    220V do mesmo produto).
+  - `ml_client.sincronizar_estoque_sku`, que faz a varredura e grava em
+    EstoqueSku.
 """
-from fastapi import APIRouter, Depends, HTTPException, Request
+import logging
+
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app import ml_client
 from app.database import get_db
-from app.models import CustoSku
+from app.models import Conta, CustoSku, EstoqueSku
 from app.ml_client import MLAuthError, MLApiError
 from app.routers.custos_painel import _seller_logado
 from app.routers.cmx import _conta_vinculada_do_usuario
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/api/painel/produtos", tags=["painel-produtos"])
 
 
-@router.get("/lista")
-def listar_produtos(
-    sku: str = "",
-    usuario=Depends(_seller_logado),
-    db: Session = Depends(get_db),
-):
+def _sincronizar_estoque_em_segundo_plano(conta_id: int) -> None:
     """
-    Devolve, para a conta do seller logado:
-      - itens: lista de {sku, nome_produto, custo, quantidade, valor_total}
-      - resumo: totais pra exibir nos cards (estoque total, valor total,
-        quantidade de SKUs sem custo, sem estoque)
-      - estoque_indisponivel: true se não deu pra consultar o Mercado
-        Livre agora (conta sem token, ou erro de rede) -- nesse caso os
-        itens vêm só com o custo, quantidade fica null, e o aviso deve
-        aparecer na tela em vez de travar a página inteira.
-
-    `sku`: filtro opcional (contém), igual à busca que já existe em
-    "Custos" -- aqui filtra a lista já combinada com o estoque.
+    Mesmo padrão de app/cancelamento_apoio.py:preencher_produtos_em_segundo_plano
+    -- roda DEPOIS da resposta já ter sido enviada, com sua própria sessão
+    de banco (a da requisição original já fechou). Qualquer falha aqui só
+    é registrada no log: ninguém está esperando essa chamada, a tela já
+    mostrou o último dado bom conhecido.
     """
-    conta = _conta_vinculada_do_usuario(usuario, db)
+    from app.database import SessionLocal
 
+    try:
+        with SessionLocal() as db:
+            conta = db.query(Conta).filter(Conta.id == conta_id).first()
+            if conta is None:
+                return
+            ml_client.sincronizar_estoque_sku(conta, db)
+    except (MLAuthError, MLApiError) as exc:
+        logger.warning("Sincronização de estoque em segundo plano falhou pra conta %s: %s", conta_id, exc)
+    except Exception:
+        logger.exception("Erro inesperado sincronizando estoque em segundo plano (conta %s)", conta_id)
+
+
+def _montar_resposta(conta: Conta, db: Session, sku: str) -> dict:
+    """
+    Monta a resposta de /lista a partir do que já está salvo (CustoSku +
+    EstoqueSku) -- não faz nenhuma chamada ao Mercado Livre aqui; quem
+    chama decide separadamente se precisa sincronizar antes ou depois.
+    """
     custos = db.query(CustoSku).filter(CustoSku.conta_id == conta.id).all()
     custos_por_sku = {c.sku: c for c in custos}
 
-    estoque_indisponivel = False
-    aviso_estoque = None
-    estoque_por_sku: dict = {}
-    try:
-        estoque_por_sku = ml_client.listar_estoque_por_sku(conta, db)
-    except MLAuthError as exc:
-        estoque_indisponivel = True
-        aviso_estoque = str(exc)
-    except MLApiError as exc:
-        estoque_indisponivel = True
-        aviso_estoque = f"Não consegui consultar o estoque no Mercado Livre agora: {exc}"
+    estoque_rows = db.query(EstoqueSku).filter(EstoqueSku.conta_id == conta.id).all()
+    estoque_por_sku = {e.sku: e for e in estoque_rows}
 
     # União dos SKUs que têm custo cadastrado com os que têm anúncio no
     # ML (pode ter anúncio sem custo cadastrado ainda, ou custo
@@ -71,16 +92,23 @@ def listar_produtos(
     valor_total = 0.0
     sem_custo = 0
     sem_estoque = 0
+    atualizado_em = None
 
     for sku_atual in sorted(todos_skus):
         custo_registro = custos_por_sku.get(sku_atual)
         estoque_registro = estoque_por_sku.get(sku_atual)
 
         custo = custo_registro.custo if custo_registro else None
-        quantidade = estoque_registro["quantidade"] if estoque_registro else (None if estoque_indisponivel else 0)
+        # Sem nenhum registro de estoque ainda pra esse SKU (ex: custo
+        # cadastrado manualmente antes de existir anúncio) conta como 0,
+        # igual a um SKU com anúncio zerado.
+        quantidade = estoque_registro.quantidade if estoque_registro else 0
         nome_produto = (custo_registro.nome_produto if custo_registro else None) or (
-            estoque_registro["titulo"] if estoque_registro else None
+            estoque_registro.titulo if estoque_registro else None
         )
+
+        if estoque_registro and (atualizado_em is None or estoque_registro.atualizado_em > atualizado_em):
+            atualizado_em = estoque_registro.atualizado_em
 
         valor_item = (custo * quantidade) if (custo is not None and quantidade is not None) else None
 
@@ -107,24 +135,6 @@ def listar_produtos(
         termo = sku.strip().lower()
         itens = [i for i in itens if termo in i["sku"].lower()]
 
-    # DIAGNÓSTICO (02/10): lista SKUs que vieram de mais de um anúncio
-    # diferente no Mercado Livre -- cada um desses tem a quantidade somada
-    # de todos os anúncios que usam esse SKU, o que só está certo se forem
-    # variações do MESMO produto (ex: 127V/220V). Se forem anúncios
-    # distintos (ex: cores diferentes) usando o mesmo SKU por engano de
-    # cadastro, a soma aqui está inflando a quantidade (e o valor) desse
-    # SKU. Não muda nenhum cálculo existente -- só expõe o que já está
-    # acontecendo, pra investigar antes de decidir o que fazer.
-    skus_em_multiplos_anuncios = [
-        {
-            "sku": sku_atual,
-            "quantidade_somada": info["quantidade"],
-            "qtd_por_anuncio": info.get("qtd_por_anuncio", {}),
-        }
-        for sku_atual, info in estoque_por_sku.items()
-        if len(info.get("anuncios", [])) > 1
-    ]
-
     return {
         "itens": itens,
         "resumo": {
@@ -134,7 +144,81 @@ def listar_produtos(
             "sem_custo": sem_custo,
             "sem_estoque": sem_estoque,
         },
-        "estoque_indisponivel": estoque_indisponivel,
-        "aviso_estoque": aviso_estoque,
-        "skus_em_multiplos_anuncios": skus_em_multiplos_anuncios,
+        "estoque_indisponivel": not estoque_rows,
+        "aviso_estoque": None,
+        "estoque_atualizado_em": atualizado_em.isoformat() if atualizado_em else None,
     }
+
+
+@router.get("/lista")
+def listar_produtos(
+    background_tasks: BackgroundTasks,
+    sku: str = "",
+    usuario=Depends(_seller_logado),
+    db: Session = Depends(get_db),
+):
+    """
+    Devolve, para a conta do seller logado:
+      - itens: lista de {sku, nome_produto, custo, quantidade, valor_total}
+      - resumo: totais pra exibir nos cards (estoque total, valor total,
+        quantidade de SKUs sem custo, sem estoque)
+      - estoque_indisponivel: true só na primeira abertura da conta, se a
+        varredura inicial falhar (conta sem token, ou erro de rede) --
+        depois disso, a tela sempre tem pelo menos o último dado bom
+        conhecido, mesmo que o Mercado Livre esteja fora do ar agora.
+      - estoque_atualizado_em: quando o estoque foi sincronizado pela
+        última vez (pra mostrar "atualizado há X min" na tela).
+
+    `sku`: filtro opcional (contém), igual à busca que já existe em
+    "Custos" -- aqui filtra a lista já combinada com o estoque.
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+
+    tem_estoque_salvo = db.query(EstoqueSku).filter(EstoqueSku.conta_id == conta.id).first() is not None
+
+    if not tem_estoque_salvo:
+        # Primeira vez que essa conta abre a tela: ainda não tem nada em
+        # cache, então não tem o que mostrar sem varrer agora mesmo (só
+        # essa vez é lenta -- as próximas já vêm do banco).
+        try:
+            ml_client.sincronizar_estoque_sku(conta, db)
+        except MLAuthError as exc:
+            resposta = _montar_resposta(conta, db, sku)
+            resposta["aviso_estoque"] = str(exc)
+            return resposta
+        except MLApiError as exc:
+            resposta = _montar_resposta(conta, db, sku)
+            resposta["aviso_estoque"] = f"Não consegui consultar o estoque no Mercado Livre agora: {exc}"
+            return resposta
+    else:
+        # Já tem dado salvo: responde na hora com ele e atualiza por
+        # trás, sem fazer a pessoa esperar o Mercado Livre responder.
+        background_tasks.add_task(_sincronizar_estoque_em_segundo_plano, conta.id)
+
+    return _montar_resposta(conta, db, sku)
+
+
+@router.post("/lista/atualizar-estoque")
+def atualizar_estoque_agora(
+    usuario=Depends(_seller_logado),
+    db: Session = Depends(get_db),
+):
+    """
+    Botão "Atualizar agora": igual à sincronização em segundo plano, só
+    que aqui quem chamou espera terminar antes de receber a resposta já
+    atualizada -- pra quem não quiser esperar a próxima abertura da tela.
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+
+    try:
+        ml_client.sincronizar_estoque_sku(conta, db)
+    except MLAuthError as exc:
+        resposta = _montar_resposta(conta, db, "")
+        resposta["aviso_estoque"] = str(exc)
+        return resposta
+    except MLApiError as exc:
+        resposta = _montar_resposta(conta, db, "")
+        resposta["aviso_estoque"] = f"Não consegui consultar o estoque no Mercado Livre agora: {exc}"
+        return resposta
+
+    return _montar_resposta(conta, db, "")
