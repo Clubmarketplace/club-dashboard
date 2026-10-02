@@ -443,6 +443,91 @@ def buscar_pedido(access_token: str, order_id: str) -> dict:
     return _get(f"/orders/{order_id}", access_token, "buscar o pedido")
 
 
+# ---------------------------------------------------------------------------
+# Estoque ao vivo por SKU (tela "Produtos > Lista" do painel). Nunca
+# guardamos quantidade no banco -- cada vez que a tela "Produtos > Lista"
+# é aberta, varremos os anúncios ATIVOS da conta no Mercado Livre e
+# somamos a quantidade disponível por SKU (um SKU pode ter mais de uma
+# variação/anúncio -- ex: a mesma peça em 127V e 220V -- nesse caso a
+# quantidade de cada uma é somada). Cache curto (poucos minutos) só pra
+# não varrer a conta inteira de novo a cada atualização de tela.
+# ---------------------------------------------------------------------------
+_CACHE_ESTOQUE_POR_CONTA: dict[int, tuple[datetime, dict]] = {}
+_CACHE_ESTOQUE_VALIDADE = timedelta(minutes=3)
+
+
+def listar_estoque_por_sku(conta, db, usar_cache: bool = True) -> dict:
+    """
+    Varre os anúncios ativos da conta no Mercado Livre e devolve, por
+    SKU, a quantidade total disponível: {sku: {"quantidade": int, "titulo": str}}.
+
+    Nunca levanta erro por causa de UM anúncio que falhar ao ler -- só
+    pula ele e segue (registrado no log). Se a conta não tiver token
+    (nunca conectada pelo painel admin em /contas), levanta MLAuthError,
+    porque aí não tem nada pra varrer mesmo.
+    """
+    agora = datetime.utcnow()
+    if usar_cache:
+        em_cache = _CACHE_ESTOQUE_POR_CONTA.get(conta.id)
+        if em_cache and em_cache[0] > agora:
+            return em_cache[1]
+
+    access_token = garantir_token_valido(conta, db)
+    estoque_por_sku: dict[str, dict] = {}
+
+    offset = 0
+    limite = 50
+    total = None
+    while total is None or offset < total:
+        try:
+            pagina = _get(
+                f"/users/{conta.ml_user_id}/items/search?status=active&offset={offset}&limit={limite}",
+                access_token,
+                "listar anúncios ativos",
+            )
+        except MLApiError as exc:
+            logger.warning("Falha ao listar anúncios da conta %s (offset %s): %s", conta.apelido, offset, exc)
+            break
+
+        resultados = pagina.get("results") or []
+        if not resultados:
+            break
+        paging = pagina.get("paging") or {}
+        total = paging.get("total", offset + len(resultados))
+
+        for item_id in resultados:
+            try:
+                # include_attributes=all: sem isso, as variações vêm
+                # sem os atributos (onde mora o SELLER_SKU da variação).
+                item = _get(f"/items/{item_id}?include_attributes=all", access_token, "buscar anúncio (estoque)")
+            except MLApiError as exc:
+                logger.warning("Não consegui ler o anúncio %s pra estoque: %s", item_id, exc)
+                continue
+
+            titulo = item.get("title")
+            variacoes = item.get("variations") or []
+            if variacoes:
+                for variacao in variacoes:
+                    # Reaproveita _extrair_skus passando só essa variação,
+                    # pra usar a mesma lógica de onde o SKU pode estar.
+                    skus, _ = _extrair_skus({"attributes": [], "seller_custom_field": None, "variations": [variacao]})
+                    quantidade = variacao.get("available_quantity", 0) or 0
+                    for sku in skus:
+                        entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo})
+                        entrada["quantidade"] += quantidade
+            else:
+                skus, _ = _extrair_skus(item)
+                quantidade = item.get("available_quantity", 0) or 0
+                for sku in skus:
+                    entrada = estoque_por_sku.setdefault(sku, {"quantidade": 0, "titulo": titulo})
+                    entrada["quantidade"] += quantidade
+
+        offset += limite
+
+    _CACHE_ESTOQUE_POR_CONTA[conta.id] = (agora + _CACHE_ESTOQUE_VALIDADE, estoque_por_sku)
+    return estoque_por_sku
+
+
 def repor_estoque_item(access_token: str, item_id: str, quantidade_a_somar: int, variation_id: str | None = None) -> dict:
     """
     Soma `quantidade_a_somar` ao estoque disponível de um anúncio (ou
