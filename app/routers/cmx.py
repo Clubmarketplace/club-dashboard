@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app import auth
 from app.config import CMX_ML_CLIENT_ID, CMX_ML_CLIENT_SECRET
 from app.contas_util import chave_conta
+from app.custos_log import registrar_log_custo
 from app.database import get_db
 from app.models import Conta, CustoSku, Usuario, VariavelConta
 
@@ -246,12 +247,25 @@ def atualizar_custos(
             registro.nome_produto = item.nome_produto
         registro.atualizado_por = usuario.nome_exibicao
 
+        alterado = custo_anterior != item.custo
+        if alterado:
+            registrar_log_custo(
+                db,
+                conta_id=conta.id,
+                sku=item.sku,
+                custo_anterior=custo_anterior,
+                custo_novo=item.custo,
+                nome_produto=registro.nome_produto,
+                alterado_por=usuario.nome_exibicao,
+                origem="extensao",
+            )
+
         resultado.append(
             {
                 "sku": item.sku,
                 "custo_anterior": custo_anterior,
                 "custo_novo": item.custo,
-                "alterado": custo_anterior != item.custo,
+                "alterado": alterado,
                 "suspeito": suspeito,
             }
         )
