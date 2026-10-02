@@ -599,6 +599,35 @@ class CustoSku(Base):
     atualizado_por = Column(String, nullable=True)
 
 
+class LogCustoSku(Base):
+    """
+    Histórico de toda alteração de custo por SKU -- criação, edição e
+    remoção -- pra responder "quando e quem mudou esse custo" se algo
+    der errado (custo errado que inflou/derrubou a margem, por exemplo).
+
+    NUNCA é editado nem apagado por ninguém (nem pelo próprio sistema) --
+    só recebe linhas novas, uma por alteração. `custo_anterior` nulo
+    significa criação (SKU novo); `custo_novo` nulo significa remoção.
+
+    Gravado em 2 pontos (ver app/custos_log.py:registrar_log_custo):
+    app/routers/custos_painel.py (edição manual ou importação de
+    planilha pelo painel) e app/routers/cmx.py (gravação vinda da
+    extensão) -- `origem` diz qual dos dois foi.
+    """
+
+    __tablename__ = "log_custo_sku"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    sku = Column(String, nullable=False, index=True)
+    custo_anterior = Column(Float, nullable=True)
+    custo_novo = Column(Float, nullable=True)
+    nome_produto = Column(String, nullable=True)
+    alterado_por = Column(String, nullable=True)
+    origem = Column(String, nullable=False)  # "painel" | "extensao"
+    criado_em = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class EstoqueSku(Base):
     """
     Espelho em banco da ÚLTIMA quantidade conhecida de cada SKU, por
