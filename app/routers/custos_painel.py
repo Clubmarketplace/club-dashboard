@@ -15,8 +15,9 @@ from pydantic import BaseModel, field_validator
 from sqlalchemy.orm import Session
 
 from app import auth
+from app.custos_log import registrar_log_custo
 from app.database import get_db
-from app.models import CustoSku, Usuario
+from app.models import CustoSku, LogCustoSku, Usuario
 from app.routers.cmx import _conta_vinculada_do_usuario, _serializar_conta
 
 router = APIRouter(prefix="/api/painel/custos", tags=["painel-custos"])
@@ -130,12 +131,25 @@ def gravar_custos(
             registro.nome_produto = item.nome_produto
         registro.atualizado_por = usuario.nome_exibicao
 
+        alterado = custo_anterior != item.custo
+        if alterado:
+            registrar_log_custo(
+                db,
+                conta_id=conta.id,
+                sku=item.sku,
+                custo_anterior=custo_anterior,
+                custo_novo=item.custo,
+                nome_produto=registro.nome_produto,
+                alterado_por=usuario.nome_exibicao,
+                origem="painel",
+            )
+
         resultado.append(
             {
                 "sku": item.sku,
                 "custo_anterior": custo_anterior,
                 "custo_novo": item.custo,
-                "alterado": custo_anterior != item.custo,
+                "alterado": alterado,
             }
         )
 
@@ -158,6 +172,52 @@ def remover_custo(
     )
     if registro is None:
         raise HTTPException(status_code=404, detail="SKU não encontrado nessa conta.")
+
+    registrar_log_custo(
+        db,
+        conta_id=conta.id,
+        sku=registro.sku,
+        custo_anterior=registro.custo,
+        custo_novo=None,
+        nome_produto=registro.nome_produto,
+        alterado_por=usuario.nome_exibicao,
+        origem="painel",
+    )
     db.delete(registro)
     db.commit()
     return {"removido": sku}
+
+
+@router.get("/log")
+def listar_log_custos(
+    sku: str = "",
+    limite: int = 200,
+    usuario: Usuario = Depends(_seller_logado),
+    db: Session = Depends(get_db),
+):
+    """
+    Histórico de alterações de custo da conta do usuário logado -- pra
+    responder "quando e quem mudou esse custo". Sem `sku`: as últimas
+    `limite` alterações da conta inteira, mais recentes primeiro. Com
+    `sku`: só as desse SKU (sempre as mais recentes primeiro também).
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    consulta = db.query(LogCustoSku).filter(LogCustoSku.conta_id == conta.id)
+    termo = sku.strip()
+    if termo:
+        consulta = consulta.filter(LogCustoSku.sku == termo)
+    registros = consulta.order_by(LogCustoSku.criado_em.desc()).limit(min(limite, 500)).all()
+    return {
+        "itens": [
+            {
+                "sku": r.sku,
+                "custo_anterior": r.custo_anterior,
+                "custo_novo": r.custo_novo,
+                "nome_produto": r.nome_produto,
+                "alterado_por": r.alterado_por,
+                "origem": r.origem,
+                "criado_em": r.criado_em.isoformat() if r.criado_em else None,
+            }
+            for r in registros
+        ],
+    }
