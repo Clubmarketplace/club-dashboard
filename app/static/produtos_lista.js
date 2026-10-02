@@ -6,11 +6,14 @@
   "use strict";
 
   const API_LISTA = "/api/painel/produtos/lista";
+  const API_ATUALIZAR_ESTOQUE = "/api/painel/produtos/lista/atualizar-estoque";
   const API_CUSTOS = "/api/painel/custos";
 
   const campoBusca = document.getElementById("busca-sku");
   const btnBuscar = document.getElementById("btn-buscar");
+  const btnAtualizarEstoque = document.getElementById("btn-atualizar-estoque");
   const btnNovo = document.getElementById("btn-novo");
+  const estoqueAtualizadoEm = document.getElementById("estoque-atualizado-em");
   const tabela = document.getElementById("tabela-resultados");
   const corpoTabela = document.getElementById("corpo-resultados");
   const mensagemVazia = document.getElementById("mensagem-vazia");
@@ -149,6 +152,27 @@
     });
   }
 
+  function formatarAtualizadoEm(isoString) {
+    if (!isoString) return "";
+    // O backend manda em UTC "cru" (sem fuso) -- igual ao resto do painel.
+    const data = new Date(isoString.endsWith("Z") ? isoString : isoString + "Z");
+    if (isNaN(data.getTime())) return "";
+    const diffMinutos = Math.round((Date.now() - data.getTime()) / 60000);
+    let quando;
+    if (diffMinutos < 1) quando = "agora mesmo";
+    else if (diffMinutos < 60) quando = "há " + diffMinutos + " min";
+    else quando = "às " + data.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    return "Estoque atualizado " + quando + ".";
+  }
+
+  function renderizarDados(dados) {
+    avisoEstoque.classList.toggle("visivel", !!dados.aviso_estoque);
+    if (dados.aviso_estoque) avisoEstoque.textContent = "⚠️ " + dados.aviso_estoque;
+    renderizarResumo(dados.resumo || {}, dados.estoque_indisponivel);
+    renderizarResultados(dados.itens || []);
+    estoqueAtualizadoEm.textContent = formatarAtualizadoEm(dados.estoque_atualizado_em);
+  }
+
   function buscar() {
     const termo = campoBusca.value.trim();
     const url = termo ? API_LISTA + "?sku=" + encodeURIComponent(termo) : API_LISTA;
@@ -157,16 +181,28 @@
         if (!r.ok) throw new Error("Não consegui buscar os produtos.");
         return r.json();
       })
-      .then(function (dados) {
-        avisoEstoque.classList.toggle("visivel", !!dados.estoque_indisponivel);
-        renderizarResumo(dados.resumo || {}, dados.estoque_indisponivel);
-        renderizarResultados(dados.itens || []);
-      })
+      .then(renderizarDados)
       .catch(function (erro) {
         corpoTabela.innerHTML = "";
         tabela.style.display = "none";
         mensagemVazia.style.display = "block";
         mensagemVazia.textContent = erro.message || "Não consegui buscar os produtos.";
+      });
+  }
+
+  function atualizarEstoqueAgora() {
+    btnAtualizarEstoque.disabled = true;
+    btnAtualizarEstoque.textContent = "Atualizando...";
+    fetch(API_ATUALIZAR_ESTOQUE, { method: "POST" })
+      .then(function (r) {
+        if (!r.ok) throw new Error("Não consegui atualizar o estoque agora.");
+        return r.json();
+      })
+      .then(renderizarDados)
+      .catch(function (erro) { window.alert(erro.message); })
+      .finally(function () {
+        btnAtualizarEstoque.disabled = false;
+        btnAtualizarEstoque.textContent = "↻ Atualizar estoque agora";
       });
   }
 
@@ -225,6 +261,7 @@
 
   btnBuscar.addEventListener("click", buscar);
   campoBusca.addEventListener("keydown", function (e) { if (e.key === "Enter") buscar(); });
+  btnAtualizarEstoque.addEventListener("click", atualizarEstoqueAgora);
   btnNovo.addEventListener("click", function () { abrirFormulario(null); });
   btnCancelar.addEventListener("click", fecharFormulario);
   btnSalvar.addEventListener("click", salvarCustoAtual);
