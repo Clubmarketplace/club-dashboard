@@ -126,6 +126,57 @@ body {
   flex-shrink: 0;
 }
 
+.cmx-nav-item--sub {
+  padding-left: 22px;
+  font-size: 13px;
+}
+
+.cmx-nav-sanfona {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 9px;
+  padding: 9px 10px;
+  margin: 15px 0 0;
+  border: none;
+  border-radius: 7px;
+  background: none;
+  color: #b7c0cb;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.cmx-nav-sanfona:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.cmx-nav-sanfona-seta {
+  font-size: 11px;
+  color: #6c7784;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.cmx-nav-sanfona--aberta .cmx-nav-sanfona-seta {
+  transform: rotate(180deg);
+}
+
+.cmx-nav-submenu {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-height: 0;
+  overflow: hidden;
+}
+
+.cmx-nav-submenu--aberta {
+  max-height: 200px;
+}
+
 .cmx-nav-item--em-breve {
   color: #5c6773;
   cursor: default;
