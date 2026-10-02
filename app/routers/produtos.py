@@ -107,6 +107,24 @@ def listar_produtos(
         termo = sku.strip().lower()
         itens = [i for i in itens if termo in i["sku"].lower()]
 
+    # DIAGNÓSTICO (02/10): lista SKUs que vieram de mais de um anúncio
+    # diferente no Mercado Livre -- cada um desses tem a quantidade somada
+    # de todos os anúncios que usam esse SKU, o que só está certo se forem
+    # variações do MESMO produto (ex: 127V/220V). Se forem anúncios
+    # distintos (ex: cores diferentes) usando o mesmo SKU por engano de
+    # cadastro, a soma aqui está inflando a quantidade (e o valor) desse
+    # SKU. Não muda nenhum cálculo existente -- só expõe o que já está
+    # acontecendo, pra investigar antes de decidir o que fazer.
+    skus_em_multiplos_anuncios = [
+        {
+            "sku": sku_atual,
+            "quantidade_somada": info["quantidade"],
+            "anuncios": sorted(info.get("anuncios", [])),
+        }
+        for sku_atual, info in estoque_por_sku.items()
+        if len(info.get("anuncios", [])) > 1
+    ]
+
     return {
         "itens": itens,
         "resumo": {
@@ -118,4 +136,5 @@ def listar_produtos(
         },
         "estoque_indisponivel": estoque_indisponivel,
         "aviso_estoque": aviso_estoque,
+        "skus_em_multiplos_anuncios": skus_em_multiplos_anuncios,
     }
