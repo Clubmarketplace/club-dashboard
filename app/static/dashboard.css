@@ -13,6 +13,21 @@
   --cmx-verde: #2f6f4f;
   --cmx-verde-fundo: #e6f0ea;
   --cmx-sombra: 0 1px 2px rgba(18, 24, 31, 0.04), 0 8px 24px -12px rgba(18, 24, 31, 0.10);
+
+  /* Barra lateral -- por padrão (modo dia) clara, pra combinar com o
+     resto da tela; no modo noite (ver bloco [data-tema="escuro"] abaixo)
+     volta a ser o navy escuro original. */
+  --cmx-sidebar-bg: #ffffff;
+  --cmx-sidebar-borda: #e4e7eb;
+  --cmx-sidebar-texto: #44505e;
+  --cmx-sidebar-texto-fraco: #8a94a1;
+  --cmx-sidebar-marca-texto: #1b2430;
+  --cmx-sidebar-hover-bg: #eef1f4;
+  --cmx-sidebar-ativo-bg: #eef1f4;
+  --cmx-sidebar-ativo-texto: #1b2430;
+  --cmx-sidebar-submenu-borda: #e4e7eb;
+  --cmx-sidebar-selo-bg: #eef1f4;
+  --cmx-sidebar-selo-texto: #8a94a1;
 }
 
 /* ---------- Modo noite (tema escuro) ----------
@@ -34,6 +49,19 @@
   --cmx-rust-fundo: #3a2019;
   --cmx-verde-fundo: #163227;
   --cmx-sombra: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+
+  /* Modo noite: barra lateral volta pro navy escuro original. */
+  --cmx-sidebar-bg: var(--cmx-marinho);
+  --cmx-sidebar-borda: transparent;
+  --cmx-sidebar-texto: #b7c0cb;
+  --cmx-sidebar-texto-fraco: #6c7784;
+  --cmx-sidebar-marca-texto: #ffffff;
+  --cmx-sidebar-hover-bg: var(--cmx-marinho-suave);
+  --cmx-sidebar-ativo-bg: var(--cmx-marinho-suave);
+  --cmx-sidebar-ativo-texto: #ffffff;
+  --cmx-sidebar-submenu-borda: #26303c;
+  --cmx-sidebar-selo-bg: #26303c;
+  --cmx-sidebar-selo-texto: #8b96a3;
 }
 
 /* Cartões/cards/modais de cada tela declaram fundo branco fixo
@@ -94,8 +122,9 @@ body {
 /* ---------- Barra lateral ---------- */
 
 .cmx-sidebar {
-  background: var(--cmx-marinho);
-  color: #cfd6de;
+  background: var(--cmx-sidebar-bg);
+  color: var(--cmx-sidebar-texto);
+  border-right: 1px solid var(--cmx-sidebar-borda);
   padding: 24px 18px;
   display: flex;
   flex-direction: column;
@@ -135,7 +164,7 @@ body {
 .cmx-marca-texto {
   font-weight: 600;
   font-size: 14.5px;
-  color: #ffffff;
+  color: var(--cmx-sidebar-marca-texto);
   letter-spacing: -0.01em;
 }
 
@@ -148,7 +177,7 @@ body {
 .cmx-nav-secao {
   font-size: 11px;
   font-weight: 600;
-  color: #6c7784;
+  color: var(--cmx-sidebar-texto-fraco);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   margin: 18px 10px 6px;
@@ -164,15 +193,15 @@ body {
   gap: 9px;
   padding: 9px 10px;
   border-radius: 7px;
-  color: #b7c0cb;
+  color: var(--cmx-sidebar-texto);
   text-decoration: none;
   font-size: 13.5px;
   font-weight: 500;
 }
 
 .cmx-nav-item--ativo {
-  background: var(--cmx-marinho-suave);
-  color: #ffffff;
+  background: var(--cmx-sidebar-ativo-bg);
+  color: var(--cmx-sidebar-ativo-texto);
 }
 
 .cmx-nav-dot {
@@ -199,7 +228,7 @@ body {
   border: none;
   border-radius: 7px;
   background: none;
-  color: #b7c0cb;
+  color: var(--cmx-sidebar-texto);
   font-family: inherit;
   font-size: 13.5px;
   font-weight: 500;
@@ -208,12 +237,12 @@ body {
 }
 
 .cmx-nav-sanfona:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--cmx-sidebar-hover-bg);
 }
 
 .cmx-nav-sanfona-seta {
   font-size: 11px;
-  color: #6c7784;
+  color: var(--cmx-sidebar-texto-fraco);
   transition: transform 0.15s ease;
   flex-shrink: 0;
 }
@@ -248,12 +277,12 @@ body {
   margin-top: 10px;
 }
 .cmx-botao-tema:hover {
-  background: var(--cmx-marinho-suave);
-  color: #ffffff;
+  background: var(--cmx-sidebar-hover-bg);
+  color: var(--cmx-sidebar-ativo-texto);
 }
 
 .cmx-nav-item--em-breve {
-  color: #5c6773;
+  color: var(--cmx-sidebar-texto-fraco);
   cursor: default;
   justify-content: space-between;
 }
@@ -261,8 +290,8 @@ body {
 .cmx-selo-em-breve {
   font-size: 10px;
   font-weight: 600;
-  background: #26303c;
-  color: #8b96a3;
+  background: var(--cmx-sidebar-selo-bg);
+  color: var(--cmx-sidebar-selo-texto);
   padding: 2px 7px;
   border-radius: 100px;
 }
@@ -805,9 +834,9 @@ main {
     align-items: center;
     justify-content: center;
     border-radius: 9px;
-    border: 1px solid rgba(255, 255, 255, .18);
+    border: 1px solid var(--cmx-sidebar-borda, var(--cmx-borda));
     background: transparent;
-    color: #cfd6de;
+    color: var(--cmx-sidebar-texto);
     font-size: 16px;
     cursor: pointer;
   }
