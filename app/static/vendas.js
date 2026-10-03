@@ -5,6 +5,7 @@
   const API_LISTA = "/api/painel/vendas/lista";
   const API_SINCRONIZAR = "/api/painel/vendas/sincronizar";
   const API_MARGEM = "/api/painel/vendas/margem";
+  const API_TAXAS = "/api/painel/taxas";
 
   const filtroInicio = document.getElementById("filtro-inicio");
   const filtroFim = document.getElementById("filtro-fim");
@@ -39,6 +40,19 @@
   const campoMargemMaxima = document.getElementById("campo-margem-maxima");
   const btnSalvarMargem = document.getElementById("btn-salvar-margem");
   const msgMargem = document.getElementById("msg-margem");
+
+  // --- Card "Taxas cadastradas" (ao lado do filtro de datas) ---
+  const listaTaxasCadastradas = document.getElementById("lista-taxas-cadastradas");
+  const btnAbrirModalTaxaVendas = document.getElementById("btn-abrir-modal-taxa-vendas");
+  const modalTaxaVendas = document.getElementById("modal-taxa-vendas");
+  const campoNomeTaxaVendas = document.getElementById("campo-nome-taxa-vendas");
+  const campoPercentualTaxaVendas = document.getElementById("campo-percentual-taxa-vendas");
+  const pillsBaseTaxaVendas = document.querySelectorAll("#pills-base-taxa-vendas .pill-base");
+  const msgModalTaxaVendas = document.getElementById("msg-modal-taxa-vendas");
+  const btnCancelarModalTaxaVendas = document.getElementById("btn-cancelar-modal-taxa-vendas");
+  const btnSalvarModalTaxaVendas = document.getElementById("btn-salvar-modal-taxa-vendas");
+
+  let baseSelecionadaTaxaVendas = "venda_bruta";
 
   let filtroSemCustoOuRuim = false;
 
@@ -329,9 +343,111 @@
       });
   });
 
-  // Taxas percentuais (imposto/CLUB/etc.) agora têm tela própria: /taxas
-  // (app/templates/taxas.html + app/static/taxas.js). Esta tela só
-  // mostra o resultado já líquido nos cards acima.
+  // Taxas percentuais (imposto/CLUB/etc.) têm tela própria: /taxas
+  // (app/templates/taxas.html + app/static/taxas.js). Esta tela também
+  // mostra um card de atalho (ver/adicionar/remover) ao lado do filtro
+  // de datas, pra não precisar sair daqui pra cadastrar uma taxa nova --
+  // fica sincronizado com a tela /taxas porque os dois usam a mesma API.
 
+  function carregarTaxasCadastradas() {
+    fetch(API_TAXAS)
+      .then((r) => r.json())
+      .then((dados) => renderizarTaxasCadastradas(dados.itens || []))
+      .catch(() => {
+        listaTaxasCadastradas.innerHTML = '<p class="vazio">⚠ Não consegui carregar as taxas agora.</p>';
+      });
+  }
+
+  function renderizarTaxasCadastradas(itens) {
+    listaTaxasCadastradas.innerHTML = "";
+    if (!itens.length) {
+      listaTaxasCadastradas.innerHTML = '<p class="vazio">Nenhuma taxa cadastrada ainda.</p>';
+      return;
+    }
+    itens.forEach((item) => {
+      const linha = document.createElement("div");
+      linha.className = "linha-item";
+      linha.innerHTML =
+        "<span>" + item.nome + "</span>" +
+        '<div style="display:flex; align-items:center;">' +
+        '<span class="percentual">' + formatarPercentual(item.percentual) + "</span>" +
+        '<button class="remover" data-nome="' + item.nome + '" aria-label="Remover taxa ' + item.nome + '">✕</button>' +
+        "</div>";
+      listaTaxasCadastradas.appendChild(linha);
+    });
+    listaTaxasCadastradas.querySelectorAll(".remover").forEach((botao) => {
+      botao.addEventListener("click", function () {
+        if (!window.confirm('Remover a taxa "' + botao.dataset.nome + '"?')) return;
+        fetch(API_TAXAS + "/" + encodeURIComponent(botao.dataset.nome), { method: "DELETE" }).then(function () {
+          carregarTaxasCadastradas();
+          carregarTudo(); // taxa mudou -> lucro líquido, card azul e tabela precisam recalcular
+        });
+      });
+    });
+  }
+
+  function selecionarBaseTaxaVendas(base) {
+    baseSelecionadaTaxaVendas = base;
+    pillsBaseTaxaVendas.forEach((p) => p.classList.toggle("ativa", p.dataset.base === base));
+  }
+
+  function abrirModalTaxaVendas() {
+    campoNomeTaxaVendas.value = "";
+    campoPercentualTaxaVendas.value = "";
+    msgModalTaxaVendas.textContent = "";
+    msgModalTaxaVendas.className = "msg";
+    selecionarBaseTaxaVendas("venda_bruta");
+    modalTaxaVendas.classList.add("aberto");
+    campoNomeTaxaVendas.focus();
+  }
+
+  function fecharModalTaxaVendas() {
+    modalTaxaVendas.classList.remove("aberto");
+  }
+
+  pillsBaseTaxaVendas.forEach((p) => {
+    p.addEventListener("click", function () {
+      selecionarBaseTaxaVendas(p.dataset.base);
+    });
+  });
+
+  btnAbrirModalTaxaVendas.addEventListener("click", abrirModalTaxaVendas);
+  btnCancelarModalTaxaVendas.addEventListener("click", fecharModalTaxaVendas);
+  modalTaxaVendas.addEventListener("click", function (e) {
+    if (e.target === modalTaxaVendas) fecharModalTaxaVendas();
+  });
+
+  btnSalvarModalTaxaVendas.addEventListener("click", function () {
+    const nome = campoNomeTaxaVendas.value.trim();
+    const percentual = campoPercentualTaxaVendas.value.trim().replace(",", ".");
+    msgModalTaxaVendas.textContent = "";
+    if (!nome || percentual === "") {
+      msgModalTaxaVendas.textContent = "Preencha nome e porcentagem.";
+      msgModalTaxaVendas.className = "msg erro";
+      return;
+    }
+    if (isNaN(Number(percentual)) || Number(percentual) < 0) {
+      msgModalTaxaVendas.textContent = "Porcentagem inválida.";
+      msgModalTaxaVendas.className = "msg erro";
+      return;
+    }
+    fetch(API_TAXAS, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nome: nome, percentual: Number(percentual), base_calculo: baseSelecionadaTaxaVendas }),
+    })
+      .then((r) => {
+        if (!r.ok) return r.json().then((d) => Promise.reject(d));
+        fecharModalTaxaVendas();
+        carregarTaxasCadastradas();
+        carregarTudo(); // taxa nova -> lucro líquido, card azul e tabela precisam recalcular
+      })
+      .catch((erro) => {
+        msgModalTaxaVendas.textContent = (erro && erro.detail) || "Não consegui salvar agora.";
+        msgModalTaxaVendas.className = "msg erro";
+      });
+  });
+
+  carregarTaxasCadastradas();
   definirPeriodoPadrao(); // já chama carregarTudo() dentro de aplicarAtalho()
 })();
