@@ -197,7 +197,7 @@ _AREAS_POR_PAPEL = {
     "tv": ("paineis_tv",),
 }
 _PAGINA_INICIAL_POR_PAPEL = {
-    "seller": "/meus-cancelamentos",
+    "seller": "/vendas",  # tela mais usada pelo seller -- antes era "/meus-cancelamentos"
     "atendente": "/pre-venda",
     "logistica": "/solicitar-cancelamento",
     "tv": "/painel-tv/fila",
@@ -274,7 +274,7 @@ async def exigir_login(request: Request, call_next):
     if papel == "seller" and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-        return RedirectResponse("/meus-cancelamentos", status_code=303)
+        return RedirectResponse("/vendas", status_code=303)
 
     if papel in _AREAS_POR_PAPEL and not _papel_pode_acessar(papel, caminho):
         if caminho.startswith("/api/"):
