@@ -44,6 +44,7 @@ from app.ml_client import (
     buscar_mensagem,
     buscar_claim,
     enviar_resposta,
+    processar_pedido_em_vendas,
 )
 from app.pre_venda_logica import decidir_resposta
 from app.pos_venda_logica import processar_mensagem_pos_venda
@@ -81,6 +82,10 @@ async def receber_notificacao(payload: dict, db: Session = Depends(get_db)):
             resultado = await _processar_claim(payload, db)
         elif topic in TOPICOS_REPASSAR_PARA_APPS_SCRIPT:
             resultado = await _repassar_para_apps_script(payload, topic)
+            # Além de repassar pra Central Financeira (como sempre fez),
+            # agora também alimenta a nossa própria tela "Vendas" -- as
+            # duas coisas são independentes, uma não afeta a outra.
+            resultado["vendas"] = await _processar_venda(payload, db)
         else:
             logger.info("Tópico '%s' recebido, ainda sem tratamento.", topic)
             resultado = {"status": "ignorado", "motivo": f"tópico '{topic}' ainda não tem módulo próprio"}
@@ -120,6 +125,34 @@ async def _repassar_para_apps_script(payload: dict, topic: str | None) -> dict:
     except Exception as exc:
         logger.error("Falha ao repassar notificação (tópico '%s') pro Apps Script: %s", topic, exc)
         return {"status": "erro_ao_repassar", "topico": topic, "detalhe": str(exc)}
+
+
+async def _processar_venda(payload: dict, db: Session) -> dict:
+    """
+    Tópico 'orders_v2' também alimenta a tela "Vendas" própria (ver
+    app/models.py:Venda) -- uma linha por item do pedido, já com
+    repasse/custo/lucro/margem calculados. Nunca deixa uma falha aqui
+    derrubar o repasse pra Central Financeira (são independentes): erro
+    fica só registrado no resultado, pra reforço manual depois
+    (ml_client.sincronizar_vendas_recentes) pegar o que faltou.
+    """
+    resource = payload.get("resource", "")
+    ml_user_id = str(payload.get("user_id", ""))
+    order_id = resource.rstrip("/").split("/")[-1]
+
+    if not order_id.isdigit():
+        return {"status": "ignorado", "motivo": f"resource inesperado: {resource}"}
+
+    conta = db.query(Conta).filter(Conta.ml_user_id == ml_user_id).first()
+    if conta is None or not conta.access_token:
+        return {"status": "conta_nao_conectada", "ml_user_id": ml_user_id}
+
+    try:
+        linhas_gravadas = processar_pedido_em_vendas(conta, db, order_id)
+        return {"status": "processado", "linhas_gravadas": linhas_gravadas}
+    except (MLAuthError, MLApiError) as exc:
+        logger.warning("Não consegui processar o pedido %s pra tela de Vendas: %s", order_id, exc)
+        return {"status": "erro", "detalhe": str(exc)}
 
 
 async def _processar_pergunta(payload: dict, db: Session) -> dict:
