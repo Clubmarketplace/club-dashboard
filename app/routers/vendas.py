@@ -15,10 +15,15 @@ De onde vêm os dados:
   - CMV e lucro de cada linha usam o custo já cadastrado em CustoSku
     (mesma tabela de "Produtos" -- um SKU sem custo cadastrado aparece
     separado, igual já acontece em "Produtos > Lista").
-  - As despesas que entram no Lucro Líquido são as que o Washington já
-    configura: percentuais (VariavelConta -- imposto, CLUB etc, a mesma
-    tabela que a extensão usa) e fixas mensais (DespesaFixaConta --
-    Contabilidade, Bling etc, ratedas pelos dias do período filtrado).
+  - As despesas que entram no Lucro Líquido são as taxas percentuais
+    cadastradas na tela "Taxas" (app/routers/taxas.py -- mesma tabela
+    VariavelConta que a extensão usa). Cada taxa tem uma base_calculo
+    (venda_bruta/repasse/lucro) e é deduzida em cascata, na mesma ordem
+    que a extensão usa pra calcular a margem de cada venda:
+      Venda Bruta -> (- taxas base "venda_bruta") -> Repasse (já pronto)
+      -> (- taxas base "repasse") -> Lucro Bruto (repasse - CMV)
+      -> (- taxas base "lucro") -> Lucro Líquido.
+    Valor fixo (ex: "contador R$500/mês") está fora de escopo por ora.
 
 Mesmo padrão de autenticação/isolamento por conta do resto do painel
 (custos_painel.py / produtos.py): cookie de sessão do seller,
@@ -29,13 +34,13 @@ import logging
 from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app import ml_client
 from app.database import get_db
 from app.ml_client import MLAuthError, MLApiError
-from app.models import Conta, DespesaFixaConta, Venda, VariavelConta
+from app.models import Conta, Venda, VariavelConta
 from app.routers.custos_painel import _seller_logado
 from app.routers.cmx import _conta_vinculada_do_usuario
 
@@ -108,6 +113,44 @@ def _classificar_margem(conta: Conta, margem_percentual: float | None) -> str | 
     return "boa"
 
 
+def _cascata_taxas(taxas: list[VariavelConta], venda_bruta: float, repasse: float, lucro_bruto: float) -> tuple[list[dict], float]:
+    """
+    Aplica as taxas percentuais cadastradas em cascata -- Venda Bruta ->
+    Repasse -> Lucro -- e devolve (lista de deduções aplicadas,
+    lucro_líquido resultante). Usada tanto pro resumo agregado do
+    período (_montar_resumo) quanto pra mostrar, venda a venda, quais
+    taxas entraram na conta de cada linha (listar_vendas).
+    """
+    taxas_venda_bruta = [t for t in taxas if (t.base_calculo or "venda_bruta") == "venda_bruta"]
+    taxas_repasse = [t for t in taxas if t.base_calculo == "repasse"]
+    taxas_lucro = [t for t in taxas if t.base_calculo == "lucro"]
+
+    aplicadas = []
+
+    total_venda_bruta = 0.0
+    for t in taxas_venda_bruta:
+        valor = round(venda_bruta * t.percentual / 100, 2)
+        total_venda_bruta += valor
+        aplicadas.append({"nome": t.nome, "percentual": t.percentual, "base_calculo": "venda_bruta", "valor": valor})
+
+    total_repasse = 0.0
+    for t in taxas_repasse:
+        valor = round(repasse * t.percentual / 100, 2)
+        total_repasse += valor
+        aplicadas.append({"nome": t.nome, "percentual": t.percentual, "base_calculo": "repasse", "valor": valor})
+
+    lucro_antes_taxas_lucro = lucro_bruto - total_venda_bruta - total_repasse
+
+    total_lucro = 0.0
+    for t in taxas_lucro:
+        valor = round(lucro_antes_taxas_lucro * t.percentual / 100, 2)
+        total_lucro += valor
+        aplicadas.append({"nome": t.nome, "percentual": t.percentual, "base_calculo": "lucro", "valor": valor})
+
+    lucro_liquido = lucro_antes_taxas_lucro - total_lucro
+    return aplicadas, lucro_liquido
+
+
 def _montar_resumo(conta: Conta, db: Session, inicio_dt: datetime, fim_dt: datetime, dias: int) -> dict:
     consulta = (
         db.query(Venda)
@@ -128,26 +171,11 @@ def _montar_resumo(conta: Conta, db: Session, inicio_dt: datetime, fim_dt: datet
 
     lucro_bruto = repasse - cmv
 
-    percentuais = db.query(VariavelConta).filter(VariavelConta.conta_id == conta.id).all()
-    despesas_percentuais = [
-        {"nome": v.nome, "percentual": v.percentual, "valor": round(venda_bruta * v.percentual / 100, 2)}
-        for v in percentuais
-    ]
-    total_despesas_percentuais = sum(d["valor"] for d in despesas_percentuais)
-
-    fixas = db.query(DespesaFixaConta).filter(DespesaFixaConta.conta_id == conta.id).all()
-    despesas_fixas = [
-        {
-            "nome": d.nome,
-            "valor_mensal": d.valor_mensal,
-            # Rateio simples: valor_mensal / 30 dias x dias do período filtrado.
-            "valor_periodo": round(d.valor_mensal / 30 * dias, 2),
-        }
-        for d in fixas
-    ]
-    total_despesas_fixas = sum(d["valor_periodo"] for d in despesas_fixas)
-
-    lucro_liquido = lucro_bruto - total_despesas_percentuais - total_despesas_fixas
+    # Taxas percentuais cadastradas em "Taxas" (app/routers/taxas.py),
+    # deduzidas em cascata na mesma ordem usada pela extensão pra
+    # calcular a margem de cada venda -- ver docstring do módulo.
+    taxas = db.query(VariavelConta).filter(VariavelConta.conta_id == conta.id).all()
+    despesas_taxas, lucro_liquido = _cascata_taxas(taxas, venda_bruta, repasse, lucro_bruto)
 
     margem_markup = (lucro_liquido / cmv * 100) if cmv else None
     margem_contribuicao = (lucro_liquido / venda_bruta * 100) if venda_bruta else None
@@ -166,8 +194,7 @@ def _montar_resumo(conta: Conta, db: Session, inicio_dt: datetime, fim_dt: datet
         "lucro_liquido": round(lucro_liquido, 2),
         "margem_markup": round(margem_markup, 2) if margem_markup is not None else None,
         "margem_contribuicao": round(margem_contribuicao, 2) if margem_contribuicao is not None else None,
-        "despesas_percentuais": despesas_percentuais,
-        "despesas_fixas": despesas_fixas,
+        "despesas_taxas": despesas_taxas,
         "margem_minima": conta.margem_minima,
         "margem_maxima": conta.margem_maxima,
     }
@@ -190,25 +217,28 @@ def resumo_vendas(
     inicio_dt, fim_dt, dias = _periodo(inicio, fim)
 
     tem_venda_salva = db.query(Venda).filter(Venda.conta_id == conta.id).first() is not None
+    resposta = _montar_resumo(conta, db, inicio_dt, fim_dt, dias)
+
     if not tem_venda_salva:
-        # Primeira vez que a conta abre a tela: busca os últimos 30 dias
-        # na hora (só essa vez é mais lenta) pra não abrir vazia.
-        try:
-            ml_client.sincronizar_vendas_recentes(conta, db, dias=30)
-        except MLAuthError as exc:
-            resposta = _montar_resumo(conta, db, inicio_dt, fim_dt, dias)
-            resposta["aviso"] = str(exc)
-            return resposta
-        except MLApiError as exc:
-            resposta = _montar_resumo(conta, db, inicio_dt, fim_dt, dias)
-            resposta["aviso"] = f"Não consegui consultar as vendas no Mercado Livre agora: {exc}"
-            return resposta
+        # CORREÇÃO (03/10): a primeira busca (30 dias de pedidos, um a um
+        # no Mercado Livre) rodava na hora, esperando terminar -- numa
+        # conta com muitos pedidos isso estourava o tempo da requisição e
+        # a tela só mostrava "não consegui carregar", sem nunca terminar.
+        # Agora, igual "Produtos > Lista": responde JÁ (ainda zerado) e
+        # busca os 30 dias em segundo plano -- a próxima vez que abrir a
+        # tela (ou clicar "Atualizar agora"), já vem preenchido.
+        background_tasks.add_task(_sincronizar_vendas_em_segundo_plano, conta.id, 30)
+        resposta["aviso"] = (
+            "Buscando suas vendas dos últimos 30 dias pela primeira vez -- "
+            "isso roda em segundo plano e pode levar alguns minutos numa conta "
+            "com bastante pedido. Atualize a página daqui a pouco pra ver preenchido."
+        )
     else:
         # Reforço silencioso: cobre qualquer pedido recente cujo webhook
         # não tenha chegado. Período curto (2 dias) pra ser rápido.
         background_tasks.add_task(_sincronizar_vendas_em_segundo_plano, conta.id, 2)
 
-    return _montar_resumo(conta, db, inicio_dt, fim_dt, dias)
+    return resposta
 
 
 @router.get("/lista")
@@ -237,11 +267,28 @@ def listar_vendas(
         .all()
     )
 
+    # Taxas cadastradas em "Taxas" -- buscadas uma vez só e aplicadas em
+    # cascata linha a linha, pra mostrar na lista exatamente quais taxas
+    # entraram na conta de cada venda até chegar na margem/lucro líquido
+    # exibido (o mesmo pedido que o Washington fez: "poderia colocar na
+    # tela de visualização de venda a venda as taxas aplicadas e usadas
+    # para chegar na margem positiva").
+    taxas = db.query(VariavelConta).filter(VariavelConta.conta_id == conta.id).all()
+
     itens = []
     for l in linhas:
         classificacao = _classificar_margem(conta, l.margem_percentual)
         if margem.strip() and classificacao != margem.strip():
             continue
+
+        if l.custo_total is not None and l.lucro is not None:
+            taxas_aplicadas, lucro_liquido = _cascata_taxas(taxas, l.venda_bruta, l.repasse, l.lucro)
+            lucro_liquido = round(lucro_liquido, 2)
+        else:
+            # Sem custo cadastrado não dá pra calcular lucro nenhum
+            # (bruto ou líquido) -- mesma regra já usada pra "sem custo".
+            taxas_aplicadas, lucro_liquido = [], None
+
         itens.append(
             {
                 "id": l.id,
@@ -257,6 +304,8 @@ def listar_vendas(
                 "repasse": l.repasse,
                 "custo_total": l.custo_total,
                 "lucro": l.lucro,
+                "taxas_aplicadas": taxas_aplicadas,
+                "lucro_liquido": lucro_liquido,
                 "margem_percentual": l.margem_percentual,
                 "margem_classificacao": classificacao,
                 "status_pedido": l.status_pedido,
@@ -308,129 +357,7 @@ def definir_margem(dados: MargemEntrada, usuario=Depends(_seller_logado), db: Se
     return {"margem_minima": conta.margem_minima, "margem_maxima": conta.margem_maxima}
 
 
-class DespesaFixaEntrada(BaseModel):
-    nome: str
-    valor_mensal: float
-
-    @field_validator("nome")
-    @classmethod
-    def _nome_nao_vazio(cls, v: str) -> str:
-        v = (v or "").strip()
-        if not v:
-            raise ValueError("Nome não pode ser vazio.")
-        return v
-
-    @field_validator("valor_mensal")
-    @classmethod
-    def _valor_nao_negativo(cls, v: float) -> float:
-        if v < 0:
-            raise ValueError("Valor mensal não pode ser negativo.")
-        return v
-
-
-@router.get("/despesas-fixas")
-def listar_despesas_fixas(usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    despesas = db.query(DespesaFixaConta).filter(DespesaFixaConta.conta_id == conta.id).order_by(DespesaFixaConta.nome).all()
-    return {
-        "itens": [
-            {"nome": d.nome, "valor_mensal": d.valor_mensal, "atualizado_por": d.atualizado_por}
-            for d in despesas
-        ]
-    }
-
-
-@router.post("/despesas-fixas")
-def gravar_despesa_fixa(dados: DespesaFixaEntrada, usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    registro = (
-        db.query(DespesaFixaConta)
-        .filter(DespesaFixaConta.conta_id == conta.id, DespesaFixaConta.nome == dados.nome)
-        .first()
-    )
-    if registro is None:
-        registro = DespesaFixaConta(conta_id=conta.id, nome=dados.nome)
-        db.add(registro)
-    registro.valor_mensal = dados.valor_mensal
-    registro.atualizado_por = usuario.nome_exibicao
-    db.commit()
-    return {"nome": registro.nome, "valor_mensal": registro.valor_mensal}
-
-
-@router.delete("/despesas-fixas/{nome}")
-def remover_despesa_fixa(nome: str, usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    registro = (
-        db.query(DespesaFixaConta)
-        .filter(DespesaFixaConta.conta_id == conta.id, DespesaFixaConta.nome == nome)
-        .first()
-    )
-    if registro is None:
-        raise HTTPException(status_code=404, detail="Despesa não encontrada nessa conta.")
-    db.delete(registro)
-    db.commit()
-    return {"removida": nome}
-
-
-class VariavelEntradaPainel(BaseModel):
-    nome: str
-    percentual: float
-
-    @field_validator("nome")
-    @classmethod
-    def _nome_nao_vazio(cls, v: str) -> str:
-        v = (v or "").strip()
-        if not v:
-            raise ValueError("Nome não pode ser vazio.")
-        return v
-
-    @field_validator("percentual")
-    @classmethod
-    def _percentual_valido(cls, v: float) -> float:
-        if v < 0:
-            raise ValueError("Percentual não pode ser negativo.")
-        return v
-
-
-@router.get("/variaveis")
-def listar_variaveis_painel(usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    """
-    Mesma tabela VariavelConta que a extensão usa (imposto, CLUB etc) --
-    exposta aqui também pelo painel (cookie de sessão), pra configurar
-    pelo "Vendas" sem precisar abrir a extensão.
-    """
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    variaveis = db.query(VariavelConta).filter(VariavelConta.conta_id == conta.id).order_by(VariavelConta.nome).all()
-    return {"itens": [{"nome": v.nome, "percentual": v.percentual} for v in variaveis]}
-
-
-@router.post("/variaveis")
-def gravar_variavel_painel(dados: VariavelEntradaPainel, usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    registro = (
-        db.query(VariavelConta)
-        .filter(VariavelConta.conta_id == conta.id, VariavelConta.nome == dados.nome)
-        .first()
-    )
-    if registro is None:
-        registro = VariavelConta(conta_id=conta.id, nome=dados.nome)
-        db.add(registro)
-    registro.percentual = dados.percentual
-    registro.atualizado_por = usuario.nome_exibicao
-    db.commit()
-    return {"nome": registro.nome, "percentual": registro.percentual}
-
-
-@router.delete("/variaveis/{nome}")
-def remover_variavel_painel(nome: str, usuario=Depends(_seller_logado), db: Session = Depends(get_db)):
-    conta = _conta_vinculada_do_usuario(usuario, db)
-    registro = (
-        db.query(VariavelConta)
-        .filter(VariavelConta.conta_id == conta.id, VariavelConta.nome == nome)
-        .first()
-    )
-    if registro is None:
-        raise HTTPException(status_code=404, detail="Variável não encontrada nessa conta.")
-    db.delete(registro)
-    db.commit()
-    return {"removida": nome}
+#  As taxas percentuais (VariavelConta) agora têm tela própria --
+#  ver app/routers/taxas.py (GET/POST/DELETE /api/painel/taxas).
+#  Despesa fixa mensal (DespesaFixaConta) saiu de escopo por decisão
+#  do cliente; o modelo continua no banco (sem uso) e pode voltar.

@@ -283,9 +283,16 @@ def atualizar_custos(
 # pra dar pro painel também enxergar/editar (tela "Variáveis" futura).
 
 
+_BASES_CALCULO_VALIDAS = {"venda_bruta", "repasse", "lucro"}
+
+
 class VariavelEntrada(BaseModel):
     nome: str
     percentual: float
+    # "venda_bruta" (default) | "repasse" | "lucro" -- sobre qual valor o
+    # percentual é aplicado. Default garante compatibilidade com
+    # instalações antigas da extensão que ainda não enviam esse campo.
+    base_calculo: str = "venda_bruta"
 
     @field_validator("nome")
     @classmethod
@@ -305,6 +312,14 @@ class VariavelEntrada(BaseModel):
             raise ValueError("Percentual não pode ser negativo.")
         return v
 
+    @field_validator("base_calculo")
+    @classmethod
+    def _base_calculo_valida(cls, v: str) -> str:
+        v = (v or "venda_bruta").strip()
+        if v not in _BASES_CALCULO_VALIDAS:
+            raise ValueError("Base de cálculo inválida (use venda_bruta, repasse ou lucro).")
+        return v
+
 
 class VariaveisEntrada(BaseModel):
     itens: list[VariavelEntrada]
@@ -314,6 +329,7 @@ def _serializar_variavel(v: VariavelConta) -> dict:
     return {
         "nome": v.nome,
         "percentual": v.percentual,
+        "base_calculo": v.base_calculo or "venda_bruta",
         "atualizado_em": v.atualizado_em.isoformat() if v.atualizado_em else None,
         "atualizado_por": v.atualizado_por,
     }
@@ -363,8 +379,9 @@ def atualizar_variaveis(
             db.add(registro)
             existentes[item.nome] = registro
         registro.percentual = item.percentual
+        registro.base_calculo = item.base_calculo
         registro.atualizado_por = usuario.nome_exibicao
-        resultado.append({"nome": item.nome, "percentual": item.percentual})
+        resultado.append({"nome": item.nome, "percentual": item.percentual, "base_calculo": item.base_calculo})
 
     db.commit()
     return {"total_processados": len(resultado), "itens": resultado}
