@@ -5,8 +5,6 @@
   const API_LISTA = "/api/painel/vendas/lista";
   const API_SINCRONIZAR = "/api/painel/vendas/sincronizar";
   const API_MARGEM = "/api/painel/vendas/margem";
-  const API_VARIAVEIS = "/api/painel/vendas/variaveis";
-  const API_DESPESAS_FIXAS = "/api/painel/vendas/despesas-fixas";
 
   const filtroInicio = document.getElementById("filtro-inicio");
   const filtroFim = document.getElementById("filtro-fim");
@@ -24,6 +22,8 @@
   const cardTicketMedio = document.getElementById("card-ticket-medio");
   const cardLucroBruto = document.getElementById("card-lucro-bruto");
   const cardLucroLiquido = document.getElementById("card-lucro-liquido");
+  const cardTaxasDescontadas = document.getElementById("card-taxas-descontadas");
+  const cardTaxasDetalhe = document.getElementById("card-taxas-detalhe");
   const cardMargemMarkup = document.getElementById("card-margem-markup");
   const cardMargemContribuicao = document.getElementById("card-margem-contribuicao");
   const cardSemCusto = document.getElementById("card-sem-custo");
@@ -39,18 +39,6 @@
   const campoMargemMaxima = document.getElementById("campo-margem-maxima");
   const btnSalvarMargem = document.getElementById("btn-salvar-margem");
   const msgMargem = document.getElementById("msg-margem");
-
-  const listaVariaveis = document.getElementById("lista-variaveis");
-  const campoVariavelNome = document.getElementById("campo-variavel-nome");
-  const campoVariavelPercentual = document.getElementById("campo-variavel-percentual");
-  const btnAddVariavel = document.getElementById("btn-add-variavel");
-  const msgVariavel = document.getElementById("msg-variavel");
-
-  const listaDespesasFixas = document.getElementById("lista-despesas-fixas");
-  const campoDespesaNome = document.getElementById("campo-despesa-nome");
-  const campoDespesaValor = document.getElementById("campo-despesa-valor");
-  const btnAddDespesa = document.getElementById("btn-add-despesa");
-  const msgDespesa = document.getElementById("msg-despesa");
 
   let filtroSemCustoOuRuim = false;
 
@@ -143,20 +131,39 @@
         cardTicketMedio.textContent = formatarMoeda(resumo.ticket_medio);
         cardLucroBruto.textContent = formatarMoeda(resumo.lucro_bruto);
         cardLucroLiquido.textContent = formatarMoeda(resumo.lucro_liquido);
+        renderizarTaxasDescontadas(resumo.despesas_taxas || []);
         cardMargemMarkup.textContent = formatarPercentual(resumo.margem_markup);
         cardMargemContribuicao.textContent = formatarPercentual(resumo.margem_contribuicao);
         cardSemCusto.textContent = resumo.qtd_sem_custo;
 
         campoMargemMinima.value = resumo.margem_minima === null || resumo.margem_minima === undefined ? "" : resumo.margem_minima;
         campoMargemMaxima.value = resumo.margem_maxima === null || resumo.margem_maxima === undefined ? "" : resumo.margem_maxima;
-
-        renderizarVariaveis(resumo.despesas_percentuais || []);
-        renderizarDespesasFixas(resumo.despesas_fixas || []);
       })
       .catch(() => {
         avisoVendas.textContent = "⚠️ Não consegui carregar o resumo de vendas agora.";
         avisoVendas.classList.add("visivel");
       });
+  }
+
+  const RÓTULO_BASE_TAXA = { venda_bruta: "s/ Venda Bruta", repasse: "s/ Repasse", lucro: "s/ Lucro" };
+
+  function renderizarTaxasDescontadas(itens) {
+    const total = itens.reduce((soma, t) => soma + (t.valor || 0), 0);
+    cardTaxasDescontadas.textContent = formatarMoeda(total);
+    if (!itens.length) {
+      cardTaxasDetalhe.textContent = "Nenhuma taxa cadastrada ainda.";
+      return;
+    }
+    cardTaxasDetalhe.innerHTML = itens
+      .map((t) => {
+        const base = RÓTULO_BASE_TAXA[t.base_calculo] || t.base_calculo;
+        return (
+          '<span class="extra-linha">' +
+          t.nome + " " + formatarPercentual(t.percentual) + " (" + base + ") = " + formatarMoeda(t.valor) +
+          "</span>"
+        );
+      })
+      .join("");
   }
 
   function renderizarVendas(itens) {
@@ -212,6 +219,27 @@
       tdLucro.className = "col-numero";
       tdLucro.textContent = formatarMoeda(item.lucro);
       tr.appendChild(tdLucro);
+
+      const taxasAplicadas = item.taxas_aplicadas || [];
+      const tdTaxas = document.createElement("td");
+      tdTaxas.className = "col-numero";
+      if (taxasAplicadas.length) {
+        const totalTaxas = taxasAplicadas.reduce((soma, t) => soma + (t.valor || 0), 0);
+        tdTaxas.textContent = "-" + formatarMoeda(totalTaxas);
+        tdTaxas.title = taxasAplicadas
+          .map((t) => t.nome + " " + formatarPercentual(t.percentual) + " (" + (RÓTULO_BASE_TAXA[t.base_calculo] || t.base_calculo) + ") = " + formatarMoeda(t.valor))
+          .join("\n");
+        tdTaxas.style.cursor = "help";
+        tdTaxas.style.textDecoration = "underline dotted";
+      } else {
+        tdTaxas.textContent = "-";
+      }
+      tr.appendChild(tdTaxas);
+
+      const tdLucroLiquido = document.createElement("td");
+      tdLucroLiquido.className = "col-numero";
+      tdLucroLiquido.textContent = formatarMoeda(item.lucro_liquido);
+      tr.appendChild(tdLucroLiquido);
 
       const tdMargem = document.createElement("td");
       tdMargem.className = "col-numero";
@@ -301,107 +329,9 @@
       });
   });
 
-  // --- Despesas percentuais (VariavelConta) ---
-  function renderizarVariaveis(itens) {
-    listaVariaveis.innerHTML = "";
-    if (!itens.length) {
-      listaVariaveis.innerHTML = '<p class="sub" style="margin:0;">Nenhuma cadastrada ainda.</p>';
-      return;
-    }
-    itens.forEach((item) => {
-      const linha = document.createElement("div");
-      linha.className = "linha-item";
-      const valorTexto = item.valor !== undefined ? " (" + formatarMoeda(item.valor) + " no período)" : "";
-      linha.innerHTML =
-        "<span>" + item.nome + " — " + formatarPercentual(item.percentual) + valorTexto + "</span>" +
-        '<button class="remover" data-nome="' + item.nome + '">remover</button>';
-      listaVariaveis.appendChild(linha);
-    });
-    listaVariaveis.querySelectorAll(".remover").forEach((botao) => {
-      botao.addEventListener("click", function () {
-        fetch(API_VARIAVEIS + "/" + encodeURIComponent(botao.dataset.nome), { method: "DELETE" }).then(carregarTudo);
-      });
-    });
-  }
-
-  btnAddVariavel.addEventListener("click", function () {
-    const nome = campoVariavelNome.value.trim();
-    const percentual = campoVariavelPercentual.value.trim().replace(",", ".");
-    msgVariavel.textContent = "";
-    if (!nome || percentual === "") {
-      msgVariavel.textContent = "Preencha nome e percentual.";
-      msgVariavel.className = "msg erro";
-      return;
-    }
-    fetch(API_VARIAVEIS, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: nome, percentual: Number(percentual) }),
-    })
-      .then((r) => {
-        if (!r.ok) return r.json().then((d) => Promise.reject(d));
-        campoVariavelNome.value = "";
-        campoVariavelPercentual.value = "";
-        msgVariavel.textContent = "Adicionado!";
-        msgVariavel.className = "msg ok";
-        carregarTudo();
-      })
-      .catch((erro) => {
-        msgVariavel.textContent = (erro && erro.detail) || "Não consegui adicionar agora.";
-        msgVariavel.className = "msg erro";
-      });
-  });
-
-  // --- Despesas fixas mensais ---
-  function renderizarDespesasFixas(itens) {
-    listaDespesasFixas.innerHTML = "";
-    if (!itens.length) {
-      listaDespesasFixas.innerHTML = '<p class="sub" style="margin:0;">Nenhuma cadastrada ainda.</p>';
-      return;
-    }
-    itens.forEach((item) => {
-      const linha = document.createElement("div");
-      linha.className = "linha-item";
-      const valorPeriodoTexto = item.valor_periodo !== undefined ? " (" + formatarMoeda(item.valor_periodo) + " no período)" : "";
-      linha.innerHTML =
-        "<span>" + item.nome + " — " + formatarMoeda(item.valor_mensal) + "/mês" + valorPeriodoTexto + "</span>" +
-        '<button class="remover" data-nome="' + item.nome + '">remover</button>';
-      listaDespesasFixas.appendChild(linha);
-    });
-    listaDespesasFixas.querySelectorAll(".remover").forEach((botao) => {
-      botao.addEventListener("click", function () {
-        fetch(API_DESPESAS_FIXAS + "/" + encodeURIComponent(botao.dataset.nome), { method: "DELETE" }).then(carregarTudo);
-      });
-    });
-  }
-
-  btnAddDespesa.addEventListener("click", function () {
-    const nome = campoDespesaNome.value.trim();
-    const valor = campoDespesaValor.value.trim().replace(",", ".");
-    msgDespesa.textContent = "";
-    if (!nome || valor === "") {
-      msgDespesa.textContent = "Preencha nome e valor mensal.";
-      msgDespesa.className = "msg erro";
-      return;
-    }
-    fetch(API_DESPESAS_FIXAS, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nome: nome, valor_mensal: Number(valor) }),
-    })
-      .then((r) => {
-        if (!r.ok) return r.json().then((d) => Promise.reject(d));
-        campoDespesaNome.value = "";
-        campoDespesaValor.value = "";
-        msgDespesa.textContent = "Adicionado!";
-        msgDespesa.className = "msg ok";
-        carregarTudo();
-      })
-      .catch((erro) => {
-        msgDespesa.textContent = (erro && erro.detail) || "Não consegui adicionar agora.";
-        msgDespesa.className = "msg erro";
-      });
-  });
+  // Taxas percentuais (imposto/CLUB/etc.) agora têm tela própria: /taxas
+  // (app/templates/taxas.html + app/static/taxas.js). Esta tela só
+  // mostra o resultado já líquido nos cards acima.
 
   definirPeriodoPadrao(); // já chama carregarTudo() dentro de aplicarAtalho()
 })();

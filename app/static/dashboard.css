@@ -15,6 +15,63 @@
   --cmx-sombra: 0 1px 2px rgba(18, 24, 31, 0.04), 0 8px 24px -12px rgba(18, 24, 31, 0.10);
 }
 
+/* ---------- Modo noite (tema escuro) ----------
+   Ativado via atributo data-tema="escuro" no <html>, alternado pelo
+   botão "🌙 Modo noite" do menu lateral (ver _menu_seller.html/_menu.html
+   e tema.js) -- preferência salva no localStorage do navegador, por
+   pessoa/computador, não no servidor (é só visual, não é dado da conta).
+   Só redefine as variáveis -- o resto do CSS já usa var(--cmx-*), então
+   a maior parte da tela muda sozinha. As poucas cores fixas (ex: cartões
+   brancos "#fff" declarados direto no <style> de cada página) são
+   cobertas pelas regras genéricas logo abaixo, por nome de classe. */
+:root[data-tema="escuro"] {
+  --cmx-bg: #10151f;
+  --cmx-papel: #1a2131;
+  --cmx-texto: #e4e8ee;
+  --cmx-texto-suave: #8d97a8;
+  --cmx-borda: #2b3448;
+  --cmx-ambar-fundo: #3a2e18;
+  --cmx-rust-fundo: #3a2019;
+  --cmx-verde-fundo: #163227;
+  --cmx-sombra: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+
+/* Cartões/cards/modais de cada tela declaram fundo branco fixo
+   ("background:#fff") no <style> da própria página (vendas.html,
+   taxas.html, custos.html, produtos_lista.html etc.) -- !important aqui
+   é necessário pra vencer essa regra mais específica/posterior sem
+   precisar editar cada template um por um. */
+:root[data-tema="escuro"] .cartao,
+:root[data-tema="escuro"] .card-resumo,
+:root[data-tema="escuro"] .cartao-taxa,
+:root[data-tema="escuro"] .modal-caixa,
+:root[data-tema="escuro"] .config-bloco {
+  background: var(--cmx-papel) !important;
+  color: var(--cmx-texto);
+}
+:root[data-tema="escuro"] input,
+:root[data-tema="escuro"] select,
+:root[data-tema="escuro"] textarea {
+  background: #232c40 !important;
+  color: var(--cmx-texto) !important;
+  border-color: var(--cmx-borda) !important;
+}
+:root[data-tema="escuro"] .btn-secundario {
+  background: #232c40 !important;
+  color: var(--cmx-texto) !important;
+}
+:root[data-tema="escuro"] .btn-atalho {
+  background: var(--cmx-papel) !important;
+  color: var(--cmx-texto) !important;
+}
+:root[data-tema="escuro"] table tbody tr:hover,
+:root[data-tema="escuro"] tr:hover {
+  background: #202940 !important;
+}
+:root[data-tema="escuro"] .modal-fundo {
+  background: rgba(0, 0, 0, 0.65) !important;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -175,6 +232,24 @@ body {
 
 .cmx-nav-submenu--aberta {
   max-height: 200px;
+}
+
+/* Botão "Modo noite/dia" no menu -- reaproveita a aparência de
+   .cmx-nav-item, mas é um <button> de verdade (não um link), então
+   precisa zerar os estilos nativos de botão do navegador. */
+.cmx-botao-tema {
+  width: 100%;
+  border: none;
+  background: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  cursor: pointer;
+  text-align: left;
+  margin-top: 10px;
+}
+.cmx-botao-tema:hover {
+  background: var(--cmx-marinho-suave);
+  color: #ffffff;
 }
 
 .cmx-nav-item--em-breve {
