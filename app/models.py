@@ -70,6 +70,13 @@ class Conta(Base):
     # histórico dela é preservado; reativar limpa este campo.
     inativa_em = Column(DateTime, nullable=True)
     motivo_inativacao = Column(String, nullable=True)
+    # Faixa de margem (%) usada pela tela "Vendas" pra classificar cada
+    # venda como boa/ruim (ver app/routers/vendas.py). Nulo = ainda não
+    # configurado pelo seller (a tela então só mostra o número, sem
+    # classificar). Era só local (chrome.storage.local da extensão,
+    # perdia ao trocar de PC); agora mora aqui pra valer pro painel todo.
+    margem_minima = Column(Float, nullable=True)
+    margem_maxima = Column(Float, nullable=True)
 
     devolucoes = relationship("Devolucao", back_populates="conta")
     acoes = relationship("AcaoRegistrada", back_populates="conta")
@@ -701,3 +708,77 @@ class HistoricoConfigIA(Base):
     valor_novo = Column(Text, nullable=True)
     alterado_por = Column(String, nullable=True)
     alterado_em = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class Venda(Base):
+    """
+    Uma linha de venda já CONCRETIZADA no Mercado Livre -- um item de um
+    pedido real (não confundir com `CustoSku`/promoção, que é antes da
+    venda acontecer). Alimenta a tela "Vendas" do painel, equivalente à
+    Central Financeira (Google Apps Script) só que dentro do nosso
+    próprio sistema, já cruzando com o custo cadastrado (CustoSku) pra
+    mostrar lucro e margem venda a venda, em tempo real.
+
+    Preenchida principalmente pelo webhook 'orders_v2' (ver
+    app/routers/webhook_ml.py) assim que o Mercado Livre avisa um
+    pedido novo/atualizado, e também por uma sincronização manual de
+    reforço (app/ml_client.py:sincronizar_vendas_recentes) pra pegar
+    pedidos de antes dessa função existir ou caso algum webhook se
+    perca. UNIQUE (conta_id, ml_order_id, item_id) pra um reprocessamento
+    (reenvio do Mercado Livre, ou a sincronização manual) atualizar a
+    mesma linha em vez de duplicar.
+
+    `custo_total`/`lucro`/`margem_percentual` ficam nulos quando o SKU
+    vendido ainda não tem custo cadastrado -- a tela mostra esses casos
+    separadamente, igual "Produtos > Lista" já faz com "Sem custo
+    cadastrado".
+    """
+
+    __tablename__ = "vendas"
+    __table_args__ = (
+        UniqueConstraint("conta_id", "ml_order_id", "item_id", name="uq_venda_conta_pedido_item"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    ml_order_id = Column(String, nullable=False, index=True)
+    item_id = Column(String, nullable=False)
+    sku = Column(String, nullable=True, index=True)
+    titulo = Column(String, nullable=True)
+    quantidade = Column(Integer, nullable=False, default=1)
+    preco_unitario = Column(Float, nullable=False, default=0.0)
+    venda_bruta = Column(Float, nullable=False, default=0.0)  # preco_unitario * quantidade
+    taxa_ml = Column(Float, nullable=False, default=0.0)  # comissão/sale_fee do Mercado Livre
+    frete = Column(Float, nullable=False, default=0.0)  # custo de frete descontado do vendedor
+    repasse = Column(Float, nullable=False, default=0.0)  # venda_bruta - taxa_ml - frete (o que o ML repassa)
+    custo_total = Column(Float, nullable=True)  # CMV desta linha (custo cadastrado x quantidade); nulo = sem custo
+    lucro = Column(Float, nullable=True)  # repasse - custo_total; nulo se custo_total é nulo
+    margem_percentual = Column(Float, nullable=True)  # lucro / venda_bruta * 100; nulo se custo_total é nulo
+    status_pedido = Column(String, nullable=True)  # "paid", "cancelled", etc. (vem direto do Mercado Livre)
+    data_venda = Column(DateTime, nullable=False, index=True)  # date_created do pedido, em UTC
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DespesaFixaConta(Base):
+    """
+    Despesa fixa mensal configurada pela conta pra entrar no cálculo do
+    "Lucro Líquido" da tela Vendas -- ex: "Contabilidade" R$500/mês,
+    "Bling" R$185/mês. Diferente de `VariavelConta` (que é percentual,
+    cobrado em cima do valor de cada venda, tipo imposto/CLUB) -- aqui é
+    sempre um valor fixo por mês, e a tela rateia proporcionalmente pelos
+    dias do período filtrado (ex: 7 dias de um mês de 30 -> 7/30 do
+    valor mensal) em vez de aplicar o mês inteiro num filtro de um dia só.
+
+    Configurada só pelo painel (não tem equivalente na extensão) --
+    isolada por conta_id, igual todo o resto.
+    """
+
+    __tablename__ = "despesas_fixas_conta"
+    __table_args__ = (UniqueConstraint("conta_id", "nome", name="uq_despesa_fixa_conta_nome"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    nome = Column(String, nullable=False)
+    valor_mensal = Column(Float, nullable=False)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    atualizado_por = Column(String, nullable=True)
