@@ -12,6 +12,7 @@
   const filtroFim = document.getElementById("filtro-fim");
   const btnAplicarPeriodo = document.getElementById("btn-aplicar-periodo");
   const btnAtualizarVendas = document.getElementById("btn-atualizar-vendas");
+  const botoesAtalho = document.querySelectorAll(".btn-atalho");
   const avisoVendas = document.getElementById("aviso-vendas");
 
   const cardVendas = document.getElementById("card-vendas");
@@ -87,11 +88,41 @@
     return partes.length ? "?" + partes.join("&") : "";
   }
 
-  function definirPeriodoPadrao() {
+  function marcarAtalhoAtivo(nome) {
+    botoesAtalho.forEach((botao) => {
+      botao.classList.toggle("ativo", botao.dataset.atalho === nome);
+    });
+  }
+
+  // Dia/mês/ano é sempre em cima da data de HOJE (não da última data
+  // filtrada) -- clicar em "Este mês" depois de já estar vendo outro mês
+  // sempre volta pro mês atual, igual o "Hoje" sempre volta pro dia atual.
+  function aplicarAtalho(nome) {
     const hoje = new Date();
-    const seteDiasAtras = new Date(hoje.getTime() - 6 * 24 * 60 * 60 * 1000);
+    let inicio;
+    if (nome === "hoje") {
+      inicio = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
+    } else if (nome === "mes") {
+      inicio = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    } else {
+      inicio = new Date(hoje.getFullYear(), 0, 1);
+    }
+    filtroInicio.value = dataParaInput(inicio);
     filtroFim.value = dataParaInput(hoje);
-    filtroInicio.value = dataParaInput(seteDiasAtras);
+    marcarAtalhoAtivo(nome);
+    carregarTudo();
+  }
+
+  botoesAtalho.forEach((botao) => {
+    botao.addEventListener("click", function () {
+      aplicarAtalho(botao.dataset.atalho);
+    });
+  });
+
+  function definirPeriodoPadrao() {
+    // Tela mais usada -> abre direto no "Hoje", pra bater com o que o
+    // seller mais quer ver de cara (venda do dia).
+    aplicarAtalho("hoje");
   }
 
   function carregarResumo() {
@@ -214,7 +245,10 @@
     carregarLista();
   }
 
-  btnAplicarPeriodo.addEventListener("click", carregarTudo);
+  btnAplicarPeriodo.addEventListener("click", function () {
+    marcarAtalhoAtivo(null); // período digitado à mão -- nenhum atalho corresponde mais
+    carregarTudo();
+  });
 
   btnAtualizarVendas.addEventListener("click", function () {
     btnAtualizarVendas.disabled = true;
@@ -369,6 +403,5 @@
       });
   });
 
-  definirPeriodoPadrao();
-  carregarTudo();
+  definirPeriodoPadrao(); // já chama carregarTudo() dentro de aplicarAtalho()
 })();
