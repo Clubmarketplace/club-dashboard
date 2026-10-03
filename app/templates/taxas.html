@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Taxas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  main { max-width:900px; margin:0 auto; padding:28px 24px 60px; }
+
+  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+  .cartao h2 { margin:0 0 4px; font-size:16px; }
+  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+  .barra-topo-cartao { display:flex; justify-content:space-between; align-items:flex-start; gap:14px; flex-wrap:wrap; margin-bottom:18px; }
+
+  .btn { border:none; border-radius:9px; padding:11px 18px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .btn-primario { background:#1b2430; color:#fff; }
+  .btn-primario:hover { background:#111826; }
+  .btn-secundario { background:#eef1f4; color:#1b2430; }
+  .btn-secundario:hover { background:#e2e6eb; }
+  .btn:disabled { opacity:.55; cursor:default; }
+
+  .lista-taxas { display:flex; flex-direction:column; gap:10px; }
+  .vazio-taxas { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+
+  .cartao-taxa {
+    display:flex; align-items:center; justify-content:space-between; gap:14px;
+    border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 16px;
+  }
+  .cartao-taxa .nome { font-size:14.5px; font-weight:700; }
+  .cartao-taxa .base-selo {
+    display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:6px;
+    background:#eef1f4; color:#1b2430; margin-left:8px; vertical-align:middle;
+  }
+  .cartao-taxa .percentual { font-size:16px; font-weight:700; color:var(--cmx-texto); }
+  .cartao-taxa .acoes { display:flex; gap:8px; align-items:center; }
+  .cartao-taxa .remover { background:none; border:none; color:var(--vermelho); cursor:pointer; font-size:12px; font-weight:600; }
+
+  /* Modal "+ Adicionar variável" */
+  .modal-fundo { display:none; position:fixed; inset:0; background:rgba(17,20,26,.45); align-items:center; justify-content:center; z-index:50; padding:20px; }
+  .modal-fundo.aberto { display:flex; }
+  .modal-caixa { background:#fff; border-radius:16px; padding:26px; max-width:420px; width:100%; box-shadow:0 10px 40px rgba(0,0,0,.2); }
+  .modal-caixa h3 { margin:0 0 4px; font-size:16px; }
+  .modal-caixa .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+  .campo-form { margin-bottom:14px; }
+  .campo-form label { display:block; font-size:12px; font-weight:600; color:var(--cmx-texto-suave); margin-bottom:6px; }
+  .campo-form input[type="text"] {
+    width:100%; padding:10px 12px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit; box-sizing:border-box;
+  }
+  .pills-base { display:flex; gap:8px; flex-wrap:wrap; }
+  .pill-base {
+    border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
+    border-radius:20px; padding:8px 14px; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer;
+  }
+  .pill-base.ativa { background:#1b2430; color:#fff; border-color:#1b2430; }
+  .modal-rodape { display:flex; justify-content:flex-end; gap:10px; margin-top:20px; }
+  .msg { margin-top:10px; font-size:13px; }
+  .msg.ok { color:var(--green); }
+  .msg.erro { color:var(--vermelho); }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">seller</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Taxas</h1>
+          <p class="cmx-subtitulo">Variáveis percentuais (imposto, CLUB etc.) usadas pra calcular a margem -- aqui no painel e na extensão</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="cartao">
+          <div class="barra-topo-cartao">
+            <div>
+              <h2>Suas taxas</h2>
+              <p class="sub" style="margin:0;">Cada taxa é um percentual aplicado sobre Venda Bruta, Repasse ou Lucro -- escolha a base ao cadastrar.</p>
+            </div>
+            <button class="btn btn-primario" id="btn-abrir-modal">+ Adicionar variável</button>
+          </div>
+          <div id="lista-taxas" class="lista-taxas"></div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-fundo" id="modal-taxa">
+    <div class="modal-caixa">
+      <h3>Adicionar variável</h3>
+      <p class="sub">Percentual aplicado sobre a base escolhida.</p>
+
+      <div class="campo-form">
+        <label for="campo-nome">Nome da variável</label>
+        <input type="text" id="campo-nome" placeholder="Ex: Imposto, CLUB..." />
+      </div>
+
+      <div class="campo-form">
+        <label>Base de cálculo</label>
+        <div class="pills-base">
+          <button type="button" class="pill-base ativa" data-base="venda_bruta">Venda Bruta</button>
+          <button type="button" class="pill-base" data-base="repasse">Repasse</button>
+          <button type="button" class="pill-base" data-base="lucro">Lucro</button>
+        </div>
+      </div>
+
+      <div class="campo-form">
+        <label for="campo-percentual">Porcentagem</label>
+        <input type="text" id="campo-percentual" placeholder="Ex: 2" />
+      </div>
+
+      <div class="msg" id="msg-modal"></div>
+
+      <div class="modal-rodape">
+        <button class="btn btn-secundario" id="btn-cancelar-modal">Cancelar</button>
+        <button class="btn btn-primario" id="btn-salvar-modal">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/taxas.js?v=1"></script>
+</body>
+</html>

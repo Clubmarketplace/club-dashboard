@@ -25,6 +25,7 @@
 
 <nav class="cmx-nav" aria-label="Menu principal">
   {{ item("/vendas", "💰 Vendas") }}
+  {{ item("/taxas", "💲 Taxas") }}
   {{ item("/meus-cancelamentos", "Minhas solicitações") }}
   {{ item("/solicitar-cancelamento", "Nova solicitação") }}
 
@@ -50,4 +51,7 @@
   </script>
 
   {{ item("/extensao", "🧩 Instalar Sistema de Precificação") }}
+
+  <button type="button" class="cmx-nav-item cmx-botao-tema">🌙 Modo noite</button>
 </nav>
+<script src="/static/tema.js?v=1"></script>

@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="/static/dashboard.css?v=7" />
 <style>
-  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; --azul:#2f6fe4; }
   main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
 
   .cards-resumo { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; margin-bottom:22px; }
@@ -19,6 +19,9 @@
   .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
   .card-resumo.alerta .valor { color:var(--vermelho); }
   .card-resumo.positivo .valor { color:var(--green); }
+  .card-resumo.azul .valor { color:var(--azul); }
+  .card-resumo.azul .extra { color:var(--azul); }
+  .card-resumo.azul .extra-linha { display:block; }
   .card-resumo.clicavel { cursor:pointer; transition:box-shadow .15s; }
   .card-resumo.clicavel:hover { box-shadow:0 4px 14px rgba(0,0,0,.08); }
 
@@ -180,7 +183,12 @@
           <div class="card-resumo positivo">
             <div class="rotulo">Lucro Líquido</div>
             <div class="valor" id="card-lucro-liquido">-</div>
-            <div class="extra">Já descontando imposto/CLUB/etc. e despesas fixas do período</div>
+            <div class="extra">Já descontando as taxas cadastradas (imposto/CLUB/etc.)</div>
+          </div>
+          <div class="card-resumo azul">
+            <div class="rotulo">Taxas Descontadas</div>
+            <div class="valor" id="card-taxas-descontadas">-</div>
+            <div class="extra" id="card-taxas-detalhe"></div>
           </div>
           <div class="card-resumo">
             <div class="rotulo">Margem Mark-up</div>
@@ -197,7 +205,7 @@
         </div>
 
         <details class="cartao" id="bloco-config">
-          <summary>Configurar faixa de margem e despesas</summary>
+          <summary>Configurar faixa de margem</summary>
           <div class="config-grade" style="margin-top:18px;">
             <div class="config-bloco">
               <h3>Faixa de margem boa/ruim</h3>
@@ -210,26 +218,9 @@
               <div class="msg" id="msg-margem"></div>
             </div>
             <div class="config-bloco">
-              <h3>Despesas percentuais (sobre a venda)</h3>
-              <p class="sub" style="margin-bottom:10px;">Ex: imposto 2%, CLUB 1% -- mesma configuração usada pela extensão.</p>
-              <div id="lista-variaveis"></div>
-              <div class="form-inline">
-                <input type="text" id="campo-variavel-nome" class="campo-nome" placeholder="Nome (ex: imposto)" />
-                <input type="text" id="campo-variavel-percentual" class="campo-valor" placeholder="% (ex: 2)" />
-                <button class="btn btn-secundario" id="btn-add-variavel">+ Adicionar</button>
-              </div>
-              <div class="msg" id="msg-variavel"></div>
-            </div>
-            <div class="config-bloco">
-              <h3>Despesas fixas mensais</h3>
-              <p class="sub" style="margin-bottom:10px;">Ex: Contabilidade R$500/mês, Bling R$185/mês -- rateadas pelos dias do período filtrado.</p>
-              <div id="lista-despesas-fixas"></div>
-              <div class="form-inline">
-                <input type="text" id="campo-despesa-nome" class="campo-nome" placeholder="Nome (ex: Contabilidade)" />
-                <input type="text" id="campo-despesa-valor" class="campo-valor" placeholder="R$/mês" />
-                <button class="btn btn-secundario" id="btn-add-despesa">+ Adicionar</button>
-              </div>
-              <div class="msg" id="msg-despesa"></div>
+              <h3>Taxas (imposto, CLUB etc.)</h3>
+              <p class="sub" style="margin-bottom:10px;">Agora têm tela própria, com base de cálculo configurável (venda bruta, repasse ou lucro).</p>
+              <a class="btn btn-secundario" href="/taxas">💲 Abrir Taxas</a>
             </div>
           </div>
         </details>
@@ -252,7 +243,9 @@
                 <th class="col-numero">Venda</th>
                 <th class="col-numero">Repasse</th>
                 <th class="col-numero">Custo</th>
-                <th class="col-numero">Lucro</th>
+                <th class="col-numero">Lucro Bruto</th>
+                <th class="col-numero">Taxas</th>
+                <th class="col-numero">Lucro Líquido</th>
                 <th class="col-numero">Margem</th>
               </tr>
             </thead>
