@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Vendas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
+
+  .cards-resumo { display:grid; grid-template-columns:repeat(auto-fit, minmax(190px, 1fr)); gap:14px; margin-bottom:22px; }
+  .card-resumo { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:16px 18px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+  .card-resumo .rotulo { font-size:11px; font-weight:600; color:var(--cmx-texto-suave); text-transform:uppercase; letter-spacing:.02em; }
+  .card-resumo .valor { font-size:21px; font-weight:700; color:var(--cmx-texto); margin-top:6px; }
+  .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+  .card-resumo.alerta .valor { color:var(--vermelho); }
+  .card-resumo.positivo .valor { color:var(--green); }
+  .card-resumo.clicavel { cursor:pointer; transition:box-shadow .15s; }
+  .card-resumo.clicavel:hover { box-shadow:0 4px 14px rgba(0,0,0,.08); }
+
+  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+  .cartao h2 { margin:0 0 4px; font-size:16px; }
+  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+  .barra-topo-cartao { display:flex; justify-content:space-between; align-items:flex-end; gap:14px; flex-wrap:wrap; margin-bottom:0; }
+
+  .linha-busca { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .linha-busca .campo { display:flex; flex-direction:column; gap:5px; }
+  .linha-busca label { font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); }
+  .linha-busca input[type="date"], .linha-busca input[type="text"] {
+    padding:10px 12px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit;
+  }
+  .btn { border:none; border-radius:9px; padding:11px 18px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .btn-primario { background:#1b2430; color:#fff; }
+  .btn-primario:hover { background:#111826; }
+  .btn-secundario { background:#eef1f4; color:#1b2430; }
+  .btn-secundario:hover { background:#e2e6eb; }
+  .btn:disabled { opacity:.55; cursor:default; }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:16px; }
+  thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:10px 12px; border-bottom:1px solid var(--cmx-borda); }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fafbfc; }
+  .col-numero { text-align:right; white-space:nowrap; }
+  .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+
+  .selo-margem { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:6px; }
+  .selo-margem.boa { background:#e3f4ec; color:var(--green); }
+  .selo-margem.ruim { background:#fbe3dd; color:var(--vermelho); }
+  .tag-sem-custo { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; margin-left:6px; vertical-align:middle; background:#fdecdb; color:#a3631b; }
+
+  .aviso-vendas { display:none; background:#fdf3dc; border:1px solid #f0d9a0; color:#8a6116; border-radius:10px; padding:12px 16px; font-size:13px; margin-bottom:18px; }
+  .aviso-vendas.visivel { display:block; }
+
+  /* Configurações (despesas e faixa de margem) */
+  .config-grade { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media (max-width:860px) { .config-grade { grid-template-columns:1fr; } }
+  .config-bloco h3 { font-size:13.5px; margin:0 0 10px; }
+  .linha-item { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:8px 0; border-bottom:1px solid var(--cmx-borda); font-size:13.5px; }
+  .linha-item:last-child { border-bottom:none; }
+  .linha-item .remover { background:none; border:none; color:var(--vermelho); cursor:pointer; font-size:12px; }
+  .form-inline { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .form-inline input { padding:9px 11px; border:1px solid var(--cmx-borda); border-radius:8px; font-size:13.5px; font-family:inherit; }
+  .form-inline input.campo-nome { flex:1 1 140px; }
+  .form-inline input.campo-valor { flex:0 1 110px; }
+  .msg { margin-top:10px; font-size:13px; }
+  .msg.ok { color:var(--green); }
+  .msg.erro { color:var(--vermelho); }
+  details.cartao summary { cursor:pointer; font-size:14px; font-weight:700; list-style:none; }
+  details.cartao summary::-webkit-details-marker { display:none; }
+  details.cartao summary:before { content:"▸ "; }
+  details.cartao[open] summary:before { content:"▾ "; }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">seller</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Vendas</h1>
+          <p class="cmx-subtitulo">Venda a venda, em tempo real, com margem boa/ruim -- Venda Bruta, Repasse, CMV e Lucro do período</p>
+        </div>
+      </header>
+
+      <main>
+        <div id="aviso-vendas" class="aviso-vendas">⚠️ Não consegui consultar as vendas no Mercado Livre agora. Os números abaixo podem estar incompletos.</div>
+
+        <div class="cartao">
+          <div class="linha-busca">
+            <div class="campo">
+              <label for="filtro-inicio">De</label>
+              <input type="date" id="filtro-inicio" />
+            </div>
+            <div class="campo">
+              <label for="filtro-fim">Até</label>
+              <input type="date" id="filtro-fim" />
+            </div>
+            <button class="btn btn-secundario" id="btn-aplicar-periodo">Aplicar</button>
+            <button class="btn btn-secundario" id="btn-atualizar-vendas">↻ Atualizar agora</button>
+          </div>
+        </div>
+
+        <div class="cards-resumo">
+          <div class="card-resumo">
+            <div class="rotulo">Vendas</div>
+            <div class="valor" id="card-vendas">-</div>
+            <div class="extra" id="card-unidades"></div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Venda Bruta</div>
+            <div class="valor" id="card-venda-bruta">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Repasse</div>
+            <div class="valor" id="card-repasse">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Taxas e Frete</div>
+            <div class="valor" id="card-taxas-frete">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">CMV</div>
+            <div class="valor" id="card-cmv">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Ticket Médio</div>
+            <div class="valor" id="card-ticket-medio">-</div>
+          </div>
+          <div class="card-resumo positivo">
+            <div class="rotulo">Lucro Bruto</div>
+            <div class="valor" id="card-lucro-bruto">-</div>
+          </div>
+          <div class="card-resumo positivo">
+            <div class="rotulo">Lucro Líquido</div>
+            <div class="valor" id="card-lucro-liquido">-</div>
+            <div class="extra">Já descontando imposto/CLUB/etc. e despesas fixas do período</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Margem Mark-up</div>
+            <div class="valor" id="card-margem-markup">-</div>
+          </div>
+          <div class="card-resumo">
+            <div class="rotulo">Margem Contribuição</div>
+            <div class="valor" id="card-margem-contribuicao">-</div>
+          </div>
+          <div class="card-resumo alerta clicavel" id="card-sem-custo-clicavel" title="Clique pra ver só essas vendas">
+            <div class="rotulo">Vendas sem custo cadastrado</div>
+            <div class="valor" id="card-sem-custo">-</div>
+          </div>
+        </div>
+
+        <details class="cartao" id="bloco-config">
+          <summary>Configurar faixa de margem e despesas</summary>
+          <div class="config-grade" style="margin-top:18px;">
+            <div class="config-bloco">
+              <h3>Faixa de margem boa/ruim</h3>
+              <p class="sub" style="margin-bottom:10px;">Abaixo da mínima ou acima da máxima, a venda é marcada como "ruim" na lista.</p>
+              <div class="form-inline">
+                <input type="text" id="campo-margem-minima" class="campo-valor" placeholder="Mín. %" />
+                <input type="text" id="campo-margem-maxima" class="campo-valor" placeholder="Máx. %" />
+                <button class="btn btn-primario" id="btn-salvar-margem">Salvar</button>
+              </div>
+              <div class="msg" id="msg-margem"></div>
+            </div>
+            <div class="config-bloco">
+              <h3>Despesas percentuais (sobre a venda)</h3>
+              <p class="sub" style="margin-bottom:10px;">Ex: imposto 2%, CLUB 1% -- mesma configuração usada pela extensão.</p>
+              <div id="lista-variaveis"></div>
+              <div class="form-inline">
+                <input type="text" id="campo-variavel-nome" class="campo-nome" placeholder="Nome (ex: imposto)" />
+                <input type="text" id="campo-variavel-percentual" class="campo-valor" placeholder="% (ex: 2)" />
+                <button class="btn btn-secundario" id="btn-add-variavel">+ Adicionar</button>
+              </div>
+              <div class="msg" id="msg-variavel"></div>
+            </div>
+            <div class="config-bloco">
+              <h3>Despesas fixas mensais</h3>
+              <p class="sub" style="margin-bottom:10px;">Ex: Contabilidade R$500/mês, Bling R$185/mês -- rateadas pelos dias do período filtrado.</p>
+              <div id="lista-despesas-fixas"></div>
+              <div class="form-inline">
+                <input type="text" id="campo-despesa-nome" class="campo-nome" placeholder="Nome (ex: Contabilidade)" />
+                <input type="text" id="campo-despesa-valor" class="campo-valor" placeholder="R$/mês" />
+                <button class="btn btn-secundario" id="btn-add-despesa">+ Adicionar</button>
+              </div>
+              <div class="msg" id="msg-despesa"></div>
+            </div>
+          </div>
+        </details>
+
+        <div class="cartao">
+          <div class="barra-topo-cartao">
+            <div>
+              <h2>Vendas do período</h2>
+              <p class="sub" id="filtro-ativo-aviso" style="display:none; margin:4px 0 0;">
+                Mostrando só vendas com margem ruim ou sem custo. <a href="#" id="link-limpar-filtro">Ver todas</a>
+              </p>
+            </div>
+          </div>
+          <table id="tabela-vendas" style="display:none;">
+            <thead>
+              <tr>
+                <th>Data</th>
+                <th>SKU / Produto</th>
+                <th class="col-numero">Qtd.</th>
+                <th class="col-numero">Venda</th>
+                <th class="col-numero">Repasse</th>
+                <th class="col-numero">Custo</th>
+                <th class="col-numero">Lucro</th>
+                <th class="col-numero">Margem</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-vendas"></tbody>
+          </table>
+          <div class="vazio" id="mensagem-vazia" style="display:none;">Nenhuma venda encontrada nesse período.</div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script src="/static/vendas.js?v=1"></script>
+</body>
+</html>
