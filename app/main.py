@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -261,6 +261,7 @@ async def exigir_login(request: Request, call_next):
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
         "/vendas",
+        "/taxas",
     }
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
@@ -270,6 +271,7 @@ async def exigir_login(request: Request, call_next):
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
         or caminho.startswith("/api/painel/custos/")
         or caminho.startswith("/api/painel/vendas")
+        or caminho.startswith("/api/painel/taxas")
     )
     if papel == "seller" and not _seller_liberado:
         if caminho.startswith("/api/"):
@@ -301,6 +303,7 @@ app.include_router(cmx_rotas.router)  # login/validação da extensão ClubMarke
 app.include_router(custos_painel_rotas.router)  # tela "Custos" do painel (seller, cookie)
 app.include_router(produtos_rotas.router)  # tela "Produtos > Lista" do painel (seller, cookie)
 app.include_router(vendas_rotas.router)  # tela "Vendas" do painel (seller, cookie)
+app.include_router(taxas_rotas.router)  # tela "Taxas" do painel (seller, cookie)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -590,6 +593,24 @@ def pagina_vendas(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="vendas.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+    )
+
+
+@app.get("/taxas", response_class=HTMLResponse)
+def pagina_taxas(request: Request):
+    """
+    Tela "Taxas": cadastro das variáveis percentuais (imposto, CLUB
+    etc) usadas pra calcular a margem -- no painel (Vendas) e na
+    extensão. A API fica em app/routers/taxas.py.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="taxas.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado},
     )
 

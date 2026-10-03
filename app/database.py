@@ -77,6 +77,12 @@ _COLUNAS_ADICIONAIS = {
         # Tipo da solicitação ("cancelamento" | "reputacao"); nulo = cancelamento.
         "tipo": "VARCHAR",
     },
+    "variaveis_conta": {
+        # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,
+        # comportamento antigo) | "repasse" | "lucro". Backfill das linhas
+        # antigas (NULL) pra "venda_bruta" é feito abaixo, depois do ALTER.
+        "base_calculo": "VARCHAR",
+    },
 }
 
 # Índices pra filtros/busca continuarem rápidos com o volume crescendo.
@@ -126,6 +132,15 @@ def garantir_estrutura_atualizada() -> None:
                 )
             if pendentes:
                 logger.info("conta_chave preenchida em %d solicitações antigas", len(pendentes))
+
+        # base_calculo das taxas antigas (cadastradas antes deste campo
+        # existir) vira NULL pelo ALTER ADD COLUMN -- preenche como
+        # "venda_bruta" pra manter o cálculo exatamente igual ao de antes.
+        if inspetor.has_table("variaveis_conta"):
+            with engine.begin() as conexao:
+                conexao.execute(
+                    text("UPDATE variaveis_conta SET base_calculo = 'venda_bruta' WHERE base_calculo IS NULL")
+                )
     except Exception:
         logger.exception("Falha ao atualizar a estrutura do banco")
         raise

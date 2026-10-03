@@ -672,18 +672,29 @@ class EstoqueSku(Base):
 
 class VariavelConta(Base):
     """
-    "Variáveis" (taxas) de cada conta, usadas pra calcular a margem de
-    lucro na extensão ClubMarketplaceX -- ex: "imposto" 2%, "club" 1%.
-    Antes ficavam só no chrome.storage.local do computador de cada
-    seller (perdia tudo se trocasse de PC, e cada instalação tinha o
-    próprio valor sem ninguém no Club Marketplace conseguir ver ou
-    ajustar). Agora seguem o mesmo modelo do CustoSku: isolado por
-    conta_id, nunca por nome sozinho -- toda consulta filtra pela conta
-    do usuário logado (ver app/routers/cmx.py).
+    "Taxas" (variáveis percentuais) de cada conta, usadas pra calcular a
+    margem de lucro tanto no painel (página Vendas) quanto na extensão
+    ClubMarketplaceX -- ex: "imposto" 2%, "club" 1%. Antes ficavam só no
+    chrome.storage.local do computador de cada seller (perdia tudo se
+    trocasse de PC, e cada instalação tinha o próprio valor sem ninguém
+    no Club Marketplace conseguir ver ou ajustar). Agora seguem o mesmo
+    modelo do CustoSku: isolado por conta_id, nunca por nome sozinho --
+    toda consulta filtra pela conta do usuário logado (ver
+    app/routers/cmx.py e app/routers/taxas.py).
 
-    Por enquanto só suporta percentual (aplicado sobre o preço, igual a
-    extensão já fazia localmente). Valor fixo (ex: "contador R$500/mês")
-    pode entrar depois como campo adicional, sem quebrar o que existe.
+    Por enquanto só suporta percentual. Valor fixo (ex: "contador
+    R$500/mês") foi deixado de fora por decisão do cliente -- pode
+    entrar depois como campo/tabela adicional, sem quebrar o que existe.
+
+    base_calculo indica sobre QUAL valor o percentual é aplicado:
+      - "venda_bruta": sobre o preço final de venda (comportamento
+        antigo, único que existia antes deste campo -- por isso é o
+        default, pra não mudar o cálculo de quem já tinha taxas
+        cadastradas).
+      - "repasse": sobre o valor que o Mercado Livre repassa ao seller
+        (já líquido de tarifa ML + frete).
+      - "lucro": sobre o lucro (repasse - custo - taxas de venda_bruta e
+        repasse já deduzidas) -- é a última dedução antes do líquido.
     """
 
     __tablename__ = "variaveis_conta"
@@ -693,6 +704,7 @@ class VariavelConta(Base):
     conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
     nome = Column(String, nullable=False)
     percentual = Column(Float, nullable=False)
+    base_calculo = Column(String, nullable=False, default="venda_bruta")
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     atualizado_por = Column(String, nullable=True)
 
