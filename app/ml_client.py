@@ -9,7 +9,7 @@ httpx subir — isso facilita bastante diagnosticar problema de
 configuração (.env errado, Redirect URI não bate, etc.) sem precisar
 ficar lendo stack trace.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode
 
 import logging
@@ -649,3 +649,175 @@ def repor_estoque_item(access_token: str, item_id: str, quantidade_a_somar: int,
     if resposta.status_code != 200:
         raise MLApiError(f"Mercado Livre recusou a reposição de estoque (status {resposta.status_code}): {resposta.text}")
     return resposta.json()
+
+
+# ---------------------------------------------------------------------------
+# Vendas em tempo real (tela "Vendas" do painel)
+# ---------------------------------------------------------------------------
+# Cada item de cada pedido vira uma linha em `Venda` (app/models.py), já
+# com o repasse calculado (venda - taxa do Mercado Livre - frete) e,
+# quando o SKU já tem custo cadastrado, lucro e margem também. Alimentada
+# por dois caminhos: o webhook 'orders_v2' (tempo real, ver
+# app/routers/webhook_ml.py) e `sincronizar_vendas_recentes` (reforço/
+# backfill, pra pedidos de antes dessa tela existir ou se algum webhook
+# se perder).
+
+
+def _data_ml_para_utc(texto: str | None) -> datetime | None:
+    """'2026-09-25T19:10:00.000-04:00' -> datetime UTC sem fuso (padrão do banco)."""
+    if not texto:
+        return None
+    try:
+        data = datetime.fromisoformat(texto.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if data.tzinfo is not None:
+        data = data.astimezone(timezone.utc).replace(tzinfo=None)
+    return data
+
+
+def processar_pedido_em_vendas(conta, db, order_id: str) -> int:
+    """
+    Busca um pedido no Mercado Livre e grava/atualiza uma linha de
+    `Venda` pra cada item dele. Devolve quantas linhas foram gravadas
+    (0 se o pedido não tiver itens, por exemplo um pedido cancelado
+    antes de ter item confirmado).
+
+    O frete descontado do vendedor vem agregado no pedido (não por
+    item), então é rateado igualmente entre os itens do pedido -- uma
+    aproximação razoável pra pedidos de 1 item (a grande maioria) e
+    ainda assim útil pra pedidos com vários itens.
+
+    Deixa subir MLAuthError/MLApiError pra quem chamou decidir o que
+    fazer (o webhook só registra o erro no EventoWebhook; a
+    sincronização manual pode mostrar um aviso na tela).
+    """
+    from app.models import CustoSku, Venda
+
+    access_token = garantir_token_valido(conta, db)
+    pedido = _get(f"/orders/{order_id}", access_token, "buscar o pedido para a tela de Vendas")
+
+    itens = pedido.get("order_items") or []
+    if not itens:
+        return 0
+
+    status = pedido.get("status")
+    data_venda = _data_ml_para_utc(pedido.get("date_created")) or datetime.utcnow()
+    pagamentos = pedido.get("payments") or []
+    frete_total = sum((p.get("shipping_cost") or 0) for p in pagamentos)
+    frete_por_item = frete_total / len(itens) if itens else 0.0
+
+    # Cache local só pra não buscar o mesmo anúncio duas vezes dentro do
+    # mesmo pedido (ex: pedido com 2 itens do mesmo anúncio).
+    anuncios_lidos: dict[str, dict] = {}
+    gravados = 0
+
+    for item_pedido in itens:
+        item = item_pedido.get("item") or {}
+        item_id = str(item.get("id") or "")
+        sku = (item.get("seller_sku") or "").strip() or None
+
+        # Nem todo pedido traz o seller_sku direto -- quando falta,
+        # busca no próprio anúncio (mesma lógica de _extrair_skus usada
+        # em "Produtos > Lista").
+        if not sku and item_id:
+            if item_id not in anuncios_lidos:
+                anuncios_lidos[item_id] = ler_dados_do_anuncio(access_token, item_id)
+            anuncio = anuncios_lidos[item_id]
+            if anuncio and not anuncio.get("erro"):
+                sku = anuncio.get("sku") or None
+
+        quantidade = item_pedido.get("quantity") or 1
+        preco_unitario = item_pedido.get("unit_price") or 0.0
+        venda_bruta = preco_unitario * quantidade
+        taxa_ml = (item_pedido.get("sale_fee") or 0.0) * quantidade
+        repasse = venda_bruta - taxa_ml - frete_por_item
+
+        custo_unitario = None
+        if sku:
+            registro_custo = (
+                db.query(CustoSku)
+                .filter(CustoSku.conta_id == conta.id, CustoSku.sku == sku)
+                .first()
+            )
+            custo_unitario = registro_custo.custo if registro_custo else None
+        custo_total = (custo_unitario * quantidade) if custo_unitario is not None else None
+        lucro = (repasse - custo_total) if custo_total is not None else None
+        margem_percentual = (lucro / venda_bruta * 100) if (lucro is not None and venda_bruta) else None
+
+        linha = (
+            db.query(Venda)
+            .filter(Venda.conta_id == conta.id, Venda.ml_order_id == str(order_id), Venda.item_id == item_id)
+            .first()
+        )
+        if linha is None:
+            linha = Venda(conta_id=conta.id, ml_order_id=str(order_id), item_id=item_id)
+            db.add(linha)
+
+        linha.sku = sku
+        linha.titulo = item.get("title")
+        linha.quantidade = quantidade
+        linha.preco_unitario = preco_unitario
+        linha.venda_bruta = venda_bruta
+        linha.taxa_ml = taxa_ml
+        linha.frete = frete_por_item
+        linha.repasse = repasse
+        linha.custo_total = custo_total
+        linha.lucro = lucro
+        linha.margem_percentual = margem_percentual
+        linha.status_pedido = status
+        linha.data_venda = data_venda
+        gravados += 1
+
+    db.commit()
+    return gravados
+
+
+def sincronizar_vendas_recentes(conta, db, dias: int = 30) -> int:
+    """
+    Backfill/reforço: busca no Mercado Livre todos os pedidos dos
+    últimos `dias` dias e processa cada um com `processar_pedido_em_vendas`.
+    Usado (a) na primeira vez que a conta abre a tela "Vendas" (pra já
+    aparecer com histórico, não só pedidos novos a partir de agora) e
+    (b) no botão "Atualizar agora" da tela, pra cobrir qualquer pedido
+    cujo webhook não tenha chegado por algum motivo. Devolve quantos
+    pedidos foram processados.
+    """
+    access_token = garantir_token_valido(conta, db)
+    desde = (datetime.utcnow() - timedelta(days=dias)).strftime("%Y-%m-%dT00:00:00.000-00:00")
+
+    total_pedidos = 0
+    offset = 0
+    limite = 50
+    total_ml = None
+    while total_ml is None or offset < total_ml:
+        try:
+            pagina = _get(
+                f"/orders/search?seller={conta.ml_user_id}&order.date_created.from={desde}"
+                f"&sort=date_desc&offset={offset}&limit={limite}",
+                access_token,
+                "listar pedidos recentes",
+            )
+        except MLApiError as exc:
+            logger.warning("Falha ao listar pedidos recentes da conta %s (offset %s): %s", conta.apelido, offset, exc)
+            break
+
+        resultados = pagina.get("results") or []
+        if not resultados:
+            break
+        paging = pagina.get("paging") or {}
+        total_ml = paging.get("total", offset + len(resultados))
+
+        for pedido_resumido in resultados:
+            order_id = pedido_resumido.get("id")
+            if not order_id:
+                continue
+            try:
+                processar_pedido_em_vendas(conta, db, str(order_id))
+                total_pedidos += 1
+            except (MLAuthError, MLApiError) as exc:
+                logger.warning("Não consegui processar o pedido %s na sincronização de vendas: %s", order_id, exc)
+
+        offset += limite
+
+    return total_pedidos

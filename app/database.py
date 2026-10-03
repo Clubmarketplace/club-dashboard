@@ -47,6 +47,8 @@ _COLUNAS_ADICIONAIS = {
     "contas": {
         "inativa_em": "TIMESTAMP",
         "motivo_inativacao": "VARCHAR",
+        "margem_minima": "FLOAT",
+        "margem_maxima": "FLOAT",
     },
     "perguntas": {
         "skus_anuncio": "VARCHAR",

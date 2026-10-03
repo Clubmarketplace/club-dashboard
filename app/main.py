@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -260,15 +260,17 @@ async def exigir_login(request: Request, call_next):
         "/extensao",
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
+        "/vendas",
     }
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     papel = usuario_logado.papel if usuario_logado else None
 
-    # "/api/painel/custos/" com .startswith (não só ==) por causa do DELETE
-    # /api/painel/custos/{sku} -- o SKU vai dentro da própria URL, então
-    # nunca bate exatamente com a string cadastrada no conjunto acima.
-    _seller_liberado = caminho in _ROTAS_PERMITIDAS_PARA_SELLER or caminho.startswith("/api/painel/custos/")
+    _seller_liberado = (
+        caminho in _ROTAS_PERMITIDAS_PARA_SELLER
+        or caminho.startswith("/api/painel/custos/")
+        or caminho.startswith("/api/painel/vendas")
+    )
     if papel == "seller" and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
@@ -296,8 +298,9 @@ app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
 app.include_router(calibrar_ia_rotas.router)
 app.include_router(cmx_rotas.router)  # login/validação da extensão ClubMarketplaceX
-app.include_router(custos_painel_rotas.router)  # API de custo por SKU (seller, cookie)
+app.include_router(custos_painel_rotas.router)  # tela "Custos" do painel (seller, cookie)
 app.include_router(produtos_rotas.router)  # tela "Produtos > Lista" do painel (seller, cookie)
+app.include_router(vendas_rotas.router)  # tela "Vendas" do painel (seller, cookie)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -568,6 +571,25 @@ def pagina_produtos_lista(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="produtos_lista.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+    )
+
+
+@app.get("/vendas", response_class=HTMLResponse)
+def pagina_vendas(request: Request):
+    """
+    Tela "Vendas": venda a venda em tempo real, com margem boa/ruim e os
+    cards de Venda Bruta/Repasse/CMV/Lucro, equivalente à Central
+    Financeira só que dentro do nosso sistema. A API fica em
+    app/routers/vendas.py.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="vendas.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado},
     )
 
