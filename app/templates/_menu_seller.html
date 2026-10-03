@@ -24,9 +24,9 @@
 {% set _produtos_aberto = _caminho in ["/produtos/lista", "/custos"] %}
 
 <nav class="cmx-nav" aria-label="Menu principal">
+  {{ item("/vendas", "💰 Vendas") }}
   {{ item("/meus-cancelamentos", "Minhas solicitações") }}
   {{ item("/solicitar-cancelamento", "Nova solicitação") }}
-  {{ item("/vendas", "💰 Vendas") }}
 
   <button type="button" class="cmx-nav-sanfona{% if _produtos_aberto %} cmx-nav-sanfona--aberta{% endif %}" id="cmx-produtos-sanfona" aria-expanded="{{ 'true' if _produtos_aberto else 'false' }}" aria-controls="cmx-produtos-submenu">
     <span>📦 Produtos</span>
