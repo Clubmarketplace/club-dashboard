@@ -261,6 +261,7 @@ async def exigir_login(request: Request, call_next):
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
         "/vendas",
+        "/vendas/consulta",
         "/taxas",
     }
     with SessionLocal() as db:
@@ -593,6 +594,26 @@ def pagina_vendas(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="vendas.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+    )
+
+
+@app.get("/vendas/consulta", response_class=HTMLResponse)
+def pagina_vendas_consulta(request: Request):
+    """
+    Submenu "Consulta de Vendas": a mesma venda a venda da tela "Vendas"
+    (Resumo), só que em formato de lista/cartão -- um cartão por venda,
+    com lucro/markup/margem já calculados e foco em atualização em tempo
+    real (a tela fica se auto-atualizando sozinha). Mesma API de
+    app/routers/vendas.py (GET /lista), nenhuma rota nova no back-end.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="vendas_consulta.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado},
     )
 
