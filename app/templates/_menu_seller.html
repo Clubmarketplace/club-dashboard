@@ -22,9 +22,30 @@
 
 {# Fica aberto se a página atual já é uma das sub-telas, senão começa fechado. #}
 {% set _produtos_aberto = _caminho in ["/produtos/lista", "/custos"] %}
+{% set _vendas_aberto = _caminho in ["/vendas", "/vendas/consulta"] %}
 
 <nav class="cmx-nav" aria-label="Menu principal">
-  {{ item("/vendas", "💰 Vendas") }}
+  <button type="button" class="cmx-nav-sanfona{% if _vendas_aberto %} cmx-nav-sanfona--aberta{% endif %}" id="cmx-vendas-sanfona" aria-expanded="{{ 'true' if _vendas_aberto else 'false' }}" aria-controls="cmx-vendas-submenu" style="margin-top:0;">
+    <span>💰 Vendas</span>
+    <span class="cmx-nav-sanfona-seta">▾</span>
+  </button>
+  <div class="cmx-nav-submenu{% if _vendas_aberto %} cmx-nav-submenu--aberta{% endif %}" id="cmx-vendas-submenu">
+    {{ subitem("/vendas", "Resumo") }}
+    {{ subitem("/vendas/consulta", "Consulta de Vendas") }}
+  </div>
+  <script>
+    (function () {
+      var botao = document.getElementById("cmx-vendas-sanfona");
+      var submenu = document.getElementById("cmx-vendas-submenu");
+      if (!botao || !submenu) return;
+      botao.addEventListener("click", function () {
+        var aberta = botao.classList.toggle("cmx-nav-sanfona--aberta");
+        submenu.classList.toggle("cmx-nav-submenu--aberta", aberta);
+        botao.setAttribute("aria-expanded", aberta ? "true" : "false");
+      });
+    })();
+  </script>
+
   {{ item("/taxas", "💲 Taxas") }}
   {{ item("/meus-cancelamentos", "Minhas solicitações") }}
   {{ item("/solicitar-cancelamento", "Nova solicitação") }}
