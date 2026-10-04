@@ -41,8 +41,7 @@
   const btnSalvarMargem = document.getElementById("btn-salvar-margem");
   const msgMargem = document.getElementById("msg-margem");
 
-  // --- Card "Taxas cadastradas" (ao lado do filtro de datas) ---
-  const listaTaxasCadastradas = document.getElementById("lista-taxas-cadastradas");
+  // --- Chips de taxas (dentro da faixa única de filtro) ---
   const btnAbrirModalTaxaVendas = document.getElementById("btn-abrir-modal-taxa-vendas");
   const modalTaxaVendas = document.getElementById("modal-taxa-vendas");
   const campoNomeTaxaVendas = document.getElementById("campo-nome-taxa-vendas");
@@ -53,6 +52,183 @@
   const btnSalvarModalTaxaVendas = document.getElementById("btn-salvar-modal-taxa-vendas");
 
   let baseSelecionadaTaxaVendas = "venda_bruta";
+
+  // --- Modal "Escolher data" (abas Por Dia / Por Mês / Por Ano) ---
+  const btnAbrirModalData = document.getElementById("btn-abrir-modal-data");
+  const modalEscolherData = document.getElementById("modal-escolher-data");
+  const btnFecharModalData = document.getElementById("btn-fechar-modal-data");
+  const btnCancelarModalData = document.getElementById("btn-cancelar-modal-data");
+  const btnPesquisarModalData = document.getElementById("btn-pesquisar-modal-data");
+  const abasEscolherData = document.querySelectorAll("#abas-escolher-data .aba-escolher-data");
+  const painelDia = document.getElementById("painel-dia");
+  const painelMes = document.getElementById("painel-mes");
+  const painelAno = document.getElementById("painel-ano");
+  const modalFiltroInicio = document.getElementById("modal-filtro-inicio");
+  const modalFiltroFim = document.getElementById("modal-filtro-fim");
+  const rotuloAnoMes = document.getElementById("rotulo-ano-mes");
+  const btnAnoMesAnterior = document.getElementById("btn-ano-mes-anterior");
+  const btnAnoMesProximo = document.getElementById("btn-ano-mes-proximo");
+  const gradeMeses = document.getElementById("grade-meses");
+  const gradeAnos = document.getElementById("grade-anos");
+  const msgModalData = document.getElementById("msg-modal-data");
+  const chipsTaxasFiltro = document.getElementById("chips-taxas-filtro");
+
+  const NOMES_MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+  let abaAtivaData = "dia";
+  let anoExibidoMes = new Date().getFullYear();
+
+  function dataISO(data) {
+    return data.getFullYear() + "-" + String(data.getMonth() + 1).padStart(2, "0") + "-" + String(data.getDate()).padStart(2, "0");
+  }
+
+  function ultimoDiaDoMes(ano, mesIndice0) {
+    return new Date(ano, mesIndice0 + 1, 0);
+  }
+
+  function selecionarAbaData(aba) {
+    abaAtivaData = aba;
+    abasEscolherData.forEach((b) => b.classList.toggle("ativa", b.dataset.aba === aba));
+    painelDia.style.display = aba === "dia" ? "block" : "none";
+    painelMes.style.display = aba === "mes" ? "block" : "none";
+    painelAno.style.display = aba === "ano" ? "block" : "none";
+    btnPesquisarModalData.style.display = aba === "dia" ? "inline-block" : "none";
+    msgModalData.textContent = "";
+    if (aba === "mes") renderizarGradeMeses();
+    if (aba === "ano") renderizarGradeAnos();
+  }
+
+  function renderizarGradeMeses() {
+    const hoje = new Date();
+    const anoAtual = hoje.getFullYear();
+    const mesAtual = hoje.getMonth();
+    rotuloAnoMes.textContent = String(anoExibidoMes);
+    btnAnoMesProximo.disabled = anoExibidoMes >= anoAtual;
+    gradeMeses.innerHTML = "";
+    NOMES_MESES.forEach((nome, indice) => {
+      const futuro = anoExibidoMes > anoAtual || (anoExibidoMes === anoAtual && indice > mesAtual);
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "celula-mes";
+      btn.textContent = nome;
+      btn.disabled = futuro;
+      if (futuro) {
+        gradeMeses.appendChild(btn);
+        return;
+      }
+      btn.addEventListener("click", function () {
+        const inicio = new Date(anoExibidoMes, indice, 1);
+        const fimMes = ultimoDiaDoMes(anoExibidoMes, indice);
+        const fim = fimMes > hoje ? hoje : fimMes;
+        aplicarPeriodoEscolhido(dataISO(inicio), dataISO(fim));
+      });
+      gradeMeses.appendChild(btn);
+    });
+  }
+
+  function renderizarGradeAnos() {
+    const anoAtual = new Date().getFullYear();
+    gradeAnos.innerHTML = "";
+    for (let ano = anoAtual; ano >= anoAtual - 5; ano--) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "celula-ano";
+      btn.textContent = String(ano);
+      btn.addEventListener("click", function () {
+        const hoje = new Date();
+        const inicio = new Date(ano, 0, 1);
+        const fimAno = new Date(ano, 11, 31);
+        const fim = fimAno > hoje ? hoje : fimAno;
+        aplicarPeriodoEscolhido(dataISO(inicio), dataISO(fim));
+      });
+      gradeAnos.appendChild(btn);
+    }
+  }
+
+  function aplicarPeriodoEscolhido(inicioISO, fimISO) {
+    filtroInicio.value = inicioISO;
+    filtroFim.value = fimISO;
+    marcarAtalhoAtivo(null);
+    fecharModalData();
+    carregarTudo();
+  }
+
+  function abrirModalData() {
+    selecionarAbaData("dia");
+    modalFiltroInicio.value = filtroInicio.value;
+    modalFiltroFim.value = filtroFim.value;
+    anoExibidoMes = new Date().getFullYear();
+    modalEscolherData.classList.add("aberto");
+  }
+
+  function fecharModalData() {
+    modalEscolherData.classList.remove("aberto");
+  }
+
+  btnAbrirModalData.addEventListener("click", abrirModalData);
+  btnFecharModalData.addEventListener("click", fecharModalData);
+  btnCancelarModalData.addEventListener("click", fecharModalData);
+  modalEscolherData.addEventListener("click", function (e) {
+    if (e.target === modalEscolherData) fecharModalData();
+  });
+
+  abasEscolherData.forEach((botao) => {
+    botao.addEventListener("click", function () {
+      selecionarAbaData(botao.dataset.aba);
+    });
+  });
+
+  btnAnoMesAnterior.addEventListener("click", function () {
+    anoExibidoMes -= 1;
+    renderizarGradeMeses();
+  });
+  btnAnoMesProximo.addEventListener("click", function () {
+    if (anoExibidoMes >= new Date().getFullYear()) return;
+    anoExibidoMes += 1;
+    renderizarGradeMeses();
+  });
+
+  btnPesquisarModalData.addEventListener("click", function () {
+    const inicio = modalFiltroInicio.value;
+    const fim = modalFiltroFim.value;
+    if (!inicio || !fim) {
+      msgModalData.textContent = "Preencha as duas datas.";
+      msgModalData.className = "msg erro";
+      return;
+    }
+    if (inicio > fim) {
+      msgModalData.textContent = "A data \"De\" não pode ser depois da data \"Até\".";
+      msgModalData.className = "msg erro";
+      return;
+    }
+    aplicarPeriodoEscolhido(inicio, fim);
+  });
+
+  function renderizarChipsTaxasFiltro(itens) {
+    if (!chipsTaxasFiltro) return;
+    if (!itens.length) {
+      chipsTaxasFiltro.innerHTML = '<span class="vazio-chips">Nenhuma taxa cadastrada ainda.</span>';
+      return;
+    }
+    chipsTaxasFiltro.innerHTML = itens
+      .map(
+        (item) =>
+          '<span class="chip-taxa-filtro">' +
+          item.nome + " · " + formatarPercentual(item.percentual) +
+          '<button type="button" class="chip-taxa-filtro-remover" data-nome="' + item.nome + '" aria-label="Remover taxa ' + item.nome + '">✕</button>' +
+          "</span>"
+      )
+      .join("");
+    chipsTaxasFiltro.querySelectorAll(".chip-taxa-filtro-remover").forEach((botao) => {
+      botao.addEventListener("click", function () {
+        if (!window.confirm('Remover a taxa "' + botao.dataset.nome + '"?')) return;
+        fetch(API_TAXAS + "/" + encodeURIComponent(botao.dataset.nome), { method: "DELETE" }).then(function () {
+          carregarTaxasCadastradas();
+          carregarTudo(); // taxa mudou -> lucro líquido, card azul e tabela precisam recalcular
+        });
+      });
+    });
+  }
 
   let filtroSemCustoOuRuim = false;
 
@@ -293,13 +469,15 @@
   });
 
   btnAtualizarVendas.addEventListener("click", function () {
+    // Botão compacto (só ícone) agora -- em vez de trocar o texto, mostra
+    // que está rodando girando o ícone e desabilitando o clique.
     btnAtualizarVendas.disabled = true;
-    btnAtualizarVendas.textContent = "Atualizando...";
+    btnAtualizarVendas.textContent = "⏳";
     fetch(API_SINCRONIZAR, { method: "POST" })
       .then(() => carregarTudo())
       .finally(() => {
         btnAtualizarVendas.disabled = false;
-        btnAtualizarVendas.textContent = "↻ Atualizar agora";
+        btnAtualizarVendas.textContent = "↻";
       });
   });
 
@@ -352,38 +530,10 @@
   function carregarTaxasCadastradas() {
     fetch(API_TAXAS)
       .then((r) => r.json())
-      .then((dados) => renderizarTaxasCadastradas(dados.itens || []))
+      .then((dados) => renderizarChipsTaxasFiltro(dados.itens || []))
       .catch(() => {
-        listaTaxasCadastradas.innerHTML = '<p class="vazio">⚠ Não consegui carregar as taxas agora.</p>';
+        if (chipsTaxasFiltro) chipsTaxasFiltro.innerHTML = '<span class="vazio-chips">⚠ Não consegui carregar as taxas agora.</span>';
       });
-  }
-
-  function renderizarTaxasCadastradas(itens) {
-    listaTaxasCadastradas.innerHTML = "";
-    if (!itens.length) {
-      listaTaxasCadastradas.innerHTML = '<p class="vazio">Nenhuma taxa cadastrada ainda.</p>';
-      return;
-    }
-    itens.forEach((item) => {
-      const linha = document.createElement("div");
-      linha.className = "linha-item";
-      linha.innerHTML =
-        "<span>" + item.nome + "</span>" +
-        '<div style="display:flex; align-items:center;">' +
-        '<span class="percentual">' + formatarPercentual(item.percentual) + "</span>" +
-        '<button class="remover" data-nome="' + item.nome + '" aria-label="Remover taxa ' + item.nome + '">✕</button>' +
-        "</div>";
-      listaTaxasCadastradas.appendChild(linha);
-    });
-    listaTaxasCadastradas.querySelectorAll(".remover").forEach((botao) => {
-      botao.addEventListener("click", function () {
-        if (!window.confirm('Remover a taxa "' + botao.dataset.nome + '"?')) return;
-        fetch(API_TAXAS + "/" + encodeURIComponent(botao.dataset.nome), { method: "DELETE" }).then(function () {
-          carregarTaxasCadastradas();
-          carregarTudo(); // taxa mudou -> lucro líquido, card azul e tabela precisam recalcular
-        });
-      });
-    });
   }
 
   function selecionarBaseTaxaVendas(base) {
