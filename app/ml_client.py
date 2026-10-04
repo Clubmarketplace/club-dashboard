@@ -663,6 +663,37 @@ def repor_estoque_item(access_token: str, item_id: str, quantidade_a_somar: int,
 # se perder).
 
 
+def _frete_real_do_vendedor(pedido: dict, access_token: str) -> float | None:
+    """
+    Busca no endpoint de custos do envio (`/shipments/{id}/costs`) o
+    valor de frete que efetivamente sai do bolso do vendedor.
+
+    Isso é diferente do `shipping_cost` que vem dentro de `payments` do
+    pedido: aquele é (normalmente) só o que o COMPRADOR pagou de frete,
+    que fica menor que o custo real sempre que tem frete grátis ou
+    desconto de frete (Mercado Envios Full, por exemplo) -- nesses
+    casos o vendedor absorve a diferença, e é ela que fazia o Repasse
+    calculado aqui ficar maior (e o Lucro Bruto inflado) do que o valor
+    real repassado pelo Mercado Livre.
+
+    Devolve None (não zero) se não der pra confirmar o valor real --
+    quem chamar deve cair de volta pra estimativa antiga nesse caso,
+    em vez de assumir frete zero.
+    """
+    shipping_id = (pedido.get("shipping") or {}).get("id")
+    if not shipping_id:
+        return 0.0  # pedido sem envio (retirada em loja, por exemplo) -- frete é mesmo zero
+    try:
+        custos = _get(f"/shipments/{shipping_id}/costs", access_token, "buscar o custo real do frete")
+    except MLApiError as exc:
+        logger.warning("Não consegui buscar o custo real do frete do envio %s: %s", shipping_id, exc)
+        return None
+    senders = custos.get("senders") or []
+    if not senders:
+        return None
+    return sum((s.get("cost") or 0.0) for s in senders)
+
+
 def _data_ml_para_utc(texto: str | None) -> datetime | None:
     """'2026-09-25T19:10:00.000-04:00' -> datetime UTC sem fuso (padrão do banco)."""
     if not texto:
@@ -703,8 +734,13 @@ def processar_pedido_em_vendas(conta, db, order_id: str) -> int:
 
     status = pedido.get("status")
     data_venda = _data_ml_para_utc(pedido.get("date_created")) or datetime.utcnow()
-    pagamentos = pedido.get("payments") or []
-    frete_total = sum((p.get("shipping_cost") or 0) for p in pagamentos)
+
+    frete_total = _frete_real_do_vendedor(pedido, access_token)
+    if frete_total is None:
+        # Não deu pra confirmar o valor real (endpoint de custo falhou) --
+        # cai de volta pra estimativa antiga em vez de travar a venda.
+        pagamentos = pedido.get("payments") or []
+        frete_total = sum((p.get("shipping_cost") or 0) for p in pagamentos)
     frete_por_item = frete_total / len(itens) if itens else 0.0
 
     # Cache local só pra não buscar o mesmo anúncio duas vezes dentro do
