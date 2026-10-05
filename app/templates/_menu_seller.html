@@ -25,12 +25,12 @@
 {% set _vendas_aberto = _caminho in ["/vendas", "/vendas/consulta"] %}
 
 {# Quem vê a sanfona "Vendas". `papel_logado` vem do contexto da página
-   (main.py); se alguma tela não mandar, assume "seller" pra não sumir
-   menu sem querer. Pra esconder Vendas dos sellers enquanto a tela está
-   em ajuste, basta deixar só "suporte" nesta lista -- o bloqueio de
-   verdade da rota fica no middleware exigir_login (main.py). #}
+   (main.py). Tela EM AJUSTE: por enquanto só o perfil "suporte" vê (o
+   bloqueio de verdade da rota fica no middleware exigir_login, main.py,
+   em _ROTAS_VENDAS_SO_SUPORTE). Pra liberar de volta pros sellers,
+   troque pra: _papel in ["seller", "suporte"]. #}
 {% set _papel = papel_logado | default("seller") %}
-{% set _mostra_vendas = _papel in ["seller", "suporte"] %}
+{% set _mostra_vendas = _papel == "suporte" %}
 
 <nav class="cmx-nav" aria-label="Menu principal">
   {% if _mostra_vendas %}
