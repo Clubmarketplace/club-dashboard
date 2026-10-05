@@ -83,6 +83,13 @@ _COLUNAS_ADICIONAIS = {
         # antigas (NULL) pra "venda_bruta" é feito abaixo, depois do ALTER.
         "base_calculo": "VARCHAR",
     },
+    "vendas": {
+        # Situação do pagamento ("approved", "refunded"...). Linhas antigas
+        # ficam NULL até serem reprocessadas pelo "Atualizar agora".
+        "pagamento_status": "VARCHAR",
+        # Carrinho (pack) do ML; NULL = pedido avulso ou linha antiga.
+        "pack_id": "VARCHAR",
+    },
 }
 
 # Índices pra filtros/busca continuarem rápidos com o volume crescendo.

@@ -769,6 +769,15 @@ class Venda(Base):
     lucro = Column(Float, nullable=True)  # repasse - custo_total; nulo se custo_total é nulo
     margem_percentual = Column(Float, nullable=True)  # lucro / venda_bruta * 100; nulo se custo_total é nulo
     status_pedido = Column(String, nullable=True)  # "paid", "cancelled", etc. (vem direto do Mercado Livre)
+    # Situação do pagamento do pedido ("approved", "refunded", "charged_back"...).
+    # Um pedido devolvido continua "paid" no status do pedido -- o que muda é
+    # o pagamento, que vira "refunded". Guardado aqui pra tela de Vendas
+    # deixar devolução/estorno fora dos totais, igual o próprio ML faz.
+    pagamento_status = Column(String, nullable=True)
+    # Carrinho do Mercado Livre: uma compra com vários itens vira um pedido
+    # por item, todos com o mesmo pack_id. O ML conta o carrinho como UMA
+    # venda -- o resumo da tela de Vendas usa isso pra contar igual.
+    pack_id = Column(String, nullable=True)
     data_venda = Column(DateTime, nullable=False, index=True)  # date_created do pedido, em UTC
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

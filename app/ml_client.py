@@ -707,6 +707,28 @@ def _data_ml_para_utc(texto: str | None) -> datetime | None:
     return data
 
 
+def _situacao_pagamento_do_pedido(pedido: dict) -> str | None:
+    """
+    Resume os pagamentos do pedido numa situação só, pra tela de Vendas.
+
+    Regra: se qualquer pagamento foi estornado (devolução concluída ->
+    "refunded") ou contestado ("charged_back"), essa situação prevalece,
+    porque o dinheiro voltou pro comprador e a venda não conta mais.
+    Senão, devolve a situação do pagamento aprovado (ou do primeiro que
+    houver). Pedido sem pagamento -> None.
+    """
+    pagamentos = pedido.get("payments") or []
+    situacoes = [str(p.get("status") or "").lower() for p in pagamentos if p.get("status")]
+    if not situacoes:
+        return None
+    for devolvido in ("refunded", "charged_back"):
+        if devolvido in situacoes:
+            return devolvido
+    if "approved" in situacoes:
+        return "approved"
+    return situacoes[0]
+
+
 def processar_pedido_em_vendas(conta, db, order_id: str) -> int:
     """
     Busca um pedido no Mercado Livre e grava/atualiza uma linha de
@@ -733,6 +755,8 @@ def processar_pedido_em_vendas(conta, db, order_id: str) -> int:
         return 0
 
     status = pedido.get("status")
+    pagamento_status = _situacao_pagamento_do_pedido(pedido)
+    pack_id = str(pedido["pack_id"]) if pedido.get("pack_id") else None
     data_venda = _data_ml_para_utc(pedido.get("date_created")) or datetime.utcnow()
 
     frete_total = _frete_real_do_vendedor(pedido, access_token)
@@ -802,6 +826,8 @@ def processar_pedido_em_vendas(conta, db, order_id: str) -> int:
         linha.lucro = lucro
         linha.margem_percentual = margem_percentual
         linha.status_pedido = status
+        linha.pagamento_status = pagamento_status
+        linha.pack_id = pack_id
         linha.data_venda = data_venda
         gravados += 1
 
