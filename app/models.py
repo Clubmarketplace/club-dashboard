@@ -485,7 +485,7 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     usuario = Column(String, unique=True, index=True, nullable=False)
     nome_exibicao = Column(String, nullable=False)
-    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "atendente" | "logistica" | "seller"
+    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "atendente" | "logistica" | "seller" | "suporte" | "tv"
     senha_hash = Column(String, nullable=True)  # nulo até o primeiro acesso ser concluído
     codigo_primeiro_acesso = Column(String, nullable=True)
     precisa_trocar_senha = Column(Boolean, default=True)
@@ -493,9 +493,11 @@ class Usuario(Base):
     criado_em = Column(DateTime, default=datetime.utcnow)
     criado_por_usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
-    # Só usado quando papel == "seller" -- qual conta (ex: "Velasco")
-    # esse usuário representa. É o que filtra o que ele vê em
-    # /meus-cancelamentos e pré-preenche a conta no formulário público.
+    # Só usado quando papel é "seller" ou "suporte" -- qual conta (ex:
+    # "Velasco") esse usuário representa. É o que filtra o que ele vê em
+    # /meus-cancelamentos, no painel (Vendas/Custos/Taxas) e pré-preenche
+    # a conta no formulário público. "suporte" é o perfil interno que
+    # testa/acompanha o painel usando a conta de um seller.
     conta_vinculada = Column(String, nullable=True)
 
 

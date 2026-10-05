@@ -196,8 +196,20 @@ _AREAS_POR_PAPEL = {
     # TV: só enxerga os painéis (não responde nada, não abre outras telas).
     "tv": ("paineis_tv",),
 }
+# Papéis que entram no PAINEL DO SELLER (telas /vendas, /custos, /taxas...).
+#  - "seller": o dono da conta.
+#  - "suporte": perfil interno pra testar/acompanhar o painel usando a
+#    conta de um seller (ex: Washington entrando como a Velasco), sem
+#    ter que logar com o acesso do próprio seller. Vê exatamente o que o
+#    seller vê (inclusive telas em teste, como Vendas), nada de admin.
+#    Também usa conta_vinculada; só admin cria.
+# Toda regra "é seller?" do painel deve usar esta tupla, não comparar
+# com "seller" direto -- senão o suporte cai fora sem querer.
+PAPEIS_PAINEL_SELLER = ("seller", "suporte")
+
 _PAGINA_INICIAL_POR_PAPEL = {
     "seller": "/vendas",  # tela mais usada pelo seller -- antes era "/meus-cancelamentos"
+    "suporte": "/vendas",
     "atendente": "/pre-venda",
     "logistica": "/solicitar-cancelamento",
     "tv": "/painel-tv/fila",
@@ -207,9 +219,19 @@ _PAGINA_INICIAL_POR_PAPEL = {
 # TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
 # no servidor, nunca só no <select> da tela.
 PAPEIS_GERENCIAVEIS_POR = {
-    "admin": ("admin", "supervisor", "atendente", "logistica", "seller", "tv"),
+    "admin": ("admin", "supervisor", "atendente", "logistica", "seller", "suporte", "tv"),
     "supervisor": ("atendente", "logistica", "seller", "tv"),
 }
+
+
+def _eh_painel_seller(usuario) -> bool:
+    """True se o usuário logado navega pelo painel do seller (seller ou suporte) com conta vinculada."""
+    return bool(usuario and usuario.papel in PAPEIS_PAINEL_SELLER and usuario.conta_vinculada)
+
+
+def _conta_logada_de(usuario):
+    """Apelido da conta que as telas do painel do seller devem mostrar (None pros outros perfis)."""
+    return usuario.conta_vinculada if _eh_painel_seller(usuario) else None
 
 
 def _papel_pode_acessar(papel: str, caminho: str) -> bool:
@@ -274,7 +296,9 @@ async def exigir_login(request: Request, call_next):
         or caminho.startswith("/api/painel/vendas")
         or caminho.startswith("/api/painel/taxas")
     )
-    if papel == "seller" and not _seller_liberado:
+    # Suporte segue EXATAMENTE as mesmas portas do seller (mesmas telas,
+    # mesmas APIs) -- a diferença é só quem é a pessoa, não o que ela vê.
+    if papel in PAPEIS_PAINEL_SELLER and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
         return RedirectResponse("/vendas", status_code=303)
@@ -493,7 +517,7 @@ def pagina_solicitar_cancelamento(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_pre_preenchida = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_pre_preenchida = _conta_logada_de(usuario)
         logistica_logado = bool(usuario and usuario.papel == "logistica")
         # Equipe: abre dentro do sistema (menu à esquerda) e lança por qualquer conta.
         equipe_logado = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
@@ -507,6 +531,7 @@ def pagina_solicitar_cancelamento(request: Request):
             "logistica_logado": logistica_logado,
             "equipe_logado": equipe_logado,
             "usuario_logado": usuario,
+            "papel_logado": usuario.papel if usuario else None,
             "nome_usuario": nome_usuario,
         },
     )
@@ -522,7 +547,7 @@ def pagina_extensao(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
@@ -530,6 +555,7 @@ def pagina_extensao(request: Request):
         context={
             "conta_logada": conta_logada,
             "seller_logado": seller_logado,
+            "papel_logado": usuario.papel if usuario else None,
             # TODO: trocar pelo link real assim que a extensão for publicada
             # (unlisted) na Chrome Web Store.
             "url_extensao": None,
@@ -549,12 +575,12 @@ def pagina_custos(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
         name="custos.html",
-        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
 
@@ -570,12 +596,12 @@ def pagina_produtos_lista(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
         name="produtos_lista.html",
-        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
 
@@ -589,12 +615,12 @@ def pagina_vendas(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
         name="vendas.html",
-        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
 
@@ -609,12 +635,12 @@ def pagina_vendas_consulta(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
         name="vendas_consulta.html",
-        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
 
@@ -627,12 +653,12 @@ def pagina_taxas(request: Request):
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        conta_logada = usuario.conta_vinculada if (usuario and usuario.papel == "seller") else None
+        conta_logada = _conta_logada_de(usuario)
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
         name="taxas.html",
-        context={"conta_logada": conta_logada, "seller_logado": seller_logado},
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
 
@@ -653,7 +679,7 @@ def pagina_meus_cancelamentos(request: Request):
     """Tela do seller: só as solicitações (cancelamento e reputação) da conta vinculada a ele."""
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
-        if not usuario or usuario.papel != "seller" or not usuario.conta_vinculada:
+        if not _eh_painel_seller(usuario):
             return RedirectResponse("/", status_code=303)
 
         solicitacoes = (
@@ -665,7 +691,7 @@ def pagina_meus_cancelamentos(request: Request):
         return templates.TemplateResponse(
             request=request,
             name="meus-cancelamentos.html",
-            context={"usuario": usuario, "solicitacoes": solicitacoes},
+            context={"usuario": usuario, "solicitacoes": solicitacoes, "papel_logado": usuario.papel},
         )
 
 
@@ -825,15 +851,15 @@ def editar_usuario(
             )
 
         conta_limpa = conta_vinculada.strip() or None
-        if papel == "seller" and not conta_limpa:
+        if papel in PAPEIS_PAINEL_SELLER and not conta_limpa:
             return templates.TemplateResponse(
                 request=request, name="editar-usuario.html", status_code=400,
-                context={**contexto_erro, "erro": "Informe a conta vinculada -- obrigatório pra usuários seller."},
+                context={**contexto_erro, "erro": "Informe a conta vinculada -- obrigatório pra usuários seller e suporte."},
             )
 
         alvo.nome_exibicao = nome_limpo
         alvo.papel = papel
-        alvo.conta_vinculada = conta_limpa if papel == "seller" else None
+        alvo.conta_vinculada = conta_limpa if papel in PAPEIS_PAINEL_SELLER else None
         db.commit()
 
         return RedirectResponse("/usuarios", status_code=303)
@@ -892,10 +918,10 @@ def criar_usuario(
             )
 
         conta_vinculada_limpa = conta_vinculada.strip() or None
-        if papel == "seller" and not conta_vinculada_limpa:
+        if papel in PAPEIS_PAINEL_SELLER and not conta_vinculada_limpa:
             return templates.TemplateResponse(
                 request=request, name="usuarios.html", status_code=400,
-                context={**contexto_base, "erro_criar": "Informe a conta vinculada -- obrigatório pra usuários seller."},
+                context={**contexto_base, "erro_criar": "Informe a conta vinculada -- obrigatório pra usuários seller e suporte."},
             )
 
         codigo = auth.gerar_codigo_primeiro_acesso()
@@ -905,7 +931,7 @@ def criar_usuario(
             papel=papel,
             codigo_primeiro_acesso=codigo,
             precisa_trocar_senha=True,
-            conta_vinculada=conta_vinculada_limpa if papel == "seller" else None,
+            conta_vinculada=conta_vinculada_limpa if papel in PAPEIS_PAINEL_SELLER else None,
             criado_por_usuario_id=usuario_logado.id,
         )
         db.add(novo_usuario)
