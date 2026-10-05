@@ -297,6 +297,18 @@
     });
   });
 
+  // Pinta o cartão de verde (lucro/margem positiva) ou vermelho (negativa).
+  // Usado nos 4 cartões que podem fechar no prejuízo -- Lucro Bruto,
+  // Lucro Líquido, Margem Mark-up e Margem Contribuição -- pra não
+  // mostrar um resultado negativo em verde (cor fixa que existia antes).
+  function pintarPeloSinal(cartaoValor, valor) {
+    const card = cartaoValor.closest(".card-resumo");
+    if (!card) return;
+    card.classList.remove("positivo", "alerta");
+    if (valor === null || valor === undefined || Number.isNaN(valor)) return;
+    card.classList.add(valor < 0 ? "alerta" : "positivo");
+  }
+
   function definirPeriodoPadrao() {
     // Tela mais usada -> abre direto no "Hoje", pra bater com o que o
     // seller mais quer ver de cara (venda do dia).
@@ -320,10 +332,14 @@
         cardCmv.textContent = formatarMoeda(resumo.cmv);
         cardTicketMedio.textContent = formatarMoeda(resumo.ticket_medio);
         cardLucroBruto.textContent = formatarMoeda(resumo.lucro_bruto);
+        pintarPeloSinal(cardLucroBruto, resumo.lucro_bruto);
         cardLucroLiquido.textContent = formatarMoeda(resumo.lucro_liquido);
+        pintarPeloSinal(cardLucroLiquido, resumo.lucro_liquido);
         renderizarTaxasDescontadas(resumo.despesas_taxas || []);
         cardMargemMarkup.textContent = formatarPercentual(resumo.margem_markup);
+        pintarPeloSinal(cardMargemMarkup, resumo.margem_markup);
         cardMargemContribuicao.textContent = formatarPercentual(resumo.margem_contribuicao);
+        pintarPeloSinal(cardMargemContribuicao, resumo.margem_contribuicao);
         cardSemCusto.textContent = resumo.qtd_sem_custo;
 
         campoMargemMinima.value = resumo.margem_minima === null || resumo.margem_minima === undefined ? "" : resumo.margem_minima;
