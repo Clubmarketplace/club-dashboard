@@ -31,12 +31,24 @@ Mesmo padrão de autenticação/isolamento por conta do resto do painel
 outra.
 """
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
+
+# Fuso usado pra interpretar "Hoje"/"Este mês" vindos da tela -- o banco
+# guarda tudo em UTC (datetime.utcnow), mas o filtro de data é pensado
+# no calendário de Brasília. Sem isso, "Hoje" vaza venda das ~21h em
+# diante do dia anterior (ela já virou o dia em UTC) e corta as últimas
+# horas do dia atual. Mesmo padrão usado em app/routers/pre_venda.py.
+try:
+    from zoneinfo import ZoneInfo
+
+    _FUSO_BR = ZoneInfo("America/Sao_Paulo")
+except Exception:  # ZoneInfoNotFoundError ou Python sem zoneinfo
+    _FUSO_BR = timezone(timedelta(hours=-3), "BRT")
 
 from app import ml_client
 from app.database import get_db
@@ -79,23 +91,33 @@ def _periodo(inicio: str, fim: str) -> tuple[datetime, datetime, int]:
     Converte 'YYYY-MM-DD'/'YYYY-MM-DD' em (início do dia, fim do dia,
     quantidade de dias) -- sem nenhum dos dois, usa os últimos 7 dias
     (padrão da tela ao abrir pela primeira vez).
+
+    As datas vêm da tela como dia de calendário em Brasília (ex: "Hoje"
+    manda a data local de hoje). `data_venda` no banco é UTC, então o
+    início/fim do dia aqui precisam ser convertidos de Brasília pra UTC
+    antes de comparar -- senão "Hoje" pega um pedaço da noite de ontem
+    (que em UTC já virou o dia) e perde as últimas horas de hoje.
     """
+    hoje_br = datetime.now(_FUSO_BR).date()
     try:
-        data_fim = datetime.strptime(fim, "%Y-%m-%d") if fim.strip() else datetime.utcnow()
+        data_fim = datetime.strptime(fim, "%Y-%m-%d").date() if fim.strip() else hoje_br
     except ValueError:
         raise HTTPException(status_code=400, detail="Data final inválida (use AAAA-MM-DD).")
     try:
         data_inicio = (
-            datetime.strptime(inicio, "%Y-%m-%d") if inicio.strip() else data_fim - timedelta(days=6)
+            datetime.strptime(inicio, "%Y-%m-%d").date() if inicio.strip() else data_fim - timedelta(days=6)
         )
     except ValueError:
         raise HTTPException(status_code=400, detail="Data inicial inválida (use AAAA-MM-DD).")
 
-    inicio_dt = data_inicio.replace(hour=0, minute=0, second=0, microsecond=0)
-    fim_dt = data_fim.replace(hour=23, minute=59, second=59, microsecond=999999)
-    if fim_dt < inicio_dt:
+    inicio_local = datetime.combine(data_inicio, datetime.min.time(), tzinfo=_FUSO_BR)
+    fim_local = datetime.combine(data_fim, datetime.max.time(), tzinfo=_FUSO_BR)
+    if fim_local < inicio_local:
         raise HTTPException(status_code=400, detail="Data final não pode ser antes da inicial.")
-    dias = max((fim_dt.date() - inicio_dt.date()).days + 1, 1)
+    dias = max((data_fim - data_inicio).days + 1, 1)
+
+    inicio_dt = inicio_local.astimezone(timezone.utc).replace(tzinfo=None)
+    fim_dt = fim_local.astimezone(timezone.utc).replace(tzinfo=None)
     return inicio_dt, fim_dt, dias
 
 
