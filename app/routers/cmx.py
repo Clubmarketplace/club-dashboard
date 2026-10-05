@@ -74,7 +74,9 @@ def _conta_vinculada_do_usuario(usuario: Usuario, db: Session) -> Conta:
     usuário sem vínculo de conta, conta que não existe (mais) no
     cadastro, ou conta desativada.
     """
-    if usuario.papel != "seller" or not usuario.conta_vinculada:
+    # "suporte" = perfil interno que usa o painel com a conta de um seller
+    # (ver PAPEIS_PAINEL_SELLER em main.py); resolve a conta do mesmo jeito.
+    if usuario.papel not in ("seller", "suporte") or not usuario.conta_vinculada:
         raise HTTPException(status_code=403, detail="Este usuário não está vinculado a uma conta de seller.")
 
     chave_procurada = chave_conta(usuario.conta_vinculada)

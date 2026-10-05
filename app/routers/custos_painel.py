@@ -31,7 +31,9 @@ def _seller_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
     antes de chegar aqui; isso só confirma que é mesmo um seller.
     """
     usuario = auth.usuario_atual(request, db)
-    if not usuario or usuario.papel != "seller":
+    # "suporte" é o perfil interno que navega o painel com a conta de um
+    # seller (ver PAPEIS_PAINEL_SELLER em main.py) -- mesmas APIs.
+    if not usuario or usuario.papel not in ("seller", "suporte"):
         raise HTTPException(status_code=403, detail="Acesso restrito a sellers.")
     return usuario
 
