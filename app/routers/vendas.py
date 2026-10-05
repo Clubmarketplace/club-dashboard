@@ -35,6 +35,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app import ml_client
@@ -48,10 +49,29 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/painel/vendas", tags=["painel-vendas"])
 
-# Pedido cancelado não é venda de verdade -- fica de fora de todos os
-# totais e da lista, igual "Produtos > Lista" já ignora anúncio pausado
-# nos totais de "sem custo".
-_STATUS_IGNORADOS = {"cancelled"}
+# Só pedido PAGO é venda de verdade -- mesma régua do "Vendas de hoje ao
+# vivo" do Mercado Livre. Fica de fora: cancelado, pagamento pendente
+# (Pix/boleto gerado e não pago: "payment_required", "payment_in_process"),
+# inválido etc. "partially_refunded" entra porque parte da venda ficou.
+_STATUS_VENDA_REAL = {"paid", "partially_refunded"}
+
+# Pedido devolvido continua "paid" no status do pedido; quem muda é o
+# pagamento ("refunded" = devolução concluída, "charged_back" = estorno
+# por contestação). Nesses casos o dinheiro voltou pro comprador e a
+# venda sai dos totais e da lista.
+_PAGAMENTOS_DEVOLVIDOS = {"refunded", "charged_back"}
+
+
+def _somente_vendas_validas(consulta):
+    """
+    Aplica num query de `Venda` o filtro "venda de verdade": status do
+    pedido pago e pagamento não devolvido. `pagamento_status` NULL (linha
+    gravada antes dessa coluna existir) é aceito pra não sumir com o
+    histórico -- o "Atualizar agora" reprocessa e preenche.
+    """
+    return consulta.filter(Venda.status_pedido.in_(_STATUS_VENDA_REAL)).filter(
+        or_(Venda.pagamento_status.is_(None), ~Venda.pagamento_status.in_(_PAGAMENTOS_DEVOLVIDOS))
+    )
 
 
 def _periodo(inicio: str, fim: str) -> tuple[datetime, datetime, int]:
@@ -152,15 +172,16 @@ def _cascata_taxas(taxas: list[VariavelConta], venda_bruta: float, repasse: floa
 
 
 def _montar_resumo(conta: Conta, db: Session, inicio_dt: datetime, fim_dt: datetime, dias: int) -> dict:
-    consulta = (
+    consulta = _somente_vendas_validas(
         db.query(Venda)
         .filter(Venda.conta_id == conta.id)
         .filter(Venda.data_venda >= inicio_dt, Venda.data_venda <= fim_dt)
-        .filter(~Venda.status_pedido.in_(_STATUS_IGNORADOS))
     )
     linhas = consulta.all()
 
-    pedidos = {l.ml_order_id for l in linhas}
+    # "Vendas" conta igual ao Mercado Livre: um carrinho (pack) com vários
+    # pedidos é UMA venda; pedido avulso (sem pack) conta por número de pedido.
+    pedidos = {f"pack:{l.pack_id}" if l.pack_id else f"pedido:{l.ml_order_id}" for l in linhas}
     unidades = sum(l.quantidade for l in linhas)
     venda_bruta = sum(l.venda_bruta for l in linhas)
     repasse = sum(l.repasse for l in linhas)
@@ -259,10 +280,11 @@ def listar_vendas(
     inicio_dt, fim_dt, _ = _periodo(inicio, fim)
 
     linhas = (
-        db.query(Venda)
-        .filter(Venda.conta_id == conta.id)
-        .filter(Venda.data_venda >= inicio_dt, Venda.data_venda <= fim_dt)
-        .filter(~Venda.status_pedido.in_(_STATUS_IGNORADOS))
+        _somente_vendas_validas(
+            db.query(Venda)
+            .filter(Venda.conta_id == conta.id)
+            .filter(Venda.data_venda >= inicio_dt, Venda.data_venda <= fim_dt)
+        )
         .order_by(Venda.data_venda.desc())
         .all()
     )
