@@ -208,7 +208,9 @@ _AREAS_POR_PAPEL = {
 PAPEIS_PAINEL_SELLER = ("seller", "suporte")
 
 _PAGINA_INICIAL_POR_PAPEL = {
-    "seller": "/vendas",  # tela mais usada pelo seller -- antes era "/meus-cancelamentos"
+    # Seller volta pra "Meus cancelamentos" enquanto a tela Vendas está em
+    # ajuste (ela era a inicial; quando liberar de novo, troque pra "/vendas").
+    "seller": "/meus-cancelamentos",
     "suporte": "/vendas",
     "atendente": "/pre-venda",
     "logistica": "/solicitar-cancelamento",
@@ -282,10 +284,17 @@ async def exigir_login(request: Request, call_next):
         "/extensao",
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
-        "/vendas",
-        "/vendas/consulta",
         "/taxas",
     }
+    # Tela "Vendas" (Resumo + Consulta) e a API dela: EM AJUSTE -- por
+    # enquanto só o perfil "suporte" entra (pra testar com a conta do
+    # seller). Esconder só o item do menu não bastaria, porque quem
+    # souber a URL abriria; o bloqueio de verdade é aqui. Quando a tela
+    # for liberada pros sellers, basta tirar esta separação (voltar
+    # "/vendas", "/vendas/consulta" e "/api/painel/vendas" pra lista de
+    # cima) e ajustar _mostra_vendas em _menu_seller.html.
+    _ROTAS_VENDAS_SO_SUPORTE = {"/vendas", "/vendas/consulta"}
+
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
     papel = usuario_logado.papel if usuario_logado else None
@@ -293,15 +302,18 @@ async def exigir_login(request: Request, call_next):
     _seller_liberado = (
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
         or caminho.startswith("/api/painel/custos/")
-        or caminho.startswith("/api/painel/vendas")
         or caminho.startswith("/api/painel/taxas")
     )
-    # Suporte segue EXATAMENTE as mesmas portas do seller (mesmas telas,
-    # mesmas APIs) -- a diferença é só quem é a pessoa, não o que ela vê.
+    _eh_rota_vendas = caminho in _ROTAS_VENDAS_SO_SUPORTE or caminho.startswith("/api/painel/vendas")
+    if papel == "suporte" and _eh_rota_vendas:
+        _seller_liberado = True
+
+    # Seller e suporte passam pelas mesmas portas (a diferença é só quem
+    # é a pessoa) -- exceto Vendas, liberada só pro suporte por ora.
     if papel in PAPEIS_PAINEL_SELLER and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-        return RedirectResponse("/vendas", status_code=303)
+        return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(papel, "/logout"), status_code=303)
 
     if papel in _AREAS_POR_PAPEL and not _papel_pode_acessar(papel, caminho):
         if caminho.startswith("/api/"):
