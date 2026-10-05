@@ -96,6 +96,7 @@
               <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
               <option value="logistica" {% if alvo.papel == "logistica" %}selected{% endif %}>Logística</option>
               <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
+              <option value="suporte" {% if alvo.papel == "suporte" %}selected{% endif %}>Suporte (usa o painel com a conta de um seller)</option>
               <option value="tv" {% if alvo.papel == "tv" %}selected{% endif %}>TV (só vê os painéis)</option>
             </select>
             {% else %}
@@ -125,9 +126,10 @@
           function alternarCampoConta() {
             const select = document.getElementById("campo-papel");
             const papel = select ? select.value : "seller";
+            const precisaConta = (papel === "seller" || papel === "suporte");
             const bloco = document.getElementById("bloco-conta");
-            bloco.classList.toggle("visivel", papel === "seller");
-            document.getElementById("campo-conta").required = (papel === "seller");
+            bloco.classList.toggle("visivel", precisaConta);
+            document.getElementById("campo-conta").required = precisaConta;
           }
           alternarCampoConta();
         </script>

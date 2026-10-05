@@ -24,7 +24,16 @@
 {% set _produtos_aberto = _caminho in ["/produtos/lista", "/custos"] %}
 {% set _vendas_aberto = _caminho in ["/vendas", "/vendas/consulta"] %}
 
+{# Quem vê a sanfona "Vendas". `papel_logado` vem do contexto da página
+   (main.py); se alguma tela não mandar, assume "seller" pra não sumir
+   menu sem querer. Pra esconder Vendas dos sellers enquanto a tela está
+   em ajuste, basta deixar só "suporte" nesta lista -- o bloqueio de
+   verdade da rota fica no middleware exigir_login (main.py). #}
+{% set _papel = papel_logado | default("seller") %}
+{% set _mostra_vendas = _papel in ["seller", "suporte"] %}
+
 <nav class="cmx-nav" aria-label="Menu principal">
+  {% if _mostra_vendas %}
   <button type="button" class="cmx-nav-sanfona{% if _vendas_aberto %} cmx-nav-sanfona--aberta{% endif %}" id="cmx-vendas-sanfona" aria-expanded="{{ 'true' if _vendas_aberto else 'false' }}" aria-controls="cmx-vendas-submenu" style="margin-top:0;">
     <span>💰 Vendas</span>
     <span class="cmx-nav-sanfona-seta">▾</span>
@@ -45,6 +54,7 @@
       });
     })();
   </script>
+  {% endif %}
 
   {{ item("/taxas", "💲 Taxas") }}
   {{ item("/meus-cancelamentos", "Minhas solicitações") }}
