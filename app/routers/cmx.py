@@ -15,13 +15,16 @@ escolher nada. Se o admin desativar o usuário (Usuario.ativo = False)
 ou remover a conta vinculada, o próximo /api/cmx/validar já nega, e a
 extensão para de funcionar pra essa pessoa.
 """
+from datetime import datetime
+
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app import auth
+from app import auth, ml_client
+from app.ml_client import MLAuthError
 from app.config import CMX_ML_CLIENT_ID, CMX_ML_CLIENT_SECRET
 from app.contas_util import chave_conta
 from app.custos_log import registrar_log_custo
@@ -510,3 +513,65 @@ def renovar_token_ml(
         "refresh_token": dados.refresh_token,
     }
     return _chamar_endpoint_token_ml(payload, "renovar o token")
+
+
+# --- Token do Mercado Livre pela autorização que a conta JÁ DEU ao painel --
+#
+# A extensão não faz mais login próprio no Mercado Livre. Toda conta
+# autoriza o app MESTRE uma vez, pelo link gerado em /contas (é a mesma
+# autorização que alimenta perguntas, mensagens e vendas). Esta rota entrega
+# à extensão o access_token dessa autorização, já renovado se preciso --
+# mesma função (ml_client.garantir_token_valido) usada pelo resto do
+# servidor. Consequências desejadas:
+#   - nenhuma conta autoriza duas vezes; "Conectar conta" some da extensão;
+#   - a extensão só opera na conta vinculada ao login da pessoa (não há
+#     como "autorizar a conta errada", porque a autorização não acontece lá);
+#   - o token nunca fica guardado no PC: vem daqui a cada uso, mediante
+#     login válido no Club -- usuário removido/desativado para na hora
+#     (usuario_logado_cmx devolve 401 e a extensão apaga a sessão).
+# As rotas /ml/trocar-codigo e /ml/renovar-token acima ficam como legado e
+# podem ser removidas quando nenhum pacote antigo estiver mais em uso.
+
+
+@router.get("/ml/token")
+def token_ml_da_conta_vinculada(
+    usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
+):
+    """
+    Devolve um access_token válido do Mercado Livre pra conta vinculada ao
+    usuário logado na extensão. 409 se a conta ainda não autorizou pelo
+    painel; 502 se o Mercado Livre recusar a renovação (precisa autorizar
+    de novo pelo link de /contas).
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    if not conta.access_token or not conta.refresh_token:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não autorizou o Club Marketplace no Mercado Livre. "
+                "Gere o link de autorização em Contas no painel e peça pro dono da conta aceitar."
+            ),
+        )
+    try:
+        access_token = ml_client.garantir_token_valido(conta, db)
+    except MLAuthError as exc:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                f"O Mercado Livre não renovou a autorização da conta '{conta.apelido}' ({exc}). "
+                "Gere um novo link de autorização em Contas no painel."
+            ),
+        ) from exc
+
+    # Quanto tempo o token ainda vale (a extensão usa pra cachear em memória
+    # por poucos minutos e pedir de novo antes de vencer).
+    expira_em_segundos = 0
+    if conta.token_expira_em:
+        expira_em_segundos = max(int((conta.token_expira_em - datetime.utcnow()).total_seconds()), 0)
+    return {
+        "access_token": access_token,
+        "ml_user_id": str(conta.ml_user_id),
+        "apelido": conta.apelido,
+        "expira_em_segundos": expira_em_segundos,
+    }
