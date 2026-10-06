@@ -85,12 +85,21 @@
     $("ci-ativa-info").textContent = ultimaPausa ? `${ultimaPausa.depois ? "Ligada" : "Pausada"} por ${ultimaPausa.por || "—"} em ${new Date(ultimaPausa.em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : "";
   }
 
+  function pintarSaude(saude) {
+    const el = $("ci-saude");
+    if (!saude) { el.style.display = "none"; return; }
+    const hora = new Date(saude.desde).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
+    el.textContent = `⚠️ IA sem crédito/falhando desde ${hora} — perguntas estão indo direto pra equipe.`;
+    el.style.display = "block";
+  }
+
   function aplicar(dados) {
     degraus = dados.degraus;
     salvo = JSON.parse(JSON.stringify(dados.config));
     atual = JSON.parse(JSON.stringify(dados.config));
     montarCampos();
     pintarHistorico(dados.historico || []);
+    pintarSaude(dados.saude || null);
     pintar();
   }
 
@@ -102,6 +111,16 @@
       aplicar(d);
     } catch (e) { aviso("Não consegui carregar os ajustes: " + e.message, "erro"); }
   }
+
+  // Confere de novo a cada minuto, só pra manter o aviso de saúde da IA em
+  // dia (some sozinho assim que uma pergunta for respondida com sucesso).
+  setInterval(async () => {
+    try {
+      const r = await fetch("/api/calibrar-ia", { cache: "no-store" });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok) pintarSaude(d.saude || null);
+    } catch (e) { /* silencioso -- não interrompe quem está editando */ }
+  }, 60000);
 
   // Interações
   $("ci-ativa").addEventListener("click", () => {
