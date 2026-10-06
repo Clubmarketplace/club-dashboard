@@ -568,9 +568,9 @@ def pagina_extensao(request: Request):
             "conta_logada": conta_logada,
             "seller_logado": seller_logado,
             "papel_logado": usuario.papel if usuario else None,
-            # "Sistema de Precificação — ClubMarketplace", aprovada (unlisted)
-            # na Chrome Web Store em 05/10/2026.
-            "url_extensao": "https://chromewebstore.google.com/detail/feonnbeecdbchkdbkffghoemjgcklghm",
+            # TODO: trocar pelo link real assim que a extensão for publicada
+            # (unlisted) na Chrome Web Store.
+            "url_extensao": None,
         },
     )
 
