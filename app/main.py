@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -285,6 +285,7 @@ async def exigir_login(request: Request, call_next):
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
         "/taxas",
+        "/historico-adesoes", "/api/painel/historico-adesoes",
     }
     # Tela "Vendas" (Resumo + Consulta) e a API dela: EM AJUSTE -- por
     # enquanto só o perfil "suporte" entra (pra testar com a conta do
@@ -341,6 +342,7 @@ app.include_router(custos_painel_rotas.router)  # tela "Custos" do painel (selle
 app.include_router(produtos_rotas.router)  # tela "Produtos > Lista" do painel (seller, cookie)
 app.include_router(vendas_rotas.router)  # tela "Vendas" do painel (seller, cookie)
 app.include_router(taxas_rotas.router)  # tela "Taxas" do painel (seller, cookie)
+app.include_router(historico_adesoes_painel_rotas.router)  # tela "Histórico de adesões" do painel (seller, cookie)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -592,6 +594,28 @@ def pagina_custos(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="custos.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
+    )
+
+
+@app.get("/historico-adesoes", response_class=HTMLResponse)
+def pagina_historico_adesoes(request: Request):
+    """
+    Tela "Produtos > Histórico de adesões": cópia no servidor de toda
+    adesão a promoção feita pela extensão ClubMarketplaceX, juntando os
+    registros de todos os logins/computadores da conta (cada linha mostra
+    quem fez) -- sobrevive a desinstalar a extensão ou trocar de PC. A
+    tela só monta o layout; os dados vêm de GET /api/cmx/historico-adesoes
+    (app/routers/cmx.py), filtrados pelo mesmo cookie de sessão do painel
+    (seller ou suporte navegando na conta dele).
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = _conta_logada_de(usuario)
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="historico-adesoes.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
