@@ -724,6 +724,23 @@ class HistoricoConfigIA(Base):
     alterado_em = Column(DateTime, default=datetime.utcnow, index=True)
 
 
+class EventoIA(Base):
+    """
+    Registro de cada chamada à API do Claude feita pela nossa IA de pré-venda:
+    "falha" (sem crédito, limite, rede...) ou "sucesso". Alimenta o aviso
+    "IA sem crédito/falhando" na tela Administração › Calibrar IA -- sem isso,
+    uma falha na API só aparecia nos logs do servidor, e as perguntas iam
+    pra fila humana silenciosamente, sem ninguém perceber o motivo.
+    """
+
+    __tablename__ = "eventos_ia"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tipo = Column(String, nullable=False)  # "falha" | "sucesso"
+    motivo = Column(String, nullable=True)  # resumo do erro (só quando tipo="falha")
+    ocorrido_em = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 class Venda(Base):
     """
     Uma linha de venda já CONCRETIZADA no Mercado Livre -- um item de um
