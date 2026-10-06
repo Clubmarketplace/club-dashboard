@@ -24,6 +24,7 @@ from sqlalchemy import (
     Text,
     Boolean,
     UniqueConstraint,
+    Index,
 )
 from sqlalchemy.orm import relationship
 from app.database import Base
@@ -709,6 +710,67 @@ class VariavelConta(Base):
     base_calculo = Column(String, nullable=False, default="venda_bruta")
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     atualizado_por = Column(String, nullable=True)
+
+
+class EventoAdesaoCmx(Base):
+    """
+    Cópia no SERVIDOR de cada adesão a promoção feita pela extensão
+    ClubMarketplaceX -- a extensão continua gravando a cópia LOCAL dela
+    (chrome.storage.local.cmxHistoricoAdesoes, inalterada) pra manter a
+    tela "Ver histórico de adesões" rápida e funcionando sem depender de
+    rede; esta tabela é uma SEGUNDA cópia, assíncrona, pra servir à
+    página do painel ("Produtos > Histórico de adesões"), com 3
+    vantagens que o armazenamento local não dá: (1) sobrevive a
+    desinstalar/reinstalar a extensão ou trocar de PC; (2) junta os
+    registros de VÁRIOS logins/computadores usando a mesma conta (cada
+    linha grava `usuario`, o nome de quem fez); (3) pesquisável no
+    servidor sem precisar abrir a extensão.
+
+    IDEMPOTÊNCIA: `id_envio` é gerado pela extensão (crypto.randomUUID())
+    no momento em que a adesão é registrada localmente, e reenviado
+    IGUAL em toda tentativa de retry (fila local em
+    chrome.storage.local.cmxFilaEnvioHistorico) -- a gravação em lote
+    (app/routers/cmx.py) usa esse campo pra nunca duplicar a mesma
+    adesão quando a extensão reenviar por falha de rede ou reinício do
+    service worker.
+
+    ESCALA (100+ contas): toda consulta da página do painel filtra por
+    conta_id E por intervalo de data (default: últimos 10 dias), nunca a
+    tabela inteira -- por isso o índice composto (conta_id, data_adesao)
+    abaixo, que é exatamente o par usado nessa consulta. Sem ele, cada
+    busca precisaria varrer a tabela inteira (todas as contas, todo o
+    histórico) pra achar as linhas de uma conta num período -- rápido
+    com poucas contas, lento conforme o total de linhas crescer.
+    """
+
+    __tablename__ = "eventos_adesao_cmx"
+    __table_args__ = (
+        UniqueConstraint("id_envio", name="uq_evento_adesao_cmx_id_envio"),
+        Index("ix_evento_adesao_cmx_conta_data", "conta_id", "data_adesao"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    # Gerado pela extensão (UUID) -- é o que garante que reenviar o mesmo
+    # registro (retry) nunca cria uma segunda linha.
+    id_envio = Column(String, nullable=False, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    # Quem fez a adesão -- nome de exibição do login da extensão (não o
+    # dono da conta: numa conta com 2 PCs/usuários, cada um aparece
+    # separado aqui, embora a conta/custos/taxas sejam as mesmas).
+    usuario = Column(String, nullable=True)
+    maquina = Column(String, nullable=True)  # apelido opcional do PC/pessoa (cmxApelidoMaquina), só informativo
+    item_id = Column(String, nullable=False, index=True)
+    sku = Column(String, nullable=True)
+    nome_anuncio = Column(String, nullable=True)
+    tipo_promocao = Column(String, nullable=True)
+    preco_final = Column(Float, nullable=True)
+    voce_recebe = Column(Float, nullable=True)
+    custo = Column(Float, nullable=True)
+    lucro_liquido = Column(Float, nullable=True)
+    sucesso = Column(Boolean, nullable=False)
+    motivo = Column(Text, nullable=True)  # só preenchido quando sucesso=False
+    data_adesao = Column(DateTime, nullable=False, index=True)  # quando a adesão aconteceu (não quando chegou ao servidor)
+    criado_em = Column(DateTime, default=datetime.utcnow)  # quando ESTA linha foi gravada no servidor (diagnóstico de atraso de fila)
 
 
 class HistoricoConfigIA(Base):
