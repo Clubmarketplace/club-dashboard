@@ -36,6 +36,7 @@
     .ci-btn:disabled { opacity:.5; cursor:default; }
     .ci-btn-claro { background:#fff; color:#1b2430; border-color:#d5dbe1; }
     .ci-aviso { font-size:13.5px; border-radius:10px; padding:10px 12px; display:none; margin:0 0 14px; }
+    .ci-saude { font-size:13.5px; border-radius:10px; padding:10px 12px; display:none; margin:0 0 14px; background:#fdecea; color:#8a1f11; border:1px solid #f0c9bd; font-weight:600; }
     .ci-hist { width:100%; border-collapse:collapse; font-size:13px; }
     .ci-hist th, .ci-hist td { text-align:left; padding:8px 10px; border-top:1px solid #eef1f4; vertical-align:top; }
     .ci-hist th { color:#5b6776; font-size:12px; text-transform:uppercase; letter-spacing:.04em; border-top:none; }
@@ -81,6 +82,7 @@
       </header>
 
       <main>
+        <p class="ci-saude" id="ci-saude" role="alert"></p>
         <p class="ci-aviso" id="ci-aviso" role="status"></p>
         <div class="ci-grade">
           <section class="ci-card" aria-labelledby="t-status">
@@ -166,7 +168,7 @@
     </div>
   </div>
 
-  <script src="/static/calibrar-ia.js?v=2"></script>
+  <script src="/static/calibrar-ia.js?v=3"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
