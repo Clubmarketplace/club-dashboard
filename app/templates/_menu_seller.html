@@ -21,7 +21,7 @@
 {%- endmacro %}
 
 {# Fica aberto se a página atual já é uma das sub-telas, senão começa fechado. #}
-{% set _produtos_aberto = _caminho in ["/produtos/lista", "/custos"] %}
+{% set _produtos_aberto = _caminho in ["/produtos/lista", "/custos", "/historico-adesoes"] %}
 {% set _vendas_aberto = _caminho in ["/vendas", "/vendas/consulta"] %}
 
 {# Quem vê a sanfona "Vendas". `papel_logado` vem do contexto da página
@@ -67,6 +67,7 @@
   <div class="cmx-nav-submenu{% if _produtos_aberto %} cmx-nav-submenu--aberta{% endif %}" id="cmx-produtos-submenu">
     {{ subitem("/produtos/lista", "Lista") }}
     {{ subitem("/custos", "Custos") }}
+    {{ subitem("/historico-adesoes", "Histórico de adesões") }}
   </div>
   <script>
     (function () {

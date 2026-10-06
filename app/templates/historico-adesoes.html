@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Club Marketplace — Histórico de adesões</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/static/dashboard.css?v=7" />
+<style>
+  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; }
+  main { max-width:1120px; margin:0 auto; padding:28px 24px 60px; }
+
+  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+  .cartao h2 { margin:0 0 4px; font-size:16px; }
+  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
+
+  .linha-filtros { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+  .linha-filtros .campo { display:flex; flex-direction:column; gap:5px; }
+  .linha-filtros label { font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); }
+  .linha-filtros input[type="text"], .linha-filtros input[type="date"] {
+    padding:10px 12px; border:1px solid var(--cmx-borda); border-radius:9px; font-size:14px; font-family:inherit;
+  }
+  .campo-busca { flex:1 1 220px; }
+  .btn { border:none; border-radius:9px; padding:11px 18px; font-size:13.5px; font-weight:700; font-family:inherit; cursor:pointer; white-space:nowrap; }
+  .btn-primario { background:#1b2430; color:#fff; }
+  .btn-primario:hover { background:#111826; }
+  .btn-secundario { background:#eef1f4; color:#1b2430; }
+  .btn-secundario:hover { background:#e2e6eb; }
+  .btn:disabled { opacity:.55; cursor:default; }
+
+  table { width:100%; border-collapse:collapse; font-size:13.5px; margin-top:16px; }
+  thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:10px 12px; border-bottom:1px solid var(--cmx-borda); }
+  tbody td { padding:10px 12px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+  tbody tr:last-child td { border-bottom:none; }
+  tbody tr:hover { background:#fafbfc; }
+  .col-numero { text-align:right; white-space:nowrap; }
+  .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+  .tag-ok, .tag-falhou { display:inline-block; font-size:10.5px; font-weight:700; padding:2px 7px; border-radius:6px; }
+  .tag-ok { background:#e3f5ec; color:var(--green); }
+  .tag-falhou { background:#fbe3dd; color:var(--vermelho); }
+  .quem { font-size:11.5px; color:var(--cmx-texto-suave); }
+  .rodape-paginacao { display:flex; justify-content:space-between; align-items:center; margin-top:14px; font-size:13px; color:var(--cmx-texto-suave); }
+  .rodape-paginacao .botoes { display:flex; gap:8px; }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">{{ papel_logado | default("seller") }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Histórico de adesões</h1>
+          <p class="cmx-subtitulo">Toda adesão a promoção feita pelo Sistema de Precificação, de qualquer computador/login desta conta -- mostra os últimos 10 dias por padrão</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="cartao">
+          <h2>Filtrar</h2>
+          <p class="sub">Por padrão mostra os últimos 10 dias. Peça um período maior nos campos de data se precisar (até 90 dias de uma vez).</p>
+          <div class="linha-filtros">
+            <div class="campo">
+              <label for="filtro-desde">De</label>
+              <input type="date" id="filtro-desde" />
+            </div>
+            <div class="campo">
+              <label for="filtro-ate">Até</label>
+              <input type="date" id="filtro-ate" />
+            </div>
+            <div class="campo campo-busca">
+              <label for="filtro-busca">Pesquisar (nome, SKU, item ID ou usuário)</label>
+              <input type="text" id="filtro-busca" placeholder="Ex: ABC-123, 123456789, Maria..." />
+            </div>
+            <button class="btn btn-primario" id="btn-filtrar">Filtrar</button>
+            <button class="btn btn-secundario" id="btn-limpar-filtro">Limpar</button>
+          </div>
+        </div>
+
+        <div class="cartao">
+          <div id="carregando" class="sub">Carregando...</div>
+          <table id="tabela-resultados" style="display:none;">
+            <thead>
+              <tr>
+                <th>Quando</th>
+                <th>Anúncio</th>
+                <th>SKU / Item</th>
+                <th>Promoção</th>
+                <th class="col-numero">Preço</th>
+                <th class="col-numero">Lucro</th>
+                <th>Resultado</th>
+                <th>Quem fez</th>
+              </tr>
+            </thead>
+            <tbody id="corpo-resultados"></tbody>
+          </table>
+          <div class="vazio" id="mensagem-vazia" style="display:none;">Nenhuma adesão encontrada nesse período/filtro.</div>
+          <div class="rodape-paginacao" id="rodape-paginacao" style="display:none;">
+            <span id="texto-paginacao"></span>
+            <div class="botoes">
+              <button class="btn btn-secundario" id="btn-pagina-anterior">‹ Anterior</button>
+              <button class="btn btn-secundario" id="btn-pagina-proxima">Próxima ›</button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script src="/static/historico-adesoes.js?v=1"></script>
+</body>
+</html>
