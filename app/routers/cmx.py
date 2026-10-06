@@ -15,12 +15,13 @@ escolher nada. Se o admin desativar o usuário (Usuario.ativo = False)
 ou remover a conta vinculada, o próximo /api/cmx/validar já nega, e a
 extensão para de funcionar pra essa pessoa.
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app import auth, ml_client
@@ -29,7 +30,7 @@ from app.config import CMX_ML_CLIENT_ID, CMX_ML_CLIENT_SECRET
 from app.contas_util import chave_conta
 from app.custos_log import registrar_log_custo
 from app.database import get_db
-from app.models import Conta, CustoSku, Usuario, VariavelConta
+from app.models import Conta, CustoSku, EventoAdesaoCmx, Usuario, VariavelConta
 
 CMX_ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
 
@@ -575,3 +576,226 @@ def token_ml_da_conta_vinculada(
         "apelido": conta.apelido,
         "expira_em_segundos": expira_em_segundos,
     }
+
+
+# --- Histórico de adesões (cópia no servidor) ----------------------------
+#
+# A extensão continua gravando a cópia LOCAL do histórico (chrome.storage,
+# inalterada) -- isto aqui é uma SEGUNDA cópia, enviada em segundo plano
+# (sem travar a tela de Promoções), pra alimentar a página "Produtos >
+# Histórico de adesões" do painel: sobrevive a desinstalar a extensão,
+# junta os registros de vários logins/PCs na mesma conta, e é pesquisável
+# no servidor. Ver app/models.py:EventoAdesaoCmx pro desenho completo
+# (idempotência via id_envio, índice composto conta_id+data_adesao).
+
+CMX_HISTORICO_LOTE_MAXIMO = 500  # trava de segurança no tamanho de 1 requisição -- a extensão já manda em lotes de até 200
+CMX_HISTORICO_DIAS_PADRAO = 10  # janela padrão da consulta quando a extensão/painel não pedem um período específico
+CMX_HISTORICO_DIAS_MAXIMO = 90  # mesmo pedindo um período maior, nunca varre mais que isso (ver listar_historico_adesoes)
+CMX_HISTORICO_PAGINA_TAMANHO = 50
+
+
+class EventoAdesaoCmxEntrada(BaseModel):
+    id_envio: str
+    item_id: str
+    sku: str | None = None
+    nome: str | None = None
+    tipo_promocao: str | None = None
+    preco_final: float | None = None
+    voce_recebe: float | None = None
+    custo: float | None = None
+    lucro_liquido: float | None = None
+    sucesso: bool
+    motivo: str | None = None
+    data_adesao: datetime
+    maquina: str | None = None
+
+    @field_validator("id_envio", "item_id")
+    @classmethod
+    def _nao_vazio(cls, v: str) -> str:
+        v = (v or "").strip()
+        if not v:
+            raise ValueError("Campo obrigatório vazio.")
+        return v
+
+
+class HistoricoAdesoesEntrada(BaseModel):
+    itens: list[EventoAdesaoCmxEntrada]
+
+
+@router.post("/historico-adesoes")
+def gravar_historico_adesoes(
+    dados: HistoricoAdesoesEntrada,
+    usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
+):
+    """
+    Grava em lote os eventos de adesão que a extensão já registrou
+    localmente -- SEMPRE em lote (a extensão nunca manda 1 por chamada,
+    ver fila de retry no content.js/background.js), pra não virar N
+    requisições por lote de adesão com 100+ contas usando ao mesmo tempo.
+
+    IDEMPOTENTE por `id_envio`: a extensão reenvia o mesmo lote (com os
+    mesmos id_envio) quando uma tentativa anterior falhou por rede/timeout
+    -- aqui, qualquer id_envio que já exista pra esta conta é simplesmente
+    ignorado (não duplica, não sobrescreve), em vez de dar erro. Isolado
+    pela conta vinculada ao login, igual a toda outra rota deste arquivo
+    -- nunca grava em outra conta, mesmo que o payload tentasse.
+    """
+    if not dados.itens:
+        raise HTTPException(status_code=400, detail="Nenhum item enviado.")
+    if len(dados.itens) > CMX_HISTORICO_LOTE_MAXIMO:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Lote grande demais ({len(dados.itens)} itens) -- envie no máximo {CMX_HISTORICO_LOTE_MAXIMO} por chamada.",
+        )
+
+    conta = _conta_vinculada_do_usuario(usuario, db)
+
+    ids_recebidos = [item.id_envio for item in dados.itens]
+    ja_existentes = {
+        row[0]
+        for row in db.query(EventoAdesaoCmx.id_envio)
+        .filter(EventoAdesaoCmx.conta_id == conta.id, EventoAdesaoCmx.id_envio.in_(ids_recebidos))
+        .all()
+    }
+
+    novos = 0
+    ja_tinha = 0
+    vistos_neste_lote: set[str] = set()  # o mesmo lote pode repetir um id_envio (bug do cliente) -- não duplica também
+    for item in dados.itens:
+        if item.id_envio in ja_existentes or item.id_envio in vistos_neste_lote:
+            ja_tinha += 1
+            continue
+        vistos_neste_lote.add(item.id_envio)
+        db.add(
+            EventoAdesaoCmx(
+                id_envio=item.id_envio,
+                conta_id=conta.id,
+                usuario=usuario.nome_exibicao,
+                maquina=item.maquina,
+                item_id=item.item_id,
+                sku=item.sku,
+                nome_anuncio=item.nome,
+                tipo_promocao=item.tipo_promocao,
+                preco_final=item.preco_final,
+                voce_recebe=item.voce_recebe,
+                custo=item.custo,
+                lucro_liquido=item.lucro_liquido,
+                sucesso=item.sucesso,
+                motivo=item.motivo,
+                data_adesao=item.data_adesao,
+            )
+        )
+        novos += 1
+
+    try:
+        db.commit()
+    except IntegrityError:
+        # Rede de segurança: duas requisições com o mesmo id_envio chegando
+        # em paralelo (ex: aba duplicada) poderiam colidir na UNIQUE do
+        # banco entre a checagem acima e o commit. Não é erro de verdade
+        # pro cliente -- só significa que outra tentativa já gravou
+        # primeiro; a extensão trata qualquer "sucesso" como "pode tirar
+        # da fila".
+        db.rollback()
+
+    return {"recebidos": len(dados.itens), "gravados": novos, "ja_existentes": ja_tinha}
+
+
+def _serializar_evento_adesao(e: EventoAdesaoCmx) -> dict:
+    return {
+        "id_envio": e.id_envio,
+        "usuario": e.usuario,
+        "maquina": e.maquina,
+        "item_id": e.item_id,
+        "sku": e.sku,
+        "nome": e.nome_anuncio,
+        "tipo_promocao": e.tipo_promocao,
+        "preco_final": e.preco_final,
+        "voce_recebe": e.voce_recebe,
+        "custo": e.custo,
+        "lucro_liquido": e.lucro_liquido,
+        "sucesso": e.sucesso,
+        "motivo": e.motivo,
+        "data_adesao": e.data_adesao.isoformat() if e.data_adesao else None,
+    }
+
+
+def consultar_historico_adesoes(
+    conta: Conta,
+    db: Session,
+    desde: datetime | None,
+    ate: datetime | None,
+    busca: str,
+    pagina: int,
+) -> dict:
+    """
+    Lógica da consulta paginada de histórico, compartilhada pelas duas
+    rotas que a expõem (extensão, Bearer, abaixo; e painel, cookie, em
+    app/routers/historico_adesoes_painel.py) -- mesma conta, mesma regra,
+    só muda de onde vem o usuário logado.
+
+    Por desempenho com 100+ contas, a janela de data é OBRIGATÓRIA (nunca
+    varre a tabela inteira): sem `desde`, assume os últimos
+    CMX_HISTORICO_DIAS_PADRAO dias; mesmo pedindo um período maior, o
+    início nunca passa de CMX_HISTORICO_DIAS_MAXIMO dias atrás -- quem
+    quiser mais do que isso precisa pedir em partes. Sempre paginado
+    (CMX_HISTORICO_PAGINA_TAMANHO por página) e sempre com o índice
+    composto (conta_id, data_adesao) cobrindo o filtro principal.
+    """
+    agora = datetime.utcnow()
+    limite_mais_antigo = agora - timedelta(days=CMX_HISTORICO_DIAS_MAXIMO)
+    inicio = desde or (agora - timedelta(days=CMX_HISTORICO_DIAS_PADRAO))
+    if inicio < limite_mais_antigo:
+        inicio = limite_mais_antigo
+    fim = ate or agora
+
+    consulta = db.query(EventoAdesaoCmx).filter(
+        EventoAdesaoCmx.conta_id == conta.id,
+        EventoAdesaoCmx.data_adesao >= inicio,
+        EventoAdesaoCmx.data_adesao <= fim,
+    )
+
+    termo = (busca or "").strip()
+    if termo:
+        termo_like = f"%{termo}%"
+        consulta = consulta.filter(
+            (EventoAdesaoCmx.nome_anuncio.ilike(termo_like))
+            | (EventoAdesaoCmx.sku.ilike(termo_like))
+            | (EventoAdesaoCmx.item_id.ilike(termo_like))
+            | (EventoAdesaoCmx.usuario.ilike(termo_like))
+        )
+
+    pagina = max(1, pagina)
+    total = consulta.count()
+    itens = (
+        consulta.order_by(EventoAdesaoCmx.data_adesao.desc())
+        .offset((pagina - 1) * CMX_HISTORICO_PAGINA_TAMANHO)
+        .limit(CMX_HISTORICO_PAGINA_TAMANHO)
+        .all()
+    )
+
+    return {
+        "conta": _serializar_conta(conta),
+        "desde": inicio.isoformat(),
+        "ate": fim.isoformat(),
+        "pagina": pagina,
+        "tamanho_pagina": CMX_HISTORICO_PAGINA_TAMANHO,
+        "total": total,
+        "total_paginas": (total + CMX_HISTORICO_PAGINA_TAMANHO - 1) // CMX_HISTORICO_PAGINA_TAMANHO if total else 0,
+        "itens": [_serializar_evento_adesao(e) for e in itens],
+    }
+
+
+@router.get("/historico-adesoes")
+def listar_historico_adesoes(
+    desde: datetime | None = None,
+    ate: datetime | None = None,
+    busca: str = "",
+    pagina: int = 1,
+    usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
+):
+    """Mesma consulta de consultar_historico_adesoes, pelo login da extensão (Bearer token)."""
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    return consultar_historico_adesoes(conta, db, desde, ate, busca, pagina)
