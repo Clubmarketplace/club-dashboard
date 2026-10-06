@@ -54,6 +54,7 @@ def gerar_sugestao_pos_venda(texto_mensagem: str, tipo: str) -> str | None:
         "específico."
     )
 
+    from app import saude_ia
     try:
         resposta = cliente.messages.create(
             model=CLAUDE_MODEL_PRE_VENDA,
@@ -63,7 +64,9 @@ def gerar_sugestao_pos_venda(texto_mensagem: str, tipo: str) -> str | None:
         )
     except Exception as exc:
         logger.error("Falha ao gerar sugestão de pós-venda: %s", exc)
+        saude_ia.registrar_falha(str(exc))
         return None
+    saude_ia.registrar_sucesso()
 
     texto = "".join(
         bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
@@ -93,6 +96,7 @@ def gerar_sugestao_cancelamento(texto_pedido: str) -> str | None:
         "será revisada por um atendente antes de qualquer envio."
     )
 
+    from app import saude_ia
     try:
         resposta = cliente.messages.create(
             model=CLAUDE_MODEL_PRE_VENDA,
@@ -102,7 +106,9 @@ def gerar_sugestao_cancelamento(texto_pedido: str) -> str | None:
         )
     except Exception as exc:
         logger.error("Falha ao gerar sugestão de cancelamento: %s", exc)
+        saude_ia.registrar_falha(str(exc))
         return None
+    saude_ia.registrar_sucesso()
 
     texto = "".join(
         bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
