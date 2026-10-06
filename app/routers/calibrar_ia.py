@@ -11,7 +11,7 @@ import json
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app import auth, config_ia
+from app import auth, config_ia, saude_ia
 from app.database import get_db
 from app.models import HistoricoConfigIA
 
@@ -43,12 +43,20 @@ def _historico(db: Session, limite: int = 40) -> list[dict]:
     return saida
 
 
+def _saude() -> dict | None:
+    falha = saude_ia.falha_atual()
+    if not falha:
+        return None
+    return {"desde": falha["desde"].isoformat() + "Z", "motivo": falha["motivo"]}
+
+
 def _resposta(db: Session) -> dict:
     return {
         "config": config_ia.obter(forcar=True),
         "padroes": config_ia.padroes(),
         "degraus": [{"chave": k, "nome": n} for k, n in config_ia.DEGRAUS],
         "historico": _historico(db),
+        "saude": _saude(),
     }
 
 
