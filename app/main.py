@@ -286,15 +286,11 @@ async def exigir_login(request: Request, call_next):
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
         "/taxas",
         "/historico-adesoes", "/api/painel/historico-adesoes",
+        # Tela "Vendas" (Resumo + Consulta): liberada pra seller e suporte
+        # (07/10) -- antes só o "suporte" entrava, pra testar com a conta
+        # do seller primeiro.
+        "/vendas", "/vendas/consulta",
     }
-    # Tela "Vendas" (Resumo + Consulta) e a API dela: EM AJUSTE -- por
-    # enquanto só o perfil "suporte" entra (pra testar com a conta do
-    # seller). Esconder só o item do menu não bastaria, porque quem
-    # souber a URL abriria; o bloqueio de verdade é aqui. Quando a tela
-    # for liberada pros sellers, basta tirar esta separação (voltar
-    # "/vendas", "/vendas/consulta" e "/api/painel/vendas" pra lista de
-    # cima) e ajustar _mostra_vendas em _menu_seller.html.
-    _ROTAS_VENDAS_SO_SUPORTE = {"/vendas", "/vendas/consulta"}
 
     with SessionLocal() as db:
         usuario_logado = db.query(Usuario).filter(Usuario.id == usuario_id).first()
@@ -304,13 +300,10 @@ async def exigir_login(request: Request, call_next):
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
         or caminho.startswith("/api/painel/custos/")
         or caminho.startswith("/api/painel/taxas")
+        or caminho.startswith("/api/painel/vendas")
     )
-    _eh_rota_vendas = caminho in _ROTAS_VENDAS_SO_SUPORTE or caminho.startswith("/api/painel/vendas")
-    if papel == "suporte" and _eh_rota_vendas:
-        _seller_liberado = True
 
-    # Seller e suporte passam pelas mesmas portas (a diferença é só quem
-    # é a pessoa) -- exceto Vendas, liberada só pro suporte por ora.
+    # Seller e suporte passam pelas mesmas portas (a diferença é só quem é a pessoa).
     if papel in PAPEIS_PAINEL_SELLER and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
@@ -732,19 +725,22 @@ def pagina_meus_cancelamentos(request: Request):
 
 
 def _listar_usuarios_visiveis(db, usuario_logado):
-    """Cada um vê só quem pode gerenciar (admin: todos; supervisor: atendentes e sellers) -- mesma regra de criar/editar/resetar/desativar."""
+    """Cada um vê só quem pode gerenciar (admin: todos; supervisor: atendentes e sellers) -- mesma regra de criar/editar/resetar/desativar.
+    Ordem alfabética pura pelo nome de exibição (ignorando maiúsculas/minúsculas) --
+    antes agrupava por papel primeiro (ver pedido do usuário, 07/10)."""
     query = db.query(Usuario)
     if usuario_logado.papel != "admin":
         query = query.filter(Usuario.papel.in_(PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())))
-    return query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
+    return query.order_by(func.lower(Usuario.nome_exibicao)).all()
 
 
 def _contas_disponiveis(db):
     """Lista real de contas cadastradas (não inativadas), pro <select> de
     "Conta vinculada" -- antes era texto livre, o que deixava passar erro de
     digitação/espaço e gerava usuário apontando pra uma conta que não existe
-    (ver pedido do usuário, 07/10). Só lista, nunca apaga nada."""
-    return db.query(Conta).filter(Conta.inativa_em.is_(None)).order_by(Conta.apelido).all()
+    (ver pedido do usuário, 07/10). Ordem alfabética ignorando maiúsculas/
+    minúsculas. Só lista, nunca apaga nada."""
+    return db.query(Conta).filter(Conta.inativa_em.is_(None)).order_by(func.lower(Conta.apelido)).all()
 
 
 @app.get("/usuarios", response_class=HTMLResponse)
