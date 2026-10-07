@@ -188,7 +188,12 @@ Use esse código uma vez só, pra criar sua senha pessoal.</div>
                 </div>
                 <div class="pa-campo-conta" id="bloco-conta">
                   <label>Conta vinculada</label>
-                  <input type="text" name="conta_vinculada" id="campo-conta" placeholder="Ex: Velasco" />
+                  <select name="conta_vinculada" id="campo-conta">
+                    <option value="">Selecione a conta…</option>
+                    {% for conta in contas_disponiveis %}
+                    <option value="{{ conta.apelido }}">{{ conta.apelido }}</option>
+                    {% endfor %}
+                  </select>
                 </div>
                 <div>
                   <button type="submit" class="pa-criar">Criar e gerar código</button>

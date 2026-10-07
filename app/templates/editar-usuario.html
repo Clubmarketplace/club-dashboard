@@ -111,7 +111,15 @@
 
             <div class="eu-campo-conta" id="bloco-conta">
               <label>Conta vinculada (Mercado Livre / Shopee)</label>
-              <input type="text" name="conta_vinculada" id="campo-conta" value="{{ alvo.conta_vinculada or '' }}" />
+              <select name="conta_vinculada" id="campo-conta">
+                <option value="">Selecione a conta…</option>
+                {% for conta in contas_disponiveis %}
+                <option value="{{ conta.apelido }}" {% if alvo.conta_vinculada == conta.apelido %}selected{% endif %}>{{ conta.apelido }}</option>
+                {% endfor %}
+                {% if alvo.conta_vinculada and alvo.conta_vinculada not in contas_disponiveis|map(attribute="apelido")|list %}
+                <option value="{{ alvo.conta_vinculada }}" selected>{{ alvo.conta_vinculada }} (não encontrada/inativa)</option>
+                {% endif %}
+              </select>
               <div class="eu-dica">É a conta que esse usuário vê em "Meus Cancelamentos".</div>
             </div>
 
