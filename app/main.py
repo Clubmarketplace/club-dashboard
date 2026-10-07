@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, or_
-from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta
+from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
@@ -739,6 +739,14 @@ def _listar_usuarios_visiveis(db, usuario_logado):
     return query.order_by(Usuario.papel, Usuario.nome_exibicao).all()
 
 
+def _contas_disponiveis(db):
+    """Lista real de contas cadastradas (não inativadas), pro <select> de
+    "Conta vinculada" -- antes era texto livre, o que deixava passar erro de
+    digitação/espaço e gerava usuário apontando pra uma conta que não existe
+    (ver pedido do usuário, 07/10). Só lista, nunca apaga nada."""
+    return db.query(Conta).filter(Conta.inativa_em.is_(None)).order_by(Conta.apelido).all()
+
+
 @app.get("/usuarios", response_class=HTMLResponse)
 def pagina_listar_usuarios(request: Request):
     """
@@ -757,7 +765,12 @@ def pagina_listar_usuarios(request: Request):
         return templates.TemplateResponse(
             request=request,
             name="usuarios.html",
-            context={"papel_logado": usuario_logado.papel, "usuarios": usuarios, "usuario_logado": usuario_logado},
+            context={
+                "papel_logado": usuario_logado.papel,
+                "usuarios": usuarios,
+                "usuario_logado": usuario_logado,
+                "contas_disponiveis": _contas_disponiveis(db),
+            },
         )
 
 
@@ -824,6 +837,7 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
                 "papel_logado": usuario_logado.papel,
                 "usuarios": usuarios,
                 "usuario_logado": usuario_logado,
+                "contas_disponiveis": _contas_disponiveis(db),
                 "reset_sucesso": {"usuario": alvo.usuario, "nome_exibicao": alvo.nome_exibicao, "codigo": codigo},
             },
         )
@@ -845,7 +859,13 @@ def pagina_editar_usuario(usuario_id: int, request: Request):
         return templates.TemplateResponse(
             request=request,
             name="editar-usuario.html",
-            context={"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "alvo": alvo, "erro": None},
+            context={
+                "papel_logado": usuario_logado.papel,
+                "usuario_logado": usuario_logado,
+                "alvo": alvo,
+                "erro": None,
+                "contas_disponiveis": _contas_disponiveis(db),
+            },
         )
 
 
@@ -871,7 +891,12 @@ def editar_usuario(
         # Mesma regra de criar: supervisor só atribui "atendente" ou "seller", mesmo
         # que tentem forçar outro valor mexendo no HTML.
         papeis_permitidos = PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
-        contexto_erro = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "alvo": alvo}
+        contexto_erro = {
+            "papel_logado": usuario_logado.papel,
+            "usuario_logado": usuario_logado,
+            "alvo": alvo,
+            "contas_disponiveis": _contas_disponiveis(db),
+        }
 
         if papel not in papeis_permitidos:
             return templates.TemplateResponse(
@@ -924,7 +949,12 @@ def criar_usuario(
         # outro valor mexendo no HTML -- a checagem de verdade é aqui,
         # no servidor, nunca só no <select> da tela.
         papeis_que_esse_criador_pode_atribuir = PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
-        contexto_base = {"papel_logado": usuario_logado.papel, "usuario_logado": usuario_logado, "usuarios": _listar_usuarios_visiveis(db, usuario_logado)}
+        contexto_base = {
+            "papel_logado": usuario_logado.papel,
+            "usuario_logado": usuario_logado,
+            "usuarios": _listar_usuarios_visiveis(db, usuario_logado),
+            "contas_disponiveis": _contas_disponiveis(db),
+        }
 
         if papel not in papeis_que_esse_criador_pode_atribuir:
             return templates.TemplateResponse(
@@ -980,6 +1010,7 @@ def criar_usuario(
                 "papel_logado": usuario_logado.papel,
                 "usuario_logado": usuario_logado,
                 "usuarios": _listar_usuarios_visiveis(db, usuario_logado),
+                "contas_disponiveis": _contas_disponiveis(db),
                 "criar_sucesso": {"usuario": novo_usuario.usuario, "nome_exibicao": novo_usuario.nome_exibicao, "papel": novo_usuario.papel, "codigo": codigo},
             },
         )
