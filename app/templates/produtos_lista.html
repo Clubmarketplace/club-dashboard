@@ -156,7 +156,7 @@
             <div class="rotulo">Valor total de estoque (custo)</div>
             <div class="valor" id="card-valor-total">-</div>
           </div>
-          <div class="card-resumo alerta">
+          <div class="card-resumo alerta clicavel" id="card-sem-estoque-clicavel" title="Clique pra ver só esses">
             <div class="rotulo">Produtos sem estoque</div>
             <div class="valor" id="card-sem-estoque">-</div>
           </div>
@@ -185,7 +185,7 @@
           </div>
           <p class="sub" id="estoque-atualizado-em" style="margin-top:8px;"></p>
           <p class="sub" id="filtro-ativo-aviso" style="display:none; margin-top:2px;">
-            Mostrando só SKUs sem custo cadastrado. <a href="#" id="link-limpar-filtro">Ver todos</a>
+            Mostrando só <span id="filtro-ativo-texto">SKUs sem custo cadastrado</span>. <a href="#" id="link-limpar-filtro">Ver todos</a>
           </p>
 
           <table id="tabela-resultados" style="display:none;">
