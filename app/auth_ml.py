@@ -55,6 +55,14 @@ def listar_contas_conectadas(db: Session = Depends(get_db)):
             "token_expirado": bool(c.token_expira_em and c.token_expira_em < agora),
             "conectada_em": c.conectada_em.isoformat() if c.conectada_em else None,
             "token_expira_em": c.token_expira_em.isoformat() if c.token_expira_em else None,
+            # 08/10: se o app ClubMarketplaceX (promoções) dessa conta já tem
+            # client_id/client_secret cadastrados no servidor -- usado pra
+            # mostrar o selo e o client_id na tela "Contas" (ver
+            # app/routers/cmx.py, rota /api/cmx/admin/app-promocoes/{apelido},
+            # que é quem grava isso). O client_secret NUNCA é devolvido aqui
+            # (nem pra tela do admin) -- só existe no banco do servidor.
+            "cmx_configurado": bool(c.cmx_client_id),
+            "cmx_client_id": c.cmx_client_id,
         }
         for c in contas
     ]
