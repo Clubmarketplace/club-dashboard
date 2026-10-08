@@ -94,7 +94,7 @@ function renderizarTabela(todas) {
 
   if (contas.length === 0) {
     corpo.innerHTML = `
-      <tr><td colspan="7" style="text-align:center; color: var(--cmx-texto-suave);">
+      <tr><td colspan="6" style="text-align:center; color: var(--cmx-texto-suave);">
         Nenhuma conta cadastrada ainda. Use o formulário acima pra conectar a primeira.
       </td></tr>`;
     return;
@@ -115,7 +115,6 @@ function renderizarTabela(todas) {
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
-      <td id="cmx-celula-${conta.id}">${montarVisaoCmx(conta)}</td>
       <td>${botaoDesconectar}${botaoInativar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
@@ -130,52 +129,107 @@ function renderizarTabela(todas) {
   corpo.querySelectorAll("[data-inativar]").forEach((botao) => {
     botao.addEventListener("click", () => inativarConta(botao));
   });
+}
+
+// --- Credenciais do app ClubMarketplace (promoções), tabela própria ------
+// 08/10: cadastro de client_id/client_secret tem sua própria tabela nessa
+// tela ("Credenciais ClubMarketplace (Promoções)"), separada da tabela
+// "Contas cadastradas" (que já tem muita coluna) -- mesmo padrão visual
+// da tabela "Progresso de autorização".
+let CONTAS_POR_ID = {};
+
+function renderizarCmxTabela(todas) {
+  const contas = todas.filter((c) => !c.inativa);
+  const corpo = document.querySelector("#tabela-cmx-credenciais tbody");
+  if (!corpo) return;
+  corpo.innerHTML = "";
+
+  if (contas.length === 0) {
+    corpo.innerHTML = `
+      <tr><td colspan="4" style="text-align:center; color: var(--cmx-texto-suave);">
+        Nenhuma conta cadastrada ainda.
+      </td></tr>`;
+    return;
+  }
+
+  for (const conta of contas) {
+    CONTAS_POR_ID[conta.id] = conta;
+    const linha = document.createElement("tr");
+    linha.id = `cmx-linha-${conta.id}`;
+    linha.innerHTML = montarLinhaCmxVisualizacao(conta);
+    corpo.appendChild(linha);
+  }
+
   corpo.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
     botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
   });
 }
 
-// --- Credencial do app ClubMarketplaceX (promoções), direto na linha -----
-// 08/10: cadastro de client_id/client_secret movido pra dentro da própria
-// linha da conta (um só lugar, junto com o status) em vez de um formulário
-// solto em outra parte da tela -- menos lugares pra procurar.
-let CONTAS_POR_ID = {};
-
-function montarVisaoCmx(conta) {
-  CONTAS_POR_ID[conta.id] = conta;
-  const selo = conta.cmx_configurado
-    ? `<span class="cmx-selo cmx-selo-encerrado">Configurado</span><div style="font-size:11px; color:var(--cmx-texto-suave); margin-top:3px; font-family:monospace;">ID: ${escaparHtml(conta.cmx_client_id)}</div>`
-    : `<span class="cmx-selo cmx-selo-aberto">Não configurado</span>`;
+function montarLinhaCmxVisualizacao(conta) {
+  const idTexto = conta.cmx_configurado
+    ? `<code style="font-size:12px;">${escaparHtml(conta.cmx_client_id)}</code>`
+    : `<span style="color:var(--cmx-texto-suave);">—</span>`;
+  const secretTexto = conta.cmx_configurado
+    ? `<span style="font-family:monospace; letter-spacing:2px; color:var(--cmx-texto-suave);">••••••••</span>`
+    : `<span style="color:var(--cmx-texto-suave);">—</span>`;
   const botao = EH_ADMIN
-    ? `<button type="button" class="cmx-botao-link-perigo" style="color:var(--cmx-azul,#2b6cb0); margin-top:4px;" data-configurar-cmx="${conta.id}">${conta.cmx_configurado ? "Editar" : "Configurar"}</button>`
-    : "";
-  return `${selo}${botao ? `<div>${botao}</div>` : ""}`;
+    ? `<button type="button" class="cmx-botao-link-perigo" style="color:var(--cmx-azul,#2b6cb0);" data-configurar-cmx="${conta.id}">${conta.cmx_configurado ? "Editar" : "Configurar"}</button>`
+    : "—";
+  return `
+    <td>${escaparHtml(conta.apelido)}</td>
+    <td>${idTexto}</td>
+    <td>${secretTexto}</td>
+    <td>${botao}</td>
+  `;
 }
 
 function abrirEdicaoCmx(contaId) {
   const conta = CONTAS_POR_ID[contaId];
-  const celula = document.getElementById(`cmx-celula-${contaId}`);
-  if (!conta || !celula) return;
-  celula.innerHTML = `
-    <div style="display:flex; flex-direction:column; gap:6px; min-width:200px;">
-      <input type="text" id="cmx-edit-id-${contaId}" placeholder="client_id" value="${escaparHtml(conta.cmx_client_id || "")}" autocomplete="off" style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px;" />
-      <div class="cmx-campo-senha">
-        <input type="password" id="cmx-edit-secret-${contaId}" placeholder="client_secret" autocomplete="off" style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px; width:100%;" />
-        <button type="button" class="cmx-botao-olho" onclick="alternarSenhaCmx('cmx-edit-secret-${contaId}', this)" aria-label="Mostrar client_secret">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-        </button>
-      </div>
-      <p id="cmx-edit-aviso-${contaId}" style="display:none; font-size:12px; color:var(--cmx-rust); margin:0;"></p>
-      <div style="display:flex; gap:6px;">
-        <button type="button" class="cmx-botao-primario" style="padding:6px 10px; font-size:13px;" data-salvar-cmx="${contaId}">Salvar</button>
-        <button type="button" class="cmx-botao-secundario" style="padding:6px 10px; font-size:13px;" data-cancelar-cmx="${contaId}">Cancelar</button>
-      </div>
-    </div>
+  const linha = document.getElementById(`cmx-linha-${contaId}`);
+  if (!conta || !linha) return;
+  linha.innerHTML = `
+    <td>${escaparHtml(conta.apelido)}</td>
+    <td colspan="3">
+      <form autocomplete="off" style="display:flex; flex-wrap:wrap; align-items:flex-start; gap:10px;">
+        <input type="text" style="display:none;" />
+        <input type="password" style="display:none;" />
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:11px; font-weight:600; color:var(--cmx-texto-suave);">client_id</label>
+          <input type="text" id="cmx-edit-id-${contaId}" name="cmx_client_id_${contaId}" placeholder="client_id" value="${escaparHtml(conta.cmx_client_id || "")}" autocomplete="off" data-lpignore="true" data-1p-ignore style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px; min-width:200px;" />
+        </div>
+        <div style="display:flex; flex-direction:column; gap:2px;">
+          <label style="font-size:11px; font-weight:600; color:var(--cmx-texto-suave);">client_secret</label>
+          <div class="cmx-campo-senha">
+            <input type="password" id="cmx-edit-secret-${contaId}" name="cmx_client_secret_${contaId}" placeholder="client_secret" autocomplete="new-password" data-lpignore="true" data-1p-ignore style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px; width:100%; min-width:200px;" />
+            <button type="button" class="cmx-botao-olho" onclick="alternarSenhaCmx('cmx-edit-secret-${contaId}', this)" aria-label="Mostrar client_secret">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+        </div>
+        <div style="display:flex; gap:6px; align-self:flex-end;">
+          <button type="button" class="cmx-botao-primario" style="padding:6px 10px; font-size:13px;" data-salvar-cmx="${contaId}">Salvar</button>
+          <button type="button" class="cmx-botao-secundario" style="padding:6px 10px; font-size:13px;" data-cancelar-cmx="${contaId}">Cancelar</button>
+        </div>
+      </form>
+      <p id="cmx-edit-aviso-${contaId}" style="display:none; font-size:12px; color:var(--cmx-rust); margin:6px 0 0;"></p>
+    </td>
   `;
-  celula.querySelector(`[data-salvar-cmx="${contaId}"]`).addEventListener("click", () => salvarCmxLinha(contaId));
-  celula.querySelector(`[data-cancelar-cmx="${contaId}"]`).addEventListener("click", () => {
-    celula.innerHTML = montarVisaoCmx(conta);
-    celula.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
+  // O navegador às vezes preenche sozinho um campo de texto vazio/parecido
+  // com login com o último usuário salvo (ex: "Admin") -- limpa de novo
+  // logo depois, só se não tiver sido um valor que a gente mesmo colocou
+  // (client_id já cadastrado).
+  setTimeout(() => {
+    const campoId = document.getElementById(`cmx-edit-id-${contaId}`);
+    if (campoId && campoId.value && campoId.value !== (conta.cmx_client_id || "") && !campoId.value.startsWith(String(conta.cmx_client_id || "\u0000"))) {
+      campoId.value = conta.cmx_client_id || "";
+    }
+    const campoSecret = document.getElementById(`cmx-edit-secret-${contaId}`);
+    if (campoSecret) campoSecret.value = "";
+  }, 60);
+  linha.querySelector(`[data-salvar-cmx="${contaId}"]`).addEventListener("click", () => salvarCmxLinha(contaId));
+  linha.querySelector(`[data-cancelar-cmx="${contaId}"]`).addEventListener("click", () => {
+    linha.innerHTML = montarLinhaCmxVisualizacao(conta);
+    linha.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
       botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
     });
   });
@@ -207,9 +261,9 @@ async function salvarCmxLinha(contaId) {
 
     conta.cmx_configurado = true;
     conta.cmx_client_id = dados.cmx_client_id;
-    const celula = document.getElementById(`cmx-celula-${contaId}`);
-    celula.innerHTML = montarVisaoCmx(conta);
-    celula.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
+    const linha = document.getElementById(`cmx-linha-${contaId}`);
+    linha.innerHTML = montarLinhaCmxVisualizacao(conta);
+    linha.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
       botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
     });
   } catch (erro) {
@@ -247,7 +301,9 @@ function renderizarInativas(inativas) {
 }
 
 async function recarregarContas() {
-  renderizarTabela(await carregarContas());
+  const contas = await carregarContas();
+  renderizarTabela(contas);
+  renderizarCmxTabela(contas);
 }
 
 async function inativarConta(botao) {
@@ -326,6 +382,7 @@ async function desconectarConta(botao) {
     }
     const contas = await carregarContas();
     renderizarTabela(contas);
+    renderizarCmxTabela(contas);
   } catch (erro) {
     mostrarAviso("Não foi possível desconectar essa conta. Tente novamente.");
     console.error(erro);
@@ -356,6 +413,7 @@ async function excluirConta(botao) {
     }
     const contas = await carregarContas();
     renderizarTabela(contas);
+    renderizarCmxTabela(contas);
   } catch (erro) {
     mostrarAviso(erro.message || "Não foi possível excluir essa conta. Tente novamente.");
     console.error(erro);
@@ -371,7 +429,7 @@ function mostrarAviso(mensagem) {
   aviso.style.display = "block";
 }
 
-// --- Credencial do app ClubMarketplaceX (promoções), por conta -----------
+// --- Credencial do app ClubMarketplace (promoções), por conta -----------
 // 08/10: cada conta tem seu próprio client_id/client_secret, cadastrados
 // aqui (tela visual) em vez de precisar de curl/terminal. Chama a mesma
 // rota admin que já existia (app/routers/cmx.py), autenticada pelo cookie
@@ -389,34 +447,8 @@ function alternarSenhaCmx(idCampo, botao) {
   botao.setAttribute("aria-label", mostrando ? "Mostrar client_secret" : "Ocultar client_secret");
 }
 
-let CMX_CLIENT_ID_POR_APELIDO = {};
-
-function popularSelectContasCmx(contas) {
-  const select = document.getElementById("cmx-select-conta");
-  if (!select) return;
-  const valorAtual = select.value;
-  select.innerHTML = '<option value="">Selecione a conta...</option>';
-  CMX_CLIENT_ID_POR_APELIDO = {};
-  for (const conta of contas.filter((c) => !c.inativa)) {
-    const opcao = document.createElement("option");
-    opcao.value = conta.apelido;
-    opcao.textContent = conta.cmx_configurado ? `${conta.apelido} (já configurada)` : conta.apelido;
-    select.appendChild(opcao);
-    if (conta.cmx_configurado) CMX_CLIENT_ID_POR_APELIDO[conta.apelido] = conta.cmx_client_id;
-  }
-  if (valorAtual) select.value = valorAtual;
-}
-
-function avisarCmxCredenciais(texto, erro) {
-  const aviso = document.getElementById("cmx-credenciais-aviso");
-  if (!aviso) return;
-  aviso.textContent = texto;
-  aviso.style.display = texto ? "block" : "none";
-  aviso.style.color = erro ? "var(--cmx-rust)" : "var(--cmx-verde)";
-}
-
 async function inicializar() {
-  // Cadastro de credencial do app ClubMarketplaceX é ação administrativa
+  // Cadastro de credencial do app ClubMarketplace é ação administrativa
   // (o servidor também confere) -- esconde a seção pra quem não é admin.
   const secaoCmxCredenciais = document.getElementById("secao-cmx-credenciais");
   if (secaoCmxCredenciais && !EH_ADMIN) secaoCmxCredenciais.style.display = "none";
@@ -424,63 +456,10 @@ async function inicializar() {
   try {
     const contas = await carregarContas();
     renderizarTabela(contas);
-    popularSelectContasCmx(contas);
+    renderizarCmxTabela(contas);
   } catch (erro) {
     mostrarAviso("Não foi possível carregar as contas. Verifique se o backend está rodando.");
     console.error(erro);
-  }
-
-  const selectCmxConta = document.getElementById("cmx-select-conta");
-  if (selectCmxConta) {
-    // Ao escolher uma conta já configurada, mostra o client_id atual dela
-    // pra conferência (o client_secret nunca é mostrado -- fica só no
-    // servidor). Se o admin não mexer no campo, reenviar o formulário
-    // troca o client_id pelo mesmo valor; só o secret precisa ser
-    // preenchido de novo (ou reaproveitado se for o mesmo já cadastrado).
-    selectCmxConta.addEventListener("change", () => {
-      const apelido = selectCmxConta.value;
-      document.getElementById("cmx-input-client-id").value = CMX_CLIENT_ID_POR_APELIDO[apelido] || "";
-      document.getElementById("cmx-input-client-secret").value = "";
-      avisarCmxCredenciais("");
-    });
-  }
-
-  const formCmxCredenciais = document.getElementById("form-cmx-credenciais");
-  if (formCmxCredenciais) {
-    formCmxCredenciais.addEventListener("submit", async (evento) => {
-      evento.preventDefault();
-      const apelido = document.getElementById("cmx-select-conta").value;
-      const clientId = document.getElementById("cmx-input-client-id").value.trim();
-      const clientSecret = document.getElementById("cmx-input-client-secret").value.trim();
-      if (!apelido) { avisarCmxCredenciais("Selecione a conta.", true); return; }
-      if (!clientId || !clientSecret) { avisarCmxCredenciais("Preencha client_id e client_secret.", true); return; }
-
-      const botao = document.getElementById("btn-salvar-cmx-credenciais");
-      botao.disabled = true;
-      botao.textContent = "Salvando...";
-      try {
-        const resposta = await fetch(`/api/cmx/admin/app-promocoes/${encodeURIComponent(apelido)}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
-        });
-        const dados = await resposta.json().catch(() => ({}));
-        if (!resposta.ok) throw new Error(dados.detail || `status ${resposta.status}`);
-
-        avisarCmxCredenciais(`Credencial de "${dados.apelido}" salva com sucesso.`, false);
-        document.getElementById("cmx-input-client-id").value = "";
-        document.getElementById("cmx-input-client-secret").value = "";
-        const contasAtualizadas = await carregarContas();
-        renderizarTabela(contasAtualizadas);
-        popularSelectContasCmx(contasAtualizadas);
-        document.getElementById("cmx-select-conta").value = apelido;
-      } catch (erro) {
-        avisarCmxCredenciais("Não foi possível salvar: " + erro.message, true);
-      } finally {
-        botao.disabled = false;
-        botao.textContent = "Salvar credencial";
-      }
-    });
   }
 
   try {
