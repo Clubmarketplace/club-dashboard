@@ -26,7 +26,9 @@
   const cardSemCusto = document.getElementById("card-sem-custo");
   const cardTotalSkus = document.getElementById("card-total-skus");
   const cardSemCustoClicavel = document.getElementById("card-sem-custo-clicavel");
+  const cardSemEstoqueClicavel = document.getElementById("card-sem-estoque-clicavel");
   const filtroAtivoAviso = document.getElementById("filtro-ativo-aviso");
+  const filtroAtivoTexto = document.getElementById("filtro-ativo-texto");
   const linkLimparFiltro = document.getElementById("link-limpar-filtro");
 
   const formEdicao = document.getElementById("form-edicao");
@@ -44,8 +46,9 @@
   const btnFecharHistorico = document.getElementById("btn-fechar-historico");
 
   let editandoSkuOriginal = null; // null = criando novo
-  let ultimosItens = []; // última lista recebida do servidor, pra aplicar o filtro "sem custo" sem precisar buscar de novo
+  let ultimosItens = []; // última lista recebida do servidor, pra aplicar os filtros sem precisar buscar de novo
   let filtroSemCusto = false;
+  let filtroSemEstoque = false;
 
   function formatarMoeda(valor) {
     if (valor === null || valor === undefined) return "-";
@@ -180,11 +183,36 @@
     return "Estoque atualizado " + quando + ".";
   }
 
-  // Reaplica o filtro "só sem custo" (se estiver ativo) em cima da
-  // última lista recebida, sem precisar buscar no servidor de novo.
+  // Reaplica o filtro ativo (sem custo OU sem estoque -- nunca os dois
+  // juntos) em cima da última lista recebida, sem precisar buscar no
+  // servidor de novo. Também deixa visualmente claro qual filtro está
+  // ligado (selo "Filtrando" no card) e avisa quando já não sobra nada
+  // pra fazer nesse filtro (ex: todo mundo já tem custo cadastrado).
   function aplicarFiltroEExibir() {
-    filtroAtivoAviso.style.display = filtroSemCusto ? "block" : "none";
-    const itensExibidos = filtroSemCusto ? ultimosItens.filter(function (i) { return i.custo === null; }) : ultimosItens;
+    cardSemCustoClicavel.classList.toggle("filtro-ativo", filtroSemCusto);
+    cardSemEstoqueClicavel.classList.toggle("filtro-ativo", filtroSemEstoque);
+
+    let itensExibidos = ultimosItens;
+    if (filtroSemCusto) itensExibidos = ultimosItens.filter(function (i) { return i.custo === null; });
+    else if (filtroSemEstoque) itensExibidos = ultimosItens.filter(function (i) { return i.quantidade === 0; });
+
+    if (filtroSemCusto || filtroSemEstoque) {
+      filtroAtivoAviso.style.display = "flex";
+      if (itensExibidos.length === 0) {
+        filtroAtivoAviso.classList.add("tudo-ok");
+        filtroAtivoTexto.textContent = filtroSemCusto
+          ? "Prontinho! Nenhum SKU sem custo cadastrado."
+          : "Prontinho! Nenhum SKU sem estoque.";
+      } else {
+        filtroAtivoAviso.classList.remove("tudo-ok");
+        filtroAtivoTexto.textContent = filtroSemCusto
+          ? "Mostrando só SKUs sem custo cadastrado."
+          : "Mostrando só SKUs sem estoque.";
+      }
+    } else {
+      filtroAtivoAviso.style.display = "none";
+    }
+
     renderizarResultados(itensExibidos);
   }
 
@@ -198,7 +226,8 @@
   }
 
   function buscar() {
-    filtroSemCusto = false; // pesquisar por SKU sempre sai do modo "só sem custo"
+    filtroSemCusto = false; // pesquisar por SKU sempre sai dos filtros "só sem custo/sem estoque"
+    filtroSemEstoque = false;
     const termo = campoBusca.value.trim();
     const url = termo ? API_LISTA + "?sku=" + encodeURIComponent(termo) : API_LISTA;
     fetch(url)
@@ -217,8 +246,30 @@
 
   function mostrarApenasSemCusto() {
     filtroSemCusto = true;
+    filtroSemEstoque = false;
     campoBusca.value = "";
     aplicarFiltroEExibir();
+  }
+
+  function mostrarApenasSemEstoque() {
+    filtroSemEstoque = true;
+    filtroSemCusto = false;
+    campoBusca.value = "";
+    aplicarFiltroEExibir();
+  }
+
+  // Recarrega a lista do servidor SEM mexer no filtro nem na busca atual
+  // -- usada depois de salvar um custo enquanto filtrando "sem custo":
+  // o item que acabou de ganhar custo some sozinho da lista filtrada,
+  // sem precisar sair do filtro nem redigitar nada.
+  function atualizarListaMantendoFiltro() {
+    fetch(API_LISTA)
+      .then(function (r) {
+        if (!r.ok) throw new Error("Não consegui atualizar a lista.");
+        return r.json();
+      })
+      .then(renderizarDados)
+      .catch(function (erro) { console.error(erro); });
   }
 
   function formatarDataHora(isoString) {
@@ -340,9 +391,8 @@
       .then(function () {
         msgSalvar.textContent = "Salvo!";
         msgSalvar.className = "msg ok";
-        campoBusca.value = editandoSkuOriginal || sku;
-        buscar();
-        setTimeout(fecharFormulario, 700);
+        atualizarListaMantendoFiltro();
+        setTimeout(fecharFormulario, 500);
       })
       .catch(function (erro) {
         msgSalvar.textContent = erro.message;
@@ -356,10 +406,21 @@
   btnAtualizarEstoque.addEventListener("click", atualizarEstoqueAgora);
   btnNovo.addEventListener("click", function () { abrirFormulario(null); });
   cardSemCustoClicavel.addEventListener("click", mostrarApenasSemCusto);
+  cardSemEstoqueClicavel.addEventListener("click", mostrarApenasSemEstoque);
   linkLimparFiltro.addEventListener("click", function (e) {
     e.preventDefault();
     filtroSemCusto = false;
+    filtroSemEstoque = false;
     aplicarFiltroEExibir();
+  });
+  // Enter em qualquer campo do formulário de custo salva direto (igual
+  // já funciona na busca) -- pra quem está filtrando "sem custo" e
+  // preenchendo um SKU atrás do outro, sem precisar clicar no mouse.
+  formEdicao.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && e.target.tagName === "INPUT") {
+      e.preventDefault();
+      salvarCustoAtual();
+    }
   });
   btnFecharHistorico.addEventListener("click", fecharHistorico);
   modalHistorico.addEventListener("click", function (e) {
