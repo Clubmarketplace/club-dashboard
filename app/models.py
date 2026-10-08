@@ -78,6 +78,19 @@ class Conta(Base):
     # perdia ao trocar de PC); agora mora aqui pra valer pro painel todo.
     margem_minima = Column(Float, nullable=True)
     margem_maxima = Column(Float, nullable=True)
+    # 07/10: token do app "ClubMarketplaceX" (promoções, usado pela
+    # extensão) -- SEPARADO de access_token/refresh_token acima, que são
+    # do app "mestre" (pré/pós-venda). Ver app/cmx.py.
+    cmx_access_token = Column(Text, nullable=True)
+    cmx_refresh_token = Column(Text, nullable=True)
+    cmx_token_expira_em = Column(DateTime, nullable=True)
+    # App ClubMarketplaceX PRÓPRIO dessa conta (cada conta tem o seu,
+    # cadastrado separadamente no Mercado Livre Devs) -- usado em vez de
+    # uma credencial global única. Precisa ser preenchido (ver rota
+    # admin /api/cmx/admin/app-promocoes/{apelido}) antes da conta
+    # conseguir autorizar/usar a adesão via API.
+    cmx_client_id = Column(String, nullable=True)
+    cmx_client_secret = Column(Text, nullable=True)
 
     devolucoes = relationship("Devolucao", back_populates="conta")
     acoes = relationship("AcaoRegistrada", back_populates="conta")

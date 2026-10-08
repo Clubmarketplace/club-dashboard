@@ -49,6 +49,20 @@ _COLUNAS_ADICIONAIS = {
         "motivo_inativacao": "VARCHAR",
         "margem_minima": "FLOAT",
         "margem_maxima": "FLOAT",
+        # 07/10: token do app "ClubMarketplaceX" (CMX_ML_CLIENT_ID), usado
+        # pela extensão pra checar/aderir promoções -- separado do
+        # access_token/refresh_token acima (esses são do app "mestre",
+        # usado pelo pré/pós-venda). São apps DIFERENTES cadastrados no
+        # Mercado Livre Devs; um token emitido por um não serve pro outro.
+        # Ver app/cmx.py (rotas /ml/trocar-codigo e /ml/token).
+        "cmx_access_token": "TEXT",
+        "cmx_refresh_token": "TEXT",
+        "cmx_token_expira_em": "TIMESTAMP",
+        # 07/10: cada conta vendedora tem seu PRÓPRIO app cadastrado no
+        # Mercado Livre Devs (não um app único compartilhado) -- guardado
+        # aqui pra não depender de variável de ambiente global.
+        "cmx_client_id": "VARCHAR",
+        "cmx_client_secret": "TEXT",
     },
     "perguntas": {
         "skus_anuncio": "VARCHAR",
