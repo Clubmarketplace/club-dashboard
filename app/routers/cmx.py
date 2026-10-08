@@ -18,15 +18,13 @@ extensão para de funcionar pra essa pessoa.
 from datetime import datetime, timedelta
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, field_validator
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app import auth, ml_client
-from app.ml_client import MLAuthError
-from app.config import CMX_ML_CLIENT_ID, CMX_ML_CLIENT_SECRET
+from app import auth
 from app.contas_util import chave_conta
 from app.custos_log import registrar_log_custo
 from app.database import get_db
@@ -433,22 +431,27 @@ def validar_sessao_extensao(usuario: Usuario = Depends(usuario_logado_cmx), db: 
 
 # --- OAuth do Mercado Livre por trás do servidor (não mais na extensão) --
 #
-# Antes, a troca do "code" por token e a renovação do token aconteciam
-# DIRETO na extensão (background.js), usando CMX_ML_CLIENT_SECRET escrito
-# no próprio arquivo -- que vai dentro do pacote publicado na Chrome Web
-# Store. Qualquer pessoa que instalasse a extensão conseguia abrir o
-# "Inspecionar" em chrome://extensions e ler esse secret em texto puro.
-# Se vazasse e fosse usado de forma abusiva, o Mercado Livre poderia
-# suspender o client_id inteiro -- derrubando o login de TODOS os
-# sellers de uma vez, não só de quem vazou.
+# 07-08/10: CORREÇÃO DE ROTA. A promoção ("aderir") é uma função do app
+# ClubMarketplaceX -- um app DIFERENTE do app mestre (pré/pós-venda:
+# mensagens, perguntas, vendas). Cada conta vendedora tem seu PRÓPRIO
+# ClubMarketplaceX cadastrado no Mercado Livre Devs (client_id/secret
+# próprios de cada conta, não um único app global) -- por isso ficam
+# guardados em conta.cmx_client_id/cmx_client_secret, nunca numa
+# variável de ambiente compartilhada.
 #
-# Agora essas duas etapas passam por aqui: o secret fica só numa
-# variável de ambiente no servidor (CMX_ML_CLIENT_SECRET), nunca em
-# código nenhum que saia daqui. A extensão continua fazendo a parte que
-# só ela pode fazer (abrir a aba de login e capturar o "code" do
-# redirect), mas manda esse "code" pra cá em vez de trocar direto com o
-# Mercado Livre. Protegido pelo mesmo login da extensão (usuário
-# precisa estar autenticado no Club Marketplace pra conectar o ML).
+# Esta rota (/ml/token) ANTES devolvia o token do app MESTRE
+# (ml_client.garantir_token_valido) pra extensão usar também pra
+# promoções -- só que o Mercado Livre bloqueia isso com
+# "PA_UNAUTHORIZED_RESULT_FROM_POLICIES" (PolicyAgent), porque um token
+# emitido por um app não serve pro outro. Confirmado comparando com a
+# extensão antiga (mesma conta, usando o ClubMarketplaceX direto,
+# aderiu 5 de 5 promoções). Por isso agora usa _garantir_token_cmx_valido
+# (token/refresh próprios do ClubMarketplaceX, colunas cmx_*), não mais
+# ml_client.garantir_token_valido.
+#
+# O client_secret de cada conta nunca sai daqui -- a extensão só manda o
+# "code" capturado do redirect (uma vez, pra autorizar) e depois só pede
+# o access_token já pronto por /ml/token.
 
 
 class TrocarCodigoMlEntrada(BaseModel):
@@ -462,11 +465,10 @@ class RenovarTokenMlEntrada(BaseModel):
 
 
 def _chamar_endpoint_token_ml(payload: dict, contexto: str) -> dict:
-    if not CMX_ML_CLIENT_ID or not CMX_ML_CLIENT_SECRET:
-        raise HTTPException(
-            status_code=500,
-            detail="CMX_ML_CLIENT_ID/CMX_ML_CLIENT_SECRET não configurados no servidor (variáveis de ambiente).",
-        )
+    # A validação de client_id/client_secret é feita por quem monta o
+    # payload (cada conta tem a sua própria, em conta.cmx_client_id/
+    # cmx_client_secret) -- não existe mais uma credencial global única
+    # pra validar aqui.
     try:
         resposta = httpx.post(CMX_ML_TOKEN_URL, data=payload, timeout=15)
     except httpx.RequestError as exc:
@@ -480,58 +482,152 @@ def _chamar_endpoint_token_ml(payload: dict, contexto: str) -> dict:
     return resposta.json()
 
 
+def _salvar_token_cmx_na_conta(conta: Conta, dados_token: dict, db: Session) -> None:
+    """
+    Grava o token do app ClubMarketplaceX na conta certa (nunca em outra
+    -- ver checagem de ml_user_id em trocar_codigo_ml, antes de chamar
+    esta função). Mesmo padrão de expiração usado no app mestre
+    (app/auth_ml.py): guarda a margem de segurança já no cálculo, igual
+    _garantir_token_cmx_valido espera encontrar.
+    """
+    expira_em_segundos = dados_token.get("expires_in", 21600)  # 6h, fallback do ML
+    conta.cmx_access_token = dados_token.get("access_token")
+    conta.cmx_refresh_token = dados_token.get("refresh_token")
+    conta.cmx_token_expira_em = datetime.utcnow() + timedelta(seconds=expira_em_segundos)
+    db.commit()
+    db.refresh(conta)
+
+
+def _garantir_token_cmx_valido(conta: Conta, db: Session) -> str:
+    """
+    Equivalente a ml_client.garantir_token_valido, só que pro app
+    ClubMarketplaceX da PRÓPRIA conta (conta.cmx_client_id/secret) --
+    são apps diferentes, com tokens que não se misturam. Renova sozinho
+    via refresh_token quando está perto de vencer (mesma margem de 5 min
+    usada no app mestre), e atualiza o banco.
+    """
+    if not conta.cmx_client_id or not conta.cmx_client_secret:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não tem o app ClubMarketplaceX "
+                f"configurado no servidor (client_id/client_secret) -- cadastre primeiro "
+                f"as credenciais dessa conta (as mesmas do Mercado Livre Devs) antes de "
+                f"autorizar/usar a adesão a promoções."
+            ),
+        )
+
+    if not conta.cmx_access_token or not conta.cmx_refresh_token:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não autorizou o app ClubMarketplaceX "
+                f"-- é preciso logar na extensão e autorizar o Mercado Livre uma vez "
+                f"(abre a aba de login) antes de conseguir aderir a promoções."
+            ),
+        )
+
+    margem_seguranca = timedelta(minutes=5)
+    if conta.cmx_token_expira_em and conta.cmx_token_expira_em > datetime.utcnow() + margem_seguranca:
+        return conta.cmx_access_token  # ainda válido, nada a fazer
+
+    payload = {
+        "grant_type": "refresh_token",
+        "client_id": conta.cmx_client_id,
+        "client_secret": conta.cmx_client_secret,
+        "refresh_token": conta.cmx_refresh_token,
+    }
+    dados_token = _chamar_endpoint_token_ml(payload, f"renovar o token do app ClubMarketplaceX da conta '{conta.apelido}'")
+    _salvar_token_cmx_na_conta(conta, dados_token, db)
+    return conta.cmx_access_token
+
+
 @router.post("/ml/trocar-codigo")
 def trocar_codigo_ml(
     dados: TrocarCodigoMlEntrada,
     usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
 ):
     """
-    Troca o "code" do OAuth do Mercado Livre por access_token/refresh_token.
-    Chamada pela extensão logo depois de capturar o "code" do redirect --
-    o CMX_ML_CLIENT_SECRET nunca sai daqui.
+    Troca o "code" do OAuth do Mercado Livre por access_token/refresh_token
+    do app ClubMarketplaceX (promoções) e SALVA na conta vinculada ao
+    usuário logado -- autorização de uma vez por conta, feita pela
+    extensão (abre a aba de login, captura o "code" do redirect e manda
+    pra cá). O client_secret da conta nunca sai daqui.
+
+    07/10: cada conta tem seu próprio app cadastrado no Mercado Livre
+    Devs -- por isso a conta é resolvida ANTES de montar o payload, pra
+    usar a credencial certa (conta.cmx_client_id/cmx_client_secret).
     """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    if not conta.cmx_client_id or not conta.cmx_client_secret:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não tem o app ClubMarketplaceX "
+                f"configurado no servidor (client_id/client_secret) -- cadastre primeiro "
+                f"as credenciais dessa conta antes de autorizar o Mercado Livre."
+            ),
+        )
+
     payload = {
         "grant_type": "authorization_code",
-        "client_id": CMX_ML_CLIENT_ID,
-        "client_secret": CMX_ML_CLIENT_SECRET,
+        "client_id": conta.cmx_client_id,
+        "client_secret": conta.cmx_client_secret,
         "code": dados.code,
         "redirect_uri": dados.redirect_uri,
         "code_verifier": dados.code_verifier,
     }
-    return _chamar_endpoint_token_ml(payload, "trocar o código por token")
+    dados_token = _chamar_endpoint_token_ml(payload, "trocar o código por token")
+
+    ml_user_id_autorizado = str(dados_token.get("user_id", ""))
+    if ml_user_id_autorizado and ml_user_id_autorizado != str(conta.ml_user_id):
+        # Mesma trava de segurança do app mestre (app/auth_ml.py callback):
+        # quem autorizou no Mercado Livre não é a mesma conta vinculada a
+        # este usuário no painel -- provavelmente a pessoa estava logada
+        # no Mercado Livre com a conta errada ao autorizar. Não salva nada.
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta do Mercado Livre que acabou de autorizar não é a '{conta.apelido}' "
+                f"(é outra conta, ml_user_id={ml_user_id_autorizado}). Nada foi salvo -- "
+                f"refaça o login no Mercado Livre com a conta vendedora certa antes de autorizar."
+            ),
+        )
+
+    _salvar_token_cmx_na_conta(conta, dados_token, db)
+    return dados_token
 
 
 @router.post("/ml/renovar-token")
 def renovar_token_ml(
     dados: RenovarTokenMlEntrada,
     usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
 ):
-    """Renova o access_token do Mercado Livre a partir do refresh_token, sem expor o secret na extensão."""
+    """
+    Renova o access_token do Mercado Livre a partir do refresh_token, sem
+    expor o secret na extensão. Rota manual, não usada pelo background.js
+    atual (que usa /ml/token, com renovação automática via
+    _garantir_token_cmx_valido) -- mantida só por compatibilidade, usando
+    a credencial da própria conta (conta.cmx_client_id/secret).
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    if not conta.cmx_client_id or not conta.cmx_client_secret:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não tem o app ClubMarketplaceX "
+                f"configurado no servidor (client_id/client_secret)."
+            ),
+        )
     payload = {
         "grant_type": "refresh_token",
-        "client_id": CMX_ML_CLIENT_ID,
-        "client_secret": CMX_ML_CLIENT_SECRET,
+        "client_id": conta.cmx_client_id,
+        "client_secret": conta.cmx_client_secret,
         "refresh_token": dados.refresh_token,
     }
     return _chamar_endpoint_token_ml(payload, "renovar o token")
-
-
-# --- Token do Mercado Livre pela autorização que a conta JÁ DEU ao painel --
-#
-# A extensão não faz mais login próprio no Mercado Livre. Toda conta
-# autoriza o app MESTRE uma vez, pelo link gerado em /contas (é a mesma
-# autorização que alimenta perguntas, mensagens e vendas). Esta rota entrega
-# à extensão o access_token dessa autorização, já renovado se preciso --
-# mesma função (ml_client.garantir_token_valido) usada pelo resto do
-# servidor. Consequências desejadas:
-#   - nenhuma conta autoriza duas vezes; "Conectar conta" some da extensão;
-#   - a extensão só opera na conta vinculada ao login da pessoa (não há
-#     como "autorizar a conta errada", porque a autorização não acontece lá);
-#   - o token nunca fica guardado no PC: vem daqui a cada uso, mediante
-#     login válido no Club -- usuário removido/desativado para na hora
-#     (usuario_logado_cmx devolve 401 e a extensão apaga a sessão).
-# As rotas /ml/trocar-codigo e /ml/renovar-token acima ficam como legado e
-# podem ser removidas quando nenhum pacote antigo estiver mais em uso.
 
 
 @router.get("/ml/token")
@@ -540,41 +636,85 @@ def token_ml_da_conta_vinculada(
     db: Session = Depends(get_db),
 ):
     """
-    Devolve um access_token válido do Mercado Livre pra conta vinculada ao
-    usuário logado na extensão. 409 se a conta ainda não autorizou pelo
-    painel; 502 se o Mercado Livre recusar a renovação (precisa autorizar
-    de novo pelo link de /contas).
+    Devolve o access_token do app ClubMarketplaceX (promoções) da conta
+    vinculada ao usuário logado na extensão -- e só dessa conta, nunca de
+    outra (mesma trava de /custos e /variaveis: quem decide a conta é o
+    login, não o que a extensão pede). Renova sozinho via
+    _garantir_token_cmx_valido quando está perto de vencer.
+
+    Cada conta vendedora precisa autorizar o app ClubMarketplaceX pelo
+    menos uma vez (fluxo /ml/trocar-codigo) antes desta rota funcionar
+    pra ela -- sem isso, vira 409 abaixo.
     """
     conta = _conta_vinculada_do_usuario(usuario, db)
-    if not conta.access_token or not conta.refresh_token:
-        raise HTTPException(
-            status_code=409,
-            detail=(
-                f"A conta '{conta.apelido}' ainda não autorizou o Club Marketplace no Mercado Livre. "
-                "Gere o link de autorização em Contas no painel e peça pro dono da conta aceitar."
-            ),
-        )
-    try:
-        access_token = ml_client.garantir_token_valido(conta, db)
-    except MLAuthError as exc:
-        raise HTTPException(
-            status_code=502,
-            detail=(
-                f"O Mercado Livre não renovou a autorização da conta '{conta.apelido}' ({exc}). "
-                "Gere um novo link de autorização em Contas no painel."
-            ),
-        ) from exc
+    access_token = _garantir_token_cmx_valido(conta, db)
 
-    # Quanto tempo o token ainda vale (a extensão usa pra cachear em memória
-    # por poucos minutos e pedir de novo antes de vencer).
     expira_em_segundos = 0
-    if conta.token_expira_em:
-        expira_em_segundos = max(int((conta.token_expira_em - datetime.utcnow()).total_seconds()), 0)
+    if conta.cmx_token_expira_em:
+        expira_em_segundos = max(0, int((conta.cmx_token_expira_em - datetime.utcnow()).total_seconds()))
+
     return {
         "access_token": access_token,
         "ml_user_id": str(conta.ml_user_id),
         "apelido": conta.apelido,
         "expira_em_segundos": expira_em_segundos,
+    }
+
+
+# --- Configuração do app ClubMarketplaceX de cada conta (admin) ---------
+#
+# 07/10: cada conta vendedora tem seu próprio app cadastrado no Mercado
+# Livre Devs (client_id/client_secret próprios) -- diferente do app
+# mestre, que é um só compartilhado por todas as contas. Essa rota é
+# como o admin cadastra, no servidor, a credencial de cada conta (uma
+# vez por conta), pra depois a extensão poder pedir o token dela sem
+# nunca ver o client_secret. Autenticação igual ao painel (cookie de
+# sessão), não o login da extensão -- isso aqui só o admin faz.
+
+
+class CredenciaisCmxEntrada(BaseModel):
+    client_id: str
+    client_secret: str
+
+    @field_validator("client_id", "client_secret")
+    @classmethod
+    def _nao_vazio(cls, valor: str) -> str:
+        valor = valor.strip()
+        if not valor:
+            raise ValueError("não pode ser vazio")
+        return valor
+
+
+@router.post("/admin/app-promocoes/{apelido}")
+def definir_credenciais_cmx(
+    apelido: str,
+    dados: CredenciaisCmxEntrada,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Cadastra/atualiza o client_id+client_secret do app ClubMarketplaceX
+    (promoções) de uma conta específica. Só admin. O client_secret fica
+    só aqui no banco do servidor -- nunca é devolvido pra extensão nem
+    pro navegador (só o access_token de curta duração sai por /ml/token).
+    """
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin",)):
+        raise HTTPException(status_code=403, detail="Só admin pode configurar o app ClubMarketplaceX das contas.")
+
+    conta = next((c for c in db.query(Conta).all() if chave_conta(c.apelido) == chave_conta(apelido)), None)
+    if conta is None:
+        raise HTTPException(status_code=404, detail=f"Conta '{apelido}' não encontrada.")
+
+    conta.cmx_client_id = dados.client_id
+    conta.cmx_client_secret = dados.client_secret
+    db.commit()
+    db.refresh(conta)
+
+    return {
+        "apelido": conta.apelido,
+        "cmx_client_id": conta.cmx_client_id,
+        "salvo": True,
     }
 
 
