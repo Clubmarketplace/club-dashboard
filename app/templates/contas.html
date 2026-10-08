@@ -122,7 +122,7 @@
           .cmx-botao-olho:hover { color: var(--cmx-texto); }
         </style>
 
-        <section class="cmx-tabela-secao" id="secao-cmx-credenciais">
+        <section class="cmx-tabela-secao">
           <h2>Contas cadastradas</h2>
           <table class="cmx-tabela" id="tabela-contas">
             <thead>
@@ -132,7 +132,27 @@
                 <th>ID no Mercado Livre</th>
                 <th>Conectada em</th>
                 <th>Token expira em</th>
-                <th>Promoções (ML)</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </section>
+
+        <section class="cmx-tabela-secao" id="secao-cmx-credenciais">
+          <h2>Credenciais ClubMarketplace (Promoções)</h2>
+          <p class="cmx-grafico-nota">
+            client_id e client_secret do app ClubMarketplace cadastrado no Mercado Livre
+            Devs de cada conta -- usado só pra aderir a promoções por API. O
+            client_secret nunca é mostrado depois de salvo; só o client_id (não é
+            segredo) aparece na tabela.
+          </p>
+          <table class="cmx-tabela" id="tabela-cmx-credenciais">
+            <thead>
+              <tr>
+                <th>Conta</th>
+                <th>client_id</th>
+                <th>client_secret</th>
                 <th>Ações</th>
               </tr>
             </thead>
