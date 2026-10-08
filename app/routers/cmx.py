@@ -542,6 +542,31 @@ def _garantir_token_cmx_valido(conta: Conta, db: Session) -> str:
     return conta.cmx_access_token
 
 
+@router.get("/ml/client-id")
+def client_id_promocoes_da_conta_vinculada(
+    usuario: Usuario = Depends(usuario_logado_cmx),
+    db: Session = Depends(get_db),
+):
+    """
+    Devolve só o client_id (nunca o secret) do app ClubMarketplaceX da
+    conta vinculada ao login -- o client_id não é segredo (ele vai na
+    própria URL de autorização, visível pra qualquer um), então é seguro
+    mandar pra extensão montar a URL de login. Usado só na autorização
+    única (ver /ml/trocar-codigo abaixo); depois disso a extensão nunca
+    mais precisa dele, só do access_token (via /ml/token).
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    if not conta.cmx_client_id:
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                f"A conta '{conta.apelido}' ainda não tem o app ClubMarketplaceX "
+                f"configurado no servidor -- fale com o admin pra cadastrar o client_id/client_secret."
+            ),
+        )
+    return {"client_id": conta.cmx_client_id, "apelido": conta.apelido}
+
+
 @router.post("/ml/trocar-codigo")
 def trocar_codigo_ml(
     dados: TrocarCodigoMlEntrada,
