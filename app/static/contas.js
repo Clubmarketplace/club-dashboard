@@ -94,7 +94,7 @@ function renderizarTabela(todas) {
 
   if (contas.length === 0) {
     corpo.innerHTML = `
-      <tr><td colspan="6" style="text-align:center; color: var(--cmx-texto-suave);">
+      <tr><td colspan="7" style="text-align:center; color: var(--cmx-texto-suave);">
         Nenhuma conta cadastrada ainda. Use o formulário acima pra conectar a primeira.
       </td></tr>`;
     return;
@@ -109,12 +109,16 @@ function renderizarTabela(todas) {
     const botaoInativar = EH_ADMIN
       ? `<button class="cmx-botao-link-perigo" data-inativar="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}" style="margin-left: 10px;">Inativar</button>`
       : "";
+    const seloCmx = conta.cmx_configurado
+      ? `<span class="cmx-selo cmx-selo-encerrado">Configurado</span><div style="font-size:11px; color:var(--cmx-texto-suave); margin-top:3px; font-family:monospace;">ID: ${escaparHtml(conta.cmx_client_id)}</div>`
+      : `<span class="cmx-selo cmx-selo-aberto">Não configurado</span>`;
     linha.innerHTML = `
       <td>${conta.apelido}</td>
       <td>${montarSeloStatus(conta)}</td>
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
+      <td>${seloCmx}</td>
       <td>${botaoDesconectar}${botaoInativar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
@@ -282,13 +286,116 @@ function mostrarAviso(mensagem) {
   aviso.style.display = "block";
 }
 
+// --- Credencial do app ClubMarketplaceX (promoções), por conta -----------
+// 08/10: cada conta tem seu próprio client_id/client_secret, cadastrados
+// aqui (tela visual) em vez de precisar de curl/terminal. Chama a mesma
+// rota admin que já existia (app/routers/cmx.py), autenticada pelo cookie
+// de sessão do painel (mesma sessão usada pro resto da tela).
+// Mostrar/ocultar o client_secret digitado (mesmo padrão do olhinho da
+// tela de login) -- só afeta o que o admin está digitando agora; o
+// servidor nunca devolve um secret já salvo pra tela mostrar.
+function alternarSenhaCmx(idCampo, botao) {
+  const campo = document.getElementById(idCampo);
+  const mostrando = campo.type === "text";
+  campo.type = mostrando ? "password" : "text";
+  botao.innerHTML = mostrando
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'
+    : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.94 10.94 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+  botao.setAttribute("aria-label", mostrando ? "Mostrar client_secret" : "Ocultar client_secret");
+}
+
+let CMX_CLIENT_ID_POR_APELIDO = {};
+
+function popularSelectContasCmx(contas) {
+  const select = document.getElementById("cmx-select-conta");
+  if (!select) return;
+  const valorAtual = select.value;
+  select.innerHTML = '<option value="">Selecione a conta...</option>';
+  CMX_CLIENT_ID_POR_APELIDO = {};
+  for (const conta of contas.filter((c) => !c.inativa)) {
+    const opcao = document.createElement("option");
+    opcao.value = conta.apelido;
+    opcao.textContent = conta.cmx_configurado ? `${conta.apelido} (já configurada)` : conta.apelido;
+    select.appendChild(opcao);
+    if (conta.cmx_configurado) CMX_CLIENT_ID_POR_APELIDO[conta.apelido] = conta.cmx_client_id;
+  }
+  if (valorAtual) select.value = valorAtual;
+}
+
+function avisarCmxCredenciais(texto, erro) {
+  const aviso = document.getElementById("cmx-credenciais-aviso");
+  if (!aviso) return;
+  aviso.textContent = texto;
+  aviso.style.display = texto ? "block" : "none";
+  aviso.style.color = erro ? "var(--cmx-rust)" : "var(--cmx-verde)";
+}
+
 async function inicializar() {
+  // Cadastro de credencial do app ClubMarketplaceX é ação administrativa
+  // (o servidor também confere) -- esconde a seção pra quem não é admin.
+  const secaoCmxCredenciais = document.getElementById("secao-cmx-credenciais");
+  if (secaoCmxCredenciais && !EH_ADMIN) secaoCmxCredenciais.style.display = "none";
+
   try {
     const contas = await carregarContas();
     renderizarTabela(contas);
+    popularSelectContasCmx(contas);
   } catch (erro) {
     mostrarAviso("Não foi possível carregar as contas. Verifique se o backend está rodando.");
     console.error(erro);
+  }
+
+  const selectCmxConta = document.getElementById("cmx-select-conta");
+  if (selectCmxConta) {
+    // Ao escolher uma conta já configurada, mostra o client_id atual dela
+    // pra conferência (o client_secret nunca é mostrado -- fica só no
+    // servidor). Se o admin não mexer no campo, reenviar o formulário
+    // troca o client_id pelo mesmo valor; só o secret precisa ser
+    // preenchido de novo (ou reaproveitado se for o mesmo já cadastrado).
+    selectCmxConta.addEventListener("change", () => {
+      const apelido = selectCmxConta.value;
+      document.getElementById("cmx-input-client-id").value = CMX_CLIENT_ID_POR_APELIDO[apelido] || "";
+      document.getElementById("cmx-input-client-secret").value = "";
+      avisarCmxCredenciais("");
+    });
+  }
+
+  const formCmxCredenciais = document.getElementById("form-cmx-credenciais");
+  if (formCmxCredenciais) {
+    formCmxCredenciais.addEventListener("submit", async (evento) => {
+      evento.preventDefault();
+      const apelido = document.getElementById("cmx-select-conta").value;
+      const clientId = document.getElementById("cmx-input-client-id").value.trim();
+      const clientSecret = document.getElementById("cmx-input-client-secret").value.trim();
+      if (!apelido) { avisarCmxCredenciais("Selecione a conta.", true); return; }
+      if (!clientId || !clientSecret) { avisarCmxCredenciais("Preencha client_id e client_secret.", true); return; }
+
+      const botao = document.getElementById("btn-salvar-cmx-credenciais");
+      botao.disabled = true;
+      botao.textContent = "Salvando...";
+      try {
+        const resposta = await fetch(`/api/cmx/admin/app-promocoes/${encodeURIComponent(apelido)}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+        });
+        const dados = await resposta.json().catch(() => ({}));
+        if (!resposta.ok) throw new Error(dados.detail || `status ${resposta.status}`);
+
+        avisarCmxCredenciais(`Credencial de "${dados.apelido}" salva com sucesso.`, false);
+        document.getElementById("cmx-input-client-id").value = "";
+        document.getElementById("cmx-input-client-secret").value = "";
+        const contasAtualizadas = await carregarContas();
+        renderizarTabela(contasAtualizadas);
+        popularSelectContasCmx(contasAtualizadas);
+        document.getElementById("cmx-select-conta").value = apelido;
+      } catch (erro) {
+        avisarCmxCredenciais("Não foi possível salvar: " + erro.message, true);
+      } finally {
+        botao.disabled = false;
+        botao.textContent = "Salvar credencial";
+      }
+    });
   }
 
   try {
