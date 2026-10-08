@@ -19,8 +19,20 @@
   .card-resumo .valor { font-size:21px; font-weight:700; color:var(--cmx-texto); margin-top:6px; }
   .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
   .card-resumo.alerta .valor { color:var(--vermelho); }
-  .card-resumo.clicavel { cursor:pointer; transition:box-shadow .15s; }
+  .card-resumo.clicavel { cursor:pointer; transition:box-shadow .15s, border-color .15s; position:relative; }
   .card-resumo.clicavel:hover { box-shadow:0 4px 14px rgba(0,0,0,.08); }
+  .card-resumo.clicavel.filtro-ativo { border-color:#1b2430; box-shadow:0 0 0 3px rgba(27,36,48,.10); }
+  .card-resumo.clicavel.filtro-ativo::after {
+    content:"Filtrando"; position:absolute; top:-9px; right:12px; background:#1b2430; color:#fff;
+    font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; padding:2px 7px; border-radius:5px;
+  }
+
+  .filtro-ativo-barra {
+    display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    background:#eef1f4; border-radius:9px; padding:10px 14px; margin-top:10px; font-size:13px;
+  }
+  .filtro-ativo-barra.tudo-ok { background:#e7f5ed; color:#1c6a43; }
+  .btn-voltar-geral { padding:7px 14px; font-size:12.5px; flex-shrink:0; }
 
   .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
   .cartao h2 { margin:0 0 4px; font-size:16px; }
@@ -184,9 +196,10 @@
             <button class="btn btn-primario" id="btn-novo">+ Novo produto</button>
           </div>
           <p class="sub" id="estoque-atualizado-em" style="margin-top:8px;"></p>
-          <p class="sub" id="filtro-ativo-aviso" style="display:none; margin-top:2px;">
-            Mostrando só <span id="filtro-ativo-texto">SKUs sem custo cadastrado</span>. <a href="#" id="link-limpar-filtro">Ver todos</a>
-          </p>
+          <div class="filtro-ativo-barra" id="filtro-ativo-aviso" style="display:none;">
+            <span id="filtro-ativo-texto">Mostrando só SKUs sem custo cadastrado.</span>
+            <button type="button" class="btn btn-secundario btn-voltar-geral" id="link-limpar-filtro">← Voltar para lista geral</button>
+          </div>
 
           <table id="tabela-resultados" style="display:none;">
             <thead>
