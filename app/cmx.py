@@ -15,6 +15,8 @@ escolher nada. Se o admin desativar o usuário (Usuario.ativo = False)
 ou remover a conta vinculada, o próximo /api/cmx/validar já nega, e a
 extensão para de funcionar pra essa pessoa.
 """
+from datetime import datetime
+
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
@@ -25,6 +27,7 @@ from app import auth
 from app.config import CMX_ML_CLIENT_ID, CMX_ML_CLIENT_SECRET
 from app.contas_util import chave_conta
 from app.database import get_db
+from app.ml_client import MLAuthError, garantir_token_valido
 from app.models import Conta, CustoSku, Usuario, VariavelConta
 
 CMX_ML_TOKEN_URL = "https://api.mercadolibre.com/oauth/token"
@@ -391,6 +394,43 @@ def validar_sessao_extensao(usuario: Usuario = Depends(usuario_logado_cmx), db: 
         "valido": True,
         "usuario": {"nome_exibicao": usuario.nome_exibicao},
         "conta": _serializar_conta(conta),
+    }
+
+
+@router.get("/ml/token")
+def obter_token_ml(usuario: Usuario = Depends(usuario_logado_cmx), db: Session = Depends(get_db)):
+    """
+    Devolve o access_token do Mercado Livre da conta vinculada ao usuário
+    logado na extensão -- e só dessa conta, nunca de outra (mesma trava
+    de /custos e /variaveis: quem decide a conta é o login, não o que a
+    extensão pede). Reaproveita garantir_token_valido (app/ml_client.py),
+    a mesma função que já renova sozinho o token usado por mensagens,
+    reputação e vendas -- aqui ela cobre a mesma renovação automática
+    pro caso de uso de "aderir a uma promoção" via API.
+
+    07/10: criada pra corrigir a adesão às promoções, que até então usava
+    um token único (de uma conta "mestre") pra chamar a API em nome de
+    qualquer item -- o Mercado Livre recusa (403) uma chamada de escrita
+    feita com o token de uma conta sobre um item de outra conta. Cada
+    conta vendedora precisa autorizar o Mercado Livre pelo menos uma vez
+    (painel -> Contas -> link de autorização) antes desta rota funcionar
+    pra ela -- sem isso, MLAuthError vira 409 abaixo.
+    """
+    conta = _conta_vinculada_do_usuario(usuario, db)
+    try:
+        access_token = garantir_token_valido(conta, db)
+    except MLAuthError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+    expira_em_segundos = None
+    if conta.token_expira_em:
+        expira_em_segundos = max(0, int((conta.token_expira_em - datetime.utcnow()).total_seconds()))
+
+    return {
+        "access_token": access_token,
+        "ml_user_id": conta.ml_user_id,
+        "apelido": conta.apelido,
+        "expira_em_segundos": expira_em_segundos,
     }
 
 
