@@ -111,6 +111,42 @@
           </table>
         </section>
 
+        <section class="cmx-tabela-secao" id="secao-cmx-credenciais">
+          <h2>ClubMarketplaceX (Promoções) — app por conta</h2>
+          <p class="cmx-grafico-nota">
+            Cada conta vendedora tem seu PRÓPRIO app "ClubMarketplaceX" cadastrado
+            no Mercado Livre Devs (diferente do app usado em mensagens/vendas).
+            Cadastre aqui o <strong>client_id</strong> e <strong>client_secret</strong>
+            dessa conta -- feito uma vez só; o secret fica só no servidor, nunca
+            vai pra extensão. Depois disso, o seller autoriza pela extensão
+            (botão "Autorizar Mercado Livre (Promoções)" no popup).
+          </p>
+          <p class="cmx-grafico-nota" id="cmx-credenciais-aviso" style="display: none;"></p>
+          <form id="form-cmx-credenciais" class="cmx-form-inline" style="flex-wrap: wrap;">
+            <select id="cmx-select-conta" required style="padding: 9px 12px; border-radius: 8px; border: 1px solid var(--cmx-borda); font-size: 14px; min-width: 200px;">
+              <option value="">Selecione a conta...</option>
+            </select>
+            <input type="text" id="cmx-input-client-id" placeholder="client_id" required autocomplete="off" style="min-width: 220px;" />
+            <div class="cmx-campo-senha" style="min-width: 260px;">
+              <input type="password" id="cmx-input-client-secret" placeholder="client_secret" required autocomplete="off" />
+              <button type="button" class="cmx-botao-olho" onclick="alternarSenhaCmx('cmx-input-client-secret', this)" aria-label="Mostrar client_secret">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <button type="submit" id="btn-salvar-cmx-credenciais" class="cmx-botao-primario">Salvar credencial</button>
+          </form>
+        </section>
+        <style>
+          .cmx-campo-senha { position: relative; display: inline-flex; }
+          .cmx-campo-senha input { width: 100%; padding-right: 40px; }
+          .cmx-botao-olho {
+            position: absolute; right: 8px; top: 50%; transform: translateY(-50%);
+            background: none; border: none; cursor: pointer; padding: 4px; color: var(--cmx-texto-suave);
+            display: flex; align-items: center; justify-content: center;
+          }
+          .cmx-botao-olho:hover { color: var(--cmx-texto); }
+        </style>
+
         <section class="cmx-tabela-secao">
           <h2>Contas cadastradas</h2>
           <table class="cmx-tabela" id="tabela-contas">
@@ -121,6 +157,7 @@
                 <th>ID no Mercado Livre</th>
                 <th>Conectada em</th>
                 <th>Token expira em</th>
+                <th>Promoções (ML)</th>
                 <th>Ações</th>
               </tr>
             </thead>
