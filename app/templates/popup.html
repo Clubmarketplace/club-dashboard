@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <title>Sistema de Precificação — ClubMarketplace</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <h1>ClubMarketplace</h1>
+    <span class="subtitulo" id="subtitulo-header">Precificador — custos e taxas do servidor</span>
+  </header>
+
+  <!-- Tela de login: some quando a sessão já está válida (ver popup.js) -->
+  <div id="tela-login" class="bloco">
+    <h2>Entrar</h2>
+    <p class="ajuda">
+      Entre com o usuário e senha do seu acesso ao Club Marketplace. A
+      extensão identifica sozinha a qual conta você pertence e carrega os
+      custos dela do servidor. Sem login, nenhuma varredura roda.
+    </p>
+    <div class="form-login">
+      <input type="text" id="login-usuario" placeholder="Usuário" autocomplete="username" />
+      <input type="password" id="login-senha" placeholder="Senha" autocomplete="current-password" />
+      <button id="btn-login" class="btn-primario">Entrar</button>
+    </div>
+    <p id="msg-login" class="mensagem"></p>
+  </div>
+
+  <!-- Conteúdo normal do popup: só aparece depois de logado -->
+  <div id="app-principal" style="display: none;">
+    <div class="bloco" id="bloco-conta-logada">
+      <div class="linha-conta-logada">
+        <span id="texto-conta-logada"></span>
+        <button id="btn-sair" class="link-sair">Sair</button>
+      </div>
+    </div>
+
+    <div class="bloco">
+      <h2>Custos por SKU (conta)</h2>
+      <p class="ajuda">
+        O custo de cada anúncio vem <strong>só do servidor</strong> do Club
+        Marketplace (painel &rsaquo; Produtos &rsaquo; Custos). A extensão
+        atualiza sozinha ao abrir a página de Promoções, antes de cada
+        varredura e a cada 15 minutos. Anúncio sem custo cadastrado é
+        pulado: não calcula margem e não entra na adesão.
+      </p>
+      <p id="resumo-custos-servidor" class="ajuda"></p>
+      <button id="btn-atualizar-custos" class="btn-primario">🔄 Atualizar custos agora</button>
+      <p id="msg-custos-servidor" class="mensagem"></p>
+    </div>
+
+    <div class="bloco">
+      <h2>Promoções (Mercado Livre)</h2>
+      <p class="ajuda">
+        Pra aderir a promoções por API, esta conta precisa autorizar o
+        Mercado Livre <strong>uma única vez</strong>. Clique no botão,
+        faça login/aceite na aba que abrir -- depois disso não precisa
+        repetir (o servidor renova sozinho).
+      </p>
+      <button id="btn-autorizar-promocoes" class="btn-primario">Autorizar Mercado Livre (Promoções)</button>
+      <p id="msg-autorizar-promocoes" class="mensagem"></p>
+    </div>
+
+    <div class="bloco">
+      <h2>Taxas (conta)</h2>
+      <p class="ajuda">
+        As taxas (imposto, CLUB etc.) vêm <strong>só do servidor</strong> —
+        tela Taxas no painel do Club Marketplace, com a base de cada uma.
+        Não dá pra cadastrar aqui. Sem taxa cadastrada, a varredura não roda.
+      </p>
+      <div id="lista-taxas" class="lista-taxas"></div>
+    </div>
+  </div><!-- fim #app-principal -->
+
+  <script src="popup.js"></script>
+</body>
+</html>
