@@ -109,16 +109,13 @@ function renderizarTabela(todas) {
     const botaoInativar = EH_ADMIN
       ? `<button class="cmx-botao-link-perigo" data-inativar="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}" style="margin-left: 10px;">Inativar</button>`
       : "";
-    const seloCmx = conta.cmx_configurado
-      ? `<span class="cmx-selo cmx-selo-encerrado">Configurado</span><div style="font-size:11px; color:var(--cmx-texto-suave); margin-top:3px; font-family:monospace;">ID: ${escaparHtml(conta.cmx_client_id)}</div>`
-      : `<span class="cmx-selo cmx-selo-aberto">Não configurado</span>`;
     linha.innerHTML = `
       <td>${conta.apelido}</td>
       <td>${montarSeloStatus(conta)}</td>
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
-      <td>${seloCmx}</td>
+      <td id="cmx-celula-${conta.id}">${montarVisaoCmx(conta)}</td>
       <td>${botaoDesconectar}${botaoInativar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
@@ -133,6 +130,94 @@ function renderizarTabela(todas) {
   corpo.querySelectorAll("[data-inativar]").forEach((botao) => {
     botao.addEventListener("click", () => inativarConta(botao));
   });
+  corpo.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
+    botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
+  });
+}
+
+// --- Credencial do app ClubMarketplaceX (promoções), direto na linha -----
+// 08/10: cadastro de client_id/client_secret movido pra dentro da própria
+// linha da conta (um só lugar, junto com o status) em vez de um formulário
+// solto em outra parte da tela -- menos lugares pra procurar.
+let CONTAS_POR_ID = {};
+
+function montarVisaoCmx(conta) {
+  CONTAS_POR_ID[conta.id] = conta;
+  const selo = conta.cmx_configurado
+    ? `<span class="cmx-selo cmx-selo-encerrado">Configurado</span><div style="font-size:11px; color:var(--cmx-texto-suave); margin-top:3px; font-family:monospace;">ID: ${escaparHtml(conta.cmx_client_id)}</div>`
+    : `<span class="cmx-selo cmx-selo-aberto">Não configurado</span>`;
+  const botao = EH_ADMIN
+    ? `<button type="button" class="cmx-botao-link-perigo" style="color:var(--cmx-azul,#2b6cb0); margin-top:4px;" data-configurar-cmx="${conta.id}">${conta.cmx_configurado ? "Editar" : "Configurar"}</button>`
+    : "";
+  return `${selo}${botao ? `<div>${botao}</div>` : ""}`;
+}
+
+function abrirEdicaoCmx(contaId) {
+  const conta = CONTAS_POR_ID[contaId];
+  const celula = document.getElementById(`cmx-celula-${contaId}`);
+  if (!conta || !celula) return;
+  celula.innerHTML = `
+    <div style="display:flex; flex-direction:column; gap:6px; min-width:200px;">
+      <input type="text" id="cmx-edit-id-${contaId}" placeholder="client_id" value="${escaparHtml(conta.cmx_client_id || "")}" autocomplete="off" style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px;" />
+      <div class="cmx-campo-senha">
+        <input type="password" id="cmx-edit-secret-${contaId}" placeholder="client_secret" autocomplete="off" style="padding:6px 8px; border-radius:6px; border:1px solid var(--cmx-borda); font-size:13px; width:100%;" />
+        <button type="button" class="cmx-botao-olho" onclick="alternarSenhaCmx('cmx-edit-secret-${contaId}', this)" aria-label="Mostrar client_secret">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+      <p id="cmx-edit-aviso-${contaId}" style="display:none; font-size:12px; color:var(--cmx-rust); margin:0;"></p>
+      <div style="display:flex; gap:6px;">
+        <button type="button" class="cmx-botao-primario" style="padding:6px 10px; font-size:13px;" data-salvar-cmx="${contaId}">Salvar</button>
+        <button type="button" class="cmx-botao-secundario" style="padding:6px 10px; font-size:13px;" data-cancelar-cmx="${contaId}">Cancelar</button>
+      </div>
+    </div>
+  `;
+  celula.querySelector(`[data-salvar-cmx="${contaId}"]`).addEventListener("click", () => salvarCmxLinha(contaId));
+  celula.querySelector(`[data-cancelar-cmx="${contaId}"]`).addEventListener("click", () => {
+    celula.innerHTML = montarVisaoCmx(conta);
+    celula.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
+      botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
+    });
+  });
+}
+
+async function salvarCmxLinha(contaId) {
+  const conta = CONTAS_POR_ID[contaId];
+  const clientId = document.getElementById(`cmx-edit-id-${contaId}`).value.trim();
+  const clientSecret = document.getElementById(`cmx-edit-secret-${contaId}`).value.trim();
+  const aviso = document.getElementById(`cmx-edit-aviso-${contaId}`);
+  const botaoSalvar = document.querySelector(`[data-salvar-cmx="${contaId}"]`);
+
+  if (!clientId || !clientSecret) {
+    aviso.textContent = "Preencha client_id e client_secret.";
+    aviso.style.display = "block";
+    return;
+  }
+
+  botaoSalvar.disabled = true;
+  botaoSalvar.textContent = "Salvando...";
+  try {
+    const resposta = await fetch(`/api/cmx/admin/app-promocoes/${encodeURIComponent(conta.apelido)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }),
+    });
+    const dados = await resposta.json().catch(() => ({}));
+    if (!resposta.ok) throw new Error(dados.detail || `status ${resposta.status}`);
+
+    conta.cmx_configurado = true;
+    conta.cmx_client_id = dados.cmx_client_id;
+    const celula = document.getElementById(`cmx-celula-${contaId}`);
+    celula.innerHTML = montarVisaoCmx(conta);
+    celula.querySelectorAll("[data-configurar-cmx]").forEach((botao) => {
+      botao.addEventListener("click", () => abrirEdicaoCmx(botao.dataset.configurarCmx));
+    });
+  } catch (erro) {
+    aviso.textContent = "Não foi possível salvar: " + erro.message;
+    aviso.style.display = "block";
+    botaoSalvar.disabled = false;
+    botaoSalvar.textContent = "Salvar";
+  }
 }
 
 function renderizarInativas(inativas) {
