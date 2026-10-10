@@ -32,6 +32,7 @@ Reaproveita:
     EstoqueSku.
 """
 import logging
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
@@ -46,6 +47,32 @@ from app.routers.cmx import _conta_vinculada_do_usuario
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/painel/produtos", tags=["painel-produtos"])
+
+# SKU de kit/combo termina em "-KITn" (ex: 7894855232913-KIT2,
+# 51016410-KIT10) ou junta dois SKUs-base com hífen, formando o SKU de
+# um "conjunto" (ex: "7894855232968-7894855232913" = mesa + cadeiras).
+_KIT_SUFIXO_RE = re.compile(r"-KIT\d*$", re.IGNORECASE)
+_COMBO_SKU_RE = re.compile(r"^\d{6,}-\d{6,}$")
+
+
+def _eh_kit_ou_combo(sku: str) -> bool:
+    """
+    Kit/combo é um anúncio à parte no Mercado Livre (tem seu próprio
+    SKU e sua própria "quantidade" vinda de lá), mas vende o MESMO
+    estoque físico dos produtos-base que o compõem -- ex: 6 cadeiras +
+    6 mesas cadastradas separadamente, e um "Kit 2 Cadeiras" montado em
+    cima das mesmas 6 cadeiras. Somar a quantidade/valor do kit ao dos
+    produtos-base no resumo geral conta a mesma peça física duas vezes.
+
+    Por isso esses SKUs continuam aparecendo na lista (pra poder editar
+    custo deles normalmente), mas ficam de fora dos cards de total.
+    """
+    sku_upper = sku.strip().upper()
+    if _KIT_SUFIXO_RE.search(sku_upper):
+        return True
+    if _COMBO_SKU_RE.match(sku_upper):
+        return True
+    return False
 
 
 def _sincronizar_estoque_em_segundo_plano(conta_id: int) -> None:
@@ -111,15 +138,20 @@ def _montar_resposta(conta: Conta, db: Session, sku: str) -> dict:
             atualizado_em = estoque_registro.atualizado_em
 
         valor_item = (custo * quantidade) if (custo is not None and quantidade is not None) else None
+        eh_kit = _eh_kit_ou_combo(sku_atual)
 
         if custo is None:
             sem_custo += 1
         if quantidade == 0:
             sem_estoque += 1
-        if quantidade:
-            estoque_total += quantidade
-        if valor_item:
-            valor_total += valor_item
+
+        # Kit/combo fica de fora da soma dos cards (ver _eh_kit_ou_combo)
+        # -- senão a mesma peça física entra duas vezes no total.
+        if not eh_kit:
+            if quantidade:
+                estoque_total += quantidade
+            if valor_item:
+                valor_total += valor_item
 
         itens.append(
             {
@@ -128,6 +160,7 @@ def _montar_resposta(conta: Conta, db: Session, sku: str) -> dict:
                 "custo": custo,
                 "quantidade": quantidade,
                 "valor_total": valor_item,
+                "eh_kit": eh_kit,
             }
         )
 
