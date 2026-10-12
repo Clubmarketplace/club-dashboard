@@ -31,6 +31,8 @@
 {% set _mostra_vendas = _papel in ["seller", "suporte"] %}
 
 <nav class="cmx-nav" aria-label="Menu principal">
+  {{ item("/dashboard", "📊 Dashboard") }}
+
   {% if _mostra_vendas %}
   <button type="button" class="cmx-nav-sanfona{% if _vendas_aberto %} cmx-nav-sanfona--aberta{% endif %}" id="cmx-vendas-sanfona" aria-expanded="{{ 'true' if _vendas_aberto else 'false' }}" aria-controls="cmx-vendas-submenu" style="margin-top:0;">
     <span>💰 Vendas</span>
