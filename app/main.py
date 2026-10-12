@@ -639,10 +639,16 @@ def pagina_produtos_lista(request: Request):
 
 
 @app.get("/dashboard", response_class=HTMLResponse)
-def pagina_dashboard(request: Request):
+def pagina_dashboard_seller(request: Request):
     """
     Tela "Dashboard" do seller: visão rápida da conta (hoje/mês, status
     dos anúncios, evolução). A API fica em app/routers/dashboard_painel.py.
+
+    NOME DO ARQUIVO (12/10): "dashboard_seller.html" -- de propósito
+    diferente de "dashboard.html" (esse já existia e é a tela inicial
+    "/" da equipe interna/admin, resumo de devoluções/pré-venda/
+    cancelamentos). Usar o mesmo nome aqui por engano sobrescreveu
+    aquele outro -- não repetir esse nome de novo.
     """
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
@@ -650,7 +656,7 @@ def pagina_dashboard(request: Request):
         seller_logado = bool(conta_logada)
     return templates.TemplateResponse(
         request=request,
-        name="dashboard.html",
+        name="dashboard_seller.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
