@@ -1,45 +1,32 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Club Marketplace — Dashboard</title>
-<link rel="preconnect" href="https://fonts.googleapis.com" />
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-<link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="/static/dashboard.css?v=7" />
-<style>
-  :root { --amber:#f0a93d; --green:#1c9a63; --vermelho:#c1502e; --azul:#2f6fe4; }
-  main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    .db-resumo-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:24px; }
+    .db-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:18px 20px; text-decoration:none; color:inherit; display:block; transition:box-shadow .15s, transform .15s; }
+    .db-card:hover { box-shadow:0 8px 20px -8px rgba(0,0,0,.15); transform:translateY(-1px); }
+    .db-card .icone { width:34px; height:34px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:16px; margin-bottom:12px; }
+    .db-card .titulo { font-size:13px; font-weight:600; color:var(--cmx-texto-suave); }
+    .db-card .valor { font-size:26px; font-weight:700; margin-top:2px; }
+    .db-card .nota { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .db-icone.laranja { background:#fdf3e3; color:#8a5a10; }
+    .db-icone.azul { background:#eaf1ff; color:#2f6fed; }
+    .db-icone.vermelho { background:#fbe9e3; color:#c1502e; }
+    .db-icone.verde { background:#e6f0ea; color:#2f6f4f; }
 
-  .grid-4 { display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:14px; margin-bottom:22px; }
-  .card-resumo { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:16px 18px; box-shadow:0 2px 10px rgba(0,0,0,.04); }
-  .card-resumo .rotulo { font-size:11px; font-weight:600; color:var(--cmx-texto-suave); text-transform:uppercase; letter-spacing:.02em; }
-  .card-resumo .valor { font-size:21px; font-weight:700; color:var(--cmx-texto); margin-top:6px; }
-  .card-resumo .extra { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
-  .card-resumo.positivo .valor { color:var(--green); }
-
-  .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
-  .cartao h2 { margin:0 0 4px; font-size:16px; }
-  .cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
-
-  .grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
-  @media (max-width:900px) { .grid-2 { grid-template-columns:1fr; } }
-
-  .setor-item { padding:14px 0; border-bottom:1px solid var(--cmx-borda); }
-  .setor-item:last-child { border-bottom:none; padding-bottom:0; }
-  .setor-cabecalho { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
-  .setor-nome { font-size:13.5px; font-weight:700; color:var(--cmx-texto); }
-  .setor-numeros { font-size:12.5px; color:var(--cmx-texto-suave); }
-  .barra-dupla { display:flex; height:8px; border-radius:6px; overflow:hidden; background:#eef1f4; }
-  .barra-dupla .parte-ok { background:var(--green); }
-  .barra-dupla .parte-alerta { background:var(--vermelho); }
-
-  .grafico-wrap { width:100%; overflow-x:auto; }
-  .grafico-legenda { font-size:11.5px; color:var(--cmx-texto-suave); display:flex; justify-content:space-between; margin-top:6px; }
-
-  .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
-</style>
+    .db-atalhos { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:22px 24px; }
+    .db-atalhos h2 { font-size:15px; margin:0 0 14px; }
+    .db-atalhos-lista { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .db-atalho { display:flex; align-items:center; gap:10px; padding:12px 14px; border:1px solid var(--cmx-borda); border-radius:10px; text-decoration:none; color:inherit; font-size:13.5px; font-weight:600; }
+    .db-atalho:hover { border-color:#2baff2; background:#e6f7ff; }
+  </style>
 </head>
 <body>
   <div class="cmx-shell">
@@ -47,17 +34,17 @@
       <div class="cmx-marca">
         <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
-      {% include "_menu_seller.html" %}
+      {% include "_menu.html" %}
     </aside>
 
     <div class="cmx-conteudo">
-      {% if seller_logado %}
+      {% if usuario_logado %}
       <div class="cmx-menu-usuario">
         <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
-          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
           <div>
-            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
-            <div class="cmx-menu-usuario-papel">{{ papel_logado | default("seller") }}</div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
           </div>
           <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
         </div>
@@ -72,135 +59,55 @@
           if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
         });
       </script>
-      {% endif %}
-
-      <header class="cmx-topbar">
+      {% endif %}      <header class="cmx-topbar">
         <div>
           <h1>Dashboard</h1>
-          <p class="cmx-subtitulo">Visão rápida da sua conta -- vendas de hoje e do mês, anúncios e evolução</p>
+          <p class="cmx-subtitulo">Resumo geral de tudo — clique em qualquer cartão pra ver o detalhe</p>
         </div>
       </header>
 
       <main>
-        <div id="dashboard-vazio" class="vazio" style="display:none;">Não consegui carregar os dados agora. Atualize a página.</div>
+        <div class="db-resumo-grid">
+          <a class="db-card" href="/devolucoes">
+            <div class="icone db-icone laranja">↩</div>
+            <div class="titulo">Devoluções (30 dias)</div>
+            <div class="valor">{{ devolucoes_total }}</div>
+            <div class="nota">R$ {{ "%.2f"|format(devolucoes_impacto) }} de impacto</div>
+          </a>
+          <a class="db-card" href="/pre-venda">
+            <div class="icone db-icone azul">💬</div>
+            <div class="titulo">Pré-venda hoje</div>
+            <div class="valor">{{ pre_venda_total_hoje }}</div>
+            <div class="nota">{{ pre_venda_pct_ia }}% resolvido por IA</div>
+          </a>
+          <a class="db-card" href="/pre-venda">
+            <div class="icone db-icone vermelho">⏳</div>
+            <div class="titulo">Pendentes agora</div>
+            <div class="valor">{{ pendentes_total }}</div>
+            <div class="nota">{{ pendentes_criticas }} com espera crítica</div>
+          </a>
+          <a class="db-card" href="/solicitacoes-painel">
+            <div class="icone db-icone verde">✓</div>
+            <div class="titulo">Cancelamentos tratados</div>
+            <div class="valor">{{ cancelamentos_tratados }}/{{ cancelamentos_total }}</div>
+            <div class="nota">esta semana</div>
+          </a>
+        </div>
 
-        <div id="dashboard-conteudo">
-          <div class="grid-4">
-            <div class="card-resumo">
-              <div class="rotulo">Vendido hoje</div>
-              <div class="valor" id="val-hoje-venda">R$ 0,00</div>
-              <div class="extra" id="val-hoje-vendas">0 venda(s)</div>
-            </div>
-            <div class="card-resumo positivo">
-              <div class="rotulo">Lucro líquido hoje</div>
-              <div class="valor" id="val-hoje-lucro">R$ 0,00</div>
-            </div>
-            <div class="card-resumo">
-              <div class="rotulo">Vendido no mês</div>
-              <div class="valor" id="val-mes-venda">R$ 0,00</div>
-              <div class="extra" id="val-mes-vendas">0 venda(s)</div>
-            </div>
-            <div class="card-resumo positivo">
-              <div class="rotulo">Lucro líquido no mês</div>
-              <div class="valor" id="val-mes-lucro">R$ 0,00</div>
-            </div>
-          </div>
-
-          <div class="grid-2">
-            <div class="cartao">
-              <h2>Evolução -- últimos 14 dias</h2>
-              <p class="sub">Venda bruta por dia</p>
-              <div class="grafico-wrap">
-                <svg id="grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
-              </div>
-              <div class="grafico-legenda">
-                <span id="legenda-inicio"></span>
-                <span id="legenda-fim">Hoje</span>
-              </div>
-            </div>
-
-            <div class="cartao">
-              <h2>Anúncios cadastrados</h2>
-              <p class="sub">Status atual no Mercado Livre</p>
-              <div id="bloco-anuncios">
-                <div class="setor-item">
-                  <div class="setor-cabecalho">
-                    <span class="setor-nome">Ativos</span>
-                    <span class="setor-numeros" id="anuncios-ativos-num">0</span>
-                  </div>
-                  <div class="barra-dupla"><div class="parte-ok" id="anuncios-ativos-barra" style="width:0%"></div></div>
-                </div>
-                <div class="setor-item">
-                  <div class="setor-cabecalho">
-                    <span class="setor-nome">Sem estoque</span>
-                    <span class="setor-numeros" id="anuncios-sem-estoque-num">0</span>
-                  </div>
-                  <div class="barra-dupla"><div class="parte-alerta" id="anuncios-sem-estoque-barra" style="width:0%"></div></div>
-                </div>
-                <div class="setor-item">
-                  <div class="setor-cabecalho">
-                    <span class="setor-nome">Pausados</span>
-                    <span class="setor-numeros" id="anuncios-pausados-num">0</span>
-                  </div>
-                  <div class="barra-dupla"><div class="parte-alerta" id="anuncios-pausados-barra" style="width:0%"></div></div>
-                </div>
-              </div>
-            </div>
+        <div class="db-atalhos">
+          <h2>Atalhos rápidos</h2>
+          <div class="db-atalhos-lista">
+            <a class="db-atalho" href="/pre-venda">📋 Ver fila de pré-venda</a>
+            <a class="db-atalho" href="/manuais">📄 Cadastrar manual novo</a>
+            <a class="db-atalho" href="/solicitacoes-painel">🔗 Ver solicitações de cancelamento</a>
+            <a class="db-atalho" href="/contas">👥 Contas conectadas</a>
+            <a class="db-atalho" href="/painel-tv/geral" target="_blank" rel="noopener">📺 Abrir Painel Geral (TV)</a>
+            <a class="db-atalho" href="/usuarios/novo">➕ Criar novo usuário</a>
           </div>
         </div>
       </main>
     </div>
   </div>
-
-<script>
-function formatarReais(v) {
-  return "R$ " + Number(v || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
-}
-
-async function carregarDashboard() {
-  try {
-    const resp = await fetch("/api/painel/dashboard");
-    if (!resp.ok) throw new Error("falha");
-    const dados = await resp.json();
-
-    document.getElementById("val-hoje-venda").textContent = formatarReais(dados.hoje.venda_bruta);
-    document.getElementById("val-hoje-vendas").textContent = dados.hoje.vendas + " venda(s)";
-    document.getElementById("val-hoje-lucro").textContent = formatarReais(dados.hoje.lucro_liquido);
-    document.getElementById("val-mes-venda").textContent = formatarReais(dados.mes.venda_bruta);
-    document.getElementById("val-mes-vendas").textContent = dados.mes.vendas + " venda(s)";
-    document.getElementById("val-mes-lucro").textContent = formatarReais(dados.mes.lucro_liquido);
-
-    // Anúncios -- barras de duas cores (ok/alerta), proporcional ao total.
-    const a = dados.anuncios;
-    const total = Math.max(a.total, 1);
-    document.getElementById("anuncios-ativos-num").textContent = a.ativos;
-    document.getElementById("anuncios-sem-estoque-num").textContent = a.sem_estoque;
-    document.getElementById("anuncios-pausados-num").textContent = a.pausados;
-    document.getElementById("anuncios-ativos-barra").style.width = (a.ativos / total * 100) + "%";
-    document.getElementById("anuncios-sem-estoque-barra").style.width = (a.sem_estoque / total * 100) + "%";
-    document.getElementById("anuncios-pausados-barra").style.width = (a.pausados / total * 100) + "%";
-
-    // Gráfico de evolução: polyline simples, escala pelo maior valor do período.
-    const pontos = dados.evolucao_14_dias;
-    const max = Math.max(...pontos.map(p => p.venda_bruta), 1);
-    const passo = 560 / Math.max(pontos.length - 1, 1);
-    const coords = pontos.map((p, i) => {
-      const x = i * passo;
-      const y = 130 - (p.venda_bruta / max) * 120;
-      return x + "," + y;
-    }).join(" ");
-    const svg = document.getElementById("grafico-evolucao");
-    svg.innerHTML = '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />';
-    if (pontos.length) {
-      document.getElementById("legenda-inicio").textContent = pontos[0].data.split("-").reverse().slice(0, 2).join("/");
-    }
-  } catch (e) {
-    document.getElementById("dashboard-vazio").style.display = "block";
-    document.getElementById("dashboard-conteudo").style.display = "none";
-  }
-}
-
-carregarDashboard();
-</script>
+  <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
