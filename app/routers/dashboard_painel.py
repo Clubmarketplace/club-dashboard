@@ -13,11 +13,17 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.contas_util import chave_conta
 from app.database import get_db
-from app.models import EstoqueSku
+from app.models import CustoSku, EstoqueSku, MensagemPosVenda, Pergunta, SolicitacaoCancelamento
 from app.routers.custos_painel import _seller_logado
 from app.routers.cmx import _conta_vinculada_do_usuario
 from app.routers.vendas import _montar_resumo, _somente_vendas_validas, _FUSO_BR, Venda
+
+# Perguntas de pré-venda com esse status chegaram a uma resposta de
+# verdade -- "pendente"/"fila_humana" ainda não (igual o resto do
+# sistema já trata em app/main.py:pagina_dashboard).
+_STATUS_PERGUNTA_RESPONDIDA = ("respondida", "respondida_externamente")
 
 router = APIRouter(prefix="/api/painel/dashboard", tags=["painel-dashboard"])
 
@@ -64,6 +70,52 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
     sem_estoque = sum(1 for a in anuncios if a.ativo and a.quantidade <= 0)
     pausados = sum(1 for a in anuncios if not a.ativo)
 
+    # Aderidos ao Precificador: dos anúncios ATIVOS, quantos já têm custo
+    # cadastrado (CustoSku) -- é esse cadastro que liga a extensão
+    # ClubMarketplaceX (cálculo de margem/injeção na tela de Promoções).
+    skus_com_custo = {
+        c.sku for c in db.query(CustoSku.sku).filter(CustoSku.conta_id == conta.id).all()
+    }
+    anuncios_ativos = [a for a in anuncios if a.ativo]
+    aderidos = sum(1 for a in anuncios_ativos if a.sku in skus_com_custo)
+    nao_aderidos = len(anuncios_ativos) - aderidos
+
+    # Mensagens respondidas: pré-venda (Pergunta) + pós-venda (MensagemPosVenda).
+    def _mensagens_respondidas(inicio_utc: datetime) -> int:
+        perguntas = (
+            db.query(Pergunta)
+            .filter(Pergunta.conta_id == conta.id)
+            .filter(Pergunta.status.in_(_STATUS_PERGUNTA_RESPONDIDA))
+            .filter(Pergunta.respondida_em >= inicio_utc)
+            .count()
+        )
+        pos_venda = (
+            db.query(MensagemPosVenda)
+            .filter(MensagemPosVenda.conta_id == conta.id)
+            .filter(MensagemPosVenda.status == "respondida")
+            .filter(MensagemPosVenda.respondida_em >= inicio_utc)
+            .count()
+        )
+        return perguntas + pos_venda
+
+    # Pedidos de cancelamento feitos por essa conta (tela "Minhas
+    # solicitações"/"Nova solicitação") -- casados pela chave normalizada
+    # do apelido, igual o resto do sistema (app/contas_util.py).
+    chave = chave_conta(conta.apelido)
+
+    def _cancelamentos(inicio_utc: datetime) -> dict:
+        consulta = (
+            db.query(SolicitacaoCancelamento)
+            .filter(SolicitacaoCancelamento.conta_chave == chave)
+            .filter(SolicitacaoCancelamento.criado_em >= inicio_utc)
+            .filter(
+                (SolicitacaoCancelamento.tipo.is_(None)) | (SolicitacaoCancelamento.tipo == "cancelamento")
+            )
+        )
+        total = consulta.count()
+        confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
+        return {"total": total, "confirmados": confirmados, "pendentes": total - confirmados}
+
     return {
         "conta": conta.apelido,
         "hoje": resumo_hoje,
@@ -74,5 +126,15 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
             "sem_estoque": sem_estoque,
             "pausados": pausados,
             "total": len(anuncios),
+            "aderidos_precificador": aderidos,
+            "nao_aderidos_precificador": nao_aderidos,
+        },
+        "mensagens_respondidas": {
+            "hoje": _mensagens_respondidas(inicio_dia_utc),
+            "mes": _mensagens_respondidas(inicio_mes_utc),
+        },
+        "cancelamentos": {
+            "hoje": _cancelamentos(inicio_dia_utc),
+            "mes": _cancelamentos(inicio_mes_utc),
         },
     }
