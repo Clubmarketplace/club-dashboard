@@ -86,6 +86,79 @@ def _somente_vendas_validas(consulta):
     )
 
 
+_NOMES_MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"]
+
+
+def _evolucao_dias_com_anterior(db: Session, dias: int, conta_id: int | None) -> dict:
+    """
+    Evolução diária de venda bruta pros últimos `dias` dias + o MESMO
+    tanto de dias imediatamente anterior (pra sobrepor no gráfico como
+    linha de comparação) -- generaliza o que antes só existia fixo em 14
+    dias, pro filtro de período aceitar 15/30/etc.
+
+    `conta_id=None` soma todas as contas (visão do admin); com um id,
+    fica restrito a ela (visão do seller) -- mesmo padrão de
+    `_evolucao_3_meses`.
+    """
+
+    def _serie(deslocamento_inicial: int) -> list[dict]:
+        serie = []
+        for i in range(deslocamento_inicial + dias - 1, deslocamento_inicial - 1, -1):
+            dia_br = (datetime.now(_FUSO_BR) - timedelta(days=i)).replace(hour=0, minute=0, second=0, microsecond=0)
+            inicio = dia_br.astimezone(timezone.utc).replace(tzinfo=None)
+            fim = (dia_br + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None)
+            consulta = db.query(Venda).filter(Venda.data_venda >= inicio, Venda.data_venda < fim)
+            if conta_id is not None:
+                consulta = consulta.filter(Venda.conta_id == conta_id)
+            total_dia = _somente_vendas_validas(consulta).with_entities(Venda.venda_bruta).all()
+            serie.append({"data": dia_br.date().isoformat(), "venda_bruta": round(sum(v[0] for v in total_dia), 2)})
+        return serie
+
+    return {"atual": _serie(0), "anterior": _serie(dias)}
+
+
+def _evolucao_3_meses(db: Session, conta_id: int | None) -> list[dict]:
+    """
+    Evolução diária dos últimos 3 meses (mês atual + 2 anteriores),
+    alinhada por dia-do-mês (dia 1, dia 2...) pra comparar lado a lado
+    no mesmo gráfico -- uma linha por mês. O mês atual vai só até hoje;
+    os dois anteriores, mês completo.
+
+    `conta_id=None` soma TODAS as vendas válidas (visão do admin,
+    todas as contas); com um id, fica restrito à conta (visão do seller)
+    -- mesmo parâmetro que separa as duas visões no resto do painel.
+    """
+    hoje_br = datetime.now(_FUSO_BR).replace(hour=0, minute=0, second=0, microsecond=0)
+    resultado = []
+    for deslocamento in (2, 1, 0):  # mês mais antigo primeiro, atual por último
+        inicio_mes_br = hoje_br.replace(day=1)
+        for _ in range(deslocamento):
+            inicio_mes_br = (inicio_mes_br - timedelta(days=1)).replace(day=1)
+
+        if deslocamento == 0:
+            ultimo_dia_br = hoje_br
+        else:
+            proximo_mes_br = (inicio_mes_br.replace(day=28) + timedelta(days=4)).replace(day=1)
+            ultimo_dia_br = proximo_mes_br - timedelta(days=1)
+
+        dias = []
+        cursor_br = inicio_mes_br
+        while cursor_br <= ultimo_dia_br:
+            inicio = cursor_br.astimezone(timezone.utc).replace(tzinfo=None)
+            fim = (cursor_br + timedelta(days=1)).astimezone(timezone.utc).replace(tzinfo=None)
+            consulta = db.query(Venda).filter(Venda.data_venda >= inicio, Venda.data_venda < fim)
+            if conta_id is not None:
+                consulta = consulta.filter(Venda.conta_id == conta_id)
+            total_dia = _somente_vendas_validas(consulta).with_entities(Venda.venda_bruta).all()
+            dias.append({"dia": cursor_br.day, "venda_bruta": round(sum(v[0] for v in total_dia), 2)})
+            cursor_br += timedelta(days=1)
+
+        resultado.append(
+            {"label": _NOMES_MES[inicio_mes_br.month - 1] + "/" + str(inicio_mes_br.year), "dados": dias}
+        )
+    return resultado
+
+
 def _periodo(inicio: str, fim: str) -> tuple[datetime, datetime, int]:
     """
     Converte 'YYYY-MM-DD'/'YYYY-MM-DD' em (início do dia, fim do dia,
