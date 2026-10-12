@@ -420,6 +420,11 @@ def pagina_dashboard(request: Request):
             "cancelamentos_total": cancelamentos_total,
             "cancelamentos_tratados": cancelamentos_tratados,
             "usuario_logado": usuario_logado,
+            # Admin vê a visão geral de vendas (valor de cada conta + total
+            # da rede) nessa mesma tela, no lugar dos cards operacionais --
+            # supervisor e os demais continuam com os cards de sempre
+            # (eles não podem ver valor de venda, ver app/routers/admin_painel.py).
+            "eh_admin": bool(usuario_logado and usuario_logado.papel == "admin"),
         }
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context=contexto)
