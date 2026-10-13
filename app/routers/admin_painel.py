@@ -139,6 +139,12 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
     pendente + ranking completo de quem mais atendeu). Resumo de
     propósito (sem margem/lucro por conta) -- o detalhe fica no painel
     de custo/venda de cada uma.
+
+    Os números vêm só do que já está no banco -- a sincronização com o
+    Mercado Livre acontece à parte, num ciclo contínuo em segundo plano
+    (ver app/reforco_vendas.py), não disparada por essa rota. Isso evita
+    empilhar sincronizações se o admin atualizar a página várias vezes
+    seguidas.
     """
     inicio_dia_utc, inicio_mes_utc = _inicio_do_dia_e_do_mes_em_utc()
 
