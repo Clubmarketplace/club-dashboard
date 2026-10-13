@@ -118,6 +118,26 @@ async def _iniciar_leitura_reputacao() -> None:
     app.state.tarefa_reputacao = asyncio.create_task(loop_reputacao())
     logging.getLogger(__name__).info("Leitura automática de reputação iniciada.")
 
+
+# --- Tarefa em segundo plano: reforço silencioso de vendas (ver
+# app/reforco_vendas.py). Passa pelas contas ativas, uma a uma, com
+# pausa entre cada, sincronizando os últimos 2 dias direto no Mercado
+# Livre -- cobre o caso de webhook perdido (ex: depois de reautorizar
+# uma conta) sem depender de ninguém abrir o painel do admin ou do
+# seller. Desliga com REFORCO_VENDAS_ATIVO=0.
+@app.on_event("startup")
+async def _iniciar_reforco_vendas() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("REFORCO_VENDAS_ATIVO", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Reforço silencioso de vendas DESLIGADO pela variável de ambiente.")
+        return
+    from app.reforco_vendas import loop_reforco_vendas
+    app.state.tarefa_reforco_vendas = asyncio.create_task(loop_reforco_vendas())
+    logging.getLogger(__name__).info("Reforço silencioso de vendas iniciado (ciclo contínuo, últimos 2 dias por conta).")
+
 # --- Middleware de autenticação ---
 # Tudo exige login por padrão, INCLUSIVE os painéis de TV (a TV entra com
 # um usuário do perfil "tv": só visualiza e fica logada 30 dias). As
