@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
@@ -153,6 +153,7 @@ _PUBLICO_EXATO = {
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),
     ("GET", "/privacidade-extensao"),
+    ("GET", "/favicon.ico"),
 }
 # /api/cmx/ (extensão ClubMarketplaceX) também fica de fora daqui: ela não
 # usa o cookie de sessão do painel, manda o token no cabeçalho
@@ -363,6 +364,15 @@ app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel 
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
+
+
+# O navegador pede "/favicon.ico" direto na raiz por padrão, sem olhar pro
+# HTML -- por isso é uma rota própria (não dá só pra confiar num <link> no
+# <head> de cada template). Fica liberado em _PUBLICO_EXATO acima, senão
+# cai no redirect de login antes mesmo de mostrar o ícone na tela de login.
+@app.get("/favicon.ico")
+def favicon():
+    return FileResponse("app/static/favicon.ico")
 
 # O banco guarda datas em UTC "cru" (datetime.utcnow). Nas telas montadas
 # no servidor, sempre exibir no horário de Brasília (UTC-3 fixo -- sem
