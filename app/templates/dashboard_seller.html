@@ -337,6 +337,7 @@ async function carregarDashboard() {
     }
     desenharEvolucao(document.querySelector(".btn-filtro-evolucao.ativo").dataset.periodo);
   } catch (e) {
+    console.error("Erro ao carregar o dashboard:", e);
     document.getElementById("dashboard-vazio").style.display = "block";
     document.getElementById("dashboard-conteudo").style.display = "none";
   }

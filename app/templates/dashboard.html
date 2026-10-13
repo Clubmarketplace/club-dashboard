@@ -368,6 +368,7 @@
         "</td><td class='adm-col-num'>" + formatarReais(c.vendido_mes) + "</td><td class='adm-col-num'>" + c.pedidos_mes + "</td></tr>"
       ).join("") || "<tr><td colspan='4' class='adm-vazio'>Nenhuma conta ativa.</td></tr>";
     } catch (e) {
+      console.error("Erro ao carregar o dashboard do admin:", e);
       document.getElementById("adm-vazio").style.display = "block";
       document.getElementById("adm-conteudo").style.display = "none";
     }
