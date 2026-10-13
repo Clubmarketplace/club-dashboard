@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app import auth
 from app.database import get_db
-from app.models import Conta, CustoSku, EstoqueSku, MensagemPosVenda, Pergunta, SolicitacaoCancelamento, Usuario, Venda
+from app.models import Conta, EstoqueSku, EventoAdesaoCmx, MensagemPosVenda, Pergunta, SolicitacaoCancelamento, Usuario, Venda
 from app.routers.vendas import _evolucao_3_meses, _evolucao_dias_com_anterior, _somente_vendas_validas, _FUSO_BR
 
 _STATUS_PERGUNTA_RESPONDIDA = ("respondida", "respondida_externamente")
@@ -181,23 +181,25 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
 
     # Anúncios cadastrados -- soma de TODAS as contas, mesmo critério do
     # dashboard do seller (app/routers/dashboard_painel.py): ativos (com
-    # estoque), sem estoque, pausados, e dos ativos quantos já têm custo
-    # cadastrado no Precificador (= aderiram). Busca em duas queries só
-    # (sem N+1 por conta).
+    # estoque), sem estoque, pausados.
     conta_ids = [c.id for c in contas]
     todos_anuncios = (
         db.query(EstoqueSku).filter(EstoqueSku.conta_id.in_(conta_ids)).all() if conta_ids else []
     )
-    skus_com_custo = (
-        {(c.conta_id, c.sku) for c in db.query(CustoSku.conta_id, CustoSku.sku).filter(CustoSku.conta_id.in_(conta_ids))}
-        if conta_ids
-        else set()
-    )
-    anuncios_ativos_linhas = [a for a in todos_anuncios if a.ativo]
-    anuncios_ativos_total = len(anuncios_ativos_linhas)
+    anuncios_ativos_total = sum(1 for a in todos_anuncios if a.ativo)
     anuncios_sem_estoque_total = sum(1 for a in todos_anuncios if a.ativo and a.quantidade <= 0)
     anuncios_pausados_total = sum(1 for a in todos_anuncios if not a.ativo)
-    anuncios_aderidos_total = sum(1 for a in anuncios_ativos_linhas if (a.conta_id, a.sku) in skus_com_custo)
+
+    # Promoções aderidas AUTOMATICAMENTE pelo Precificador -- soma de
+    # TODAS as contas, mesma contagem real de eventos (EventoAdesaoCmx)
+    # usada no dashboard do seller, não um retrato de "quantos têm custo
+    # cadastrado agora".
+    def _promocoes_aderidas(inicio_utc: datetime) -> int:
+        return (
+            db.query(EventoAdesaoCmx)
+            .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+            .count()
+        )
 
     # Evolução: venda bruta por dia (TODAS as contas somadas) -- 15 e 30
     # dias (cada um com o período anterior pra comparação) + 3 meses,
@@ -214,7 +216,10 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "anuncios_ativos": anuncios_ativos_total,
             "anuncios_sem_estoque": anuncios_sem_estoque_total,
             "anuncios_pausados": anuncios_pausados_total,
-            "anuncios_aderidos": anuncios_aderidos_total,
+        },
+        "promocoes_aderidas": {
+            "hoje": _promocoes_aderidas(inicio_dia_utc),
+            "mes": _promocoes_aderidas(inicio_mes_utc),
         },
         "evolucao_15_dias": evolucao_15_dias,
         "evolucao_30_dias": evolucao_30_dias,
