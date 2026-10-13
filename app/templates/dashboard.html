@@ -146,6 +146,12 @@
               <div class="valor" id="adm-mensagens-mes">0</div>
               <div class="nota" id="adm-mensagens-mes-nota"></div>
             </div>
+            <div class="db-card" style="cursor:default;">
+              <div class="icone db-icone verde">🧩</div>
+              <div class="titulo">Promoções aderidas (mês)</div>
+              <div class="valor" id="adm-promocoes-mes">0</div>
+              <div class="nota" id="adm-promocoes-mes-nota"></div>
+            </div>
           </div>
 
           <div class="adm-grid-2">
@@ -191,13 +197,6 @@
                   <span class="adm-barra-numeros" id="adm-anuncios-pausados-num">0</span>
                 </div>
                 <div class="adm-barra-dupla"><div class="adm-parte-alerta" id="adm-anuncios-pausados-barra" style="width:0%"></div></div>
-              </div>
-              <div class="adm-barra-item">
-                <div class="adm-barra-cabecalho">
-                  <span class="adm-barra-nome">Aderidos ao Precificador</span>
-                  <span class="adm-barra-numeros" id="adm-anuncios-aderidos-num">0</span>
-                </div>
-                <div class="adm-barra-dupla"><div class="adm-parte-ok" id="adm-anuncios-aderidos-barra" style="width:0%"></div><div class="adm-parte-alerta" id="adm-anuncios-nao-aderidos-barra" style="width:0%"></div></div>
               </div>
             </div>
           </div>
@@ -317,6 +316,12 @@
       document.getElementById("adm-mensagens-mes").textContent = d.setor_chamados.mes.respondidas;
       document.getElementById("adm-mensagens-mes-nota").textContent = "de " + d.setor_chamados.mes.total + " recebidas (pré + pós-venda)";
 
+      // Promoções aderidas AUTOMATICAMENTE pelo Precificador -- contagem
+      // real de eventos no mês (soma de todas as contas), não "quantos
+      // têm custo cadastrado agora".
+      document.getElementById("adm-promocoes-mes").textContent = d.promocoes_aderidas.mes;
+      document.getElementById("adm-promocoes-mes-nota").textContent = d.promocoes_aderidas.hoje + " hoje";
+
       // Anúncios cadastrados (soma de todas as contas) -- mesmas barras
       // do dashboard do seller.
       const an = d.total_geral;
@@ -327,10 +332,6 @@
       document.getElementById("adm-anuncios-sem-estoque-barra").style.width = (an.anuncios_sem_estoque / anAtivosEAlem * 100) + "%";
       document.getElementById("adm-anuncios-pausados-num").textContent = an.anuncios_pausados;
       document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
-      const anuncioAderBase = an.anuncios_ativos || 1;
-      document.getElementById("adm-anuncios-aderidos-num").textContent = an.anuncios_aderidos + " de " + an.anuncios_ativos;
-      document.getElementById("adm-anuncios-aderidos-barra").style.width = (an.anuncios_aderidos / anuncioAderBase * 100) + "%";
-      document.getElementById("adm-anuncios-nao-aderidos-barra").style.width = ((an.anuncios_ativos - an.anuncios_aderidos) / anuncioAderBase * 100) + "%";
 
       // Evolução: guarda os conjuntos (15/30 dias, cada um com o período
       // anterior pra comparação, + 3 meses) pra trocar de filtro sem

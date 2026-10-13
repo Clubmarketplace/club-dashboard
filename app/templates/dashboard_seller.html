@@ -39,6 +39,31 @@
   .grafico-legenda { font-size:11.5px; color:var(--cmx-texto-suave); display:flex; justify-content:space-between; margin-top:6px; }
 
   .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
+
+  /* Card "O que o Club fez pela sua conta" */
+  .cartao-club { background:#12181f; color:#fff; border-radius:16px; padding:26px 28px; margin-bottom:22px; }
+  .cartao-club h2 { margin:0 0 16px; font-size:16px; }
+  .club-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; }
+  @media (max-width:700px) { .club-grid { grid-template-columns:1fr; } }
+  .club-item { display:flex; gap:10px; padding:8px 0; }
+  .club-check { color:var(--green); flex-shrink:0; font-weight:700; }
+  .club-titulo { font-size:13.5px; font-weight:700; }
+  .club-sub { font-size:12px; color:#b7c0cb; margin-top:2px; }
+
+  .grafico-ponto { cursor:pointer; }
+
+  .filtro-evolucao { display:flex; gap:6px; flex-shrink:0; }
+  .btn-filtro-evolucao {
+    border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
+    border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer;
+  }
+  .btn-filtro-evolucao.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
+  .comparacao-alta { color:var(--green); font-weight:700; }
+  .comparacao-baixa { color:var(--vermelho); font-weight:700; }
+
+  .grafico-legenda-meses { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--cmx-texto-suave); }
+  .legenda-mes-item { display:flex; align-items:center; gap:6px; }
+  .legenda-mes-tracinho { display:inline-block; width:16px; height:0; border-top-width:2.5px; border-top-style:solid; }
 </style>
 </head>
 <body>
@@ -85,6 +110,40 @@
         <div id="dashboard-vazio" class="vazio" style="display:none;">Não consegui carregar os dados agora. Atualize a página.</div>
 
         <div id="dashboard-conteudo">
+          <div class="cartao-club">
+            <h2>O que o Club fez pela sua conta este mês</h2>
+            <div class="club-grid">
+              <div class="club-item">
+                <span class="club-check">✓</span>
+                <div>
+                  <div class="club-titulo" id="club-mensagens-titulo">0 mensagens respondidas</div>
+                  <div class="club-sub" id="club-mensagens-sub"></div>
+                </div>
+              </div>
+              <div class="club-item">
+                <span class="club-check">✓</span>
+                <div>
+                  <div class="club-titulo" id="club-anuncios-titulo">0 anúncios monitorados</div>
+                  <div class="club-sub">preço, estoque e disponibilidade conferidos</div>
+                </div>
+              </div>
+              <div class="club-item">
+                <span class="club-check">✓</span>
+                <div>
+                  <div class="club-titulo" id="club-promocoes-titulo">0 promoções aderidas automaticamente</div>
+                  <div class="club-sub" id="club-promocoes-sub"></div>
+                </div>
+              </div>
+              <div class="club-item">
+                <span class="club-check">✓</span>
+                <div>
+                  <div class="club-titulo" id="club-cancel-titulo">0 cancelamentos tratados</div>
+                  <div class="club-sub">solicitações confirmadas no mês</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
           <div class="grid-4">
             <div class="card-resumo">
               <div class="rotulo">Vendido hoje</div>
@@ -108,15 +167,26 @@
 
           <div class="grid-2">
             <div class="cartao">
-              <h2>Evolução -- últimos 14 dias</h2>
-              <p class="sub">Venda bruta por dia</p>
-              <div class="grafico-wrap">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                <div>
+                  <h2 id="evolucao-titulo" style="margin-bottom:0;">Evolução -- últimos 14 dias</h2>
+                  <p class="sub" style="margin-bottom:0;">Venda bruta por dia -- <span id="evolucao-total"></span></p>
+                </div>
+                <div class="filtro-evolucao">
+                  <button type="button" class="btn-filtro-evolucao ativo" data-periodo="14dias">14 dias</button>
+                  <button type="button" class="btn-filtro-evolucao" data-periodo="mes">Este mês</button>
+                  <button type="button" class="btn-filtro-evolucao" data-periodo="3meses">3 meses</button>
+                </div>
+              </div>
+              <p class="sub" id="evolucao-comparacao" style="margin-top:10px;"></p>
+              <div class="grafico-wrap" style="margin-top:8px;">
                 <svg id="grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
               </div>
-              <div class="grafico-legenda">
+              <div class="grafico-legenda" id="legenda-dias">
                 <span id="legenda-inicio"></span>
                 <span id="legenda-fim">Hoje</span>
               </div>
+              <div class="grafico-legenda-meses" id="legenda-3meses" style="display:none;"></div>
             </div>
 
             <div class="cartao">
@@ -144,14 +214,8 @@
                   </div>
                   <div class="barra-dupla"><div class="parte-alerta" id="anuncios-pausados-barra" style="width:0%"></div></div>
                 </div>
-                <div class="setor-item">
-                  <div class="setor-cabecalho">
-                    <span class="setor-nome">Aderidos ao Precificador</span>
-                    <span class="setor-numeros" id="anuncios-aderidos-num">0</span>
-                  </div>
-                  <div class="barra-dupla"><div class="parte-ok" id="anuncios-aderidos-barra" style="width:0%"></div><div class="parte-alerta" id="anuncios-nao-aderidos-barra" style="width:0%"></div></div>
-                </div>
               </div>
+              <p class="sub" id="anuncios-promocoes-nota" style="margin-top:14px; margin-bottom:0;"></p>
             </div>
           </div>
 
@@ -221,10 +285,12 @@ async function carregarDashboard() {
     document.getElementById("anuncios-sem-estoque-barra").style.width = (a.sem_estoque / total * 100) + "%";
     document.getElementById("anuncios-pausados-barra").style.width = (a.pausados / total * 100) + "%";
 
-    const totalAtivos = Math.max(a.aderidos_precificador + a.nao_aderidos_precificador, 1);
-    document.getElementById("anuncios-aderidos-num").textContent = a.aderidos_precificador + " de " + (a.aderidos_precificador + a.nao_aderidos_precificador);
-    document.getElementById("anuncios-aderidos-barra").style.width = (a.aderidos_precificador / totalAtivos * 100) + "%";
-    document.getElementById("anuncios-nao-aderidos-barra").style.width = (a.nao_aderidos_precificador / totalAtivos * 100) + "%";
+    // Promoções aderidas automaticamente pelo Precificador -- contagem
+    // real de eventos no período (não é "quantos têm custo cadastrado
+    // agora"), por isso fica como texto e não como barra de status.
+    const pa = dados.promocoes_aderidas;
+    document.getElementById("anuncios-promocoes-nota").textContent =
+      pa.mes + " promoção(ões) aderida(s) automaticamente pelo Precificador no mês (" + pa.hoje + " hoje)";
 
     // Mensagens respondidas (pré + pós-venda).
     document.getElementById("val-mensagens-hoje").textContent = dados.mensagens_respondidas.hoje;
@@ -236,25 +302,139 @@ async function carregarDashboard() {
     document.getElementById("val-cancel-mes").textContent = dados.cancelamentos.mes.total;
     document.getElementById("val-cancel-mes-extra").textContent = dados.cancelamentos.mes.pendentes + " pendente(s)";
 
-    // Gráfico de evolução: polyline simples, escala pelo maior valor do período.
-    const pontos = dados.evolucao_14_dias;
-    const max = Math.max(...pontos.map(p => p.venda_bruta), 1);
-    const passo = 560 / Math.max(pontos.length - 1, 1);
-    const coords = pontos.map((p, i) => {
-      const x = i * passo;
-      const y = 130 - (p.venda_bruta / max) * 120;
-      return x + "," + y;
-    }).join(" ");
-    const svg = document.getElementById("grafico-evolucao");
-    svg.innerHTML = '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />';
-    if (pontos.length) {
-      document.getElementById("legenda-inicio").textContent = pontos[0].data.split("-").reverse().slice(0, 2).join("/");
+    // Card "O que o Club fez pela sua conta este mês" -- só dado real.
+    const at = dados.atendimento_mes;
+    document.getElementById("club-mensagens-titulo").textContent = dados.mensagens_respondidas.mes + " mensagens respondidas";
+    document.getElementById("club-mensagens-sub").textContent =
+      (at.cobertura_pct != null ? at.cobertura_pct + "% de cobertura" : "sem mensagens recebidas no período") +
+      (at.tempo_medio_minutos != null ? ", tempo médio de " + at.tempo_medio_minutos + " min por resposta" : "");
+    document.getElementById("club-anuncios-titulo").textContent = a.total + " anúncios monitorados";
+    document.getElementById("club-promocoes-titulo").textContent = pa.mes + " promoções aderidas automaticamente";
+    document.getElementById("club-promocoes-sub").textContent = pa.hoje + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
+    document.getElementById("club-cancel-titulo").textContent = dados.cancelamentos.mes.confirmados + " cancelamentos tratados";
+
+    // Gráfico de evolução: guarda os dois conjuntos (14 dias / mês) pra
+    // trocar sem precisar buscar de novo, e desenha o selecionado.
+    window._evolucaoDados = {
+      "14dias": { atual: dados.evolucao_14_dias, anterior: dados.evolucao_14_dias_anterior },
+      "mes": { atual: dados.evolucao_mes, anterior: dados.evolucao_mes_anterior },
+      "3meses": { meses: dados.evolucao_3_meses },
+    };
+
+    // Comparação com o mês anterior (mesmo número de dias decorridos) --
+    // guardada à parte pra reaplicar quando o filtro voltar de "3 meses"
+    // pra "14 dias"/"Este mês" (nesses dois o texto é o mesmo).
+    const comp = dados.comparacao_mes_anterior;
+    if (comp.variacao_pct == null) {
+      window._comparacaoMesAnteriorHtml = "Sem venda no mesmo período do mês passado pra comparar.";
+    } else {
+      const subiu = comp.variacao_pct >= 0;
+      window._comparacaoMesAnteriorHtml =
+        "Primeiros " + comp.dias_comparados + " dia(s) -- " + formatarReais(comp.valor_mes_atual) +
+        ' <span class="' + (subiu ? "comparacao-alta" : "comparacao-baixa") + '">' +
+        (subiu ? "▲ +" : "▼ ") + comp.variacao_pct + "%</span> vs. " +
+        formatarReais(comp.valor_mes_anterior_mesmo_periodo) + " no mês passado";
     }
+    desenharEvolucao(document.querySelector(".btn-filtro-evolucao.ativo").dataset.periodo);
   } catch (e) {
     document.getElementById("dashboard-vazio").style.display = "block";
     document.getElementById("dashboard-conteudo").style.display = "none";
   }
 }
+
+// Cores fixas pra linha do mês mais antigo -> mais recente, igual nos
+// dois painéis (seller e admin) -- mais claro pro mais antigo, azul do
+// sistema pro mês atual (destaque).
+const _CORES_3_MESES = ["#c7cedb", "#7f93b8", "#2f6fe4"];
+
+function desenharEvolucao(periodo) {
+  const svg = document.getElementById("grafico-evolucao");
+
+  if (periodo === "3meses") {
+    const meses = (window._evolucaoDados && window._evolucaoDados["3meses"] && window._evolucaoDados["3meses"].meses) || [];
+    document.getElementById("evolucao-titulo").textContent = "Evolução -- últimos 3 meses";
+    const totalMesAtual = meses.length ? meses[meses.length - 1].dados.reduce((s, p) => s + p.venda_bruta, 0) : 0;
+    document.getElementById("evolucao-total").textContent = "total do mês atual: " + formatarReais(totalMesAtual);
+    document.getElementById("evolucao-comparacao").textContent = "";
+
+    const max = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+    const maxDias = Math.max(...meses.map(m => m.dados.length), 1);
+    const passo = 560 / Math.max(maxDias - 1, 1);
+
+    let svgHtml = "";
+    meses.forEach((mes, idx) => {
+      const cor = _CORES_3_MESES[idx] || _CORES_3_MESES[_CORES_3_MESES.length - 1];
+      const ehAtual = idx === meses.length - 1;
+      const xy = mes.dados.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, dia: p.dia}));
+      const coords = xy.map(p => p.x + "," + p.y).join(" ");
+      const pontosSvg = xy.map(p =>
+        '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="' + (ehAtual ? 3.5 : 2.5) + '" fill="' + cor + '"><title>' +
+        mes.label + " -- dia " + p.dia + ": " + formatarReais(p.v) + '</title></circle>'
+      ).join("");
+      svgHtml +=
+        '<polyline points="' + coords + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
+        (ehAtual ? "" : ' stroke-dasharray="5,4"') +
+        ' stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+    });
+    svg.innerHTML = svgHtml;
+
+    const legenda = document.getElementById("legenda-3meses");
+    legenda.innerHTML = meses.map((mes, idx) => {
+      const cor = _CORES_3_MESES[idx] || _CORES_3_MESES[_CORES_3_MESES.length - 1];
+      return '<span class="legenda-mes-item"><span class="legenda-mes-tracinho" style="border-color:' + cor + ';"></span>' + mes.label + '</span>';
+    }).join("");
+    legenda.style.display = "flex";
+    document.getElementById("legenda-dias").style.display = "none";
+    return;
+  }
+
+  document.getElementById("legenda-3meses").style.display = "none";
+  document.getElementById("legenda-dias").style.display = "flex";
+
+  const conjunto = (window._evolucaoDados && window._evolucaoDados[periodo]) || { atual: [], anterior: [] };
+  const pontos = conjunto.atual || [];
+  const pontosAnterior = conjunto.anterior || [];
+  const totalPeriodo = pontos.reduce((s, p) => s + p.venda_bruta, 0);
+  document.getElementById("evolucao-titulo").textContent = periodo === "mes" ? "Evolução -- este mês" : "Evolução -- últimos 14 dias";
+  document.getElementById("evolucao-total").textContent = "total no período: " + formatarReais(totalPeriodo);
+
+  // Escala compartilhada pelas duas linhas, pra comparação ficar correta
+  // visualmente (senão cada uma teria seu próprio "máximo").
+  const max = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
+  const passo = 560 / Math.max(pontos.length - 1, 1);
+  const paraXY = (lista) => lista.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, d: p.data}));
+  const xy = paraXY(pontos);
+  const xyAnterior = paraXY(pontosAnterior);
+
+  const coords = xy.map(p => p.x + "," + p.y).join(" ");
+  const coordsAnterior = xyAnterior.map(p => p.x + "," + p.y).join(" ");
+  const pontosSvg = xy.map(p =>
+    '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#2f6fe4"><title>' +
+    p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
+  ).join("");
+  const pontosSvgAnterior = xyAnterior.map(p =>
+    '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#b9c2cf"><title>' +
+    "período anterior -- " + p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
+  ).join("");
+
+  svg.innerHTML =
+    (coordsAnterior
+      ? '<polyline points="' + coordsAnterior + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
+      : "") +
+    '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+
+  if (pontos.length) {
+    document.getElementById("legenda-inicio").textContent = pontos[0].data.split("-").reverse().slice(0, 2).join("/");
+  }
+}
+
+document.querySelectorAll(".btn-filtro-evolucao").forEach(function (botao) {
+  botao.addEventListener("click", function () {
+    document.querySelectorAll(".btn-filtro-evolucao").forEach(function (b) { b.classList.remove("ativo"); });
+    botao.classList.add("ativo");
+    desenharEvolucao(botao.dataset.periodo);
+  });
+});
 
 carregarDashboard();
 </script>
