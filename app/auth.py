@@ -24,6 +24,7 @@ import hashlib
 import hmac
 import secrets
 import time
+from datetime import datetime, timedelta
 from typing import Optional
 
 from fastapi import Depends, Request
@@ -101,6 +102,50 @@ DURACAO_SESSAO_CMX_SEGUNDOS = 60 * 60 * 24 * 30  # 30 dias
 
 def duracao_sessao(papel: Optional[str]) -> int:
     return DURACAO_SESSAO_TV_SEGUNDOS if papel == "tv" else DURACAO_SESSAO_SEGUNDOS
+
+
+# --- Bloqueio temporário por senha errada repetida -------------------------
+#
+# Compartilhado pelo login do painel (main.py) e da extensão CMX
+# (app/routers/cmx.py) -- mesma regra nos dois lugares, um só lugar pra
+# ajustar. Guarda em Usuario.tentativas_login_falhas/bloqueado_ate (ver
+# app/models.py). Valores escolhidos pra inviabilizar tentativa
+# automatizada de senha sem travar gente de verdade que erra 1-2 vezes
+# (Caps Lock, senha trocada recente etc.); o desbloqueio é sempre
+# automático por tempo, nunca manual -- isso evita que alguém travem de
+# propósito o acesso de outra pessoa só sabendo o usuário dela (soltar
+# senha errada de caso pensado não adiantaria nada além de 15 min).
+LOGIN_MAX_TENTATIVAS = 5
+LOGIN_BLOQUEIO_MINUTOS = 15
+
+
+def minutos_bloqueado(usuario: Usuario) -> Optional[int]:
+    """None se não está bloqueado; senão, quantos minutos faltam (arredondado pra cima, mínimo 1)."""
+    if not usuario.bloqueado_ate or usuario.bloqueado_ate <= datetime.utcnow():
+        return None
+    return max(1, int((usuario.bloqueado_ate - datetime.utcnow()).total_seconds() // 60) + 1)
+
+
+def registrar_tentativa_falha(usuario: Usuario, db: Session) -> None:
+    """
+    Soma 1 na tentativa errada; ao bater o limite, bloqueia por
+    LOGIN_BLOQUEIO_MINUTOS a partir de AGORA (não acumula com um
+    bloqueio anterior) e zera o contador -- a próxima leva de tentativas
+    começa do zero quando o bloqueio expirar.
+    """
+    usuario.tentativas_login_falhas = (usuario.tentativas_login_falhas or 0) + 1
+    if usuario.tentativas_login_falhas >= LOGIN_MAX_TENTATIVAS:
+        usuario.bloqueado_ate = datetime.utcnow() + timedelta(minutes=LOGIN_BLOQUEIO_MINUTOS)
+        usuario.tentativas_login_falhas = 0
+    db.commit()
+
+
+def limpar_bloqueio_login(usuario: Usuario, db: Session) -> None:
+    """Login certo: zera qualquer contador/bloqueio anterior."""
+    if usuario.tentativas_login_falhas or usuario.bloqueado_ate:
+        usuario.tentativas_login_falhas = 0
+        usuario.bloqueado_ate = None
+        db.commit()
 
 
 def criar_token_sessao(usuario_id: int, duracao_segundos: Optional[int] = None) -> str:

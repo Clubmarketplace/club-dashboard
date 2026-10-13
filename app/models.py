@@ -78,19 +78,6 @@ class Conta(Base):
     # perdia ao trocar de PC); agora mora aqui pra valer pro painel todo.
     margem_minima = Column(Float, nullable=True)
     margem_maxima = Column(Float, nullable=True)
-    # 07/10: token do app "ClubMarketplaceX" (promoções, usado pela
-    # extensão) -- SEPARADO de access_token/refresh_token acima, que são
-    # do app "mestre" (pré/pós-venda). Ver app/cmx.py.
-    cmx_access_token = Column(Text, nullable=True)
-    cmx_refresh_token = Column(Text, nullable=True)
-    cmx_token_expira_em = Column(DateTime, nullable=True)
-    # App ClubMarketplaceX PRÓPRIO dessa conta (cada conta tem o seu,
-    # cadastrado separadamente no Mercado Livre Devs) -- usado em vez de
-    # uma credencial global única. Precisa ser preenchido (ver rota
-    # admin /api/cmx/admin/app-promocoes/{apelido}) antes da conta
-    # conseguir autorizar/usar a adesão via API.
-    cmx_client_id = Column(String, nullable=True)
-    cmx_client_secret = Column(Text, nullable=True)
 
     devolucoes = relationship("Devolucao", back_populates="conta")
     acoes = relationship("AcaoRegistrada", back_populates="conta")
@@ -504,6 +491,15 @@ class Usuario(Base):
     codigo_primeiro_acesso = Column(String, nullable=True)
     precisa_trocar_senha = Column(Boolean, default=True)
     ativo = Column(Boolean, default=True)
+
+    # Bloqueio temporário por senha errada repetida (ver app/routers/cmx.py,
+    # login_extensao). tentativas_login_falhas zera ao acertar a senha;
+    # ao bater o limite, bloqueado_ate recebe "agora + N minutos" e o
+    # login fica recusado até esse horário passar -- sem precisar de
+    # nenhum admin desbloquear na mão (evita virar porta pra alguém travar
+    # de propósito o acesso de outra pessoa só sabendo o usuário dela).
+    tentativas_login_falhas = Column(Integer, default=0)
+    bloqueado_ate = Column(DateTime, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow)
     criado_por_usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=True)
 
@@ -512,7 +508,49 @@ class Usuario(Base):
     # /meus-cancelamentos, no painel (Vendas/Custos/Taxas) e pré-preenche
     # a conta no formulário público. "suporte" é o perfil interno que
     # testa/acompanha o painel usando a conta de um seller.
+    #
+    # MANTIDO por compatibilidade (registros antigos, e é o campo que o
+    # formulário público de cancelamento ainda lê). Desde a tabela
+    # UsuarioConta abaixo, NÃO é mais a fonte de verdade de "quais contas
+    # esse usuário pode abrir" -- um usuário pode estar ligado a mais de
+    # uma conta agora (ver UsuarioConta). Esse campo aqui vira só um
+    # valor de referência/pré-preenchimento; `garantir_estrutura_atualizada`
+    # migra o valor dele pra UsuarioConta na subida do sistema.
     conta_vinculada = Column(String, nullable=True)
+
+    contas_vinculadas = relationship("UsuarioConta", back_populates="usuario")
+
+
+class UsuarioConta(Base):
+    """
+    Vínculo entre um usuário ("seller" ou "suporte") e uma conta que ele
+    pode abrir no painel -- substitui o antigo "1 usuário = 1 conta"
+    (campo Usuario.conta_vinculada) por "1 usuário = N contas", pra
+    operador que atende mais de um seller poder trocar de conta sem
+    precisar de um login por conta.
+
+    Não é a mesma coisa que "conta ativa no momento" -- essa tabela só
+    diz QUAIS contas o usuário tem permissão de ver; qual delas está
+    selecionada agora fica na sessão de login (ver app/auth.py), sempre
+    revalidada contra esta tabela antes de qualquer consulta (pra um
+    operador nunca conseguir ver dado de uma conta que foi removida
+    dele depois do login).
+    """
+
+    __tablename__ = "usuario_contas"
+    __table_args__ = (UniqueConstraint("usuario_id", "conta_id", name="uq_usuario_conta"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    usuario_id = Column(Integer, ForeignKey("usuarios.id"), nullable=False, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    criado_em = Column(DateTime, default=datetime.utcnow)
+    # Nome de quem fez o vínculo (admin/supervisor que editou o usuário),
+    # pra auditoria -- nulo nos registros migrados automaticamente do
+    # antigo conta_vinculada.
+    vinculado_por = Column(String, nullable=True)
+
+    usuario = relationship("Usuario", back_populates="contas_vinculadas")
+    conta = relationship("Conta")
 
 
 class ReputacaoConta(Base):

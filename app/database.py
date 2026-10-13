@@ -49,20 +49,6 @@ _COLUNAS_ADICIONAIS = {
         "motivo_inativacao": "VARCHAR",
         "margem_minima": "FLOAT",
         "margem_maxima": "FLOAT",
-        # 07/10: token do app "ClubMarketplaceX" (CMX_ML_CLIENT_ID), usado
-        # pela extensão pra checar/aderir promoções -- separado do
-        # access_token/refresh_token acima (esses são do app "mestre",
-        # usado pelo pré/pós-venda). São apps DIFERENTES cadastrados no
-        # Mercado Livre Devs; um token emitido por um não serve pro outro.
-        # Ver app/cmx.py (rotas /ml/trocar-codigo e /ml/token).
-        "cmx_access_token": "TEXT",
-        "cmx_refresh_token": "TEXT",
-        "cmx_token_expira_em": "TIMESTAMP",
-        # 07/10: cada conta vendedora tem seu PRÓPRIO app cadastrado no
-        # Mercado Livre Devs (não um app único compartilhado) -- guardado
-        # aqui pra não depender de variável de ambiente global.
-        "cmx_client_id": "VARCHAR",
-        "cmx_client_secret": "TEXT",
     },
     "perguntas": {
         "skus_anuncio": "VARCHAR",
@@ -103,6 +89,14 @@ _COLUNAS_ADICIONAIS = {
         "pagamento_status": "VARCHAR",
         # Carrinho (pack) do ML; NULL = pedido avulso ou linha antiga.
         "pack_id": "VARCHAR",
+    },
+    "usuarios": {
+        # Bloqueio temporário por senha errada repetida (login da extensão
+        # CMX, ver app/routers/cmx.py). Linhas antigas ficam com
+        # tentativas_login_falhas NULL até o primeiro login -- tratado como
+        # 0 no código (nunca lido direto sem fallback).
+        "tentativas_login_falhas": "INTEGER",
+        "bloqueado_ate": "TIMESTAMP",
     },
 }
 
@@ -162,6 +156,39 @@ def garantir_estrutura_atualizada() -> None:
                 conexao.execute(
                     text("UPDATE variaveis_conta SET base_calculo = 'venda_bruta' WHERE base_calculo IS NULL")
                 )
+
+        # Migra Usuario.conta_vinculada (texto antigo, só 1 conta por
+        # usuário) pra UsuarioConta (tabela nova, N contas por usuário) --
+        # idempotente: só cria o vínculo de quem ainda não tem NENHUMA
+        # linha em UsuarioConta (ou seja, nunca mexe em quem já foi
+        # migrado antes, ou já foi editado manualmente na tela nova).
+        from app.models import Usuario, Conta, UsuarioConta  # import local: evita ciclo na carga
+        from app.contas_util import chave_conta as _chave_conta
+
+        with SessionLocal() as sessao:
+            usuarios_sem_vinculo = (
+                sessao.query(Usuario)
+                .filter(Usuario.papel.in_(["seller", "suporte"]))
+                .filter(Usuario.conta_vinculada.isnot(None))
+                .filter(~Usuario.contas_vinculadas.any())
+                .all()
+            )
+            if usuarios_sem_vinculo:
+                contas_por_chave = {_chave_conta(c.apelido): c for c in sessao.query(Conta).all()}
+                migrados = 0
+                for usuario in usuarios_sem_vinculo:
+                    conta = contas_por_chave.get(_chave_conta(usuario.conta_vinculada))
+                    if conta is None:
+                        # conta_vinculada não bate com nenhuma conta cadastrada
+                        # (nome digitado errado, ou conta removida depois) --
+                        # fica sem vínculo nenhum até o admin corrigir na tela;
+                        # não é seguro adivinhar.
+                        continue
+                    sessao.add(UsuarioConta(usuario_id=usuario.id, conta_id=conta.id))
+                    migrados += 1
+                if migrados:
+                    sessao.commit()
+                    logger.info("UsuarioConta: %d usuário(s) migrado(s) a partir de conta_vinculada", migrados)
     except Exception:
         logger.exception("Falha ao atualizar a estrutura do banco")
         raise

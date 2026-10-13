@@ -1152,8 +1152,16 @@ def fazer_login(request: Request, usuario: str = Form(...), senha: str = Form(..
             erro = "Usuário ou senha incorretos." if conta is None else "Essa conta ainda não concluiu o primeiro acesso — use o link 'Criar sua senha'."
             return templates.TemplateResponse(request=request, name="login.html", context={"erro": erro, "proximo": proximo}, status_code=401)
 
+        minutos_restantes = auth.minutos_bloqueado(conta)
+        if minutos_restantes is not None:
+            erro = f"Muitas tentativas erradas. Tente novamente em cerca de {minutos_restantes} minuto(s)."
+            return templates.TemplateResponse(request=request, name="login.html", context={"erro": erro, "proximo": proximo}, status_code=429)
+
         if not auth.verificar_senha(senha, conta.senha_hash):
+            auth.registrar_tentativa_falha(conta, db)
             return templates.TemplateResponse(request=request, name="login.html", context={"erro": "Usuário ou senha incorretos.", "proximo": proximo}, status_code=401)
+
+        auth.limpar_bloqueio_login(conta, db)
 
         # Voltou pra tela que queria abrir; se o perfil não puder, o próprio
         # controle de acesso manda pra página inicial dele.
