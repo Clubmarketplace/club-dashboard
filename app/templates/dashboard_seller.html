@@ -180,7 +180,7 @@
               </div>
               <p class="sub" id="evolucao-comparacao" style="margin-top:10px;"></p>
               <div class="grafico-wrap" style="margin-top:8px;">
-                <svg id="grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
+                <svg id="grafico-evolucao" width="100%" height="150" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
               </div>
               <div class="grafico-legenda" id="legenda-dias">
                 <span id="legenda-inicio"></span>
@@ -288,43 +288,48 @@ async function carregarDashboard() {
     // Promoções aderidas automaticamente pelo Precificador -- contagem
     // real de eventos no período (não é "quantos têm custo cadastrado
     // agora"), por isso fica como texto e não como barra de status.
-    const pa = dados.promocoes_aderidas;
+    // (|| {} e campos com "|| 0": se o backend ainda não tiver esse campo
+    // -- ex: deploy parcial -- a tela não trava mais, só mostra 0.)
+    const pa = dados.promocoes_aderidas || {};
     document.getElementById("anuncios-promocoes-nota").textContent =
-      pa.mes + " promoção(ões) aderida(s) automaticamente pelo Precificador no mês (" + pa.hoje + " hoje)";
+      (pa.mes || 0) + " promoção(ões) aderida(s) automaticamente pelo Precificador no mês (" + (pa.hoje || 0) + " hoje)";
 
     // Mensagens respondidas (pré + pós-venda).
-    document.getElementById("val-mensagens-hoje").textContent = dados.mensagens_respondidas.hoje;
-    document.getElementById("val-mensagens-mes").textContent = dados.mensagens_respondidas.mes;
+    const msgResp = dados.mensagens_respondidas || {};
+    document.getElementById("val-mensagens-hoje").textContent = msgResp.hoje || 0;
+    document.getElementById("val-mensagens-mes").textContent = msgResp.mes || 0;
 
     // Pedidos de cancelamento feitos por essa conta.
-    document.getElementById("val-cancel-hoje").textContent = dados.cancelamentos.hoje.total;
-    document.getElementById("val-cancel-hoje-extra").textContent = dados.cancelamentos.hoje.pendentes + " pendente(s)";
-    document.getElementById("val-cancel-mes").textContent = dados.cancelamentos.mes.total;
-    document.getElementById("val-cancel-mes-extra").textContent = dados.cancelamentos.mes.pendentes + " pendente(s)";
+    const cancelHoje = (dados.cancelamentos && dados.cancelamentos.hoje) || {};
+    const cancelMes = (dados.cancelamentos && dados.cancelamentos.mes) || {};
+    document.getElementById("val-cancel-hoje").textContent = cancelHoje.total || 0;
+    document.getElementById("val-cancel-hoje-extra").textContent = (cancelHoje.pendentes || 0) + " pendente(s)";
+    document.getElementById("val-cancel-mes").textContent = cancelMes.total || 0;
+    document.getElementById("val-cancel-mes-extra").textContent = (cancelMes.pendentes || 0) + " pendente(s)";
 
     // Card "O que o Club fez pela sua conta este mês" -- só dado real.
-    const at = dados.atendimento_mes;
-    document.getElementById("club-mensagens-titulo").textContent = dados.mensagens_respondidas.mes + " mensagens respondidas";
+    const at = dados.atendimento_mes || {};
+    document.getElementById("club-mensagens-titulo").textContent = (msgResp.mes || 0) + " mensagens respondidas";
     document.getElementById("club-mensagens-sub").textContent =
       (at.cobertura_pct != null ? at.cobertura_pct + "% de cobertura" : "sem mensagens recebidas no período") +
       (at.tempo_medio_minutos != null ? ", tempo médio de " + at.tempo_medio_minutos + " min por resposta" : "");
     document.getElementById("club-anuncios-titulo").textContent = a.total + " anúncios monitorados";
-    document.getElementById("club-promocoes-titulo").textContent = pa.mes + " promoções aderidas automaticamente";
-    document.getElementById("club-promocoes-sub").textContent = pa.hoje + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
-    document.getElementById("club-cancel-titulo").textContent = dados.cancelamentos.mes.confirmados + " cancelamentos tratados";
+    document.getElementById("club-promocoes-titulo").textContent = (pa.mes || 0) + " promoções aderidas automaticamente";
+    document.getElementById("club-promocoes-sub").textContent = (pa.hoje || 0) + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
+    document.getElementById("club-cancel-titulo").textContent = (cancelMes.confirmados || 0) + " cancelamentos tratados";
 
     // Gráfico de evolução: guarda os dois conjuntos (14 dias / mês) pra
     // trocar sem precisar buscar de novo, e desenha o selecionado.
     window._evolucaoDados = {
-      "14dias": { atual: dados.evolucao_14_dias, anterior: dados.evolucao_14_dias_anterior },
-      "mes": { atual: dados.evolucao_mes, anterior: dados.evolucao_mes_anterior },
-      "3meses": { meses: dados.evolucao_3_meses },
+      "14dias": { atual: dados.evolucao_14_dias || [], anterior: dados.evolucao_14_dias_anterior || [] },
+      "mes": { atual: dados.evolucao_mes || [], anterior: dados.evolucao_mes_anterior || [] },
+      "3meses": { meses: dados.evolucao_3_meses || [] },
     };
 
     // Comparação com o mês anterior (mesmo número de dias decorridos) --
     // guardada à parte pra reaplicar quando o filtro voltar de "3 meses"
     // pra "14 dias"/"Este mês" (nesses dois o texto é o mesmo).
-    const comp = dados.comparacao_mes_anterior;
+    const comp = dados.comparacao_mes_anterior || {};
     if (comp.variacao_pct == null) {
       window._comparacaoMesAnteriorHtml = "Sem venda no mesmo período do mês passado pra comparar.";
     } else {
@@ -348,6 +353,74 @@ async function carregarDashboard() {
 // sistema pro mês atual (destaque).
 const _CORES_3_MESES = ["#c7cedb", "#7f93b8", "#2f6fe4"];
 
+// Área útil do SVG (viewBox 0 0 600 150): margem à esquerda pra caber o
+// eixo com os valores (R$ 800 / 1,5 mil / 1 mi...), igual o padrão do
+// Mercado Livre em "Tendências em vendas brutas".
+const _GRAFICO_MARGEM_ESQ = 46;
+const _GRAFICO_LARGURA = 554;
+const _GRAFICO_TOPO = 10;
+const _GRAFICO_BASE = 130;
+
+// "800", "1,5 mil", "1,2 mi" -- pra saber de cara em que escala está o
+// gráfico (não precisa contar zero).
+function formatarEixoReais(v) {
+  if (v >= 1000000) return (v / 1000000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mi";
+  if (v >= 1000) return (v / 1000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mil";
+  return Math.round(v).toLocaleString("pt-BR");
+}
+
+// Calcula um teto "redondo" pro eixo Y (não o máximo exato dos dados) e
+// os valores de cada linha de grade -- mesmo truque usado em gráfico de
+// mercado (ex: Mercado Livre), pra não ficar "0, 437, 874, 1311...".
+function calcularEixoY(maxDado) {
+  if (!maxDado || maxDado <= 0) return {maxEixo: 1, passos: [0, 0.5, 1]};
+  const bruto = maxDado / 4;
+  const mag = Math.pow(10, Math.floor(Math.log10(bruto)));
+  const normalizado = bruto / mag;
+  let passo;
+  if (normalizado < 1.5) passo = 1 * mag;
+  else if (normalizado < 3) passo = 2 * mag;
+  else if (normalizado < 7) passo = 5 * mag;
+  else passo = 10 * mag;
+  const maxEixo = Math.ceil(maxDado / passo) * passo;
+  const passos = [];
+  for (let v = 0; v <= maxEixo + passo / 2; v += passo) passos.push(Math.round(v * 100) / 100);
+  return {maxEixo, passos};
+}
+
+// Grade horizontal pontilhada + valores do eixo -- desenhada primeiro,
+// pra ficar atrás das linhas de venda.
+function desenharGradeY(maxEixo, passos) {
+  return passos.map(function (valor) {
+    const y = _GRAFICO_BASE - (valor / maxEixo) * (_GRAFICO_BASE - _GRAFICO_TOPO);
+    return (
+      '<line x1="' + _GRAFICO_MARGEM_ESQ + '" y1="' + y + '" x2="600" y2="' + y + '" stroke="#e8ecf1" stroke-width="1" stroke-dasharray="3,4" />' +
+      '<text x="' + (_GRAFICO_MARGEM_ESQ - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#9aa4b2">' + formatarEixoReais(valor) + '</text>'
+    );
+  }).join("");
+}
+
+// Curva suave (Catmull-Rom -> Bézier) em vez de linha reta ponto a ponto
+// -- mesmo visual de gráfico de tendência (ex: Mercado Livre).
+function curvaSuave(pontos) {
+  if (!pontos.length) return "";
+  if (pontos.length === 1) return "M" + pontos[0].x + "," + pontos[0].y;
+  if (pontos.length === 2) return "M" + pontos[0].x + "," + pontos[0].y + " L" + pontos[1].x + "," + pontos[1].y;
+  let d = "M" + pontos[0].x + "," + pontos[0].y + " ";
+  for (let i = 0; i < pontos.length - 1; i++) {
+    const p0 = pontos[i === 0 ? i : i - 1];
+    const p1 = pontos[i];
+    const p2 = pontos[i + 1];
+    const p3 = pontos[i + 2 < pontos.length ? i + 2 : i + 1];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += "C" + cp1x + "," + cp1y + " " + cp2x + "," + cp2y + " " + p2.x + "," + p2.y + " ";
+  }
+  return d;
+}
+
 function desenharEvolucao(periodo) {
   const svg = document.getElementById("grafico-evolucao");
 
@@ -358,22 +431,26 @@ function desenharEvolucao(periodo) {
     document.getElementById("evolucao-total").textContent = "total do mês atual: " + formatarReais(totalMesAtual);
     document.getElementById("evolucao-comparacao").textContent = "";
 
-    const max = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+    const maxDado = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+    const {maxEixo, passos} = calcularEixoY(maxDado);
     const maxDias = Math.max(...meses.map(m => m.dados.length), 1);
-    const passo = 560 / Math.max(maxDias - 1, 1);
+    const passo = _GRAFICO_LARGURA / Math.max(maxDias - 1, 1);
 
-    let svgHtml = "";
+    let svgHtml = desenharGradeY(maxEixo, passos);
     meses.forEach((mes, idx) => {
       const cor = _CORES_3_MESES[idx] || _CORES_3_MESES[_CORES_3_MESES.length - 1];
       const ehAtual = idx === meses.length - 1;
-      const xy = mes.dados.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, dia: p.dia}));
-      const coords = xy.map(p => p.x + "," + p.y).join(" ");
+      const xy = mes.dados.map((p, i) => ({
+        x: _GRAFICO_MARGEM_ESQ + i * passo,
+        y: _GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_GRAFICO_BASE - _GRAFICO_TOPO),
+        v: p.venda_bruta, dia: p.dia,
+      }));
       const pontosSvg = xy.map(p =>
         '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="' + (ehAtual ? 3.5 : 2.5) + '" fill="' + cor + '"><title>' +
         mes.label + " -- dia " + p.dia + ": " + formatarReais(p.v) + '</title></circle>'
       ).join("");
       svgHtml +=
-        '<polyline points="' + coords + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
+        '<path d="' + curvaSuave(xy) + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
         (ehAtual ? "" : ' stroke-dasharray="5,4"') +
         ' stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
     });
@@ -400,15 +477,19 @@ function desenharEvolucao(periodo) {
   document.getElementById("evolucao-total").textContent = "total no período: " + formatarReais(totalPeriodo);
 
   // Escala compartilhada pelas duas linhas, pra comparação ficar correta
-  // visualmente (senão cada uma teria seu próprio "máximo").
-  const max = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
-  const passo = 560 / Math.max(pontos.length - 1, 1);
-  const paraXY = (lista) => lista.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, d: p.data}));
+  // visualmente (senão cada uma teria seu próprio "máximo"), com teto
+  // redondo pro eixo (igual o gráfico de 3 meses, acima).
+  const maxDado = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
+  const {maxEixo, passos} = calcularEixoY(maxDado);
+  const passo = _GRAFICO_LARGURA / Math.max(pontos.length - 1, 1);
+  const paraXY = (lista) => lista.map((p, i) => ({
+    x: _GRAFICO_MARGEM_ESQ + i * passo,
+    y: _GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_GRAFICO_BASE - _GRAFICO_TOPO),
+    v: p.venda_bruta, d: p.data,
+  }));
   const xy = paraXY(pontos);
   const xyAnterior = paraXY(pontosAnterior);
 
-  const coords = xy.map(p => p.x + "," + p.y).join(" ");
-  const coordsAnterior = xyAnterior.map(p => p.x + "," + p.y).join(" ");
   const pontosSvg = xy.map(p =>
     '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#2f6fe4"><title>' +
     p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
@@ -419,10 +500,11 @@ function desenharEvolucao(periodo) {
   ).join("");
 
   svg.innerHTML =
-    (coordsAnterior
-      ? '<polyline points="' + coordsAnterior + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
+    desenharGradeY(maxEixo, passos) +
+    (xyAnterior.length
+      ? '<path d="' + curvaSuave(xyAnterior) + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
       : "") +
-    '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+    '<path d="' + curvaSuave(xy) + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
 
   if (pontos.length) {
     document.getElementById("legenda-inicio").textContent = pontos[0].data.split("-").reverse().slice(0, 2).join("/");

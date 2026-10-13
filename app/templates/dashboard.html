@@ -169,7 +169,7 @@
               </div>
               <p class="sub" id="adm-evolucao-comparacao" style="margin-top:10px;"></p>
               <div class="adm-grafico-wrap" style="margin-top:8px;">
-                <svg id="adm-grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
+                <svg id="adm-grafico-evolucao" width="100%" height="150" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
               </div>
               <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
             </div>
@@ -308,23 +308,37 @@
       if (!resp.ok) throw new Error("falha");
       const d = await resp.json();
 
-      document.getElementById("adm-hoje-venda").textContent = formatarReais(d.total_geral.vendido_hoje);
-      document.getElementById("adm-mes-venda").textContent = formatarReais(d.total_geral.vendido_mes);
-      document.getElementById("adm-qtd-contas").textContent = d.total_geral.quantidade_contas;
-      document.getElementById("adm-cancel-mes").textContent = d.setor_cancelamentos.mes.total;
-      document.getElementById("adm-cancel-mes-nota").textContent = d.setor_cancelamentos.mes.confirmadas + " confirmado(s)";
-      document.getElementById("adm-mensagens-mes").textContent = d.setor_chamados.mes.respondidas;
-      document.getElementById("adm-mensagens-mes-nota").textContent = "de " + d.setor_chamados.mes.total + " recebidas (pré + pós-venda)";
+      // "|| {}" e "|| 0" em tudo abaixo: se algum campo ainda não vier do
+      // backend (ex: deploy parcial, arquivo desatualizado), a tela não
+      // trava mais inteira -- só aquele número fica 0 até corrigir.
+      const totalGeral = d.total_geral || {};
+      const setorCancel = d.setor_cancelamentos || {};
+      const setorCancelMes = setorCancel.mes || {};
+      const setorChamados = d.setor_chamados || {};
+      const setorChamadosMes = setorChamados.mes || {};
+      const promoAderidas = d.promocoes_aderidas || {};
+
+      document.getElementById("adm-hoje-venda").textContent = formatarReais(totalGeral.vendido_hoje);
+      document.getElementById("adm-mes-venda").textContent = formatarReais(totalGeral.vendido_mes);
+      document.getElementById("adm-qtd-contas").textContent = totalGeral.quantidade_contas || 0;
+      document.getElementById("adm-cancel-mes").textContent = setorCancelMes.total || 0;
+      document.getElementById("adm-cancel-mes-nota").textContent = (setorCancelMes.confirmadas || 0) + " confirmado(s)";
+      document.getElementById("adm-mensagens-mes").textContent = setorChamadosMes.respondidas || 0;
+      document.getElementById("adm-mensagens-mes-nota").textContent = "de " + (setorChamadosMes.total || 0) + " recebidas (pré + pós-venda)";
 
       // Promoções aderidas AUTOMATICAMENTE pelo Precificador -- contagem
       // real de eventos no mês (soma de todas as contas), não "quantos
       // têm custo cadastrado agora".
-      document.getElementById("adm-promocoes-mes").textContent = d.promocoes_aderidas.mes;
-      document.getElementById("adm-promocoes-mes-nota").textContent = d.promocoes_aderidas.hoje + " hoje";
+      document.getElementById("adm-promocoes-mes").textContent = promoAderidas.mes || 0;
+      document.getElementById("adm-promocoes-mes-nota").textContent = (promoAderidas.hoje || 0) + " hoje";
 
       // Anúncios cadastrados (soma de todas as contas) -- mesmas barras
       // do dashboard do seller.
-      const an = d.total_geral;
+      const an = {
+        anuncios_ativos: totalGeral.anuncios_ativos || 0,
+        anuncios_sem_estoque: totalGeral.anuncios_sem_estoque || 0,
+        anuncios_pausados: totalGeral.anuncios_pausados || 0,
+      };
       const anAtivosEAlem = an.anuncios_ativos + an.anuncios_sem_estoque + an.anuncios_pausados || 1;
       document.getElementById("adm-anuncios-ativos-num").textContent = an.anuncios_ativos;
       document.getElementById("adm-anuncios-ativos-barra").style.width = (an.anuncios_ativos / anAtivosEAlem * 100) + "%";
@@ -337,33 +351,37 @@
       // anterior pra comparação, + 3 meses) pra trocar de filtro sem
       // buscar de novo, igual o dashboard do seller.
       window._admEvolucaoDados = {
-        "15dias": d.evolucao_15_dias,
-        "30dias": d.evolucao_30_dias,
-        "3meses": { meses: d.evolucao_3_meses },
+        "15dias": d.evolucao_15_dias || { atual: [], anterior: [] },
+        "30dias": d.evolucao_30_dias || { atual: [], anterior: [] },
+        "3meses": { meses: d.evolucao_3_meses || [] },
       };
       desenharEvolucaoAdmin(document.querySelector(".adm-btn-filtro-evolucao.ativo").dataset.periodo);
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
-      const ch = d.setor_chamados;
-      document.getElementById("adm-chamados-hoje").textContent = ch.hoje.respondidas + "/" + ch.hoje.total + " respondidas (" + ch.hoje.pendentes + " pendente(s))";
-      document.getElementById("adm-chamados-hoje-top").textContent = ch.hoje.top ? "Quem mais respondeu hoje: " + ch.hoje.top.nome + " (" + ch.hoje.top.quantidade + ")" : "";
-      document.getElementById("adm-chamados-mes").textContent = ch.mes.respondidas + "/" + ch.mes.total + " respondidas (" + ch.mes.pendentes + " pendente(s))";
-      document.getElementById("adm-chamados-mes-top").textContent = ch.mes.top ? "Quem mais respondeu no mês: " + ch.mes.top.nome + " (" + ch.mes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
-      renderizarRanking("adm-chamados-ranking", ch.mes.ranking);
+      const ch = d.setor_chamados || {};
+      const chHoje = ch.hoje || {};
+      const chMes = ch.mes || {};
+      document.getElementById("adm-chamados-hoje").textContent = (chHoje.respondidas || 0) + "/" + (chHoje.total || 0) + " respondidas (" + (chHoje.pendentes || 0) + " pendente(s))";
+      document.getElementById("adm-chamados-hoje-top").textContent = chHoje.top ? "Quem mais respondeu hoje: " + chHoje.top.nome + " (" + chHoje.top.quantidade + ")" : "";
+      document.getElementById("adm-chamados-mes").textContent = (chMes.respondidas || 0) + "/" + (chMes.total || 0) + " respondidas (" + (chMes.pendentes || 0) + " pendente(s))";
+      document.getElementById("adm-chamados-mes-top").textContent = chMes.top ? "Quem mais respondeu no mês: " + chMes.top.nome + " (" + chMes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      renderizarRanking("adm-chamados-ranking", chMes.ranking);
 
       // Cancelamentos (setor) -- mesmo padrão, quem mais confirmou +
       // ranking completo do mês.
-      const ca = d.setor_cancelamentos;
-      document.getElementById("adm-cancel-hoje").textContent = ca.hoje.confirmadas + "/" + ca.hoje.total + " confirmadas (" + ca.hoje.pendentes + " pendente(s))";
-      document.getElementById("adm-cancel-hoje-top").textContent = ca.hoje.top ? "Quem mais confirmou hoje: " + ca.hoje.top.nome + " (" + ca.hoje.top.quantidade + ")" : "";
-      document.getElementById("adm-cancel-mes-setor").textContent = ca.mes.confirmadas + "/" + ca.mes.total + " confirmadas (" + ca.mes.pendentes + " pendente(s))";
-      document.getElementById("adm-cancel-mes-setor-top").textContent = ca.mes.top ? "Quem mais confirmou no mês: " + ca.mes.top.nome + " (" + ca.mes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
-      renderizarRanking("adm-cancelamentos-ranking", ca.mes.ranking);
+      const ca = d.setor_cancelamentos || {};
+      const caHoje = ca.hoje || {};
+      const caMes = ca.mes || {};
+      document.getElementById("adm-cancel-hoje").textContent = (caHoje.confirmadas || 0) + "/" + (caHoje.total || 0) + " confirmadas (" + (caHoje.pendentes || 0) + " pendente(s))";
+      document.getElementById("adm-cancel-hoje-top").textContent = caHoje.top ? "Quem mais confirmou hoje: " + caHoje.top.nome + " (" + caHoje.top.quantidade + ")" : "";
+      document.getElementById("adm-cancel-mes-setor").textContent = (caMes.confirmadas || 0) + "/" + (caMes.total || 0) + " confirmadas (" + (caMes.pendentes || 0) + " pendente(s))";
+      document.getElementById("adm-cancel-mes-setor-top").textContent = caMes.top ? "Quem mais confirmou no mês: " + caMes.top.nome + " (" + caMes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      renderizarRanking("adm-cancelamentos-ranking", caMes.ranking);
 
       // Ranking
       const corpo = document.getElementById("adm-ranking-corpo");
-      corpo.innerHTML = d.contas.map(c =>
+      corpo.innerHTML = (d.contas || []).map(c =>
         "<tr><td>" + c.apelido + "</td><td class='adm-col-num'>" + formatarReais(c.vendido_hoje) +
         "</td><td class='adm-col-num'>" + formatarReais(c.vendido_mes) + "</td><td class='adm-col-num'>" + c.pedidos_mes + "</td></tr>"
       ).join("") || "<tr><td colspan='4' class='adm-vazio'>Nenhuma conta ativa.</td></tr>";
@@ -399,6 +417,64 @@
 
   const _ADM_CORES_3_MESES = ["#c7cedb", "#7f93b8", "#2f6fe4"];
 
+  // Mesmo padrão de grade/eixo/curva do dashboard do seller -- ver
+  // comentário lá (app/templates/dashboard_seller.html) pra detalhe.
+  const _ADM_GRAFICO_MARGEM_ESQ = 46;
+  const _ADM_GRAFICO_LARGURA = 554;
+  const _ADM_GRAFICO_TOPO = 10;
+  const _ADM_GRAFICO_BASE = 130;
+
+  function formatarEixoReais(v) {
+    if (v >= 1000000) return (v / 1000000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mi";
+    if (v >= 1000) return (v / 1000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mil";
+    return Math.round(v).toLocaleString("pt-BR");
+  }
+
+  function calcularEixoY(maxDado) {
+    if (!maxDado || maxDado <= 0) return {maxEixo: 1, passos: [0, 0.5, 1]};
+    const bruto = maxDado / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(bruto)));
+    const normalizado = bruto / mag;
+    let passo;
+    if (normalizado < 1.5) passo = 1 * mag;
+    else if (normalizado < 3) passo = 2 * mag;
+    else if (normalizado < 7) passo = 5 * mag;
+    else passo = 10 * mag;
+    const maxEixo = Math.ceil(maxDado / passo) * passo;
+    const passos = [];
+    for (let v = 0; v <= maxEixo + passo / 2; v += passo) passos.push(Math.round(v * 100) / 100);
+    return {maxEixo, passos};
+  }
+
+  function desenharGradeY(maxEixo, passos) {
+    return passos.map(function (valor) {
+      const y = _ADM_GRAFICO_BASE - (valor / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO);
+      return (
+        '<line x1="' + _ADM_GRAFICO_MARGEM_ESQ + '" y1="' + y + '" x2="600" y2="' + y + '" stroke="#e8ecf1" stroke-width="1" stroke-dasharray="3,4" />' +
+        '<text x="' + (_ADM_GRAFICO_MARGEM_ESQ - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#9aa4b2">' + formatarEixoReais(valor) + '</text>'
+      );
+    }).join("");
+  }
+
+  function curvaSuave(pontos) {
+    if (!pontos.length) return "";
+    if (pontos.length === 1) return "M" + pontos[0].x + "," + pontos[0].y;
+    if (pontos.length === 2) return "M" + pontos[0].x + "," + pontos[0].y + " L" + pontos[1].x + "," + pontos[1].y;
+    let d = "M" + pontos[0].x + "," + pontos[0].y + " ";
+    for (let i = 0; i < pontos.length - 1; i++) {
+      const p0 = pontos[i === 0 ? i : i - 1];
+      const p1 = pontos[i];
+      const p2 = pontos[i + 1];
+      const p3 = pontos[i + 2 < pontos.length ? i + 2 : i + 1];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += "C" + cp1x + "," + cp1y + " " + cp2x + "," + cp2y + " " + p2.x + "," + p2.y + " ";
+    }
+    return d;
+  }
+
   function desenharEvolucaoAdmin(periodo) {
     const svg = document.getElementById("adm-grafico-evolucao");
     const legendaMeses = document.getElementById("adm-legenda-3meses");
@@ -411,22 +487,26 @@
       document.getElementById("adm-evolucao-total").textContent = "total do mês atual: " + formatarReais(totalMesAtual);
       compEl.textContent = "";
 
-      const max = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+      const maxDado = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+      const {maxEixo, passos} = calcularEixoY(maxDado);
       const maxDias = Math.max(...meses.map(m => m.dados.length), 1);
-      const passo = 560 / Math.max(maxDias - 1, 1);
+      const passo = _ADM_GRAFICO_LARGURA / Math.max(maxDias - 1, 1);
 
-      let svgHtml = "";
+      let svgHtml = desenharGradeY(maxEixo, passos);
       meses.forEach((mes, idx) => {
         const cor = _ADM_CORES_3_MESES[idx] || _ADM_CORES_3_MESES[_ADM_CORES_3_MESES.length - 1];
         const ehAtual = idx === meses.length - 1;
-        const xy = mes.dados.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, dia: p.dia}));
-        const coords = xy.map(p => p.x + "," + p.y).join(" ");
+        const xy = mes.dados.map((p, i) => ({
+          x: _ADM_GRAFICO_MARGEM_ESQ + i * passo,
+          y: _ADM_GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO),
+          v: p.venda_bruta, dia: p.dia,
+        }));
         const pontosSvg = xy.map(p =>
           '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="' + (ehAtual ? 3.5 : 2.5) + '" fill="' + cor + '"><title>' +
           mes.label + " -- dia " + p.dia + ": " + formatarReais(p.v) + '</title></circle>'
         ).join("");
         svgHtml +=
-          '<polyline points="' + coords + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
+          '<path d="' + curvaSuave(xy) + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
           (ehAtual ? "" : ' stroke-dasharray="5,4"') +
           ' stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
       });
@@ -463,15 +543,19 @@
       compEl.textContent = "Sem venda no período anterior pra comparar.";
     }
 
-    // Escala compartilhada pelas duas linhas, pra comparação ficar correta.
-    const max = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
-    const passo = 560 / Math.max(pontos.length - 1, 1);
-    const paraXY = (lista) => lista.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, d: p.data}));
+    // Escala compartilhada pelas duas linhas, pra comparação ficar
+    // correta, com teto redondo pro eixo (igual o gráfico de 3 meses).
+    const maxDado = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
+    const {maxEixo, passos} = calcularEixoY(maxDado);
+    const passo = _ADM_GRAFICO_LARGURA / Math.max(pontos.length - 1, 1);
+    const paraXY = (lista) => lista.map((p, i) => ({
+      x: _ADM_GRAFICO_MARGEM_ESQ + i * passo,
+      y: _ADM_GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO),
+      v: p.venda_bruta, d: p.data,
+    }));
     const xy = paraXY(pontos);
     const xyAnterior = paraXY(pontosAnterior);
 
-    const coords = xy.map(p => p.x + "," + p.y).join(" ");
-    const coordsAnterior = xyAnterior.map(p => p.x + "," + p.y).join(" ");
     const pontosSvg = xy.map(p =>
       '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#2f6fe4"><title>' +
       p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
@@ -482,10 +566,11 @@
     ).join("");
 
     svg.innerHTML =
-      (coordsAnterior
-        ? '<polyline points="' + coordsAnterior + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
+      desenharGradeY(maxEixo, passos) +
+      (xyAnterior.length
+        ? '<path d="' + curvaSuave(xyAnterior) + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
         : "") +
-      '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+      '<path d="' + curvaSuave(xy) + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
   }
 
   document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (botao) {
