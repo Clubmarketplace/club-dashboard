@@ -33,6 +33,9 @@
     .adm-cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
     .adm-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
     @media (max-width:980px) { .adm-grid-2 { grid-template-columns:1fr; } }
+    .adm-grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; }
+    @media (max-width:1180px) { .adm-grid-3 { grid-template-columns:1fr 1fr; } }
+    @media (max-width:720px) { .adm-grid-3 { grid-template-columns:1fr; } }
     .adm-setor-item { padding:10px 0; border-bottom:1px solid var(--cmx-borda); font-size:13px; }
     .adm-setor-item:last-child { border-bottom:none; }
     .adm-setor-numeros { color:var(--cmx-texto-suave); }
@@ -44,6 +47,33 @@
     .adm-col-num { text-align:right; }
     .adm-grafico-wrap { width:100%; overflow-x:auto; }
     .adm-vazio { text-align:center; padding:20px; color:var(--cmx-texto-suave); font-size:13px; }
+
+    .adm-filtro-evolucao { display:flex; gap:6px; flex-shrink:0; }
+    .adm-btn-filtro-evolucao {
+      border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
+      border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer;
+    }
+    .adm-btn-filtro-evolucao.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
+    .adm-comparacao-alta { color:#2f6f4f; font-weight:700; }
+    .adm-comparacao-baixa { color:#c1502e; font-weight:700; }
+    .adm-grafico-legenda-meses { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--cmx-texto-suave); }
+    .adm-legenda-mes-item { display:flex; align-items:center; gap:6px; }
+    .adm-legenda-mes-tracinho { display:inline-block; width:16px; height:0; border-top-width:2.5px; border-top-style:solid; }
+
+    .adm-barra-item { padding:14px 0; border-bottom:1px solid var(--cmx-borda); }
+    .adm-barra-item:last-child { border-bottom:none; padding-bottom:0; }
+    .adm-barra-cabecalho { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+    .adm-barra-nome { font-size:13.5px; font-weight:700; color:var(--cmx-texto); }
+    .adm-barra-numeros { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .adm-barra-dupla { display:flex; height:8px; border-radius:6px; overflow:hidden; background:#eef1f4; }
+    .adm-barra-dupla .adm-parte-ok { background:#2f6f4f; }
+    .adm-barra-dupla .adm-parte-alerta { background:#c1502e; }
+
+    .adm-ver-ranking { background:none; border:none; color:#2f6fe4; font-size:12.5px; font-weight:600; cursor:pointer; padding:6px 0 0; font-family:inherit; }
+    .adm-ranking-lista { margin-top:8px; font-size:13px; }
+    .adm-ranking-lista ol { margin:0; padding-left:18px; }
+    .adm-ranking-lista li { padding:3px 0; }
+    .adm-ranking-lista .adm-ranking-qtd { color:var(--cmx-texto-suave); }
   </style>
 </head>
 <body>
@@ -110,17 +140,69 @@
               <div class="valor" id="adm-cancel-mes">0</div>
               <div class="nota" id="adm-cancel-mes-nota"></div>
             </div>
-          </div>
-
-          <div class="adm-cartao">
-            <h2>Evolução -- últimos 14 dias</h2>
-            <p class="sub">Venda bruta por dia, soma de todas as contas -- <span id="adm-evolucao-total"></span></p>
-            <div class="adm-grafico-wrap">
-              <svg id="adm-grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
+            <div class="db-card" style="cursor:default;">
+              <div class="icone db-icone verde">💬</div>
+              <div class="titulo">Mensagens respondidas (mês)</div>
+              <div class="valor" id="adm-mensagens-mes">0</div>
+              <div class="nota" id="adm-mensagens-mes-nota"></div>
             </div>
           </div>
 
           <div class="adm-grid-2">
+            <div class="adm-cartao">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                <div>
+                  <h2 id="adm-evolucao-titulo" style="margin-bottom:0;">Evolução -- últimos 15 dias</h2>
+                  <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas -- <span id="adm-evolucao-total"></span></p>
+                </div>
+                <div class="adm-filtro-evolucao">
+                  <button type="button" class="adm-btn-filtro-evolucao ativo" data-periodo="15dias">15 dias</button>
+                  <button type="button" class="adm-btn-filtro-evolucao" data-periodo="30dias">30 dias</button>
+                  <button type="button" class="adm-btn-filtro-evolucao" data-periodo="3meses">3 meses</button>
+                </div>
+              </div>
+              <p class="sub" id="adm-evolucao-comparacao" style="margin-top:10px;"></p>
+              <div class="adm-grafico-wrap" style="margin-top:8px;">
+                <svg id="adm-grafico-evolucao" width="100%" height="140" viewBox="0 0 560 140" preserveAspectRatio="none"></svg>
+              </div>
+              <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
+            </div>
+
+            <div class="adm-cartao">
+              <h2>Anúncios cadastrados</h2>
+              <p class="sub">Status atual no Mercado Livre -- todas as contas</p>
+              <div class="adm-barra-item">
+                <div class="adm-barra-cabecalho">
+                  <span class="adm-barra-nome">Ativos</span>
+                  <span class="adm-barra-numeros" id="adm-anuncios-ativos-num">0</span>
+                </div>
+                <div class="adm-barra-dupla"><div class="adm-parte-ok" id="adm-anuncios-ativos-barra" style="width:0%"></div></div>
+              </div>
+              <div class="adm-barra-item">
+                <div class="adm-barra-cabecalho">
+                  <span class="adm-barra-nome">Sem estoque</span>
+                  <span class="adm-barra-numeros" id="adm-anuncios-sem-estoque-num">0</span>
+                </div>
+                <div class="adm-barra-dupla"><div class="adm-parte-alerta" id="adm-anuncios-sem-estoque-barra" style="width:0%"></div></div>
+              </div>
+              <div class="adm-barra-item">
+                <div class="adm-barra-cabecalho">
+                  <span class="adm-barra-nome">Pausados</span>
+                  <span class="adm-barra-numeros" id="adm-anuncios-pausados-num">0</span>
+                </div>
+                <div class="adm-barra-dupla"><div class="adm-parte-alerta" id="adm-anuncios-pausados-barra" style="width:0%"></div></div>
+              </div>
+              <div class="adm-barra-item">
+                <div class="adm-barra-cabecalho">
+                  <span class="adm-barra-nome">Aderidos ao Precificador</span>
+                  <span class="adm-barra-numeros" id="adm-anuncios-aderidos-num">0</span>
+                </div>
+                <div class="adm-barra-dupla"><div class="adm-parte-ok" id="adm-anuncios-aderidos-barra" style="width:0%"></div><div class="adm-parte-alerta" id="adm-anuncios-nao-aderidos-barra" style="width:0%"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="adm-grid-3">
             <div class="adm-cartao">
               <h2>Chamados</h2>
               <p class="sub">Pré-venda + pós-venda</p>
@@ -132,6 +214,8 @@
                 <strong>No mês:</strong> <span class="adm-setor-numeros" id="adm-chamados-mes"></span>
                 <div class="adm-setor-top" id="adm-chamados-mes-top"></div>
               </div>
+              <button type="button" class="adm-ver-ranking" data-alvo="chamados">Ver ranking completo do mês ▾</button>
+              <div class="adm-ranking-lista" id="adm-chamados-ranking" style="display:none;"></div>
             </div>
             <div class="adm-cartao">
               <h2>Cancelamentos</h2>
@@ -144,6 +228,19 @@
                 <strong>No mês:</strong> <span class="adm-setor-numeros" id="adm-cancel-mes-setor"></span>
                 <div class="adm-setor-top" id="adm-cancel-mes-setor-top"></div>
               </div>
+              <button type="button" class="adm-ver-ranking" data-alvo="cancelamentos">Ver ranking completo do mês ▾</button>
+              <div class="adm-ranking-lista" id="adm-cancelamentos-ranking" style="display:none;"></div>
+            </div>
+            <div class="adm-cartao">
+              <h2>Cadastro</h2>
+              <p class="sub">Cadastro/atualização de anúncios</p>
+              <p class="sub" style="margin-bottom:0;">
+                Esse setor ainda não tem um registro próprio no sistema (quem cadastrou o quê, quando) --
+                hoje só existe o que o ClubMarketplaceX lê direto do Mercado Livre (estoque, preço),
+                sem ligar a ação a um atendente. Pra esse card funcionar como os outros dois, precisa criar
+                esse rastreamento primeiro (ação do usuário gravada com autor e data). Não quis inventar
+                número aqui.
+              </p>
             </div>
           </div>
 
@@ -217,30 +314,51 @@
       document.getElementById("adm-qtd-contas").textContent = d.total_geral.quantidade_contas;
       document.getElementById("adm-cancel-mes").textContent = d.setor_cancelamentos.mes.total;
       document.getElementById("adm-cancel-mes-nota").textContent = d.setor_cancelamentos.mes.confirmadas + " confirmado(s)";
+      document.getElementById("adm-mensagens-mes").textContent = d.setor_chamados.mes.respondidas;
+      document.getElementById("adm-mensagens-mes-nota").textContent = "de " + d.setor_chamados.mes.total + " recebidas (pré + pós-venda)";
 
-      // Evolução
-      const pontos = d.evolucao_14_dias;
-      const totalPeriodo = pontos.reduce((s, p) => s + p.venda_bruta, 0);
-      document.getElementById("adm-evolucao-total").textContent = "total no período: " + formatarReais(totalPeriodo);
-      const max = Math.max(...pontos.map(p => p.venda_bruta), 1);
-      const passo = 560 / Math.max(pontos.length - 1, 1);
-      const coords = pontos.map((p, i) => (i * passo) + "," + (130 - (p.venda_bruta / max) * 120)).join(" ");
-      document.getElementById("adm-grafico-evolucao").innerHTML =
-        '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />';
+      // Anúncios cadastrados (soma de todas as contas) -- mesmas barras
+      // do dashboard do seller.
+      const an = d.total_geral;
+      const anAtivosEAlem = an.anuncios_ativos + an.anuncios_sem_estoque + an.anuncios_pausados || 1;
+      document.getElementById("adm-anuncios-ativos-num").textContent = an.anuncios_ativos;
+      document.getElementById("adm-anuncios-ativos-barra").style.width = (an.anuncios_ativos / anAtivosEAlem * 100) + "%";
+      document.getElementById("adm-anuncios-sem-estoque-num").textContent = an.anuncios_sem_estoque;
+      document.getElementById("adm-anuncios-sem-estoque-barra").style.width = (an.anuncios_sem_estoque / anAtivosEAlem * 100) + "%";
+      document.getElementById("adm-anuncios-pausados-num").textContent = an.anuncios_pausados;
+      document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
+      const anuncioAderBase = an.anuncios_ativos || 1;
+      document.getElementById("adm-anuncios-aderidos-num").textContent = an.anuncios_aderidos + " de " + an.anuncios_ativos;
+      document.getElementById("adm-anuncios-aderidos-barra").style.width = (an.anuncios_aderidos / anuncioAderBase * 100) + "%";
+      document.getElementById("adm-anuncios-nao-aderidos-barra").style.width = ((an.anuncios_ativos - an.anuncios_aderidos) / anuncioAderBase * 100) + "%";
 
-      // Chamados
+      // Evolução: guarda os conjuntos (15/30 dias, cada um com o período
+      // anterior pra comparação, + 3 meses) pra trocar de filtro sem
+      // buscar de novo, igual o dashboard do seller.
+      window._admEvolucaoDados = {
+        "15dias": d.evolucao_15_dias,
+        "30dias": d.evolucao_30_dias,
+        "3meses": { meses: d.evolucao_3_meses },
+      };
+      desenharEvolucaoAdmin(document.querySelector(".adm-btn-filtro-evolucao.ativo").dataset.periodo);
+
+      // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
+      // e, separado, quem mais respondeu + ranking completo do mês.
       const ch = d.setor_chamados;
       document.getElementById("adm-chamados-hoje").textContent = ch.hoje.respondidas + "/" + ch.hoje.total + " respondidas (" + ch.hoje.pendentes + " pendente(s))";
-      document.getElementById("adm-chamados-hoje-top").textContent = ch.hoje.top ? "Quem mais respondeu: " + ch.hoje.top.nome + " (" + ch.hoje.top.quantidade + ")" : "";
+      document.getElementById("adm-chamados-hoje-top").textContent = ch.hoje.top ? "Quem mais respondeu hoje: " + ch.hoje.top.nome + " (" + ch.hoje.top.quantidade + ")" : "";
       document.getElementById("adm-chamados-mes").textContent = ch.mes.respondidas + "/" + ch.mes.total + " respondidas (" + ch.mes.pendentes + " pendente(s))";
-      document.getElementById("adm-chamados-mes-top").textContent = ch.mes.top ? "Quem mais respondeu: " + ch.mes.top.nome + " (" + ch.mes.top.quantidade + ")" : "";
+      document.getElementById("adm-chamados-mes-top").textContent = ch.mes.top ? "Quem mais respondeu no mês: " + ch.mes.top.nome + " (" + ch.mes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      renderizarRanking("adm-chamados-ranking", ch.mes.ranking);
 
-      // Cancelamentos (setor)
+      // Cancelamentos (setor) -- mesmo padrão, quem mais confirmou +
+      // ranking completo do mês.
       const ca = d.setor_cancelamentos;
       document.getElementById("adm-cancel-hoje").textContent = ca.hoje.confirmadas + "/" + ca.hoje.total + " confirmadas (" + ca.hoje.pendentes + " pendente(s))";
-      document.getElementById("adm-cancel-hoje-top").textContent = ca.hoje.top ? "Quem mais confirmou: " + ca.hoje.top.nome + " (" + ca.hoje.top.quantidade + ")" : "";
+      document.getElementById("adm-cancel-hoje-top").textContent = ca.hoje.top ? "Quem mais confirmou hoje: " + ca.hoje.top.nome + " (" + ca.hoje.top.quantidade + ")" : "";
       document.getElementById("adm-cancel-mes-setor").textContent = ca.mes.confirmadas + "/" + ca.mes.total + " confirmadas (" + ca.mes.pendentes + " pendente(s))";
-      document.getElementById("adm-cancel-mes-setor-top").textContent = ca.mes.top ? "Quem mais confirmou: " + ca.mes.top.nome + " (" + ca.mes.top.quantidade + ")" : "";
+      document.getElementById("adm-cancel-mes-setor-top").textContent = ca.mes.top ? "Quem mais confirmou no mês: " + ca.mes.top.nome + " (" + ca.mes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      renderizarRanking("adm-cancelamentos-ranking", ca.mes.ranking);
 
       // Ranking
       const corpo = document.getElementById("adm-ranking-corpo");
@@ -253,6 +371,128 @@
       document.getElementById("adm-conteudo").style.display = "none";
     }
   }
+
+  // Lista "nome -- quantidade de atendimentos", do maior pro menor,
+  // usada no "Ver ranking completo" de Chamados e Cancelamentos.
+  function renderizarRanking(idAlvo, ranking) {
+    const el = document.getElementById(idAlvo);
+    if (!ranking || !ranking.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">Sem atendimento identificado por nome ainda no mês.</p>';
+      return;
+    }
+    el.innerHTML = "<ol>" + ranking.map(r =>
+      "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)</span></li>"
+    ).join("") + "</ol>";
+  }
+
+  document.querySelectorAll(".adm-ver-ranking").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      const idAlvo = "adm-" + botao.dataset.alvo + "-ranking";
+      const el = document.getElementById(idAlvo);
+      const aberto = el.style.display !== "none";
+      el.style.display = aberto ? "none" : "block";
+      botao.textContent = aberto ? "Ver ranking completo do mês ▾" : "Ocultar ranking ▴";
+    });
+  });
+
+  const _ADM_CORES_3_MESES = ["#c7cedb", "#7f93b8", "#2f6fe4"];
+
+  function desenharEvolucaoAdmin(periodo) {
+    const svg = document.getElementById("adm-grafico-evolucao");
+    const legendaMeses = document.getElementById("adm-legenda-3meses");
+    const compEl = document.getElementById("adm-evolucao-comparacao");
+
+    if (periodo === "3meses") {
+      const meses = (window._admEvolucaoDados && window._admEvolucaoDados["3meses"] && window._admEvolucaoDados["3meses"].meses) || [];
+      document.getElementById("adm-evolucao-titulo").textContent = "Evolução -- últimos 3 meses";
+      const totalMesAtual = meses.length ? meses[meses.length - 1].dados.reduce((s, p) => s + p.venda_bruta, 0) : 0;
+      document.getElementById("adm-evolucao-total").textContent = "total do mês atual: " + formatarReais(totalMesAtual);
+      compEl.textContent = "";
+
+      const max = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
+      const maxDias = Math.max(...meses.map(m => m.dados.length), 1);
+      const passo = 560 / Math.max(maxDias - 1, 1);
+
+      let svgHtml = "";
+      meses.forEach((mes, idx) => {
+        const cor = _ADM_CORES_3_MESES[idx] || _ADM_CORES_3_MESES[_ADM_CORES_3_MESES.length - 1];
+        const ehAtual = idx === meses.length - 1;
+        const xy = mes.dados.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, dia: p.dia}));
+        const coords = xy.map(p => p.x + "," + p.y).join(" ");
+        const pontosSvg = xy.map(p =>
+          '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="' + (ehAtual ? 3.5 : 2.5) + '" fill="' + cor + '"><title>' +
+          mes.label + " -- dia " + p.dia + ": " + formatarReais(p.v) + '</title></circle>'
+        ).join("");
+        svgHtml +=
+          '<polyline points="' + coords + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
+          (ehAtual ? "" : ' stroke-dasharray="5,4"') +
+          ' stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+      });
+      svg.innerHTML = svgHtml;
+
+      legendaMeses.innerHTML = meses.map((mes, idx) => {
+        const cor = _ADM_CORES_3_MESES[idx] || _ADM_CORES_3_MESES[_ADM_CORES_3_MESES.length - 1];
+        return '<span class="adm-legenda-mes-item"><span class="adm-legenda-mes-tracinho" style="border-color:' + cor + ';"></span>' + mes.label + '</span>';
+      }).join("");
+      legendaMeses.style.display = "flex";
+      return;
+    }
+
+    legendaMeses.style.display = "none";
+    const diasJanela = periodo === "30dias" ? 30 : 15;
+    document.getElementById("adm-evolucao-titulo").textContent = "Evolução -- últimos " + diasJanela + " dias";
+
+    const conjunto = (window._admEvolucaoDados && window._admEvolucaoDados[periodo]) || { atual: [], anterior: [] };
+    const pontos = conjunto.atual || [];
+    const pontosAnterior = conjunto.anterior || [];
+    const totalPeriodo = pontos.reduce((s, p) => s + p.venda_bruta, 0);
+    const totalAnterior = pontosAnterior.reduce((s, p) => s + p.venda_bruta, 0);
+    document.getElementById("adm-evolucao-total").textContent = "total no período: " + formatarReais(totalPeriodo);
+
+    if (totalAnterior) {
+      const variacao = Math.round(((totalPeriodo - totalAnterior) / totalAnterior) * 1000) / 10;
+      const subiu = variacao >= 0;
+      compEl.innerHTML =
+        formatarReais(totalPeriodo) +
+        ' <span class="' + (subiu ? "adm-comparacao-alta" : "adm-comparacao-baixa") + '">' +
+        (subiu ? "▲ +" : "▼ ") + variacao + "%</span> vs. " +
+        formatarReais(totalAnterior) + " nos " + diasJanela + " dias anteriores";
+    } else {
+      compEl.textContent = "Sem venda no período anterior pra comparar.";
+    }
+
+    // Escala compartilhada pelas duas linhas, pra comparação ficar correta.
+    const max = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
+    const passo = 560 / Math.max(pontos.length - 1, 1);
+    const paraXY = (lista) => lista.map((p, i) => ({x: i * passo, y: 130 - (p.venda_bruta / max) * 120, v: p.venda_bruta, d: p.data}));
+    const xy = paraXY(pontos);
+    const xyAnterior = paraXY(pontosAnterior);
+
+    const coords = xy.map(p => p.x + "," + p.y).join(" ");
+    const coordsAnterior = xyAnterior.map(p => p.x + "," + p.y).join(" ");
+    const pontosSvg = xy.map(p =>
+      '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#2f6fe4"><title>' +
+      p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
+    ).join("");
+    const pontosSvgAnterior = xyAnterior.map(p =>
+      '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#b9c2cf"><title>' +
+      "período anterior -- " + p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
+    ).join("");
+
+    svg.innerHTML =
+      (coordsAnterior
+        ? '<polyline points="' + coordsAnterior + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
+        : "") +
+      '<polyline points="' + coords + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+  }
+
+  document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (b) { b.classList.remove("ativo"); });
+      botao.classList.add("ativo");
+      desenharEvolucaoAdmin(botao.dataset.periodo);
+    });
+  });
 
   carregarResumoAdmin();
   </script>
