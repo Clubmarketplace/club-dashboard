@@ -462,6 +462,24 @@ def validar_sessao_extensao(usuario: Usuario = Depends(usuario_logado_cmx), db: 
 # precisa estar autenticado no Club Marketplace pra conectar o ML).
 
 
+@router.get("/ml/client-id")
+def obter_client_id_ml(usuario: Usuario = Depends(usuario_logado_cmx)):
+    """
+    Devolve o CMX_ML_CLIENT_ID (público, não é segredo -- é a mesma peça
+    que vai visível na URL de autorização do Mercado Livre) pra extensão
+    montar o link de autorização sem precisar carregar esse valor fixo
+    no próprio pacote. Só o CMX_ML_CLIENT_SECRET é sensível e nunca sai
+    daqui (ver _chamar_endpoint_token_ml). Protegida pelo mesmo login da
+    extensão só pra não ficar uma rota pública à toa.
+    """
+    if not CMX_ML_CLIENT_ID:
+        raise HTTPException(
+            status_code=500,
+            detail="CMX_ML_CLIENT_ID não configurado no servidor (variável de ambiente).",
+        )
+    return {"client_id": CMX_ML_CLIENT_ID}
+
+
 class TrocarCodigoMlEntrada(BaseModel):
     code: str
     code_verifier: str
