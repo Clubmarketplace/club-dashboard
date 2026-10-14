@@ -5,16 +5,20 @@
   Regras de quem vê o quê (espelham _AREAS_POR_PAPEL do app/main.py;
   a trava de verdade continua no servidor -- aqui só esconde o link):
     - admin e supervisor: tudo;
+    - cadastro (14/10): só o grupo Cadastro (tela de produtos novos);
     - atendente: Perguntas, Respostas padrão, Mensagens dos pedidos,
       Solicitações sellers (cancelamento e reputação), Reputação das contas e Painéis de TV.
   Grupos em sanfona: só o grupo da tela atual vem aberto; abrir um fecha os outros.
 #}
 {% set _papel = usuario_logado.papel if usuario_logado else "" %}
-{% set _restrito = _papel == "atendente" %}
+{% set _restrito = _papel in ("atendente", "cadastro") %}
+{% set _so_cadastro = _papel == "cadastro" %}
 {% set _caminho = request.url.path if request else "" %}
 
 {% macro item(href, rotulo, nova_aba=false) -%}
   {%- set ativo = (_caminho == href) or (href != "/" and _caminho.startswith(href ~ "/")) -%}
+  {#- "Produtos para cadastro" não fica marcado quando a tela aberta é a de Produtividade (que é irmã dela, não filha) -#}
+  {%- if href == "/cadastro" and _caminho.startswith("/cadastro/produtividade") %}{% set ativo = false %}{% endif -%}
   <a class="cmx-nav-item cmx-nav-subitem{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"
      {%- if nova_aba %} target="_blank" rel="noopener"{% endif %}{% if ativo %} aria-current="page"{% endif %}>
     {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
@@ -64,6 +68,7 @@
     </a>
   {% endif %}
 
+  {% if not _so_cadastro %}
   {% call grupo("pre-venda", "Pré-venda", ["/pre-venda", "/respostas-padrao", "/manuais"]) %}
     {{ item("/pre-venda", "Perguntas (fila)") }}
     {{ item("/respostas-padrao", "Respostas padrão") }}
@@ -95,10 +100,16 @@
     {{ item("/painel-tv/fila", "Painel da Fila", nova_aba=true) }}
   {% endcall %}
 
-  {% if not _restrito %}
+  {% endif %}
+
+  {% if _so_cadastro or not _restrito %}
     {% call grupo("cadastro", "Cadastro", ["/cadastro"]) %}
       {{ item("/cadastro", "Produtos para cadastro") }}
+      {% if not _so_cadastro %}{{ item("/cadastro/produtividade", "Produtividade") }}{% endif %}
     {% endcall %}
+  {% endif %}
+
+  {% if not _restrito %}
 
     {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook", "/calibrar-ia"]) %}
       {{ item("/usuarios", "Operadores") }}
