@@ -22,7 +22,7 @@ app/contas_util.py), pra "Friaça", "friaca" e "FRIAÇA" serem a mesma.
 """
 import re
 import io
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
@@ -1345,4 +1345,140 @@ def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Sessio
             }
             for s in tratadas
         ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# Produtividade (16/10) -- espelha a Produtividade do Cadastro
+# (app/routers/cadastro_produtos.py): quanto cada pessoa CONFIRMOU
+# (cancelamento + reputação, os dois tipos que passam por esta tela) no
+# período. Mesma regra de acesso: admin/supervisor sempre veem;
+# "gerente_setor" só vê com o setor "solicitacoes_cancelamento" marcado;
+# "operador" comum não vê a produtividade dos colegas.
+# ---------------------------------------------------------------------------
+def _supervisao_cancelamento_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
+    """Quem pode ver a Produtividade de Solicitações: admin, supervisor, e
+    "gerente_setor" com o setor "solicitacoes_cancelamento" -- o perfil
+    "operador" comum não vê o número dos colegas (mesma regra da
+    Produtividade do Cadastro)."""
+    usuario = auth.usuario_atual(request, db)
+    if not auth.pode_ver_produtividade(usuario, "solicitacoes_cancelamento"):
+        raise HTTPException(status_code=403, detail="Acesso restrito.")
+    return usuario
+
+
+def _limites_utc_produtividade(de: date, ate: date):
+    """Dias (inclusive) em horário de Brasília -> [início, fim) em UTC cru
+    (como o banco guarda) -- mesma conta de _inicio_do_dia_br_em_utc, só que
+    pra um intervalo de dois dias em vez de um só."""
+    inicio = _inicio_do_dia_br_em_utc(datetime.combine(de, datetime.min.time()))
+    fim = _inicio_do_dia_br_em_utc(datetime.combine(ate + timedelta(days=1), datetime.min.time()))
+    return inicio, fim
+
+
+def _no_periodo(data: Optional[datetime], inicio: datetime, fim: datetime) -> bool:
+    return data is not None and inicio <= data < fim
+
+
+def _agregar_produtividade_cancelamento(linhas, inicio: datetime, fim: datetime) -> list:
+    """
+    Conta, por pessoa, o que ela CONFIRMOU dentro de [inicio, fim) (UTC).
+    Função pura (recebe as linhas já lidas), testável sem banco:
+      - cancelamento/reputacao: confirmações de cada tipo;
+      - total: soma dos dois;
+      - assumidas_primeiro: pedidos que ela foi a PRIMEIRA a assumir no
+        período (mede quem entra na fila, mesmo quando outra pessoa confirma
+        depois -- sem isso, quem só "desengasga" pedidos difíceis e devolve
+        pra fila não apareceria em nada);
+      - tempo_medio_seg: tempo médio entre assumir (a primeira vez) e
+        confirmar, só nos pedidos que ELA MESMA confirmou (None se não
+        confirmou nenhum no período).
+    """
+    pessoas = {}
+
+    def _pessoa(nome):
+        nome = nome or "—"
+        return pessoas.setdefault(
+            nome, {"nome": nome, "cancelamento": 0, "reputacao": 0, "total": 0, "assumidas_primeiro": 0,
+                   "tempo_soma_seg": 0, "tempo_n": 0}
+        )
+
+    for s in linhas:
+        tipo = s.tipo or TIPO_PADRAO
+        if s.confirmado_por and _no_periodo(s.confirmado_em, inicio, fim):
+            pessoa = _pessoa(s.confirmado_por)
+            if tipo in pessoa:
+                pessoa[tipo] += 1
+            pessoa["total"] += 1
+            if s.assumido_primeiro_em and s.confirmado_em >= s.assumido_primeiro_em:
+                pessoa["tempo_soma_seg"] += int((s.confirmado_em - s.assumido_primeiro_em).total_seconds())
+                pessoa["tempo_n"] += 1
+        if s.assumido_primeiro_por and _no_periodo(s.assumido_primeiro_em, inicio, fim):
+            _pessoa(s.assumido_primeiro_por)["assumidas_primeiro"] += 1
+
+    for pessoa in pessoas.values():
+        pessoa["tempo_medio_seg"] = (pessoa["tempo_soma_seg"] // pessoa["tempo_n"]) if pessoa["tempo_n"] else None
+    return sorted(pessoas.values(), key=lambda x: (-x["total"], -x["assumidas_primeiro"], x["nome"].lower()))
+
+
+def _agregar_fila_cancelamento(pendentes) -> dict:
+    """Fila de agora: entre os pedidos pendentes (não confirmados), quantos
+    estão livres e quantos já estão em atendimento com alguém."""
+    livres = sum(1 for s in pendentes if not _dados_atendimento(s)["em_atendimento_por_id"])
+    return {
+        "pendentes": len(pendentes),
+        "livres": livres,
+        "em_atendimento": len(pendentes) - livres,
+    }
+
+
+@router.get("/produtividade")
+def produtividade_cancelamento(
+    de: Optional[str] = None,
+    ate: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _usuario: Usuario = Depends(_supervisao_cancelamento_logado),
+):
+    """
+    Quanto cada pessoa confirmou no período (datas no horário de Brasília,
+    padrão: hoje), somando cancelamento e reputação -- os dois tipos que
+    passam por esta tela. Por pessoa: confirmações de cada tipo, o total,
+    quantas ela foi a primeira a assumir, e o tempo médio entre assumir e
+    confirmar. Também devolve a fila de agora (pedidos pendentes, livres vs.
+    em atendimento), que não depende do período.
+    """
+    try:
+        data_de = date.fromisoformat(de) if de else datetime.now(FUSO_BR).date()
+        data_ate = date.fromisoformat(ate) if ate else data_de
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Datas no formato AAAA-MM-DD.")
+    if data_ate < data_de:
+        raise HTTPException(status_code=422, detail="A data final não pode ser antes da inicial.")
+    if (data_ate - data_de).days > 366:
+        raise HTTPException(status_code=422, detail="Escolha no máximo 1 ano de intervalo.")
+    inicio, fim = _limites_utc_produtividade(data_de, data_ate)
+
+    # Só lê as linhas que podem contar no período (o resto não muda nenhum número).
+    condicoes = [
+        and_(SolicitacaoCancelamento.confirmado_em >= inicio, SolicitacaoCancelamento.confirmado_em < fim),
+        and_(SolicitacaoCancelamento.assumido_primeiro_em >= inicio, SolicitacaoCancelamento.assumido_primeiro_em < fim),
+    ]
+    linhas = db.query(SolicitacaoCancelamento).filter(or_(*condicoes)).all()
+    pessoas = _agregar_produtividade_cancelamento(linhas, inicio, fim)
+
+    totais = {"cancelamento": 0, "reputacao": 0, "total": 0, "assumidas_primeiro": 0}
+    for pessoa in pessoas:
+        for campo in totais:
+            totais[campo] += pessoa[campo]
+    soma_t = sum(x["tempo_soma_seg"] for x in pessoas)
+    n_t = sum(x["tempo_n"] for x in pessoas)
+    totais["tempo_medio_seg"] = (soma_t // n_t) if n_t else None
+
+    pendentes = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.confirmado_por.is_(None)).all()
+    return {
+        "de": data_de.isoformat(),
+        "ate": data_ate.isoformat(),
+        "pessoas": pessoas,
+        "totais": totais,
+        "fila": _agregar_fila_cancelamento(pendentes),
     }
