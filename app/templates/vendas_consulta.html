@@ -87,6 +87,9 @@
   .cartao-venda-linha {
     padding:14px 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; cursor:pointer; user-select:none;
   }
+  /* SKU precisa poder ser selecionado e copiado (pra colar na busca do marketplace), mesmo a linha
+     toda sendo clicável pra abrir/fechar o cartão -- ver data-copiavel no clique, em vendas_consulta.js */
+  .cartao-venda-sku-copiavel { user-select:text; cursor:text; }
   .cartao-venda-avatar {
     width:42px; height:42px; border-radius:10px; background:#eef1f4; color:var(--cmx-texto-suave);
     display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; flex-shrink:0;
