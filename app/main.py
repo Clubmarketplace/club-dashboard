@@ -190,14 +190,21 @@ _AREAS = {
     # Acompanhar e confirmar as solicitações manuais de cancelamento.
     # A lista é "/api/solicitacoes-cancelamento" (exato) e o confirmar é
     # "/api/solicitacoes-cancelamento/{id}/confirmar" (prefixo).
+    # "/relatorio-cancelamentos" NÃO entra na lista de páginas aqui, de
+    # propósito -- é relatório gerencial (só gerente_setor/admin/supervisor/
+    # atendente), igual à Produtividade do Cadastro logo abaixo. Se entrasse
+    # aqui, viraria candidata a "página inicial" de QUALQUER operador/
+    # gerente_setor com esse setor (15/10 -- foi exatamente isso que causou
+    # o loop de redirecionamento). Acesso de verdade é liberado à parte, em
+    # _PAGINAS_SO_GERENCIA (logo abaixo de _papel_pode_acessar).
     "solicitacoes_cancelamento": {
-        "paginas": {"/solicitacoes-painel", "/relatorio-cancelamentos", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
+        "paginas": {"/solicitacoes-painel", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
         "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
     # Time de Cadastro (14/10): a tela de produtos novos e a API dela. A
     # tela de produtividade (/cadastro/produtividade) NÃO entra aqui de
-    # propósito -- é só de admin/supervisor; a API de produtividade também é
-    # conferida na própria rota.
+    # propósito, pelo mesmo motivo acima -- acesso liberado à parte em
+    # _PAGINAS_SO_GERENCIA.
     "cadastro": {"paginas": {"/cadastro"}, "prefixos_api": ("/api/cadastro/",)},
     # Galpão: registrar (o formulário e o envio já são públicos) e
     # acompanhar. Só endereços EXATOS -- de propósito, o /confirmar
@@ -299,10 +306,28 @@ def _conta_logada_de(usuario):
     return usuario.conta_vinculada if _eh_painel_seller(usuario) else None
 
 
+# Páginas "de gestão" (relatório/produtividade) que ficam de propósito
+# FORA de _AREAS[...]["paginas"] (ver comentário lá em cima) -- cada uma
+# mapeia pro setor que ela pertence. Quem abre: admin/supervisor (acesso
+# livre, nem passa por aqui), "gerente_setor" com o setor marcado, e quem
+# estiver em _ATENDENTE_LIBERADO_EM (acesso clássico, de antes de existir
+# setor, preservado como sempre foi).
+_PAGINAS_SO_GERENCIA = {
+    "/cadastro/produtividade": "cadastro",
+    "/relatorio-cancelamentos": "solicitacoes_cancelamento",
+}
+_ATENDENTE_LIBERADO_EM = {"/relatorio-cancelamentos"}  # atendente já via isso antes dos setores existirem
+
+
 def _papel_pode_acessar(usuario_logado, caminho: str) -> bool:
     """Diz se um perfil restrito (ex: atendente, operador, gerente_setor) pode abrir esse caminho."""
     if caminho == "/logout":
         return True
+    if caminho in _PAGINAS_SO_GERENCIA:
+        if usuario_logado.papel == "atendente" and caminho in _ATENDENTE_LIBERADO_EM:
+            return True
+        setor = _PAGINAS_SO_GERENCIA[caminho]
+        return usuario_logado.papel == "gerente_setor" and setor in auth.setores_do_usuario(usuario_logado)
     for nome_area in _areas_do_usuario(usuario_logado):
         area = _AREAS[nome_area]
         if caminho in area["paginas"] or any(caminho.startswith(p) for p in area["prefixos_api"]):
@@ -1186,18 +1211,26 @@ def pagina_cadastro(request: Request):
 
 @app.get("/cadastro/produtividade", response_class=HTMLResponse)
 def pagina_cadastro_produtividade(request: Request):
-    """Quanto cada pessoa do time de Cadastro cadastrou, por marketplace e período. Só admin e supervisor."""
+    """Quanto cada pessoa do time de Cadastro cadastrou, por marketplace e período.
+    Admin, supervisor, e gerente_setor com o setor "cadastro" (15/10) -- mesma
+    regra de app.auth.pode_ver_produtividade usada na API (antes a página
+    ficou pra trás da API e só liberava admin/supervisor)."""
     usuario = _usuario_logado(request)
-    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+    if not auth.pode_ver_produtividade(usuario, "cadastro"):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(request=request, name="cadastro-produtividade.html", context={"usuario_logado": usuario})
 
 
 @app.get("/relatorio-cancelamentos", response_class=HTMLResponse)
 def pagina_relatorio_cancelamentos(request: Request):
-    """Relatório de cancelamentos por conta e período (imprimir / PDF / Excel). Admin, supervisor e atendente."""
+    """Relatório de cancelamentos por conta e período (imprimir / PDF / Excel).
+    Admin, supervisor e atendente (acesso de sempre) + gerente_setor com o
+    setor "solicitacoes_cancelamento" (15/10)."""
     usuario = _usuario_logado(request)
-    if not usuario or usuario.papel not in ("admin", "supervisor", "atendente"):
+    if not usuario or not (
+        usuario.papel in ("admin", "supervisor", "atendente")
+        or auth.pode_ver_produtividade(usuario, "solicitacoes_cancelamento")
+    ):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(request=request, name="relatorio-cancelamentos.html", context={"usuario_logado": usuario})
 
