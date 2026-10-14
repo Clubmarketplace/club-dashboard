@@ -30,9 +30,19 @@ a informação empurra, o backend só recebe. Nada aqui lê a planilha do Operad
   POST /api/cadastro/produtos/{id}/status-> atalho: marca/desmarca os 3 de uma vez.
   POST /api/cadastro/produtos/lote       -> inclusão MANUAL de VÁRIOS produtos de uma nota (colar da planilha).
   POST /api/cadastro/produtos/{id}/assumir -> "assumi este cadastro" (ou solta); guarda quem e quando.
+  POST /api/cadastro/produtos/{id}/reabrir -> reabre um produto TRAVADO (já cadastrado), com
+        motivo obrigatório. Só admin/supervisor (ver "TRAVA" abaixo).
   GET  /api/cadastro/empresas            -> nomes de empresa já usados (sugestão no formulário).
   GET  /api/cadastro/produtividade       -> quanto cada pessoa cadastrou (só admin/supervisor).
         (as de /api/cadastro: admin, supervisor e o perfil "cadastro")
+
+TRAVA (14/10)
+-------------
+Produto "cadastrado" (os 3 marketplaces resolvidos) fica TRAVADO: as rotas de
+marcação (/marketplace e /status) recusam qualquer mudança nele (423), pra
+ninguém -- nem por engano -- desfazer um cadastro já confirmado. A única
+forma de mexer de novo é a rota /reabrir (só admin/supervisor), que exige
+motivo e grava quem reabriu, quando e por quê.
 
 REENVIO SEGURO
 --------------
@@ -293,6 +303,10 @@ def _produto_json(p: ProdutoCadastro) -> dict:
         "refazer": bool(p.refazer),
         "assumido_por": p.assumido_por,
         "assumido_em": _iso_utc(p.assumido_em),
+        "travado": p.status == "cadastrado",
+        "reaberto_por": p.reaberto_por,
+        "reaberto_em": _iso_utc(p.reaberto_em),
+        "motivo_reabertura": p.motivo_reabertura,
     }
 
 
@@ -562,6 +576,57 @@ def assumir_produto(
     return {"ok": True, "item": _produto_json(produto)}
 
 
+class ReabrirIn(BaseModel):
+    motivo: str
+
+
+@router.post("/api/cadastro/produtos/{produto_id}/reabrir")
+def reabrir_produto(
+    produto_id: int,
+    corpo: ReabrirIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_supervisao_logado),  # só admin/supervisor -- ver "TRAVA" no topo do arquivo
+):
+    """
+    Reabre um produto TRAVADO (já cadastrado/confirmado), exigindo o motivo.
+    Limpa as 3 marcações de marketplace e quem assumiu -- volta pra fila como
+    se fosse um cadastro novo, mas com o rastro de quem reabriu, quando e por
+    quê (reaberto_por/reaberto_em/motivo_reabertura) e marcado como "refazer"
+    pra quem for cadastrar saber que já foi feito antes.
+    """
+    motivo = (corpo.motivo or "").strip()
+    if len(motivo) < 5:
+        raise HTTPException(status_code=422, detail="Informe o motivo da reabertura (mínimo 5 caracteres).")
+
+    produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status != "cadastrado":
+        raise HTTPException(status_code=409, detail="Este produto não está travado (ainda não foi cadastrado).")
+
+    for k in MARKETPLACES:
+        setattr(produto, f"{k}_status", None)
+        setattr(produto, f"{k}_por", None)
+        setattr(produto, f"{k}_em", None)
+    produto.assumido_por = None
+    produto.assumido_em = None
+    produto.refazer = True
+    produto.reaberto_por = usuario.nome_exibicao
+    produto.reaberto_em = datetime.utcnow()
+    produto.motivo_reabertura = motivo
+    _recalcular_status(produto, usuario.nome_exibicao)  # os 3 ficaram vazios -> volta pra "pendente" sozinho
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao reabrir produto do Cadastro (id=%s)", produto_id)
+        raise HTTPException(status_code=500, detail="Erro ao reabrir no servidor.")
+
+    logger.info("Produto de cadastro reaberto: id=%s por=%s motivo=%s", produto_id, usuario.nome_exibicao, motivo)
+    return {"ok": True, "item": _produto_json(produto)}
+
+
 class MarketplaceIn(BaseModel):
     marketplace: str  # "ml" | "tiktok" | "shopee"
     estado: str  # "feito" | "nao_se_aplica" | "pendente"
@@ -590,6 +655,11 @@ def marcar_marketplace(
     produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
     if produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status == "cadastrado":
+        raise HTTPException(
+            status_code=423,
+            detail="Este produto já foi cadastrado e confirmado -- está travado. Peça a um supervisor para reabrir, informando o motivo.",
+        )
 
     if estado == "pendente":
         setattr(produto, f"{chave}_status", None)
@@ -624,6 +694,11 @@ def alterar_status_cadastro(
     produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
     if produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status == "cadastrado":
+        raise HTTPException(
+            status_code=423,
+            detail="Este produto já foi cadastrado e confirmado -- está travado. Peça a um supervisor para reabrir, informando o motivo.",
+        )
     agora = datetime.utcnow()
     for k in MARKETPLACES:
         if corpo.cadastrado:
