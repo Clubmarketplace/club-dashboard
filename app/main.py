@@ -1198,14 +1198,19 @@ def pagina_cadastro(request: Request):
     (e os incluídos à mão), agrupados por empresa, esperando o time de
     Cadastro. Cada pessoa marca em quais marketplaces (Mercado Livre, TikTok,
     Shopee) já cadastrou -- a tela guarda quem fez cada um. Admin, supervisor
-    e o perfil "cadastro"; a API (app/routers/cadastro_produtos.py) confere de novo.
+    e o perfil "cadastro" (de sempre) + operador/gerente_setor com o setor
+    "cadastro" marcado (15/10); a API (app/routers/cadastro_produtos.py)
+    confere de novo.
     """
     usuario = _usuario_logado(request)
-    if not auth.papel_permite(usuario, ("admin", "supervisor", "cadastro")):
+    pode_abrir = auth.papel_permite(usuario, ("admin", "supervisor", "cadastro")) or (
+        usuario is not None and usuario.papel in ("operador", "gerente_setor") and "cadastro" in auth.setores_do_usuario(usuario)
+    )
+    if not pode_abrir:
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(
         request=request, name="cadastro.html",
-        context={"usuario_logado": usuario, "pode_ver_produtividade": usuario.papel in ("admin", "supervisor")},
+        context={"usuario_logado": usuario, "pode_ver_produtividade": auth.pode_ver_produtividade(usuario, "cadastro")},
     )
 
 
