@@ -87,6 +87,16 @@ FUSO_BR = timezone(timedelta(hours=-3))
 # Papéis que podem CONFIRMAR (quem pede não confirma: controle cruzado).
 PAPEIS_QUE_CONFIRMAM = ("admin", "supervisor", "atendente")
 
+
+def _pode_tratar_solicitacao(usuario) -> bool:
+    """Quem pode assumir/confirmar uma solicitação: os papéis clássicos de
+    sempre (PAPEIS_QUE_CONFIRMAM) + operador/gerente_setor com o setor
+    "solicitacoes_cancelamento" marcado (15/10) -- sem isso, quem tem esse
+    setor abria a tela mas não conseguia trabalhar nenhum pedido nela."""
+    if usuario.papel in PAPEIS_QUE_CONFIRMAM:
+        return True
+    return usuario.papel in ("operador", "gerente_setor") and "solicitacoes_cancelamento" in auth.setores_do_usuario(usuario)
+
 # "Em atendimento" NÃO expira: o pedido fica com quem assumiu até confirmar
 # ou liberar. Se outra pessoa precisar, ela assume no lugar (e o histórico
 # guarda quanto tempo ficou com cada um). Decidido com a equipe.
@@ -640,7 +650,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
     usuario_logado = auth.usuario_atual(request, db)
     if usuario_logado is None:
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
-    if usuario_logado.papel not in PAPEIS_QUE_CONFIRMAM:
+    if not _pode_tratar_solicitacao(usuario_logado):
         raise HTTPException(status_code=403, detail="Seu perfil não pode confirmar solicitações.")
 
     solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
@@ -699,7 +709,7 @@ def _operador_que_confirma(request: Request, db: Session):
     usuario = auth.usuario_atual(request, db)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
-    if usuario.papel not in PAPEIS_QUE_CONFIRMAM:
+    if not _pode_tratar_solicitacao(usuario):
         raise HTTPException(status_code=403, detail="Seu perfil não trata cancelamentos.")
     return usuario
 
@@ -1017,6 +1027,14 @@ PAPEIS_RELATORIO = ("admin", "supervisor", "atendente")
 SEM_SKU = "—"
 
 
+def _pode_ver_relatorio_cancelamentos(usuario) -> bool:
+    """Quem gera o relatório de cancelamentos: admin/supervisor/atendente
+    (de sempre) + gerente_setor com o setor "solicitacoes_cancelamento"
+    (15/10) -- mesma regra da Produtividade do Cadastro. Operador comum
+    NÃO entra aqui de propósito (é relatório gerencial)."""
+    return usuario.papel in PAPEIS_RELATORIO or auth.pode_ver_produtividade(usuario, "solicitacoes_cancelamento")
+
+
 def _periodo_relatorio(periodo: str | None, de: str | None, ate: str | None, dias: int | None = None):
     """(início, fim, rótulo) em datas de Brasília. mes_atual | mes_anterior | datas | dias (últimos N dias)."""
     hoje = datetime.now(FUSO_BR).date()
@@ -1089,7 +1107,7 @@ def relatorio_por_conta(
     usuario = auth.usuario_atual(request, db)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
-    if usuario.papel not in PAPEIS_RELATORIO:
+    if not _pode_ver_relatorio_cancelamentos(usuario):
         raise HTTPException(status_code=403, detail="Seu perfil não gera este relatório.")
 
     inicio, fim, rotulo = _periodo_relatorio(periodo, de, ate, dias)
@@ -1253,7 +1271,7 @@ def relatorio_dia_dados(request: Request, data: Optional[str] = None, db: Sessio
     usuario = auth.usuario_atual(request, db)
     if usuario is None:
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
-    if usuario.papel not in PAPEIS_RELATORIO:
+    if not _pode_ver_relatorio_cancelamentos(usuario):
         raise HTTPException(status_code=403, detail="Seu perfil não gera este relatório.")
     try:
         dia = datetime.strptime(data, "%Y-%m-%d").date() if data else datetime.now(FUSO_BR).date()
