@@ -121,6 +121,9 @@ _COLUNAS_ADICIONAIS = {
         "shopee_em": "TIMESTAMP",
         # 14/10: marca "refazer" (cadastro que está sendo refeito).
         "refazer": "BOOLEAN",
+        # 14/10: quem assumiu o cadastro e desde quando (tempo de cadastro).
+        "assumido_por": "VARCHAR",
+        "assumido_em": "TIMESTAMP",
     },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel

@@ -978,3 +978,10 @@ class ProdutoCadastro(Base):
     # manual), apenas marcada como "refazer": serve pra todo mundo saber que o
     # produto já foi cadastrado antes e está sendo refeito. Sem ligação com o anterior.
     refazer = Column(Boolean, nullable=True, default=False)
+
+    # --- 14/10: quem ASSUMIU o cadastro e desde quando -----------------------
+    # Dá pra saber quem está cuidando de cada produto e quanto tempo levou
+    # (assumido_em -> cadastrado_em). Preenche ao clicar "Assumir" ou sozinho
+    # quando alguém marca o primeiro canal e ninguém tinha assumido.
+    assumido_por = Column(String, nullable=True)
+    assumido_em = Column(DateTime, nullable=True)
