@@ -185,6 +185,27 @@ def papel_permite(usuario: Optional[Usuario], papeis_permitidos: tuple) -> bool:
     return usuario is not None and usuario.papel in papeis_permitidos
 
 
+# --- Setores (15/10) --------------------------------------------------------
+# "operador" e "gerente_setor" não têm área fixa por papel -- cada pessoa
+# marca, no cadastro dela, quais setores ela tem (ver Usuario.setores e
+# SETORES_DISPONIVEIS em app/main.py). Guardado como texto simples
+# "cadastro,solicitacoes_cancelamento" pra não precisar de tabela nova.
+def setores_do_usuario(usuario: Optional[Usuario]) -> set:
+    """Devolve o conjunto de setores marcados pra esse usuário (vazio se não tiver nenhum)."""
+    if not usuario or not usuario.setores:
+        return set()
+    return {s.strip() for s in usuario.setores.split(",") if s.strip()}
+
+
+def pode_ver_produtividade(usuario: Optional[Usuario], setor: str) -> bool:
+    """Admin e supervisor sempre veem. 'gerente_setor' só vê a produtividade
+    do(s) setor(es) que ele tiver marcado -- um 'operador' comum não vê a
+    dos colegas, mesmo que tenha o mesmo setor."""
+    if papel_permite(usuario, ("admin", "supervisor")):
+        return True
+    return bool(usuario and usuario.papel == "gerente_setor" and setor in setores_do_usuario(usuario))
+
+
 def usuario_por_token(token: str, db: Session) -> Optional[Usuario]:
     """
     Igual a usuario_atual, mas para quando o token não vem no cookie do

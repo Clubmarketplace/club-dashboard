@@ -499,7 +499,7 @@ class Usuario(Base):
     id = Column(Integer, primary_key=True, index=True)
     usuario = Column(String, unique=True, index=True, nullable=False)
     nome_exibicao = Column(String, nullable=False)
-    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "atendente" | "logistica" | "seller" | "suporte" | "tv"
+    papel = Column(String, nullable=False)  # "admin" | "supervisor" | "gerente_setor" | "operador" | "atendente" | "logistica" | "seller" | "suporte" | "tv"
     senha_hash = Column(String, nullable=True)  # nulo até o primeiro acesso ser concluído
     codigo_primeiro_acesso = Column(String, nullable=True)
     precisa_trocar_senha = Column(Boolean, default=True)
@@ -524,6 +524,14 @@ class Usuario(Base):
     # a conta no formulário público. "suporte" é o perfil interno que
     # testa/acompanha o painel usando a conta de um seller.
     conta_vinculada = Column(String, nullable=True)
+
+    # Só usado quando papel é "operador" ou "gerente_setor" (15/10) -- quais
+    # setores essa pessoa tem, texto simples separado por vírgula (ex.:
+    # "cadastro,solicitacoes_cancelamento"; chaves em app/main.py:SETORES_DISPONIVEIS).
+    # Substitui ter que inventar um papel novo pra cada combinação de telas:
+    # pra abrir um setor novo no futuro, só se acrescenta mais uma opção aqui.
+    # Nulo/vazio pra todos os outros papéis -- não muda nada de quem já existe.
+    setores = Column(String, nullable=True)
 
 
 class ReputacaoConta(Base):

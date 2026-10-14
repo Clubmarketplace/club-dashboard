@@ -225,6 +225,36 @@ _AREAS_POR_PAPEL = {
     # TV: só enxerga os painéis (não responde nada, não abre outras telas).
     "tv": ("paineis_tv",),
 }
+
+# Setores "soltos" (15/10): em vez de inventar um papel novo pra cada
+# combinação de telas, "operador" e "gerente_setor" marcam pessoa por pessoa
+# (Usuario.setores, ver editar/criar usuário) quais desses setores têm --
+# a chave de cada um é o mesmo nome de área em _AREAS. Pra abrir um setor
+# novo no futuro, basta acrescentar uma linha aqui (e a área em _AREAS, se
+# ainda não existir) -- nada mais no sistema precisa mudar.
+SETORES_DISPONIVEIS = {
+    "cadastro": "Cadastro",
+    "solicitacoes_cancelamento": "Cancelamento",
+}
+
+# Todo papel de acesso restrito (só abre o que está liberado explicitamente):
+# os "clássicos" de cima (lista fixa) + os dois novos (lista vem de
+# usuario.setores). Admin e supervisor não entram aqui -- acesso amplo.
+_PAPEIS_RESTRITOS = set(_AREAS_POR_PAPEL) | {"operador", "gerente_setor"}
+
+
+def _areas_do_usuario(usuario) -> tuple:
+    """Quais áreas (ver _AREAS) esse usuário pode abrir -- só chamado pra
+    quem tem papel restrito (ver _PAPEIS_RESTRITOS)."""
+    if usuario is None:
+        return ()
+    if usuario.papel in _AREAS_POR_PAPEL:
+        return _AREAS_POR_PAPEL[usuario.papel]
+    if usuario.papel in ("operador", "gerente_setor"):
+        return tuple(s for s in auth.setores_do_usuario(usuario) if s in SETORES_DISPONIVEIS)
+    return ()
+
+
 # Papéis que entram no PAINEL DO SELLER (telas /vendas, /custos, /taxas...).
 #  - "seller": o dono da conta.
 #  - "suporte": perfil interno pra testar/acompanhar o painel usando a
@@ -251,8 +281,11 @@ _PAGINA_INICIAL_POR_PAPEL = {
 # TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
 # no servidor, nunca só no <select> da tela.
 PAPEIS_GERENCIAVEIS_POR = {
-    "admin": ("admin", "supervisor", "atendente", "logistica", "cadastro", "seller", "suporte", "tv"),
-    "supervisor": ("atendente", "logistica", "cadastro", "seller", "tv"),
+    "admin": ("admin", "supervisor", "gerente_setor", "operador", "atendente", "logistica", "cadastro", "seller", "suporte", "tv"),
+    # Supervisor continua sem poder criar/editar admin, supervisor ou suporte --
+    # mesma fronteira de sempre (permissão dele é sempre menor que a do admin),
+    # só com os dois papéis novos de setor somados à lista que ele já gerenciava.
+    "supervisor": ("gerente_setor", "operador", "atendente", "logistica", "cadastro", "seller", "tv"),
 }
 
 
@@ -266,11 +299,11 @@ def _conta_logada_de(usuario):
     return usuario.conta_vinculada if _eh_painel_seller(usuario) else None
 
 
-def _papel_pode_acessar(papel: str, caminho: str) -> bool:
-    """Diz se um perfil restrito (ex: atendente) pode abrir esse caminho."""
+def _papel_pode_acessar(usuario_logado, caminho: str) -> bool:
+    """Diz se um perfil restrito (ex: atendente, operador, gerente_setor) pode abrir esse caminho."""
     if caminho == "/logout":
         return True
-    for nome_area in _AREAS_POR_PAPEL.get(papel, ()):
+    for nome_area in _areas_do_usuario(usuario_logado):
         area = _AREAS[nome_area]
         if caminho in area["paginas"] or any(caminho.startswith(p) for p in area["prefixos_api"]):
             return True
@@ -280,6 +313,27 @@ def _papel_pode_acessar(papel: str, caminho: str) -> bool:
 def _pode_gerenciar(usuario_logado, papel_alvo: str) -> bool:
     """True se quem está logado pode mexer num operador com esse papel."""
     return bool(usuario_logado) and papel_alvo in PAPEIS_GERENCIAVEIS_POR.get(usuario_logado.papel, ())
+
+
+def _pagina_inicial(usuario) -> str:
+    """Pra onde mandar alguém ao entrar (ou quando tenta abrir algo que não
+    pode). Papéis clássicos têm destino fixo (_PAGINA_INICIAL_POR_PAPEL);
+    "operador" e "gerente_setor" variam pessoa por pessoa, então usa a
+    primeira página do primeiro setor que a pessoa tiver marcado -- sem
+    isso ela cairia numa home que o próprio perfil restrito não pode abrir
+    e entraria num loop de redirecionamento."""
+    if usuario is None:
+        return "/logout"
+    destino = _PAGINA_INICIAL_POR_PAPEL.get(usuario.papel)
+    if destino:
+        return destino
+    for nome_area in _areas_do_usuario(usuario):
+        for pagina in sorted(_AREAS[nome_area]["paginas"]):
+            if not pagina.startswith("/api/"):
+                return pagina
+    # Papel restrito sem nenhum setor marcado ainda: evita cair numa home
+    # bloqueada -- fica no login até alguém liberar um setor pra ele.
+    return "/logout" if usuario.papel in _PAPEIS_RESTRITOS else "/"
 
 
 @app.middleware("http")
@@ -339,12 +393,12 @@ async def exigir_login(request: Request, call_next):
     if papel in PAPEIS_PAINEL_SELLER and not _seller_liberado:
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-        return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(papel, "/logout"), status_code=303)
+        return RedirectResponse(_pagina_inicial(usuario_logado), status_code=303)
 
-    if papel in _AREAS_POR_PAPEL and not _papel_pode_acessar(papel, caminho):
+    if papel in _PAPEIS_RESTRITOS and not _papel_pode_acessar(usuario_logado, caminho):
         if caminho.startswith("/api/"):
             return JSONResponse({"detail": "Acesso restrito"}, status_code=403)
-        return RedirectResponse(_PAGINA_INICIAL_POR_PAPEL.get(papel, "/logout"), status_code=303)
+        return RedirectResponse(_pagina_inicial(usuario_logado), status_code=303)
 
     return await call_next(request)
 
@@ -806,6 +860,14 @@ def _listar_usuarios_visiveis(db, usuario_logado):
     return query.order_by(func.lower(Usuario.nome_exibicao)).all()
 
 
+def _setores_validos(valores) -> str:
+    """Junta só os setores que realmente existem em SETORES_DISPONIVEIS (ignora
+    qualquer coisa fora disso, mesmo que alguém tente forçar pelo HTML),
+    sem duplicar, numa string separada por vírgula pra guardar em Usuario.setores."""
+    vistos = [v for v in valores if v in SETORES_DISPONIVEIS]
+    return ",".join(dict.fromkeys(vistos))
+
+
 def _contas_disponiveis(db):
     """Lista real de contas cadastradas (não inativadas), pro <select> de
     "Conta vinculada" -- antes era texto livre, o que deixava passar erro de
@@ -838,6 +900,7 @@ def pagina_listar_usuarios(request: Request):
                 "usuarios": usuarios,
                 "usuario_logado": usuario_logado,
                 "contas_disponiveis": _contas_disponiveis(db),
+                "setores_disponiveis": SETORES_DISPONIVEIS,
             },
         )
 
@@ -906,6 +969,7 @@ def resetar_senha_usuario(usuario_id: int, request: Request):
                 "usuarios": usuarios,
                 "usuario_logado": usuario_logado,
                 "contas_disponiveis": _contas_disponiveis(db),
+                "setores_disponiveis": SETORES_DISPONIVEIS,
                 "reset_sucesso": {"usuario": alvo.usuario, "nome_exibicao": alvo.nome_exibicao, "codigo": codigo},
             },
         )
@@ -933,6 +997,8 @@ def pagina_editar_usuario(usuario_id: int, request: Request):
                 "alvo": alvo,
                 "erro": None,
                 "contas_disponiveis": _contas_disponiveis(db),
+                "setores_disponiveis": SETORES_DISPONIVEIS,
+                "setores_do_alvo": auth.setores_do_usuario(alvo),
             },
         )
 
@@ -944,6 +1010,7 @@ def editar_usuario(
     nome_exibicao: str = Form(...),
     papel: str = Form(...),
     conta_vinculada: str = Form(""),
+    setores: list[str] = Form([]),
 ):
     with SessionLocal() as db:
         usuario_logado = auth.usuario_atual(request, db)
@@ -964,6 +1031,8 @@ def editar_usuario(
             "usuario_logado": usuario_logado,
             "alvo": alvo,
             "contas_disponiveis": _contas_disponiveis(db),
+            "setores_disponiveis": SETORES_DISPONIVEIS,
+            "setores_do_alvo": auth.setores_do_usuario(alvo),
         }
 
         if papel not in papeis_permitidos:
@@ -989,6 +1058,9 @@ def editar_usuario(
         alvo.nome_exibicao = nome_limpo
         alvo.papel = papel
         alvo.conta_vinculada = conta_limpa if papel in PAPEIS_PAINEL_SELLER else None
+        # Setores só fazem sentido pra "operador"/"gerente_setor" -- se o papel
+        # mudar pra outro, limpa (evita ficar um valor velho sem efeito nenhum).
+        alvo.setores = _setores_validos(setores) if papel in ("operador", "gerente_setor") else None
         db.commit()
 
         return RedirectResponse("/usuarios", status_code=303)
@@ -1007,6 +1079,7 @@ def criar_usuario(
     nome_exibicao: str = Form(...),
     papel: str = Form(...),
     conta_vinculada: str = Form(""),
+    setores: list[str] = Form([]),
 ):
     with SessionLocal() as db:
         usuario_logado = auth.usuario_atual(request, db)
@@ -1022,6 +1095,7 @@ def criar_usuario(
             "usuario_logado": usuario_logado,
             "usuarios": _listar_usuarios_visiveis(db, usuario_logado),
             "contas_disponiveis": _contas_disponiveis(db),
+            "setores_disponiveis": SETORES_DISPONIVEIS,
         }
 
         if papel not in papeis_que_esse_criador_pode_atribuir:
@@ -1066,6 +1140,7 @@ def criar_usuario(
             codigo_primeiro_acesso=codigo,
             precisa_trocar_senha=True,
             conta_vinculada=conta_vinculada_limpa if papel in PAPEIS_PAINEL_SELLER else None,
+            setores=_setores_validos(setores) if papel in ("operador", "gerente_setor") else None,
             criado_por_usuario_id=usuario_logado.id,
         )
         db.add(novo_usuario)
@@ -1079,6 +1154,7 @@ def criar_usuario(
                 "usuario_logado": usuario_logado,
                 "usuarios": _listar_usuarios_visiveis(db, usuario_logado),
                 "contas_disponiveis": _contas_disponiveis(db),
+                "setores_disponiveis": SETORES_DISPONIVEIS,
                 "criar_sucesso": {"usuario": novo_usuario.usuario, "nome_exibicao": novo_usuario.nome_exibicao, "papel": novo_usuario.papel, "codigo": codigo},
             },
         )
@@ -1143,9 +1219,8 @@ def pagina_privacidade_extensao(request: Request):
     return templates.TemplateResponse(request=request, name="privacidade-extensao.html", context={})
 
 
-def _redirecionar_por_papel(papel: str) -> RedirectResponse:
-    destino = _PAGINA_INICIAL_POR_PAPEL.get(papel, "/")
-    return RedirectResponse(destino, status_code=303)
+def _redirecionar_por_papel(usuario) -> RedirectResponse:
+    return RedirectResponse(_pagina_inicial(usuario), status_code=303)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -1154,7 +1229,7 @@ def pagina_login(request: Request):
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         if usuario:
-            return _redirecionar_por_papel(usuario.papel)
+            return _redirecionar_por_papel(usuario)
     return templates.TemplateResponse(request=request, name="login.html", context={"erro": None, "proximo": _proximo_seguro(request.query_params.get("proximo", ""))})
 
 
@@ -1212,7 +1287,7 @@ def fazer_login(request: Request, usuario: str = Form(...), senha: str = Form(..
 
         # Voltou pra tela que queria abrir; se o perfil não puder, o próprio
         # controle de acesso manda pra página inicial dele.
-        resposta = RedirectResponse(proximo, status_code=303) if proximo else _redirecionar_por_papel(conta.papel)
+        resposta = RedirectResponse(proximo, status_code=303) if proximo else _redirecionar_por_papel(conta)
         duracao = auth.duracao_sessao(conta.papel)
         token = auth.criar_token_sessao(conta.id, duracao)
         resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=duracao)
@@ -1264,7 +1339,7 @@ def concluir_primeiro_acesso(
         conta.precisa_trocar_senha = False
         db.commit()
 
-        resposta = _redirecionar_por_papel(conta.papel)
+        resposta = _redirecionar_por_papel(conta)
         duracao = auth.duracao_sessao(conta.papel)
         token = auth.criar_token_sessao(conta.id, duracao)
         resposta.set_cookie(auth.COOKIE_SESSAO, token, httponly=True, samesite="lax", max_age=duracao)

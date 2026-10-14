@@ -138,6 +138,9 @@ _COLUNAS_ADICIONAIS = {
         # como 0 no código (nunca lido direto sem fallback).
         "tentativas_login_falhas": "INTEGER",
         "bloqueado_ate": "TIMESTAMP",
+        # Setores de "operador"/"gerente_setor" (15/10, ver app/models.py).
+        # Nulo pra todo mundo que já existe -- não muda nada do que já está em uso.
+        "setores": "VARCHAR",
     },
 }
 
