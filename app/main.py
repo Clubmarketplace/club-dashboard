@@ -315,6 +315,7 @@ def _conta_logada_de(usuario):
 _PAGINAS_SO_GERENCIA = {
     "/cadastro/produtividade": "cadastro",
     "/relatorio-cancelamentos": "solicitacoes_cancelamento",
+    "/produtividade-cancelamento": "solicitacoes_cancelamento",
 }
 _ATENDENTE_LIBERADO_EM = {"/relatorio-cancelamentos"}  # atendente já via isso antes dos setores existirem
 
@@ -1238,6 +1239,18 @@ def pagina_relatorio_cancelamentos(request: Request):
     ):
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(request=request, name="relatorio-cancelamentos.html", context={"usuario_logado": usuario})
+
+
+@app.get("/produtividade-cancelamento", response_class=HTMLResponse)
+def pagina_produtividade_cancelamento(request: Request):
+    """Quanto cada pessoa confirmou (cancelamento + reputação) no período.
+    Admin, supervisor, e gerente_setor com o setor "solicitacoes_cancelamento"
+    (16/10) -- mesma regra de app.auth.pode_ver_produtividade usada na API e
+    na Produtividade do Cadastro."""
+    usuario = _usuario_logado(request)
+    if not auth.pode_ver_produtividade(usuario, "solicitacoes_cancelamento"):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request=request, name="produtividade-cancelamento.html", context={"usuario_logado": usuario})
 
 
 @app.get("/api/saude")
