@@ -110,10 +110,10 @@
   {% endif %}
 
   {% if _eh_setor_cancelamento %}
-    {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
+    {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel"] + (["/relatorio-cancelamentos"] if _eh_gerente else [])) %}
       {{ item("/solicitar-cancelamento", "Nova solicitação") }}
       {{ item("/solicitacoes-painel", "Solicitações") }}
-      {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
+      {% if _eh_gerente %}{{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}{% endif %}
     {% endcall %}
   {% endif %}
 
