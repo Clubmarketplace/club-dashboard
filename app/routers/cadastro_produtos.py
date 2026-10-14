@@ -28,6 +28,8 @@ a informação empurra, o backend só recebe. Nada aqui lê a planilha do Operad
         (feito, não se aplica ou volta a pendente), guardando quem e quando.
         O produto só fica "cadastrado" (OK) quando os 3 estão resolvidos.
   POST /api/cadastro/produtos/{id}/status-> atalho: marca/desmarca os 3 de uma vez.
+  POST /api/cadastro/produtos/lote       -> inclusão MANUAL de VÁRIOS produtos de uma nota (colar da planilha).
+  POST /api/cadastro/produtos/{id}/assumir -> "assumi este cadastro" (ou solta); guarda quem e quando.
   GET  /api/cadastro/empresas            -> nomes de empresa já usados (sugestão no formulário).
   GET  /api/cadastro/produtividade       -> quanto cada pessoa cadastrou (só admin/supervisor).
         (as de /api/cadastro: admin, supervisor e o perfil "cadastro")
@@ -289,6 +291,8 @@ def _produto_json(p: ProdutoCadastro) -> dict:
         "criado_por": p.criado_por,
         "marketplaces": _dados_marketplaces(p),
         "refazer": bool(p.refazer),
+        "assumido_por": p.assumido_por,
+        "assumido_em": _iso_utc(p.assumido_em),
     }
 
 
@@ -371,24 +375,19 @@ class ProdutoManualIn(BaseModel):
     refazer: bool = False
 
 
-@router.post("/api/cadastro/produtos")
-def incluir_produto_manual(
-    corpo: ProdutoManualIn,
-    db: Session = Depends(get_db),
-    usuario: Usuario = Depends(_cadastro_logado),
-):
+def _incluir_um(db: Session, usuario: Usuario, *, empresa: str, produto: str, sku: str, fornecedor=None, numero_nota=None,
+                gtin=None, quantidade: float = 0, custo_unitario: float = 0, refazer: bool = False):
     """
-    Inclusão MANUAL: o time inclui um produto que não veio do Operador (nota
-    que não passou por lá, produto avulso...). Entra na mesma lista, pendente,
-    marcado como "manual" e com quem incluiu. Se já existe um PENDENTE da mesma
-    empresa com o mesmo SKU, recusa (409) pra não duplicar.
+    Cria UM produto manual (sem commit -- quem chama confirma). Levanta HTTPException
+    com o motivo quando não pode (campo faltando, negativo, SKU já pendente nessa
+    empresa). Devolve (registro, aviso_ou_None).
     """
-    empresa = (corpo.empresa or "").strip()
-    sku = (corpo.sku or "").strip()
-    nome = (corpo.produto or "").strip()
+    empresa = (empresa or "").strip()
+    sku = (sku or "").strip()
+    nome = (produto or "").strip()
     if not empresa or not sku or not nome:
         raise HTTPException(status_code=422, detail="Empresa, SKU e nome do produto são obrigatórios.")
-    if corpo.quantidade < 0 or corpo.custo_unitario < 0:
+    if quantidade < 0 or custo_unitario < 0:
         raise HTTPException(status_code=422, detail="Quantidade e custo não podem ser negativos.")
 
     chave_empresa = chave_conta(empresa)
@@ -406,31 +405,161 @@ def incluir_produto_manual(
     if any(r.status == "pendente" for r in repetido):
         raise HTTPException(status_code=409, detail="Esse SKU já está na lista de pendentes dessa empresa.")
 
-    agora = datetime.utcnow()
     registro = ProdutoCadastro(
         nota_id="MANUAL-" + uuid.uuid4().hex[:10],
         empresa_nome=empresa,
         empresa_chave=chave_empresa,
-        fornecedor=_limpo(corpo.fornecedor),
-        numero_nota=_limpo(corpo.numero_nota),
-        data_nota=agora,
+        fornecedor=_limpo(fornecedor),
+        numero_nota=_limpo(numero_nota),
+        data_nota=datetime.utcnow(),
         sku=sku,
         produto=nome,
-        gtin=_limpo(corpo.gtin),
-        quantidade=corpo.quantidade or 0,
-        custo_unitario=corpo.custo_unitario or 0,
+        gtin=_limpo(gtin),
+        quantidade=quantidade or 0,
+        custo_unitario=custo_unitario or 0,
         status="pendente",
         origem="manual",
         criado_por=usuario.nome_exibicao,
-        refazer=bool(corpo.refazer),
+        refazer=bool(refazer),
     )
     db.add(registro)
+    db.flush()  # já aparece nas próximas conferências (SKU repetido no mesmo lote)
+    aviso = None
+    if repetido and not refazer:
+        aviso = "Esse SKU já tinha sido cadastrado antes nessa empresa; entrou de novo como pendente."
+    return registro, aviso
+
+
+@router.post("/api/cadastro/produtos")
+def incluir_produto_manual(
+    corpo: ProdutoManualIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_cadastro_logado),
+):
+    """
+    Inclusão MANUAL de um produto: entra na mesma lista, pendente, marcado como
+    "manual" e com quem incluiu. Se já existe um PENDENTE da mesma empresa com o
+    mesmo SKU, recusa (409) pra não duplicar. `refazer` marca um cadastro que
+    já foi feito antes e está sendo refeito.
+    """
+    registro, aviso = _incluir_um(
+        db, usuario, empresa=corpo.empresa, produto=corpo.produto, sku=corpo.sku, fornecedor=corpo.fornecedor,
+        numero_nota=corpo.numero_nota, gtin=corpo.gtin, quantidade=corpo.quantidade, custo_unitario=corpo.custo_unitario,
+        refazer=corpo.refazer,
+    )
     db.commit()
     db.refresh(registro)
     resposta = {"ok": True, "item": _produto_json(registro)}
-    if repetido and not corpo.refazer:
-        resposta["aviso"] = "Esse SKU já tinha sido cadastrado antes nessa empresa; entrou de novo como pendente."
+    if aviso:
+        resposta["aviso"] = aviso
     return resposta
+
+
+class ItemLoteIn(BaseModel):
+    sku: str
+    produto: str
+    gtin: Optional[str] = ""
+    quantidade: float = 0
+    custo_unitario: float = 0
+
+
+class LoteManualIn(BaseModel):
+    empresa: str
+    fornecedor: Optional[str] = ""
+    numero_nota: Optional[str] = ""
+    refazer: bool = False
+    itens: List[ItemLoteIn]
+
+
+LIMITE_LOTE_MANUAL = 300
+
+
+@router.post("/api/cadastro/produtos/lote")
+def incluir_lote_manual(
+    corpo: LoteManualIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_cadastro_logado),
+):
+    """
+    Inclusão manual de VÁRIOS produtos de uma nota de uma vez (copiado e colado da
+    planilha). Cada produto é conferido sozinho: os bons entram, os que não podem
+    (SKU já pendente, campo faltando...) voltam em `ignorados` com o motivo --
+    nada some em silêncio. Empresa, fornecedor, nota e a marca "refazer" valem pra todos.
+    """
+    if not (corpo.empresa or "").strip():
+        raise HTTPException(status_code=422, detail="Informe a empresa.")
+    if not corpo.itens:
+        raise HTTPException(status_code=422, detail="Nenhum produto para incluir.")
+    if len(corpo.itens) > LIMITE_LOTE_MANUAL:
+        raise HTTPException(status_code=413, detail=f"Máximo de {LIMITE_LOTE_MANUAL} produtos por vez.")
+    criados, ignorados, avisos = [], [], []
+    try:
+        for n, it in enumerate(corpo.itens, start=1):
+            try:
+                registro, aviso = _incluir_um(
+                    db, usuario, empresa=corpo.empresa, produto=it.produto, sku=it.sku, fornecedor=corpo.fornecedor,
+                    numero_nota=corpo.numero_nota, gtin=it.gtin, quantidade=it.quantidade, custo_unitario=it.custo_unitario,
+                    refazer=corpo.refazer,
+                )
+            except HTTPException as e:
+                ignorados.append({"linha": n, "sku": (it.sku or "").strip(), "motivo": e.detail})
+                continue
+            criados.append(registro)
+            if aviso:
+                avisos.append({"linha": n, "sku": registro.sku, "aviso": aviso})
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao gravar o lote manual do Cadastro")
+        raise HTTPException(status_code=500, detail="Erro ao gravar os produtos no servidor.")
+    return {"ok": True, "criados": [_produto_json(r) for r in criados], "ignorados": ignorados, "avisos": avisos}
+
+
+def _assumir_se_ninguem(produto: ProdutoCadastro, usuario: Usuario, estado: str) -> None:
+    """
+    Quem marca um canal em um produto que ninguém assumiu passa a ser quem
+    assumiu (o relógio de "quanto tempo levou" começa aí). Só conta marcar de
+    verdade -- voltar a "pendente" não assume nada.
+    """
+    if estado != "pendente" and not produto.assumido_por:
+        produto.assumido_por = usuario.nome_exibicao
+        produto.assumido_em = datetime.utcnow()
+
+
+class AssumirIn(BaseModel):
+    assumir: bool = True  # False = soltar (volta a "ninguém assumiu")
+    forcar: bool = False  # True = assumir mesmo que outra pessoa já tenha assumido
+
+
+@router.post("/api/cadastro/produtos/{produto_id}/assumir")
+def assumir_produto(
+    produto_id: int,
+    corpo: AssumirIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_cadastro_logado),
+):
+    """
+    "Assumi este cadastro": guarda quem e quando (o tempo de cadastro conta daqui).
+    Se outra pessoa já tinha assumido, recusa (409) a menos que `forcar` -- a tela
+    pergunta antes ("Ana já assumiu. Assumir mesmo assim?"). Soltar só vale pra
+    quem assumiu (ou supervisor/admin).
+    """
+    produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if corpo.assumir:
+        if produto.assumido_por and produto.assumido_por != usuario.nome_exibicao and not corpo.forcar:
+            raise HTTPException(status_code=409, detail=f"{produto.assumido_por} já assumiu este cadastro.")
+        if produto.assumido_por != usuario.nome_exibicao:
+            produto.assumido_por = usuario.nome_exibicao
+            produto.assumido_em = datetime.utcnow()
+    else:
+        if produto.assumido_por and produto.assumido_por != usuario.nome_exibicao and usuario.papel not in ("admin", "supervisor"):
+            raise HTTPException(status_code=403, detail="Só quem assumiu (ou o supervisor) pode soltar.")
+        produto.assumido_por = None
+        produto.assumido_em = None
+    db.commit()
+    return {"ok": True, "item": _produto_json(produto)}
 
 
 class MarketplaceIn(BaseModel):
@@ -470,6 +599,7 @@ def marcar_marketplace(
         setattr(produto, f"{chave}_status", estado)
         setattr(produto, f"{chave}_por", usuario.nome_exibicao)
         setattr(produto, f"{chave}_em", datetime.utcnow())
+    _assumir_se_ninguem(produto, usuario, estado)
     _recalcular_status(produto, usuario.nome_exibicao)
     db.commit()
     return {"ok": True, "item": _produto_json(produto)}
@@ -505,6 +635,8 @@ def alterar_status_cadastro(
             setattr(produto, f"{k}_status", None)
             setattr(produto, f"{k}_por", None)
             setattr(produto, f"{k}_em", None)
+    if corpo.cadastrado:
+        _assumir_se_ninguem(produto, usuario, "feito")
     _recalcular_status(produto, usuario.nome_exibicao)
     db.commit()
     return {"ok": True, "item": _produto_json(produto), **{
@@ -558,7 +690,8 @@ def _agregar_produtividade(linhas, inicio: datetime, fim: datetime) -> list:
     def _pessoa(nome):
         nome = nome or "—"
         return pessoas.setdefault(
-            nome, {"nome": nome, "ml": 0, "tiktok": 0, "shopee": 0, "total": 0, "produtos_fechados": 0, "incluidos_manual": 0}
+            nome, {"nome": nome, "ml": 0, "tiktok": 0, "shopee": 0, "total": 0, "produtos_fechados": 0, "incluidos_manual": 0,
+             "tempo_soma_seg": 0, "tempo_n": 0}
         )
 
     for p in linhas:
@@ -568,10 +701,17 @@ def _agregar_produtividade(linhas, inicio: datetime, fim: datetime) -> list:
                 pessoa[k] += 1
                 pessoa["total"] += 1
         if p.status == "cadastrado" and _no_periodo(p.cadastrado_em, inicio, fim):
-            _pessoa(p.cadastrado_por)["produtos_fechados"] += 1
+            pessoa = _pessoa(p.cadastrado_por)
+            pessoa["produtos_fechados"] += 1
+            # tempo que levou: de quando alguém assumiu até o produto ficar OK
+            if p.assumido_em and p.cadastrado_em and p.cadastrado_em >= p.assumido_em:
+                pessoa["tempo_soma_seg"] += int((p.cadastrado_em - p.assumido_em).total_seconds())
+                pessoa["tempo_n"] += 1
         if p.origem == "manual" and _no_periodo(p.recebido_em, inicio, fim):
             _pessoa(p.criado_por)["incluidos_manual"] += 1
 
+    for pessoa in pessoas.values():
+        pessoa["tempo_medio_seg"] = (pessoa["tempo_soma_seg"] // pessoa["tempo_n"]) if pessoa["tempo_n"] else None
     return sorted(pessoas.values(), key=lambda x: (-x["total"], -x["produtos_fechados"], x["nome"].lower()))
 
 
@@ -625,6 +765,9 @@ def produtividade_cadastro(
     for pessoa in pessoas:
         for campo in totais:
             totais[campo] += pessoa[campo]
+    soma_t = sum(x["tempo_soma_seg"] for x in pessoas)
+    n_t = sum(x["tempo_n"] for x in pessoas)
+    totais["tempo_medio_seg"] = (soma_t // n_t) if n_t else None
 
     pendentes = db.query(ProdutoCadastro).filter(ProdutoCadastro.status == "pendente").all()
     return {
