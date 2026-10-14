@@ -155,9 +155,11 @@
     const feito = p.status === "cadastrado";
     let topo = "";
     if (feito) {
+      // Bolha "✓ Concluído" em linha própria + autoria embaixo, com o nome em destaque
+      // (mesmo padrão visual do "✓ Resolvido" que o Solicitações já usa).
       topo = ehMarcacaoAntiga(p)
-        ? `<span class="cd-ok">🔒 OK</span> <small class="cd-quem">por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))} (marcação antiga, sem separar por marketplace)</small>`
-        : `<span class="cd-ok">🔒 OK</span> <small class="cd-quem">fechado por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))} — travado</small>`;
+        ? `<span class="cd-ok">✓ Concluído</span><div class="cd-quem">por <b class="cd-quem-nome">${esc(p.cadastrado_por || "—")}</b><br>${esc(dataBr(p.cadastrado_em))} (marcação antiga, sem separar por marketplace)</div>`
+        : `<span class="cd-ok">✓ Concluído</span><div class="cd-quem">por <b class="cd-quem-nome">${esc(p.cadastrado_por || "—")}</b><br>${esc(dataBr(p.cadastrado_em))}</div>`;
     }
     // Travado: ninguém mexe mais nos botões por marketplace (o servidor recusa também, com 423).
     const tags = (feito || ehMarcacaoAntiga(p)) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
