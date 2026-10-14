@@ -420,8 +420,10 @@
     titulo.textContent = item.titulo || item.sku || "(sem título)";
     const sub = document.createElement("div");
     sub.className = "cartao-venda-sub";
+    // O SKU fica num span à parte, selecionável/copiável (pra colar na busca do marketplace) --
+    // o resto da linha continua clicável normalmente pra abrir/fechar o cartão.
     sub.innerHTML =
-      "SKU: " + (item.sku || "(sem SKU)") + " · " + item.quantidade + " un." +
+      "SKU: " + (item.sku ? `<span class="cartao-venda-sku-copiavel">${item.sku}</span>` : "(sem SKU)") + " · " + item.quantidade + " un." +
       (semCusto ? '<span class="tag-sem-custo">sem custo</span>' : "");
     info.appendChild(titulo);
     info.appendChild(sub);
@@ -457,7 +459,10 @@
     seta.textContent = "▾";
     linha.appendChild(seta);
 
-    linha.addEventListener("click", function () {
+    linha.addEventListener("click", function (e) {
+      // Clique dentro do SKU copiável não abre/fecha o cartão (deixa selecionar/copiar em paz,
+      // inclusive o clique final de um duplo-clique que seleciona a palavra).
+      if (e.target.closest(".cartao-venda-sku-copiavel")) return;
       if (idsExpandidos.has(item.id)) {
         idsExpandidos.delete(item.id);
       } else {

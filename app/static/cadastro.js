@@ -30,7 +30,7 @@
   const estado = {
     itens: [], contagem: { pendente: 0, cadastrado: 0 }, status: "pendente", busca: "", falta: "",
     truncado: false, ocupado: false,
-    naModo: new Set(), mpOcupados: new Set(), resp: "", eu: "",
+    naModo: new Set(), mpOcupados: new Set(), resp: "", eu: "", papel: "",
   };
 
   function esc(t) {
@@ -143,24 +143,39 @@
     return partes.length ? `<div class="cd-quem">${partes.join(" · ")}</div>` : "";
   }
 
+  // Quem pode destravar um produto já cadastrado (o servidor também confere -- isto é só o espelho visual).
+  function souSupervisao() { return estado.papel === "admin" || estado.papel === "supervisor"; }
+
+  function blocoReabertura(p) {
+    if (!p.reaberto_por) return "";
+    return `<div class="cd-quem" style="color:var(--cmx-rust)">↻ Reaberto por ${esc(p.reaberto_por)} em ${esc(dataBr(p.reaberto_em))}${p.motivo_reabertura ? ": " + esc(p.motivo_reabertura) : ""}</div>`;
+  }
+
   function blocoMarketplaces(p) {
     const feito = p.status === "cadastrado";
     let topo = "";
     if (feito) {
       topo = ehMarcacaoAntiga(p)
-        ? `<span class="cd-ok">✔ OK</span> <small class="cd-quem">por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))} (marcação antiga, sem separar por marketplace)</small>`
-        : `<span class="cd-ok">✔ OK</span> <small class="cd-quem">fechado por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))}</small>`;
+        ? `<span class="cd-ok">🔒 OK</span> <small class="cd-quem">por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))} (marcação antiga, sem separar por marketplace)</small>`
+        : `<span class="cd-ok">🔒 OK</span> <small class="cd-quem">fechado por ${esc(p.cadastrado_por || "—")} · ${esc(dataBr(p.cadastrado_em))} — travado</small>`;
     }
-    const tags = ehMarcacaoAntiga(p) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
+    // Travado: ninguém mexe mais nos botões por marketplace (o servidor recusa também, com 423).
+    const tags = (feito || ehMarcacaoAntiga(p)) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
     const quem = ehMarcacaoAntiga(p) ? "" : textoQuem(p);
     const emModo = estado.naModo.has(p.id);
     const btnNa = feito ? "" : ` <button class="cd-btn cd-mini" type="button" data-namodo="${p.id}" title="Para o canal em que este produto não vai ser cadastrado">${emModo ? "Cancelar" : "Não se aplica…"}</button>`;
-    const atalho = (feito
-      ? `<button class="cd-btn cd-mini" type="button" data-desfazer="${p.id}">Desfazer tudo</button>`
-      : `<button class="cd-btn cd-mini" type="button" data-todos="${p.id}" title="Marca como cadastrado o que ainda falta, em nome de quem clicar">✔ Cadastrei nos 3</button>`) + btnNa;
+    let atalho;
+    if (feito) {
+      // Travado: só admin/supervisor vê como mexer de novo, e precisa informar o motivo.
+      atalho = souSupervisao()
+        ? `<button class="cd-btn cd-mini" type="button" data-reabrir="${p.id}" title="Volta pra pendente, pede o motivo e fica registrado">↻ Reabrir</button>`
+        : `<small class="cd-quem">Travado — só supervisor/admin pode reabrir.</small>`;
+    } else {
+      atalho = `<button class="cd-btn cd-mini" type="button" data-todos="${p.id}" title="Marca como cadastrado o que ainda falta, em nome de quem clicar">✔ Cadastrei nos 3</button>${btnNa}`;
+    }
     const tempo = blocoTempo(p);
     const dicaModo = emModo ? `<div class="cd-quem" style="color:var(--cmx-rust)">Clique no canal que <b>não se aplica</b> a este produto.</div>` : "";
-    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${dicaModo}${atalho}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${dicaModo}${atalho}</div>`;
   }
 
   // Quem assumiu, desde quando e quanto tempo está levando / levou.
@@ -349,12 +364,24 @@
     }
     const todos = e.target.closest("[data-todos]");
     if (todos) return atalhoTodos(Number(todos.dataset.todos), true, todos);
-    const desfazer = e.target.closest("[data-desfazer]");
-    if (desfazer) {
-      if (!window.confirm("Desfazer as marcações dos 3 marketplaces deste produto?")) return;
-      return atalhoTodos(Number(desfazer.dataset.desfazer), false, desfazer);
-    }
+    const reabrir = e.target.closest("[data-reabrir]");
+    if (reabrir) return reabrirProduto(Number(reabrir.dataset.reabrir));
   });
+
+  // Reabrir um produto travado (só aparece o botão pra admin/supervisor -- o servidor confere de novo).
+  async function reabrirProduto(id) {
+    const motivo = window.prompt("Por que este produto precisa ser reaberto? (fica registrado)");
+    if (motivo === null) return; // cancelou
+    if (motivo.trim().length < 5) { aviso("Descreva o motivo com um pouco mais de detalhe (mínimo 5 caracteres).", "erro"); return; }
+    try {
+      const d = await api(`/produtos/${id}/reabrir`, { method: "POST", body: JSON.stringify({ motivo: motivo.trim() }) });
+      aplicarItem(d.item);
+      aviso("Produto reaberto — voltou para a fila de pendentes.", "ok");
+      carregarContagem();
+    } catch (e) {
+      aviso("Não consegui reabrir: " + e.message, "erro");
+    }
+  }
 
   document.querySelectorAll(".cd-chip").forEach((b) => {
     b.addEventListener("click", () => { estado.status = b.dataset.status; carregar(); });
@@ -374,6 +401,7 @@
 
   document.getElementById("cd-resp").addEventListener("change", (e) => { estado.resp = e.target.value; desenhar(); });
   estado.eu = document.getElementById("cd-lista").dataset.eu || "";
+  estado.papel = document.getElementById("cd-lista").dataset.papel || "";
 
   document.getElementById("cd-atualizar").addEventListener("click", () => carregar());
 
