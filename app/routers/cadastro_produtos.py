@@ -99,17 +99,24 @@ def _conferir_token(request: Request) -> None:
 
 
 def _cadastro_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
-    """Tela e API de Cadastro: admin, supervisor e o perfil "cadastro" (os demais perfis já são barrados no middleware)."""
+    """Tela e API de Cadastro: admin, supervisor, o perfil "cadastro" (os demais
+    perfis já são barrados no middleware), e "operador"/"gerente_setor" que
+    tiverem o setor "cadastro" marcado (ver app/main.py:SETORES_DISPONIVEIS)."""
     usuario = auth.usuario_atual(request, db)
-    if not auth.papel_permite(usuario, ("admin", "supervisor", "cadastro")):
+    permitido = auth.papel_permite(usuario, ("admin", "supervisor", "cadastro")) or (
+        usuario is not None and usuario.papel in ("operador", "gerente_setor") and "cadastro" in auth.setores_do_usuario(usuario)
+    )
+    if not permitido:
         raise HTTPException(status_code=403, detail="Acesso restrito.")
     return usuario
 
 
 def _supervisao_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
-    """Produtividade (quanto cada um cadastrou): só admin e supervisor -- o perfil "cadastro" não vê o número dos colegas."""
+    """Produtividade (quanto cada um cadastrou): admin, supervisor, e
+    "gerente_setor" com o setor "cadastro" -- o perfil "cadastro"/"operador"
+    comum não vê o número dos colegas."""
     usuario = auth.usuario_atual(request, db)
-    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+    if not auth.pode_ver_produtividade(usuario, "cadastro"):
         raise HTTPException(status_code=403, detail="Acesso restrito.")
     return usuario
 
