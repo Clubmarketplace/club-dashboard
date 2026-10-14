@@ -985,3 +985,13 @@ class ProdutoCadastro(Base):
     # quando alguém marca o primeiro canal e ninguém tinha assumido.
     assumido_por = Column(String, nullable=True)
     assumido_em = Column(DateTime, nullable=True)
+
+    # --- 14/10: trava + reabertura --------------------------------------------
+    # Produto "cadastrado" (os 3 marketplaces resolvidos) fica TRAVADO: ninguém
+    # altera mais pelas rotas normais (ver marcar_marketplace/alterar_status_cadastro
+    # em cadastro_produtos.py). A única forma de voltar a mexer é um admin/
+    # supervisor reabrir pela rota /reabrir, informando o motivo -- fica
+    # registrado aqui quem reabriu, quando e por quê (auditoria).
+    reaberto_por = Column(String, nullable=True)
+    reaberto_em = Column(DateTime, nullable=True)
+    motivo_reabertura = Column(Text, nullable=True)

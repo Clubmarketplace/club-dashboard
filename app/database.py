@@ -124,6 +124,12 @@ _COLUNAS_ADICIONAIS = {
         # 14/10: quem assumiu o cadastro e desde quando (tempo de cadastro).
         "assumido_por": "VARCHAR",
         "assumido_em": "TIMESTAMP",
+        # 14/10: reabertura de um produto já travado (cadastrado) -- quem, quando
+        # e o motivo informado pelo supervisor/admin. Linhas antigas ficam NULL
+        # (nunca foram reabertas).
+        "reaberto_por": "VARCHAR",
+        "reaberto_em": "TIMESTAMP",
+        "motivo_reabertura": "TEXT",
     },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel
