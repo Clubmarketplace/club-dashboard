@@ -32,6 +32,18 @@
     return [hoje, hoje];
   }
 
+  // Tempo médio em "3h 20min" / "2d 3h" ("—" quando ninguém assumiu/fechou produto no período).
+  function tempoMedio(seg) {
+    if (seg === null || seg === undefined) return "—";
+    const min = Math.floor(seg / 60);
+    if (min < 1) return "menos de 1 min";
+    if (min < 60) return `${min}min`;
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h < 24) return m ? `${h}h ${String(m).padStart(2, "0")}min` : `${h}h`;
+    const d = Math.floor(h / 24), hr = h % 24;
+    return hr ? `${d}d ${hr}h` : `${d}d`;
+  }
+
   function dataCurta(iso) {
     const [a, m, d] = iso.split("-");
     return `${d}/${m}/${a}`;
@@ -74,12 +86,13 @@
       <td class="pd-total">${p.total}</td>
       <td>${p.produtos_fechados}</td>
       <td>${p.incluidos_manual}</td>
+      <td>${esc(tempoMedio(p.tempo_medio_seg))}</td>
     </tr>`).join("");
     const t = d.totais;
     alvo.innerHTML = `<table>
-      <thead><tr><th>Pessoa</th><th>${NOMES.ml}</th><th>${NOMES.tiktok}</th><th>${NOMES.shopee}</th><th>Total</th><th>Produtos fechados</th><th>Incluídos à mão</th></tr></thead>
+      <thead><tr><th>Pessoa</th><th>${NOMES.ml}</th><th>${NOMES.tiktok}</th><th>${NOMES.shopee}</th><th>Total</th><th>Produtos fechados</th><th>Incluídos à mão</th><th>Tempo médio por produto</th></tr></thead>
       <tbody>${linhas}</tbody>
-      <tfoot><tr><td>Todos</td><td>${t.ml}</td><td>${t.tiktok}</td><td>${t.shopee}</td><td>${t.total}</td><td>${t.produtos_fechados}</td><td>${t.incluidos_manual}</td></tr></tfoot>
+      <tfoot><tr><td>Todos</td><td>${t.ml}</td><td>${t.tiktok}</td><td>${t.shopee}</td><td>${t.total}</td><td>${t.produtos_fechados}</td><td>${t.incluidos_manual}</td><td>${esc(tempoMedio(t.tempo_medio_seg))}</td></tr></tfoot>
     </table>`;
   }
 

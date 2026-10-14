@@ -15,10 +15,22 @@
   };
   const CHAVES = ["ml", "tiktok", "shopee"];
 
+  // "2d 3h", "3h 20min", "15min", "menos de 1 min" -- tempo corrido (dias e horas que o produto está levando).
+  function duracao(ms) {
+    const min = Math.floor(ms / 60000);
+    if (!(min >= 1)) return "menos de 1 min";
+    if (min < 60) return `${min}min`;
+    const h = Math.floor(min / 60), m = min % 60;
+    if (h < 24) return m ? `${h}h ${String(m).padStart(2, "0")}min` : `${h}h`;
+    const d = Math.floor(h / 24), hr = h % 24;
+    return hr ? `${d}d ${hr}h` : `${d}d`;
+  }
+  const HORAS_DEMORA = 24; // passou disso esperando/em andamento, o tempo fica em vermelho
+
   const estado = {
     itens: [], contagem: { pendente: 0, cadastrado: 0 }, status: "pendente", busca: "", falta: "",
     truncado: false, ocupado: false,
-    naModo: new Set(), mpOcupados: new Set(),
+    naModo: new Set(), mpOcupados: new Set(), resp: "", eu: "",
   };
 
   function esc(t) {
@@ -146,8 +158,43 @@
     const atalho = (feito
       ? `<button class="cd-btn cd-mini" type="button" data-desfazer="${p.id}">Desfazer tudo</button>`
       : `<button class="cd-btn cd-mini" type="button" data-todos="${p.id}" title="Marca como cadastrado o que ainda falta, em nome de quem clicar">✔ Cadastrei nos 3</button>`) + btnNa;
+    const tempo = blocoTempo(p);
     const dicaModo = emModo ? `<div class="cd-quem" style="color:var(--cmx-rust)">Clique no canal que <b>não se aplica</b> a este produto.</div>` : "";
-    return `<div class="cd-acao">${topo}${tags}${quem}${dicaModo}${atalho}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${dicaModo}${atalho}</div>`;
+  }
+
+  // Quem assumiu, desde quando e quanto tempo está levando / levou.
+  function blocoTempo(p) {
+    const agora = Date.now();
+    const chegou = p.data_nota ? new Date(p.data_nota).getTime() : NaN;
+    const assumiu = p.assumido_em ? new Date(p.assumido_em).getTime() : NaN;
+    const fechou = p.cadastrado_em ? new Date(p.cadastrado_em).getTime() : NaN;
+    const linhas = [];
+    if (p.status === "cadastrado") {
+      if (!isNaN(assumiu) && !isNaN(fechou)) {
+        linhas.push(`⏱ <b>Levou ${esc(duracao(fechou - assumiu))}</b> · ${esc(p.assumido_por || "—")} assumiu ${esc(dataBr(p.assumido_em))} → OK ${esc(dataBr(p.cadastrado_em))}`);
+      } else if (!isNaN(chegou) && !isNaN(fechou)) {
+        linhas.push(`⏱ Ninguém assumiu · da chegada até o OK: ${esc(duracao(fechou - chegou))}`);
+      }
+    } else {
+      if (p.assumido_por) {
+        const decorrido = isNaN(assumiu) ? 0 : agora - assumiu;
+        const demora = decorrido > HORAS_DEMORA * 3600000 ? " cd-demora" : "";
+        linhas.push(`<span class="cd-assumido">👤 ${esc(p.assumido_por)} assumiu</span> há <b class="${demora.trim()}">${esc(duracao(decorrido))}</b> <small>(desde ${esc(dataBr(p.assumido_em))})</small>`);
+      } else if (!isNaN(chegou)) {
+        const decorrido = agora - chegou;
+        const demora = decorrido > HORAS_DEMORA * 3600000 ? ' class="cd-demora"' : "";
+        linhas.push(`Sem responsável · aguardando há <b${demora}>${esc(duracao(decorrido))}</b>`);
+      }
+      if (p.assumido_por && !isNaN(chegou)) linhas.push(`<small>Chegou há ${esc(duracao(agora - chegou))}</small>`);
+    }
+    let botao = "";
+    if (p.status !== "cadastrado") {
+      if (!p.assumido_por) botao = `<button class="cd-btn cd-mini" type="button" data-assumir="${p.id}">🙋 Assumir</button>`;
+      else if (p.assumido_por === estado.eu) botao = `<button class="cd-btn cd-mini" type="button" data-soltar="${p.id}" title="Devolve o produto para a fila, sem responsável">Soltar</button>`;
+      else botao = `<button class="cd-btn cd-mini" type="button" data-assumir="${p.id}" title="${esc(p.assumido_por)} já assumiu">🙋 Assumir mesmo assim</button>`;
+    }
+    return `<div class="cd-tempo">${linhas.join("<br>")}${botao ? "<div>" + botao + "</div>" : ""}</div>`;
   }
 
   function linhaProduto(p) {
@@ -168,8 +215,11 @@
   }
 
   function itensVisiveis() {
-    if (!estado.falta) return estado.itens;
-    return estado.itens.filter((p) => p.status !== "cadastrado" && !mpDe(p, estado.falta).estado);
+    let itens = estado.itens;
+    if (estado.falta) itens = itens.filter((p) => p.status !== "cadastrado" && !mpDe(p, estado.falta).estado);
+    if (estado.resp === "meus") itens = itens.filter((p) => p.assumido_por && p.assumido_por === estado.eu);
+    if (estado.resp === "ninguem") itens = itens.filter((p) => !p.assumido_por);
+    return itens;
   }
 
   function desenhar() {
@@ -247,6 +297,20 @@
     }
   }
 
+  async function assumir(id, assumirFlag, forcar) {
+    try {
+      const d = await api(`/produtos/${id}/assumir`, { method: "POST", body: JSON.stringify({ assumir: assumirFlag, forcar: !!forcar }) });
+      aplicarItem(d.item);
+      aviso(assumirFlag ? "Você assumiu este cadastro." : "Produto devolvido para a fila.", "ok");
+    } catch (e) {
+      if (assumirFlag && !forcar && /já assumiu/.test(e.message)) {
+        if (window.confirm(e.message + " Assumir mesmo assim?")) return assumir(id, true, true);
+        return;
+      }
+      aviso("Não consegui: " + e.message, "erro");
+    }
+  }
+
   async function atalhoTodos(id, cadastrado, botao) {
     botao.disabled = true;
     try {
@@ -273,6 +337,10 @@
   document.getElementById("cd-lista").addEventListener("click", (e) => {
     const mp = e.target.closest("[data-mp]");
     if (mp) return alternarMp(Number(mp.dataset.id), mp.dataset.mp);
+    const ass = e.target.closest("[data-assumir]");
+    if (ass) return assumir(Number(ass.dataset.assumir), true, false);
+    const solt = e.target.closest("[data-soltar]");
+    if (solt) return assumir(Number(solt.dataset.soltar), false, false);
     const na = e.target.closest("[data-namodo]");
     if (na) {
       const id = Number(na.dataset.namodo);
@@ -304,11 +372,16 @@
     if (estado.falta && estado.status !== "pendente") { estado.status = "pendente"; carregar(); } else desenhar();
   });
 
+  document.getElementById("cd-resp").addEventListener("change", (e) => { estado.resp = e.target.value; desenhar(); });
+  estado.eu = document.getElementById("cd-lista").dataset.eu || "";
+
   document.getElementById("cd-atualizar").addEventListener("click", () => carregar());
 
   // ------------------------------------------------------- inclusão manual
   const form = document.getElementById("cd-form");
   const campo = (id) => document.getElementById(id);
+  const marcaRefazer = campo("cf-refazer");
+  const incluidos = []; // produtos incluídos desde que o formulário foi aberto (a lista "Incluídos agora")
 
   async function carregarEmpresas() {
     try {
@@ -317,35 +390,229 @@
     } catch (e) { /* a lista de sugestões é só conforto */ }
   }
 
-  // Botão "↻ Refazer": liga/desliga a marca. Só isso -- sem ligação com o cadastro anterior.
-  const marcaRefazer = campo("cf-refazer");
   function pintarRefazer() { campo("cf-refazer-btn").classList.toggle("ligado", marcaRefazer.checked); }
   marcaRefazer.addEventListener("change", pintarRefazer);
+
+  function modo(qual) {
+    form.classList.toggle("modo-colar", qual === "colar");
+    form.classList.toggle("modo-um", qual === "um");
+    campo("cf-aba-colar").classList.toggle("ativo", qual === "colar");
+    campo("cf-aba-um").classList.toggle("ativo", qual === "um");
+  }
+  campo("cf-aba-colar").addEventListener("click", () => modo("colar"));
+  campo("cf-aba-um").addEventListener("click", () => { modo("um"); campo("cf-sku").focus(); });
+
+  // ---------- ler o que foi colado da planilha ----------
+  // Divide em linhas e colunas respeitando aspas (descrição com vírgula/quebra de linha dentro de "...").
+  function dividirTabela(texto) {
+    const t = String(texto || "").replace(/\r\n?/g, "\n");
+    const delim = t.includes("\t") ? "\t" : (t.includes(";") ? ";" : ",");
+    const linhas = []; let linha = [], cel = "", aspas = false;
+    for (let i = 0; i < t.length; i++) {
+      const c = t[i];
+      if (aspas) {
+        if (c === '"') { if (t[i + 1] === '"') { cel += '"'; i++; } else aspas = false; }
+        else cel += c;
+      } else if (c === '"' && cel === "") aspas = true;
+      else if (c === delim) { linha.push(cel); cel = ""; }
+      else if (c === "\n") { linha.push(cel); linhas.push(linha); linha = []; cel = ""; }
+      else cel += c;
+    }
+    linha.push(cel); linhas.push(linha);
+    return linhas.map((l) => l.map((x) => x.trim())).filter((l) => l.some((x) => x !== ""));
+  }
+
+  function semAcento(x) { return String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim(); }
+
+  const CABECALHOS = {
+    sku: ["sku", "codigo", "cod", "ref", "referencia", "cod produto", "codigo produto", "codigo do produto"],
+    produto: ["produto", "descricao", "nome", "item", "descricao do produto", "nome do produto"],
+    gtin: ["ean", "gtin", "ean/gtin", "codigo de barras", "cod barras", "barras"],
+    quantidade: ["qtd", "qtde", "quantidade", "quant", "qtd.", "qtde."],
+    custo_unitario: ["custo", "custo un", "custo un.", "custo unitario", "custo unit", "valor unit", "valor unitario", "preco", "preco unitario", "vl unit"],
+  };
+
+  function campoDoCabecalho(txt) {
+    const n = semAcento(txt);
+    for (const [k, lista] of Object.entries(CABECALHOS)) if (lista.includes(n)) return k;
+    return null;
+  }
+
+  // "1.234,50" -> 1234.5 ; "R$ 12,5" -> 12.5 ; "1.234" -> 1234 ; "12.5" -> 12.5
+  function numeroBr(x) {
+    let v = String(x ?? "").replace(/R\$|\s/g, "");
+    if (v === "") return 0;
+    if (v.includes(",")) v = v.replace(/\./g, "").replace(",", ".");
+    else if (/^\d{1,3}(\.\d{3})+$/.test(v)) v = v.replace(/\./g, "");
+    const n = Number(v);
+    return isFinite(n) ? n : NaN;
+  }
+
+  const ORDEM_PADRAO = {
+    2: ["sku", "produto"],
+    3: ["sku", "produto", "quantidade"],
+    4: ["sku", "produto", "quantidade", "custo_unitario"],
+    5: ["sku", "produto", "gtin", "quantidade", "custo_unitario"],
+  };
+
+  // Devolve { linhas: [{n, sku, produto, gtin, quantidade, custo_unitario, bruto, erro}], colunas: [...], cabecalho: bool }
+  function lerColado(texto) {
+    const tabela = dividirTabela(texto);
+    if (!tabela.length) return { linhas: [], colunas: [], cabecalho: false };
+    let colunas = null, inicio = 0, cabecalho = false;
+    const mapeadas = tabela[0].map(campoDoCabecalho);
+    if (mapeadas.filter(Boolean).length >= 2 && mapeadas.includes("sku")) { colunas = mapeadas; inicio = 1; cabecalho = true; }
+    if (!colunas) {
+      const largura = Math.min(5, Math.max(2, Math.max(...tabela.map((l) => l.length))));
+      colunas = (ORDEM_PADRAO[largura] || ORDEM_PADRAO[5]).slice();
+    }
+    const linhas = [];
+    for (let i = inicio; i < tabela.length; i++) {
+      const cels = tabela[i];
+      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, bruto: cels, erro: "" };
+      colunas.forEach((k, j) => {
+        if (!k) return;
+        const v = cels[j] ?? "";
+        if (k === "quantidade" || k === "custo_unitario") r[k] = numeroBr(v);
+        else r[k] = v;
+      });
+      if (!r.sku) r.erro = "sem SKU";
+      else if (!r.produto) r.erro = "sem nome do produto";
+      else if (isNaN(r.quantidade)) r.erro = "quantidade inválida";
+      else if (isNaN(r.custo_unitario)) r.erro = "custo inválido";
+      else if (r.quantidade < 0 || r.custo_unitario < 0) r.erro = "valor negativo";
+      else if (/e\+/i.test(r.gtin)) r.erro = "EAN em notação científica (formate a coluna como texto na planilha)";
+      linhas.push(r);
+    }
+    const vistos = new Set();
+    linhas.forEach((r) => { if (!r.erro) { const k = r.sku.toLowerCase(); if (vistos.has(k)) r.erro = "SKU repetido nesta lista"; vistos.add(k); } });
+    return { linhas, colunas, cabecalho };
+  }
+
+  let lidos = { linhas: [] };
+
+  function desenharPrevia() {
+    lidos = lerColado(campo("cf-colar").value);
+    const caixa = campo("cf-previa");
+    const bons = lidos.linhas.filter((r) => !r.erro);
+    campo("cf-incluir-lote").disabled = bons.length === 0;
+    campo("cf-incluir-lote").textContent = bons.length ? `Incluir ${bons.length}` : "Incluir";
+    if (!lidos.linhas.length) { caixa.innerHTML = ""; return; }
+    const ruins = lidos.linhas.length - bons.length;
+    const resumo = `${bons.length} produto(s) prontos para incluir` + (ruins ? ` · <span style="color:var(--cmx-rust)">${ruins} com problema (não entram)</span>` : "") + (lidos.cabecalho ? " · cabeçalho reconhecido" : "");
+    const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.erro ? "ruim" : ""}">
+        <td>${r.n}</td><td><b>${esc(r.sku)}</b></td><td>${esc(r.produto)}</td><td>${esc(r.gtin)}</td>
+        <td>${isNaN(r.quantidade) ? "?" : esc(quantidade(r.quantidade))}</td><td>${isNaN(r.custo_unitario) ? "?" : esc(moeda(r.custo_unitario))}</td>
+        <td>${r.erro ? "✖ " + esc(r.erro) : "✔"}</td></tr>`).join("");
+    caixa.innerHTML = `<div class="res">${resumo}</div><div class="cd-previa"><table>
+      <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>EAN</th><th>Qtd</th><th>Custo un.</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  }
+  campo("cf-colar").addEventListener("input", desenharPrevia);
+  campo("cf-limpar").addEventListener("click", () => { campo("cf-colar").value = ""; desenharPrevia(); });
+
+  // Anexar planilha salva como CSV: lê o arquivo e joga o texto na caixa (que mostra a prévia).
+  campo("cf-arquivo").addEventListener("change", async (e) => {
+    const arq = e.target.files && e.target.files[0];
+    if (!arq) return;
+    try {
+      const buf = await arq.arrayBuffer();
+      let texto;
+      try { texto = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { texto = new TextDecoder("windows-1252").decode(buf); }
+      campo("cf-colar").value = texto.replace(/^﻿/, "");
+      desenharPrevia();
+    } catch (err) {
+      aviso("Não consegui ler o arquivo: " + err.message, "erro");
+    }
+    e.target.value = "";
+  });
+
+  // ---------- lista "Incluídos agora" ----------
+  function desenharIncluidos(erros) {
+    const bloco = campo("cf-incluidos");
+    bloco.style.display = incluidos.length || (erros && erros.length) ? "block" : "none";
+    campo("cf-incluidos-n").textContent = incluidos.length ? `(${incluidos.length})` : "";
+    campo("cf-incluidos-lista").innerHTML =
+      (erros || []).map((e) => `<div class="cd-inc-erro">✖ Linha ${esc(e.linha)}${e.sku ? " (" + esc(e.sku) + ")" : ""}: não entrou — ${esc(e.motivo)}</div>`).join("") +
+      incluidos.slice().reverse().map((p) => `<div class="cd-inc-item"><b>${esc(p.sku)}</b><span style="flex:1">${esc(p.produto)}</span><span>${esc(quantidade(p.quantidade))} un · ${esc(moeda(p.custo_unitario))}</span></div>`).join("");
+  }
+
+  function dadosDaNota() {
+    return { empresa: campo("cf-empresa").value.trim(), fornecedor: campo("cf-fornecedor").value, numero_nota: campo("cf-nota").value, refazer: marcaRefazer.checked };
+  }
+
+  async function aposIncluir() {
+    estado.status = "pendente"; estado.falta = ""; campo("cd-falta").value = ""; estado.resp = ""; campo("cd-resp").value = "";
+    estado.ocupado = false;
+    await carregar(true);
+    carregarEmpresas();
+  }
+
+  // Botão "Incluir" do modo colar: manda tudo de uma vez; o que não entrar fica na caixa pra corrigir.
+  campo("cf-incluir-lote").addEventListener("click", async () => {
+    const nota = dadosDaNota();
+    if (!nota.empresa) { aviso("Informe a empresa antes de incluir.", "erro"); campo("cf-empresa").focus(); return; }
+    const bons = lidos.linhas.filter((r) => !r.erro);
+    if (!bons.length) return;
+    const botao = campo("cf-incluir-lote");
+    botao.disabled = true;
+    try {
+      const d = await api("/produtos/lote", {
+        method: "POST",
+        body: JSON.stringify(Object.assign({}, nota, { itens: bons.map((r) => ({ sku: r.sku, produto: r.produto, gtin: r.gtin, quantidade: r.quantidade, custo_unitario: r.custo_unitario })) })),
+      });
+      d.criados.forEach((p) => incluidos.push(p));
+      const falhas = d.ignorados.map((x) => Object.assign({}, x, { linha: bons[x.linha - 1] ? bons[x.linha - 1].n : x.linha }));
+      desenharIncluidos(falhas);
+      // deixa na caixa só o que NÃO entrou (linhas com problema + as recusadas pelo servidor), pra corrigir e incluir de novo
+      const recusadas = new Set(d.ignorados.map((x) => bons[x.linha - 1]));
+      const ficam = lidos.linhas.filter((r) => r.erro || recusadas.has(r));
+      campo("cf-colar").value = ficam.map((r) => r.bruto.join("\t")).join("\n");
+      desenharPrevia();
+      const refaz = nota.refazer ? " para REFAZER" : "";
+      aviso(`${d.criados.length} produto(s) incluído(s)${refaz}.` + (falhas.length ? ` ${falhas.length} não entrou(aram) — veja abaixo.` : ""), falhas.length ? "aviso" : "ok");
+      marcaRefazer.checked = false; pintarRefazer();
+      await aposIncluir();
+    } catch (e) {
+      aviso("Não consegui incluir: " + e.message, "erro");
+      desenharPrevia();
+    }
+  });
 
   document.getElementById("cd-novo").addEventListener("click", () => {
     const aberto = form.style.display === "block";
     form.style.display = aberto ? "none" : "block";
-    if (!aberto) { carregarEmpresas(); campo(campo("cf-empresa").value ? "cf-sku" : "cf-empresa").focus(); }
+    if (!aberto) { carregarEmpresas(); (campo("cf-empresa").value ? campo("cf-colar") : campo("cf-empresa")).focus(); }
   });
-  document.getElementById("cf-fechar").addEventListener("click", () => { form.style.display = "none"; });
 
+  function finalizar() {
+    form.style.display = "none";
+    incluidos.length = 0; desenharIncluidos([]);
+    campo("cf-colar").value = ""; desenharPrevia();
+    ["cf-sku", "cf-produto", "cf-gtin"].forEach((id) => { campo(id).value = ""; });
+    marcaRefazer.checked = false; pintarRefazer();
+  }
+  campo("cf-fechar").addEventListener("click", finalizar);
+
+  // Modo "digitar um produto" (um de cada vez).
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const botao = campo("cf-salvar");
+    const nota = dadosDaNota();
+    if (!nota.empresa || !campo("cf-sku").value.trim() || !campo("cf-produto").value.trim()) {
+      aviso("Preencha empresa, SKU e nome do produto.", "erro");
+      return;
+    }
     botao.disabled = true;
     try {
-      const corpo = {
-        empresa: campo("cf-empresa").value,
-        fornecedor: campo("cf-fornecedor").value,
-        numero_nota: campo("cf-nota").value,
-        sku: campo("cf-sku").value,
+      const corpo = Object.assign({}, nota, {
         produto: campo("cf-produto").value,
+        sku: campo("cf-sku").value,
         gtin: campo("cf-gtin").value,
         quantidade: Number(campo("cf-qtd").value || 0),
         custo_unitario: Number(campo("cf-custo").value || 0),
-        refazer: marcaRefazer.checked,
-      };
+      });
       const d = await api("/produtos", { method: "POST", body: JSON.stringify(corpo) });
+      incluidos.push(d.item); desenharIncluidos([]);
       aviso((corpo.refazer ? `Incluído para REFAZER: ${d.item.sku} — ${d.item.produto}.` : `Incluído: ${d.item.sku} — ${d.item.produto}.`) + (d.aviso ? " " + d.aviso : ""), d.aviso ? "aviso" : "ok");
       // limpa só o que muda de um produto pro outro; empresa, fornecedor e nota ficam pro próximo da mesma nota
       ["cf-sku", "cf-produto", "cf-gtin"].forEach((id) => { campo(id).value = ""; });
@@ -353,10 +620,7 @@
       campo("cf-custo").value = "0";
       marcaRefazer.checked = false; pintarRefazer();
       campo("cf-sku").focus();
-      estado.status = "pendente"; estado.falta = ""; campo("cd-falta").value = "";
-      estado.ocupado = false;
-      await carregar(true);
-      carregarEmpresas();
+      await aposIncluir();
     } catch (err) {
       aviso("Não consegui incluir: " + err.message, "erro");
     } finally {
@@ -364,8 +628,9 @@
     }
   });
 
-  // Atualiza sozinha a cada minuto (só com a aba visível) -- produto novo aparece sem precisar recarregar.
-  setInterval(() => { if (!document.hidden && form.style.display !== "block") carregar(true); }, 60000);
+  // Atualiza sozinha a cada minuto (só com a aba visível) -- produto novo aparece e os tempos andam, sem recarregar.
+  setInterval(() => { if (!document.hidden) { if (form.style.display !== "block") carregar(true); else desenhar(); } }, 60000);
 
+  desenharPrevia();
   carregar();
 })();
