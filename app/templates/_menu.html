@@ -96,6 +96,10 @@
   {% endcall %}
 
   {% if not _restrito %}
+    {% call grupo("cadastro", "Cadastro", ["/cadastro"]) %}
+      {{ item("/cadastro", "Produtos para cadastro") }}
+    {% endcall %}
+
     {% call grupo("admin", "Administração", ["/usuarios", "/eventos-webhook", "/calibrar-ia"]) %}
       {{ item("/usuarios", "Operadores") }}
       {{ item("/calibrar-ia", "Calibrar IA") }}
