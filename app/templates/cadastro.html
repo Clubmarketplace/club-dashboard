@@ -60,6 +60,32 @@
     .cd-form label { display:block; font-size:12px; font-weight:700; color:var(--cmx-texto-suave); margin:0 0 4px; }
     .cd-form input { width:100%; box-sizing:border-box; height:38px; border:1px solid var(--cmx-borda); border-radius:9px; padding:0 10px; font:14px Inter,sans-serif; background:var(--cmx-bg); color:var(--cmx-texto); }
     .cd-form .cd-largo { grid-column:span 2; }
+    .cd-form.modo-colar .cf-um { display:none; }
+    .cd-form.modo-um .cf-colar { display:none; }
+    .cd-aba { height:34px; padding:0 14px; border-radius:9px 9px 0 0; border:1px solid var(--cmx-borda); border-bottom:none; background:var(--cmx-bg); color:var(--cmx-texto-suave); font:700 13px Inter,sans-serif; cursor:pointer; }
+    .cd-aba.ativo { background:var(--cmx-texto); color:var(--cmx-papel); border-color:var(--cmx-texto); }
+    .cd-colar-linha { display:flex; gap:10px; align-items:stretch; }
+    .cd-colar-linha textarea { flex:1; min-width:0; border:1px solid var(--cmx-borda); border-radius:9px; padding:10px; font:13px ui-monospace,Menlo,Consolas,monospace; background:var(--cmx-bg); color:var(--cmx-texto); resize:vertical; }
+    .cd-colar-botoes { display:flex; flex-direction:column; gap:8px; width:150px; }
+    .cd-colar-botoes .cd-btn { width:100%; height:38px; display:inline-flex; align-items:center; justify-content:center; }
+    .cd-anexo { cursor:pointer; position:relative; }
+    .cd-anexo input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+    .cd-previa { margin:10px 0 6px; border:1px solid var(--cmx-borda); border-radius:10px; overflow:auto; max-height:260px; background:var(--cmx-papel); }
+    .cd-previa table { width:100%; border-collapse:collapse; font-size:12.5px; }
+    .cd-previa th { position:sticky; top:0; background:var(--cmx-bg); text-align:left; padding:6px 8px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
+    .cd-previa td { padding:5px 8px; border-top:1px solid var(--cmx-borda); }
+    .cd-previa tr.ruim td { background:var(--cmx-rust-fundo); color:var(--cmx-rust); }
+    .cd-previa .res { font-weight:700; margin:8px 0 4px; font-size:13px; }
+    #cf-incluidos { margin-top:14px; border-top:1px dashed var(--cmx-borda); padding-top:10px; }
+    #cf-incluidos h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
+    .cd-inc-item { display:flex; gap:10px; padding:5px 0; font-size:13px; border-top:1px solid var(--cmx-borda); }
+    .cd-inc-item:first-child { border-top:none; }
+    .cd-inc-item b { font-family:ui-monospace,Menlo,Consolas,monospace; min-width:110px; }
+    .cd-inc-erro { color:var(--cmx-rust); font-size:13px; padding:3px 0; }
+    .cd-tempo { margin-top:6px; font-size:12px; line-height:1.4; color:var(--cmx-texto-suave); }
+    .cd-tempo b { color:var(--cmx-texto); }
+    .cd-tempo .cd-demora { color:var(--cmx-rust); font-weight:700; }
+    .cd-assumido { display:inline-block; background:var(--cmx-ambar-fundo); color:var(--cmx-ambar); border-radius:999px; padding:1px 9px; font-weight:700; font-size:12px; }
     .cd-form-acoes { display:flex; gap:10px; margin-top:14px; align-items:center; flex-wrap:wrap; }
     .cd-selo-refazer { display:inline-block; font-size:11px; font-weight:800; color:#fff; background:#7c3aed; border-radius:6px; padding:1px 7px; margin-top:4px; letter-spacing:.03em; }
     .cd-form label.cd-refazer-btn { display:inline-flex; align-items:center; gap:8px; height:36px; padding:0 14px; border-radius:10px; border:1.5px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); font:700 13px Inter,sans-serif; cursor:pointer; user-select:none; }
@@ -131,32 +157,62 @@
             <option value="tiktok">Falta no TikTok</option>
             <option value="shopee">Falta na Shopee</option>
           </select>
+          <label for="cd-resp" style="position:absolute;left:-9999px">Responsável</label>
+          <select id="cd-resp" class="cd-select" title="Filtrar por quem assumiu o cadastro">
+            <option value="">Responsável: todos</option>
+            <option value="meus">Só os meus</option>
+            <option value="ninguem">Sem responsável</option>
+          </select>
           <button class="cd-btn" id="cd-atualizar" type="button">↻ Atualizar</button>
           <button class="cd-btn cd-btn-ok" id="cd-novo" type="button">+ Incluir produto</button>
           {% if pode_ver_produtividade %}<a class="cd-btn" href="/cadastro/produtividade" style="display:inline-flex;align-items:center;text-decoration:none;">📊 Produtividade</a>{% endif %}
           <span class="cd-contador" id="cd-contador"></span>
         </div>
 
-        <form class="cd-form" id="cd-form" autocomplete="off">
-          <h3>Incluir produto manualmente</h3>
-          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Ele entra na lista como pendente, marcado como “incluído à mão” com o seu nome. Empresa, fornecedor e nota ficam preenchidos para você incluir vários da mesma nota.</p>
+        <form class="cd-form modo-colar" id="cd-form" autocomplete="off" novalidate>
+          <h3>Incluir produtos manualmente</h3>
+          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Preencha a empresa, o fornecedor e a nota <b>uma vez</b> e inclua os produtos: eles entram como pendentes, marcados como “incluído à mão” com o seu nome.</p>
           <div class="cd-form-grade">
-            <div class="cd-largo"><label for="cf-empresa">Empresa *</label><input id="cf-empresa" list="cf-empresas" required maxlength="120" /><datalist id="cf-empresas"></datalist></div>
+            <div class="cd-largo"><label for="cf-empresa">Empresa *</label><input id="cf-empresa" list="cf-empresas" maxlength="120" /><datalist id="cf-empresas"></datalist></div>
             <div class="cd-largo"><label for="cf-fornecedor">Fornecedor</label><input id="cf-fornecedor" maxlength="160" /></div>
             <div><label for="cf-nota">Nota</label><input id="cf-nota" maxlength="40" /></div>
-            <div><label for="cf-sku">SKU *</label><input id="cf-sku" required maxlength="80" /></div>
-            <div class="cd-largo"><label for="cf-produto">Nome do produto *</label><input id="cf-produto" required maxlength="300" /></div>
-            <div><label for="cf-gtin">EAN</label><input id="cf-gtin" inputmode="numeric" maxlength="20" /></div>
-            <div><label for="cf-qtd">Quantidade</label><input id="cf-qtd" type="number" min="0" step="any" value="0" /></div>
-            <div><label for="cf-custo">Custo un. (R$)</label><input id="cf-custo" type="number" min="0" step="any" value="0" /></div>
-            <div style="grid-column:1 / -1;border-top:1px dashed var(--cmx-borda);padding-top:12px">
-              <label class="cd-refazer-btn" id="cf-refazer-btn" for="cf-refazer" title="Marque se este produto já foi cadastrado antes e está sendo refeito"><input id="cf-refazer" type="checkbox" />↻ REFAZER</label>
-              <span style="font-size:12.5px;color:var(--cmx-texto-suave);margin-left:8px">Marque se este produto já foi cadastrado antes e está sendo refeito.</span>
+            <div style="grid-column:span 3;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
+              <button type="button" class="cd-aba ativo" id="cf-aba-colar">📋 Colar da planilha</button>
+              <button type="button" class="cd-aba" id="cf-aba-um">✏️ Digitar um produto</button>
+              <label class="cd-refazer-btn" id="cf-refazer-btn" for="cf-refazer" title="Marque se estes produtos já foram cadastrados antes e estão sendo refeitos" style="margin-left:auto"><input id="cf-refazer" type="checkbox" />↻ REFAZER</label>
             </div>
+
+            <!-- modo: colar da planilha -->
+            <div class="cf-colar" style="grid-column:1 / -1">
+              <label for="cf-colar">Cole aqui as linhas copiadas da planilha — colunas: <b>SKU · Produto · EAN · Qtd · Custo un.</b> (pode colar com o cabeçalho; eu reconheço as colunas)</label>
+              <div class="cd-colar-linha">
+                <textarea id="cf-colar" rows="6" spellcheck="false" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)…"></textarea>
+                <div class="cd-colar-botoes">
+                  <button class="cd-btn cd-btn-ok" id="cf-incluir-lote" type="button" disabled>Incluir</button>
+                  <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
+                  <button class="cd-btn" id="cf-limpar" type="button">Limpar</button>
+                </div>
+              </div>
+              <div id="cf-previa"></div>
+              <small style="color:var(--cmx-texto-suave)">Planilha .xlsx? Abra, selecione as linhas, copie e cole aqui. Números como 1.234,50 são entendidos.</small>
+            </div>
+
+            <!-- modo: digitar um produto -->
+            <div class="cf-um"><label for="cf-sku">SKU *</label><input id="cf-sku" maxlength="80" /></div>
+            <div class="cf-um cd-largo"><label for="cf-produto">Nome do produto *</label><input id="cf-produto" maxlength="300" /></div>
+            <div class="cf-um"><label for="cf-gtin">EAN</label><input id="cf-gtin" inputmode="numeric" maxlength="20" /></div>
+            <div class="cf-um"><label for="cf-qtd">Quantidade</label><input id="cf-qtd" type="number" min="0" step="any" value="0" /></div>
+            <div class="cf-um"><label for="cf-custo">Custo un. (R$)</label><input id="cf-custo" type="number" min="0" step="any" value="0" /></div>
+            <div class="cf-um" style="align-self:end"><button class="cd-btn cd-btn-ok" id="cf-salvar" type="submit">Incluir</button></div>
+          </div>
+
+          <div id="cf-incluidos" style="display:none">
+            <h4>Incluídos agora <span id="cf-incluidos-n"></span></h4>
+            <div id="cf-incluidos-lista"></div>
           </div>
           <div class="cd-form-acoes">
-            <button class="cd-btn cd-btn-ok" id="cf-salvar" type="submit">Incluir na lista</button>
-            <button class="cd-btn" id="cf-fechar" type="button">Fechar</button>
+            <button class="cd-btn" id="cf-fechar" type="button">Finalizar inclusão</button>
+            <span style="font-size:12.5px;color:var(--cmx-texto-suave)">Pode incluir quantas vezes quiser; ao terminar a nota, clique em Finalizar.</span>
           </div>
         </form>
 
@@ -168,7 +224,7 @@
           <span>Clicou errado? Clique de novo para desfazer. O produto fica <b>OK</b> quando os 3 estão resolvidos.</span>
         </div>
 
-        <div id="cd-lista"><div class="cd-vazio">Carregando…</div></div>
+        <div id="cd-lista" data-eu="{{ usuario_logado.nome_exibicao if usuario_logado else '' }}"><div class="cd-vazio">Carregando…</div></div>
 
         <div class="cd-info">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
@@ -178,7 +234,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=5"></script>
+  <script src="/static/cadastro.js?v=6"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
