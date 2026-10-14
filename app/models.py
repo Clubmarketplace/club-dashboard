@@ -954,3 +954,27 @@ class ProdutoCadastro(Base):
     cadastrado_em = Column(DateTime, nullable=True)
     recebido_em = Column(DateTime, default=datetime.utcnow)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # --- 14/10: quem cadastrou, em qual marketplace ---------------------------
+    # "automatico" = chegou do Operador; "manual" = incluído na tela por alguém
+    # do time (criado_por guarda quem).
+    origem = Column(String, nullable=True, default="automatico")
+    criado_por = Column(String, nullable=True)
+    # Uma marcação por marketplace: nulo = ainda falta; "feito" = cadastrado lá;
+    # "nao_se_aplica" = esse produto não vai pra esse marketplace (conta como
+    # resolvido, pra o produto poder ficar OK só com 2). *_por/*_em = quem e quando.
+    ml_status = Column(String, nullable=True)
+    ml_por = Column(String, nullable=True)
+    ml_em = Column(DateTime, nullable=True)
+    tiktok_status = Column(String, nullable=True)
+    tiktok_por = Column(String, nullable=True)
+    tiktok_em = Column(DateTime, nullable=True)
+    shopee_status = Column(String, nullable=True)
+    shopee_por = Column(String, nullable=True)
+    shopee_em = Column(DateTime, nullable=True)
+
+    # --- 14/10: "refazer cadastro" -------------------------------------------
+    # Um cadastro que precisa ser refeito entra como solicitação NOVA (inclusão
+    # manual), apenas marcada como "refazer": serve pra todo mundo saber que o
+    # produto já foi cadastrado antes e está sendo refeito. Sem ligação com o anterior.
+    refazer = Column(Boolean, nullable=True, default=False)

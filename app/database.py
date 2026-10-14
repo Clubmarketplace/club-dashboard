@@ -104,6 +104,24 @@ _COLUNAS_ADICIONAIS = {
         # Carrinho (pack) do ML; NULL = pedido avulso ou linha antiga.
         "pack_id": "VARCHAR",
     },
+    "produtos_cadastro": {
+        # 14/10: origem, quem incluiu e a marcação por marketplace (ver
+        # ProdutoCadastro em app/models.py). Linhas antigas ficam NULL --
+        # tratado como "automatico" / "sem marcação por marketplace" no código.
+        "origem": "VARCHAR",
+        "criado_por": "VARCHAR",
+        "ml_status": "VARCHAR",
+        "ml_por": "VARCHAR",
+        "ml_em": "TIMESTAMP",
+        "tiktok_status": "VARCHAR",
+        "tiktok_por": "VARCHAR",
+        "tiktok_em": "TIMESTAMP",
+        "shopee_status": "VARCHAR",
+        "shopee_por": "VARCHAR",
+        "shopee_em": "TIMESTAMP",
+        # 14/10: marca "refazer" (cadastro que está sendo refeito).
+        "refazer": "BOOLEAN",
+    },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel
         # e da extensão CMX, ver app/auth.py). Linhas antigas ficam com

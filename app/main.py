@@ -194,6 +194,11 @@ _AREAS = {
         "paginas": {"/solicitacoes-painel", "/relatorio-cancelamentos", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
         "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
+    # Time de Cadastro (14/10): a tela de produtos novos e a API dela. A
+    # tela de produtividade (/cadastro/produtividade) NÃO entra aqui de
+    # propósito -- é só de admin/supervisor; a API de produtividade também é
+    # conferida na própria rota.
+    "cadastro": {"paginas": {"/cadastro"}, "prefixos_api": ("/api/cadastro/",)},
     # Galpão: registrar (o formulário e o envio já são públicos) e
     # acompanhar. Só endereços EXATOS -- de propósito, o /confirmar
     # fica de fora (quem pede não confirma).
@@ -215,6 +220,8 @@ _AREAS = {
 _AREAS_POR_PAPEL = {
     "atendente": ("pre_venda", "pos_venda", "paineis_tv", "solicitacoes_cancelamento", "reputacao", "respostas_padrao"),
     "logistica": ("logistica",),
+    # Cadastro (14/10): só a tela "Cadastro" -- cada pessoa do time com o seu login.
+    "cadastro": ("cadastro",),
     # TV: só enxerga os painéis (não responde nada, não abre outras telas).
     "tv": ("paineis_tv",),
 }
@@ -237,14 +244,15 @@ _PAGINA_INICIAL_POR_PAPEL = {
     "atendente": "/pre-venda",
     "logistica": "/solicitar-cancelamento",
     "tv": "/painel-tv/fila",
+    "cadastro": "/cadastro",
 }
 
 # Quais perfis cada papel pode criar/editar/resetar/desativar. Usado em
 # TODAS as rotas de operadores -- a checagem de verdade é sempre aqui,
 # no servidor, nunca só no <select> da tela.
 PAPEIS_GERENCIAVEIS_POR = {
-    "admin": ("admin", "supervisor", "atendente", "logistica", "seller", "suporte", "tv"),
-    "supervisor": ("atendente", "logistica", "seller", "tv"),
+    "admin": ("admin", "supervisor", "atendente", "logistica", "cadastro", "seller", "suporte", "tv"),
+    "supervisor": ("atendente", "logistica", "cadastro", "seller", "tv"),
 }
 
 
@@ -1085,16 +1093,28 @@ def pagina_solicitacoes_painel(request: Request):
 @app.get("/cadastro", response_class=HTMLResponse)
 def pagina_cadastro(request: Request):
     """
-    Tela "Cadastro": produtos novos das notas fiscais do Operador Logístico,
-    agrupados por empresa, esperando o time de Cadastro (mesma informação do
-    Zap "PRODUTO(S) NOVO(S) PARA CADASTRO"). Admin e supervisor -- a API
-    (app/routers/cadastro_produtos.py) confere de novo. Os dados chegam
-    sozinhos do Operador; a tela só lista e deixa marcar "cadastrado".
+    Tela "Cadastro": produtos novos das notas fiscais do Operador Logístico
+    (e os incluídos à mão), agrupados por empresa, esperando o time de
+    Cadastro. Cada pessoa marca em quais marketplaces (Mercado Livre, TikTok,
+    Shopee) já cadastrou -- a tela guarda quem fez cada um. Admin, supervisor
+    e o perfil "cadastro"; a API (app/routers/cadastro_produtos.py) confere de novo.
     """
+    usuario = _usuario_logado(request)
+    if not auth.papel_permite(usuario, ("admin", "supervisor", "cadastro")):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(
+        request=request, name="cadastro.html",
+        context={"usuario_logado": usuario, "pode_ver_produtividade": usuario.papel in ("admin", "supervisor")},
+    )
+
+
+@app.get("/cadastro/produtividade", response_class=HTMLResponse)
+def pagina_cadastro_produtividade(request: Request):
+    """Quanto cada pessoa do time de Cadastro cadastrou, por marketplace e período. Só admin e supervisor."""
     usuario = _usuario_logado(request)
     if not auth.papel_permite(usuario, ("admin", "supervisor")):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse(request=request, name="cadastro.html", context={"usuario_logado": usuario})
+    return templates.TemplateResponse(request=request, name="cadastro-produtividade.html", context={"usuario_logado": usuario})
 
 
 @app.get("/relatorio-cancelamentos", response_class=HTMLResponse)
