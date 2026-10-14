@@ -8,11 +8,18 @@
     - cadastro (14/10): só o grupo Cadastro (tela de produtos novos);
     - atendente: Perguntas, Respostas padrão, Mensagens dos pedidos,
       Solicitações sellers (cancelamento e reputação), Reputação das contas e Painéis de TV.
+    - operador/gerente_setor (15/10): só os grupos dos setores que a pessoa
+      tiver marcada (Usuario.setores) -- Cadastro e/ou Solicitações sellers.
+      "gerente_setor" também vê a Produtividade do(s) setor(es) marcado(s).
   Grupos em sanfona: só o grupo da tela atual vem aberto; abrir um fecha os outros.
 #}
 {% set _papel = usuario_logado.papel if usuario_logado else "" %}
-{% set _restrito = _papel in ("atendente", "cadastro") %}
+{% set _setores_pessoais = (usuario_logado.setores.split(",") if usuario_logado and usuario_logado.setores else []) %}
+{% set _restrito = _papel in ("atendente", "cadastro", "operador", "gerente_setor") %}
 {% set _so_cadastro = _papel == "cadastro" %}
+{% set _eh_gerente = _papel == "gerente_setor" %}
+{% set _eh_setor_cadastro = _papel in ("operador", "gerente_setor") and "cadastro" in _setores_pessoais %}
+{% set _eh_setor_cancelamento = _papel in ("operador", "gerente_setor") and "solicitacoes_cancelamento" in _setores_pessoais %}
 {% set _caminho = request.url.path if request else "" %}
 
 {% macro item(href, rotulo, nova_aba=false) -%}
@@ -102,10 +109,18 @@
 
   {% endif %}
 
-  {% if _so_cadastro or not _restrito %}
+  {% if _eh_setor_cancelamento %}
+    {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos"]) %}
+      {{ item("/solicitar-cancelamento", "Nova solicitação") }}
+      {{ item("/solicitacoes-painel", "Solicitações") }}
+      {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
+    {% endcall %}
+  {% endif %}
+
+  {% if _so_cadastro or _eh_setor_cadastro or not _restrito %}
     {% call grupo("cadastro", "Cadastro", ["/cadastro"]) %}
       {{ item("/cadastro", "Produtos para cadastro") }}
-      {% if not _so_cadastro %}{{ item("/cadastro/produtividade", "Produtividade") }}{% endif %}
+      {% if (not _restrito) or (_eh_setor_cadastro and _eh_gerente) %}{{ item("/cadastro/produtividade", "Produtividade") }}{% endif %}
     {% endcall %}
   {% endif %}
 

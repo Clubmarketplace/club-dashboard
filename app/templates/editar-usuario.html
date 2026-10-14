@@ -21,6 +21,9 @@
     .eu-dica { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:5px; }
     .eu-campo-conta { display:none; }
     .eu-campo-conta.visivel { display:block; }
+    .eu-setores { display:flex; flex-wrap:wrap; gap:10px 18px; }
+    .eu-setor-item { display:inline-flex !important; align-items:center; gap:6px; font-weight:500 !important; font-size:13.5px !important; margin-bottom:0 !important; margin-top:0 !important; }
+    .eu-setor-item input { width:auto !important; padding:0 !important; }
     .eu-botoes { display:flex; gap:10px; margin-top:24px; }
     button.eu-salvar {
       padding:12px 22px; border:none; border-radius:9px;
@@ -93,6 +96,8 @@
             <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
               <option value="admin" {% if alvo.papel == "admin" %}selected{% endif %}>Admin</option>
               <option value="supervisor" {% if alvo.papel == "supervisor" %}selected{% endif %}>Supervisor</option>
+              <option value="gerente_setor" {% if alvo.papel == "gerente_setor" %}selected{% endif %}>Gerente de setor (vê as telas + produtividade dos setores marcados)</option>
+              <option value="operador" {% if alvo.papel == "operador" %}selected{% endif %}>Operador (vê só as telas dos setores marcados)</option>
               <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
               <option value="logistica" {% if alvo.papel == "logistica" %}selected{% endif %}>Logística</option>
               <option value="cadastro" {% if alvo.papel == "cadastro" %}selected{% endif %}>Cadastro (cadastra os produtos novos)</option>
@@ -102,14 +107,26 @@
             </select>
             {% else %}
             <select name="papel" id="campo-papel" onchange="alternarCampoConta()">
+              <option value="gerente_setor" {% if alvo.papel == "gerente_setor" %}selected{% endif %}>Gerente de setor (vê as telas + produtividade dos setores marcados)</option>
+              <option value="operador" {% if alvo.papel == "operador" %}selected{% endif %}>Operador (vê só as telas dos setores marcados)</option>
               <option value="atendente" {% if alvo.papel == "atendente" %}selected{% endif %}>Atendente</option>
               <option value="logistica" {% if alvo.papel == "logistica" %}selected{% endif %}>Logística</option>
               <option value="cadastro" {% if alvo.papel == "cadastro" %}selected{% endif %}>Cadastro (cadastra os produtos novos)</option>
               <option value="seller" {% if alvo.papel == "seller" %}selected{% endif %}>Seller</option>
               <option value="tv" {% if alvo.papel == "tv" %}selected{% endif %}>TV (só vê os painéis)</option>
             </select>
-            <div class="eu-dica">Como supervisor, você edita atendentes, logística, cadastro, sellers e TVs.</div>
+            <div class="eu-dica">Como supervisor, você edita gerente de setor, operador, atendentes, logística, cadastro, sellers e TVs.</div>
             {% endif %}
+
+            <div class="eu-campo-conta" id="bloco-setores">
+              <label>Setores (quais telas essa pessoa pode abrir)</label>
+              <div class="eu-setores">
+                {% for chave, rotulo in setores_disponiveis.items() %}
+                <label class="eu-setor-item"><input type="checkbox" name="setores" value="{{ chave }}" {% if chave in setores_do_alvo %}checked{% endif %} /> {{ rotulo }}</label>
+                {% endfor %}
+              </div>
+              <div class="eu-dica">Quando abrirmos outro setor, basta marcar aqui -- não precisa trocar o perfil da pessoa.</div>
+            </div>
 
             <div class="eu-campo-conta" id="bloco-conta">
               <label>Conta vinculada (Mercado Livre / Shopee)</label>
@@ -140,6 +157,10 @@
             const bloco = document.getElementById("bloco-conta");
             bloco.classList.toggle("visivel", precisaConta);
             document.getElementById("campo-conta").required = precisaConta;
+
+            // Setores só aparecem (e só valem) pra "operador" e "gerente_setor".
+            const precisaSetor = (papel === "operador" || papel === "gerente_setor");
+            document.getElementById("bloco-setores")?.classList.toggle("visivel", precisaSetor);
           }
           alternarCampoConta();
         </script>
