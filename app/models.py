@@ -908,3 +908,49 @@ class DespesaFixaConta(Base):
     valor_mensal = Column(Float, nullable=False)
     atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     atualizado_por = Column(String, nullable=True)
+
+
+class ProdutoCadastro(Base):
+    """
+    Produto NOVO que apareceu numa nota fiscal processada pelo Operador
+    Logístico (Club Full, Apps Script) e está esperando CADASTRO. É a mesma
+    informação da mensagem de Zap "PRODUTO(S) NOVO(S) PARA CADASTRO": empresa,
+    fornecedor, nota e, por produto, SKU, nome, EAN, quantidade e custo
+    unitário (o "Custo un." do Zap -- custo final, com frete e IPI rateados
+    quando a nota tem).
+
+    Chega por POST /api/operador/produtos-novos (ver
+    app/routers/cadastro_produtos.py), enviado sozinho pelo Operador no
+    momento em que a nota é registrada. Só notas lançadas DEPOIS da
+    integração entrar no ar; nada do passado é importado. A tela "Cadastro"
+    do painel lista isso agrupado por empresa e deixa marcar o que já foi
+    cadastrado.
+
+    Chave: (nota_id, sku) -- reenviar o mesmo produto da mesma nota ATUALIZA
+    em vez de duplicar, e nunca desfaz um "cadastrado". `nota_id` é o ID que
+    o próprio Operador gerou pra nota.
+
+    O custo por empresa de TODOS os produtos (2ª rodada) NÃO está aqui de
+    propósito: vem depois, separado.
+    """
+
+    __tablename__ = "produtos_cadastro"
+    __table_args__ = (UniqueConstraint("nota_id", "sku", name="uq_produto_cadastro_nota_sku"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    nota_id = Column(String, nullable=False, index=True)  # ID da nota no Operador Logístico
+    empresa_nome = Column(String, nullable=False)  # como veio do Operador (ex: "JC MACHADO")
+    empresa_chave = Column(String, nullable=False, index=True)  # chave_conta(empresa_nome): minúsculo, sem acento
+    fornecedor = Column(String, nullable=True)
+    numero_nota = Column(String, nullable=True)
+    data_nota = Column(DateTime, nullable=True)  # quando o Operador registrou a nota (UTC)
+    sku = Column(String, nullable=False, index=True)
+    produto = Column(String, nullable=True)
+    gtin = Column(String, nullable=True)  # EAN / código de barras
+    quantidade = Column(Float, nullable=False, default=0)
+    custo_unitario = Column(Float, nullable=False, default=0)
+    status = Column(String, nullable=False, default="pendente", index=True)  # "pendente" | "cadastrado"
+    cadastrado_por = Column(String, nullable=True)
+    cadastrado_em = Column(DateTime, nullable=True)
+    recebido_em = Column(DateTime, default=datetime.utcnow)
+    atualizado_em = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

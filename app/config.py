@@ -76,3 +76,13 @@ SESSION_SECRET_KEY = os.getenv("SESSION_SECRET_KEY", "")
 # nada (o sistema só cria se a tabela de usuários estiver vazia).
 ADMIN_USUARIO_INICIAL = os.getenv("ADMIN_USUARIO_INICIAL", "")
 ADMIN_SENHA_INICIAL = os.getenv("ADMIN_SENHA_INICIAL", "")
+
+# --- Integração com o Operador Logístico (Apps Script / Club Full) ---
+# Senha compartilhada: o Operador manda os produtos NOVOS (os que vão pro
+# time de Cadastro) pra POST /api/operador/cadastro com o cabeçalho
+# "X-Operador-Token". Precisa ser definida no Railway (Variables) E nas
+# propriedades do script do Operador (BACKEND_CADASTRO_TOKEN), com o MESMO
+# valor. Sem ela configurada, a rota recusa tudo (fica desligada, nunca
+# aberta). Gere uma vez com:
+#   python3 -c "import secrets; print(secrets.token_hex(32))"
+OPERADOR_API_TOKEN = os.getenv("OPERADOR_API_TOKEN", "")

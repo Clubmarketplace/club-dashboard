@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Co
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -150,6 +150,7 @@ _PUBLICO_EXATO = {
     ("GET", "/logout"),
     ("GET", "/primeiro-acesso"), ("POST", "/primeiro-acesso"),
     ("POST", "/webhook/mercado-livre"),
+    ("POST", "/api/operador/produtos-novos"),  # Operador Logístico (Apps Script) manda os produtos novos; token conferido dentro da rota
     ("GET", "/auth/ml/callback"),
     ("GET", "/api/saude"),
     ("GET", "/privacidade-extensao"),
@@ -361,6 +362,7 @@ app.include_router(taxas_rotas.router)  # tela "Taxas" do painel (seller, cookie
 app.include_router(historico_adesoes_painel_rotas.router)  # tela "Histórico de adesões" do painel (seller, cookie)
 app.include_router(admin_painel_rotas.router)  # resumo de vendas de todas as contas -- só admin (12/10)
 app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel do seller (12/10)
+app.include_router(cadastro_produtos_rotas.router)  # produtos novos das notas do Operador Logístico, pra tela "Cadastro" (13/10)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -1078,6 +1080,21 @@ def criar_usuario(
 def pagina_solicitacoes_painel(request: Request):
     """Tela interna de acompanhamento das solicitações manuais de cancelamento, agrupada por conta."""
     return templates.TemplateResponse(request=request, name="painel-cancelamentos.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/cadastro", response_class=HTMLResponse)
+def pagina_cadastro(request: Request):
+    """
+    Tela "Cadastro": produtos novos das notas fiscais do Operador Logístico,
+    agrupados por empresa, esperando o time de Cadastro (mesma informação do
+    Zap "PRODUTO(S) NOVO(S) PARA CADASTRO"). Admin e supervisor -- a API
+    (app/routers/cadastro_produtos.py) confere de novo. Os dados chegam
+    sozinhos do Operador; a tela só lista e deixa marcar "cadastrado".
+    """
+    usuario = _usuario_logado(request)
+    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request=request, name="cadastro.html", context={"usuario_logado": usuario})
 
 
 @app.get("/relatorio-cancelamentos", response_class=HTMLResponse)
