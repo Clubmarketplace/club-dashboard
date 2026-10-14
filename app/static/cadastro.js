@@ -30,7 +30,7 @@
   const estado = {
     itens: [], contagem: { pendente: 0, cadastrado: 0 }, status: "pendente", busca: "", falta: "",
     truncado: false, ocupado: false,
-    naModo: new Set(), mpOcupados: new Set(), resp: "", eu: "", papel: "",
+    mpOcupados: new Set(), resp: "", eu: "", papel: "",
   };
 
   function esc(t) {
@@ -112,7 +112,10 @@
   }
 
   // Um clique marca o canal como cadastrado (cor do canal: ML amarelo, TikTok preto, Shopee vermelho);
-  // outro clique desfaz. "Não se aplica" é à parte (botão da linha) e também se desfaz com um clique.
+  // outro clique desfaz. (15/10: tiramos o modo "Não se aplica" e o atalho "Cadastrei nos 3" --
+  // agora só existe este botão por canal, com nome e cor, pra sempre ficar registrado quem
+  // cadastrou cada marketplace. Produtos antigos que já tinham um canal marcado "não se aplica"
+  // continuam mostrando esse estado normalmente, só não dá mais pra marcar um novo.)
   function botaoMp(p, k) {
     const m = mpDe(p, k);
     const nome = MP[k];
@@ -123,9 +126,6 @@
     } else if (m.estado === "nao_se_aplica") {
       classe += " cd-mp-na";
       dica = `${nome.longo}: não se aplica (marcado por ${m.por || "—"} em ${dataBr(m.em)}). Clique para desfazer.`;
-    } else if (estado.naModo.has(p.id)) {
-      classe += " cd-mp-escolher";
-      dica = `Clique para marcar que ${nome.longo} NÃO se aplica a este produto.`;
     } else {
       dica = `${nome.longo}: falta cadastrar. Clique quando cadastrar.`;
     }
@@ -164,20 +164,17 @@
     // Travado: ninguém mexe mais nos botões por marketplace (o servidor recusa também, com 423).
     const tags = (feito || ehMarcacaoAntiga(p)) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
     const quem = ehMarcacaoAntiga(p) ? "" : textoQuem(p);
-    const emModo = estado.naModo.has(p.id);
-    const btnNa = feito ? "" : ` <button class="cd-btn cd-mini" type="button" data-namodo="${p.id}" title="Para o canal em que este produto não vai ser cadastrado">${emModo ? "Cancelar" : "Não se aplica…"}</button>`;
-    let atalho;
+    // Pendente (15/10): nenhum atalho -- só os botões por canal acima (tags), que já
+    // registram quem cadastrou cada marketplace. Travado: só o Reabrir, pra admin/supervisor.
+    let atalho = "";
     if (feito) {
       // Travado: só admin/supervisor vê como mexer de novo, e precisa informar o motivo.
       atalho = souSupervisao()
         ? `<button class="cd-btn cd-mini" type="button" data-reabrir="${p.id}" title="Volta pra pendente, pede o motivo e fica registrado">↻ Reabrir</button>`
         : `<small class="cd-quem">Travado — só supervisor/admin pode reabrir.</small>`;
-    } else {
-      atalho = `<button class="cd-btn cd-mini" type="button" data-todos="${p.id}" title="Marca como cadastrado o que ainda falta, em nome de quem clicar">✔ Cadastrei nos 3</button>${btnNa}`;
     }
     const tempo = blocoTempo(p);
-    const dicaModo = emModo ? `<div class="cd-quem" style="color:var(--cmx-rust)">Clique no canal que <b>não se aplica</b> a este produto.</div>` : "";
-    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${dicaModo}${atalho}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${atalho}</div>`;
   }
 
   // Quem assumiu, desde quando e quanto tempo está levando / levou.
@@ -295,14 +292,15 @@
     const chave = id + ":" + mp;
     if (estado.mpOcupados.has(chave)) return;
     const atual = mpDe(p, mp).estado || "";
-    // marcado (cadastrado ou não se aplica) -> desfaz; sem marca -> cadastrado (ou "não se aplica" se a linha estiver nesse modo)
-    const novo = atual ? "pendente" : (estado.naModo.has(id) ? "nao_se_aplica" : "feito");
+    // marcado (cadastrado ou não se aplica, de antes) -> desfaz; sem marca -> cadastrado.
+    // (15/10: não existe mais o modo "não se aplica" pra marcar de novo, só pra desfazer
+    // uma marcação antiga que já estava assim.)
+    const novo = atual ? "pendente" : "feito";
     estado.mpOcupados.add(chave);
     desenhar();
     try {
       const d = await api(`/produtos/${id}/marketplace`, { method: "POST", body: JSON.stringify({ marketplace: mp, estado: novo }) });
       estado.mpOcupados.delete(chave);
-      if (novo === "nao_se_aplica") estado.naModo.delete(id);
       aplicarItem(d.item);
       if (d.item.status === "cadastrado") aviso("Produto OK: os 3 canais estão resolvidos.", "ok");
       else aviso("");
@@ -328,19 +326,6 @@
     }
   }
 
-  async function atalhoTodos(id, cadastrado, botao) {
-    botao.disabled = true;
-    try {
-      const d = await api(`/produtos/${id}/status`, { method: "POST", body: JSON.stringify({ cadastrado }) });
-      aplicarItem(d.item);
-      aviso(cadastrado ? "Marcado nos 3 marketplaces." : "Voltou para pendente.", "ok");
-      carregarContagem();
-    } catch (e) {
-      aviso("Não consegui alterar: " + e.message, "erro");
-      botao.disabled = false;
-    }
-  }
-
   // Atualiza só os números das abas (Pendentes/Cadastrados) depois de uma marcação.
   async function carregarContagem() {
     try {
@@ -358,14 +343,6 @@
     if (ass) return assumir(Number(ass.dataset.assumir), true, false);
     const solt = e.target.closest("[data-soltar]");
     if (solt) return assumir(Number(solt.dataset.soltar), false, false);
-    const na = e.target.closest("[data-namodo]");
-    if (na) {
-      const id = Number(na.dataset.namodo);
-      if (estado.naModo.has(id)) estado.naModo.delete(id); else estado.naModo.add(id);
-      return desenhar();
-    }
-    const todos = e.target.closest("[data-todos]");
-    if (todos) return atalhoTodos(Number(todos.dataset.todos), true, todos);
     const reabrir = e.target.closest("[data-reabrir]");
     if (reabrir) return reabrirProduto(Number(reabrir.dataset.reabrir));
   });
