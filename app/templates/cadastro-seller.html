@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Cadastro</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    /* Mesma lógica visual da tela "Cadastro" da equipe (app/templates/cadastro.html),
+       só o formulário -- sem lista de pendentes (o seller não acompanha a fila, só
+       manda a solicitação) e sem campo Conta (vem fixa da conta dele, travada). */
+    main { max-width:980px; margin:0 auto; padding:28px 24px 60px; }
+    .cd-btn { height:34px; padding:0 14px; border-radius:9px; border:1px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); font:600 13px Inter,sans-serif; cursor:pointer; white-space:nowrap; }
+    .cd-btn:hover { filter:brightness(.97); }
+    .cd-btn:disabled { opacity:.6; cursor:default; }
+    .cd-btn-ok { background:var(--cmx-verde); border-color:var(--cmx-verde); color:#fff; }
+    .cd-aviso { margin:0 0 14px; padding:10px 12px; border-radius:10px; font-size:13.5px; display:none; }
+    .cd-form { background:var(--cmx-papel); border:1px solid var(--cmx-borda); border-radius:14px; padding:22px; }
+    .cd-form h3 { margin:0 0 4px; font-size:16px; }
+    .cd-form p { margin:0 0 16px; font-size:13.5px; color:var(--cmx-texto-suave); }
+    .cd-conta-fixa { display:inline-flex; align-items:center; gap:8px; height:38px; padding:0 14px; border-radius:9px; background:var(--cmx-bg); border:1px solid var(--cmx-borda); font:700 14px Inter,sans-serif; color:var(--cmx-texto); margin-bottom:18px; }
+    .cd-conta-fixa small { font-weight:600; color:var(--cmx-texto-suave); }
+    .cd-anexo { cursor:pointer; position:relative; }
+    .cd-anexo input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+    .cd-grade { border:1px solid var(--cmx-borda); border-radius:10px; overflow-x:auto; background:var(--cmx-papel); }
+    .cd-grade-cab, .cd-grade-linha { display:grid; grid-template-columns:100px 1.4fr 110px 70px 90px 140px 100px 34px; min-width:780px; }
+    .cd-grade-cab { background:var(--cmx-bg); border-bottom:1px solid var(--cmx-borda); }
+    .cd-grade-cab span { padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); font-weight:700; }
+    .cd-grade-linha { border-top:1px solid var(--cmx-borda); }
+    .cd-grade-linha:first-child { border-top:none; }
+    .cd-grade-linha input { width:100%; box-sizing:border-box; height:36px; border:none; border-right:1px solid var(--cmx-borda); padding:0 8px; font:13px Inter,sans-serif; background:transparent; color:var(--cmx-texto); }
+    .cd-grade-linha input:focus { outline:2px solid var(--cmx-ambar); outline-offset:-2px; position:relative; z-index:1; }
+    .cd-grade-remover { border:none; border-left:1px solid var(--cmx-borda); background:transparent; color:var(--cmx-rust); cursor:pointer; font-size:13px; }
+    .cd-grade-remover:hover { background:var(--cmx-rust-fundo); }
+    :root { --canal-ml-bg:#facc15; --canal-ml-tx:#1a1a1a; --canal-tiktok-bg:#111111; --canal-tiktok-tx:#ffffff; --canal-shopee-bg:#dc2626; --canal-shopee-tx:#ffffff; }
+    .cf-kit, .cf-canal { border-radius:999px; border:1.5px solid var(--cmx-borda); }
+    .cf-kit.ativo { background:var(--cmx-ambar); border-color:var(--cmx-ambar); color:#1a1a1a; }
+    .cf-canal.ativo.cf-canal-ml { background:var(--canal-ml-bg); color:var(--canal-ml-tx); border-color:var(--canal-ml-bg); }
+    .cf-canal.ativo.cf-canal-tiktok { background:var(--canal-tiktok-bg); color:var(--canal-tiktok-tx); border-color:var(--canal-tiktok-bg); }
+    .cf-canal.ativo.cf-canal-shopee { background:var(--canal-shopee-bg); color:var(--canal-shopee-tx); border-color:var(--canal-shopee-bg); }
+    #cf-incluidos { margin-top:14px; border-top:1px dashed var(--cmx-borda); padding-top:10px; }
+    #cf-incluidos h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
+    .cd-inc-item { display:flex; gap:10px; padding:5px 0; font-size:13px; border-top:1px solid var(--cmx-borda); }
+    .cd-inc-item:first-child { border-top:none; }
+    .cd-inc-item b { font-family:ui-monospace,Menlo,Consolas,monospace; min-width:110px; }
+    .cd-inc-erro { color:var(--cmx-rust); font-size:13px; padding:3px 0; }
+    .cd-form-acoes { display:flex; gap:10px; margin-top:16px; align-items:center; flex-wrap:wrap; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_seller.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if seller_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ conta_logada[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ conta_logada }}</div>
+            <div class="cmx-menu-usuario-papel">{{ papel_logado | default("seller") }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}
+
+      <header class="cmx-topbar">
+        <h1>Cadastro</h1>
+        <p class="cmx-subtitulo">Solicitar o cadastro de produtos novos</p>
+      </header>
+
+      <main>
+        <p class="cd-aviso" id="cd-aviso"></p>
+        <form class="cd-form" id="cd-form" autocomplete="off" novalidate>
+          <h3>Solicitar cadastro</h3>
+          <p>Preencha os produtos na tabela abaixo (SKU, nome, EAN e custo são obrigatórios) — célula por célula ou colando um trecho da planilha —, marque se é kit e em quais canais quer cadastrar, e clique em "Finalizar solicitação". Fornecedor e Nota ficam por produto. Nada é gravado até finalizar.</p>
+
+          <div class="cd-conta-fixa"><small>Conta:</small> {{ conta_logada }}</div>
+
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:0 0 6px">Produtos *</label>
+          <div class="cd-grade">
+            <div class="cd-grade-cab">
+              <span>SKU</span><span>Produto</span><span>EAN</span><span>Qtd.</span><span>Custo</span><span>Fornecedor</span><span>Nota</span><span></span>
+            </div>
+            <div id="cf-grade-corpo"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 2px">
+            <small style="color:var(--cmx-texto-suave)">Clique numa célula e cole (Ctrl+V) um trecho copiado da planilha — preenche várias linhas e colunas de uma vez a partir dali. Números como 1.234,50 são entendidos.</small>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
+              <button class="cd-btn" id="cf-adicionar-linha" type="button">+ Adicionar linha</button>
+            </div>
+          </div>
+
+          <div style="margin:16px 0 6px">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:0 0 6px">É kit? *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="cd-btn cf-kit" data-kit="nao">Não é kit</button>
+              <button type="button" class="cd-btn cf-kit" data-kit="sim">É kit</button>
+            </div>
+          </div>
+
+          <div style="margin:14px 0 6px">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:0 0 6px">Cadastrar em qual canal? *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="cd-btn cf-canal cf-canal-ml" data-canal="ml">Mercado Livre</button>
+              <button type="button" class="cd-btn cf-canal cf-canal-tiktok" data-canal="tiktok">TikTok</button>
+              <button type="button" class="cd-btn cf-canal cf-canal-shopee" data-canal="shopee">Shopee</button>
+            </div>
+          </div>
+
+          <div id="cf-incluidos" style="display:none">
+            <h4>Incluídos agora <span id="cf-incluidos-n"></span></h4>
+            <div id="cf-incluidos-lista"></div>
+          </div>
+
+          <div class="cd-form-acoes">
+            <button class="cd-btn cd-btn-ok" id="cf-finalizar" type="button">Finalizar solicitação</button>
+            <button class="cd-btn" id="cf-limpar" type="button">Limpar</button>
+            <span id="cf-finalizar-ajuda" style="font-size:12.5px;color:var(--cmx-texto-suave)">Nada é gravado até clicar aqui.</span>
+          </div>
+        </form>
+      </main>
+    </div>
+  </div>
+
+  <script src="/static/cadastro-seller.js?v=1"></script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>
