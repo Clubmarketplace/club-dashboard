@@ -32,7 +32,11 @@ a informação empurra, o backend só recebe. Nada aqui lê a planilha do Operad
   POST /api/cadastro/produtos/{id}/assumir -> "assumi este cadastro" (ou solta); guarda quem e quando.
   POST /api/cadastro/produtos/{id}/reabrir -> reabre um produto TRAVADO (já cadastrado), com
         motivo obrigatório. Só admin/supervisor (ver "TRAVA" abaixo).
-  GET  /api/cadastro/empresas            -> nomes de empresa já usados (sugestão no formulário).
+  GET  /api/cadastro/empresas            -> nomes de empresa já usados (sugestão no formulário antigo).
+  GET  /api/cadastro/contas              -> contas ativas (tabela "contas", a mesma de "Contas
+        conectadas") -- fonte do seletor "Conta" da solicitação manual (15/10). Em vez de digitar
+        o nome da empresa livremente, a pessoa escolhe de uma lista fixa, pra nunca ter duas
+        grafias da mesma conta ("JC Machado" x "JC MACHADO").
   GET  /api/cadastro/produtividade       -> quanto cada pessoa cadastrou (só admin/supervisor).
         (as de /api/cadastro: admin, supervisor e o perfil "cadastro")
 
@@ -68,7 +72,7 @@ from sqlalchemy.orm import Session
 from app import auth, config
 from app.contas_util import chave_conta
 from app.database import get_db
-from app.models import ProdutoCadastro, Usuario
+from app.models import Conta, ProdutoCadastro, Usuario
 
 logger = logging.getLogger(__name__)
 
@@ -376,11 +380,29 @@ def listar_produtos_cadastro(
 
 @router.get("/api/cadastro/empresas")
 def listar_empresas_cadastro(db: Session = Depends(get_db), _usuario: Usuario = Depends(_cadastro_logado)):
-    """Nomes de empresa já usados (uma por chave), pra sugerir no formulário de inclusão manual e evitar 'JC Machado' x 'JC MACHADO'."""
+    """Nomes de empresa já usados (uma por chave) -- mantido pra quem ainda chamar; a tela
+    de solicitação manual usa /api/cadastro/contas (lista fixa), não esta."""
     por_chave = {}
     for chave, nome in db.query(ProdutoCadastro.empresa_chave, ProdutoCadastro.empresa_nome).order_by(ProdutoCadastro.id.desc()).all():
         por_chave.setdefault(chave, nome)
     return {"empresas": sorted(por_chave.values(), key=lambda n: chave_conta(n))}
+
+
+@router.get("/api/cadastro/contas")
+def listar_contas_cadastro(db: Session = Depends(get_db), _usuario: Usuario = Depends(_cadastro_logado)):
+    """
+    Contas ativas (mesma tabela "contas" de "Contas conectadas"), pro seletor de
+    Conta da solicitação manual (15/10). Diferente de /empresas: aqui é uma lista
+    FIXA, de uma fonte só -- não dá pra ter "Velasco" e "velasco" como duas
+    entradas, porque não dá mais pra digitar.
+    """
+    nomes = (
+        db.query(Conta.apelido)
+        .filter(Conta.ativa.is_(True), Conta.inativa_em.is_(None))
+        .order_by(Conta.apelido)
+        .all()
+    )
+    return {"contas": [n[0] for n in nomes]}
 
 
 class ProdutoManualIn(BaseModel):
@@ -482,10 +504,19 @@ class ItemLoteIn(BaseModel):
     gtin: Optional[str] = ""
     quantidade: float = 0
     custo_unitario: float = 0
+    # 15/10: fornecedor/nota POR PRODUTO -- a coluna já existe em ProdutoCadastro
+    # (um valor por linha), só não estava exposta aqui. Quando vier preenchido,
+    # vale só pra esse item e sobrescreve o do lote; permite uma solicitação
+    # juntar produtos de mais de uma nota/fornecedor de uma vez (colando uma
+    # planilha com uma coluna "Fornecedor" e outra "Nota").
+    fornecedor: Optional[str] = ""
+    numero_nota: Optional[str] = ""
 
 
 class LoteManualIn(BaseModel):
     empresa: str
+    # Fornecedor/nota no nível do lote: valem como PADRÃO pra item que não
+    # trouxer o seu próprio (ver ItemLoteIn.fornecedor/numero_nota acima).
     fornecedor: Optional[str] = ""
     numero_nota: Optional[str] = ""
     refazer: bool = False
@@ -502,10 +533,13 @@ def incluir_lote_manual(
     usuario: Usuario = Depends(_cadastro_logado),
 ):
     """
-    Inclusão manual de VÁRIOS produtos de uma nota de uma vez (copiado e colado da
-    planilha). Cada produto é conferido sozinho: os bons entram, os que não podem
-    (SKU já pendente, campo faltando...) voltam em `ignorados` com o motivo --
-    nada some em silêncio. Empresa, fornecedor, nota e a marca "refazer" valem pra todos.
+    Inclusão manual de VÁRIOS produtos de uma vez (tabela/planilha da tela de
+    solicitação). Cada produto é conferido sozinho: os bons entram, os que não
+    podem (SKU já pendente, campo faltando...) voltam em `ignorados` com o
+    motivo -- nada some em silêncio. Empresa e a marca "refazer" valem pra
+    todos; fornecedor e nota valem por produto (ou o do lote, se o item não
+    trouxer o seu -- ver ItemLoteIn), então um envio só pode juntar produtos
+    de mais de uma nota/fornecedor.
     """
     if not (corpo.empresa or "").strip():
         raise HTTPException(status_code=422, detail="Informe a empresa.")
@@ -518,8 +552,10 @@ def incluir_lote_manual(
         for n, it in enumerate(corpo.itens, start=1):
             try:
                 registro, aviso = _incluir_um(
-                    db, usuario, empresa=corpo.empresa, produto=it.produto, sku=it.sku, fornecedor=corpo.fornecedor,
-                    numero_nota=corpo.numero_nota, gtin=it.gtin, quantidade=it.quantidade, custo_unitario=it.custo_unitario,
+                    db, usuario, empresa=corpo.empresa, produto=it.produto, sku=it.sku,
+                    fornecedor=(it.fornecedor or corpo.fornecedor),
+                    numero_nota=(it.numero_nota or corpo.numero_nota),
+                    gtin=it.gtin, quantidade=it.quantidade, custo_unitario=it.custo_unitario,
                     refazer=corpo.refazer,
                 )
             except HTTPException as e:
