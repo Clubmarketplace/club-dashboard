@@ -56,6 +56,10 @@
     .adm-btn-filtro-evolucao.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
     .adm-comparacao-alta { color:#2f6f4f; font-weight:700; }
     .adm-comparacao-baixa { color:#c1502e; font-weight:700; }
+    .adm-evolucao-headline { display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-top:12px; }
+    .adm-evolucao-valor-grande { font-size:28px; font-weight:700; color:var(--cmx-texto); line-height:1; }
+    .adm-evolucao-badge { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .adm-grafico-dica { margin:8px 0 0; font-size:11px; color:var(--cmx-texto-suave); }
     .adm-grafico-legenda-meses { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--cmx-texto-suave); }
     .adm-legenda-mes-item { display:flex; align-items:center; gap:6px; }
     .adm-legenda-mes-tracinho { display:inline-block; width:16px; height:0; border-top-width:2.5px; border-top-style:solid; }
@@ -82,15 +86,15 @@
     .adm-secao-titulo { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); margin:28px 0 12px; }
     .adm-secao-titulo:first-child { margin-top:0; }
 
-    .adm-grid-vendas { display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:stretch; }
+    .adm-grid-vendas { display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:start; }
     @media (max-width:860px) { .adm-grid-vendas { grid-template-columns:1fr; } }
     .adm-col-totais { display:flex; flex-direction:column; gap:14px; }
     @media (max-width:860px) { .adm-col-totais { flex-direction:row; } }
     @media (max-width:560px) { .adm-col-totais { flex-direction:column; } }
-    .adm-total-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:18px 20px; flex:1; box-shadow:0 2px 10px rgba(0,0,0,.04); }
-    .adm-total-card .titulo { font-size:13px; font-weight:600; color:var(--cmx-texto-suave); }
-    .adm-total-card .valor { font-size:24px; font-weight:700; margin-top:4px; }
-    .adm-total-card .nota { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .adm-total-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:14px 16px; flex:1; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+    .adm-total-card .titulo { font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); display:flex; align-items:center; gap:6px; }
+    .adm-total-card .valor { font-size:20px; font-weight:700; margin-top:2px; }
+    .adm-total-card .nota { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
 
     .adm-grid-setores { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; }
     @media (max-width:1180px) { .adm-grid-setores { grid-template-columns:1fr 1fr; } }
@@ -115,11 +119,13 @@
     .adm-fin-indisponivel { opacity:.65; }
     .adm-fin-indisponivel .valor { font-size:14px; font-weight:600; color:var(--cmx-texto-suave); }
 
-    .adm-top3 { margin-top:14px; padding-top:12px; border-top:1px dashed var(--cmx-borda); }
-    .adm-top3-titulo { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--cmx-texto-suave); margin-bottom:8px; }
-    .adm-top3-item { padding:5px 0; font-size:13px; }
-    .adm-top3-item .nome { display:block; color:var(--cmx-texto); font-weight:600; }
-    .adm-top3-item .valor { display:block; color:var(--cmx-texto-suave); margin-top:1px; }
+    .adm-top3 { margin-top:10px; padding-top:10px; border-top:1px dashed var(--cmx-borda); }
+    .adm-top3-titulo { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--cmx-texto-suave); margin-bottom:6px; }
+    .adm-top3-item { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:3px 0; font-size:12.5px; }
+    .adm-top3-item .nome { flex:1 1 auto; min-width:0; color:var(--cmx-texto); font-weight:600; white-space:normal; word-break:break-word; }
+    .adm-top3-item .valor { flex-shrink:0; color:var(--cmx-texto-suave); text-align:right; white-space:nowrap; }
+    .adm-top3-link { display:inline-block; margin-top:8px; font-size:11.5px; font-weight:600; color:#2f6fe4; text-decoration:none; }
+    .adm-top3-link:hover { text-decoration:underline; }
 
     .adm-btn-filtro-ranking {
       border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
@@ -175,20 +181,22 @@
           <div class="adm-grid-vendas">
             <div class="adm-col-totais">
               <div class="adm-total-card">
-                <div class="titulo">Vendido hoje (todas as contas)</div>
+                <div class="titulo">💰 Vendido hoje</div>
                 <div class="valor" id="adm-hoje-venda">R$ 0,00</div>
                 <div class="adm-top3">
-                  <div class="adm-top3-titulo">Top 3 hoje</div>
+                  <div class="adm-top3-titulo">Top 3 contas -- hoje</div>
                   <div id="adm-top3-hoje-lista"></div>
+                  <a href="#adm-ranking-card" class="adm-top3-link">Ranking completo mais abaixo ↓</a>
                 </div>
               </div>
               <div class="adm-total-card">
-                <div class="titulo">Vendido no mês (todas as contas)</div>
+                <div class="titulo">📈 Vendido no mês</div>
                 <div class="valor" id="adm-mes-venda">R$ 0,00</div>
                 <div class="nota" id="adm-qtd-contas-nota">0 contas ativas</div>
                 <div class="adm-top3">
-                  <div class="adm-top3-titulo">Top 3 no mês</div>
+                  <div class="adm-top3-titulo">Top 3 contas -- no mês</div>
                   <div id="adm-top3-mes-lista"></div>
+                  <a href="#adm-ranking-card" class="adm-top3-link">Ranking completo mais abaixo ↓</a>
                 </div>
               </div>
             </div>
@@ -197,7 +205,7 @@
               <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                 <div>
                   <h2 id="adm-evolucao-titulo" style="margin-bottom:0;">Evolução -- últimos 15 dias</h2>
-                  <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas -- <span id="adm-evolucao-total"></span></p>
+                  <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas</p>
                 </div>
                 <div class="adm-filtro-evolucao">
                   <button type="button" class="adm-btn-filtro-evolucao ativo" data-periodo="15dias">15 dias</button>
@@ -205,10 +213,14 @@
                   <button type="button" class="adm-btn-filtro-evolucao" data-periodo="3meses">3 meses</button>
                 </div>
               </div>
-              <p class="sub" id="adm-evolucao-comparacao" style="margin-top:10px;"></p>
-              <div class="adm-grafico-wrap" style="margin-top:8px;">
+              <div class="adm-evolucao-headline">
+                <span class="adm-evolucao-valor-grande" id="adm-evolucao-total-grande">R$ 0,00</span>
+                <span class="adm-evolucao-badge" id="adm-evolucao-comparacao"></span>
+              </div>
+              <div class="adm-grafico-wrap" style="margin-top:10px;">
                 <svg id="adm-grafico-evolucao" width="100%" height="150" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
               </div>
+              <p class="adm-grafico-dica" id="adm-grafico-dica">Toque ou passe o mouse num ponto pra ver o valor do dia.</p>
               <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
             </div>
           </div>
@@ -322,7 +334,7 @@
             </div>
           </div>
 
-          <div class="adm-cartao" style="margin-top:28px;">
+          <div class="adm-cartao" id="adm-ranking-card" style="margin-top:28px; scroll-margin-top:16px;">
             <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
               <div>
                 <h2 style="margin-bottom:0;">Ranking de contas</h2>
@@ -616,6 +628,22 @@
     }).join("");
   }
 
+  function desenharEixoX(xy) {
+    if (!xy.length) return "";
+    const indices = xy.length <= 2 ? [0, xy.length - 1] : [0, Math.floor((xy.length - 1) / 2), xy.length - 1];
+    const vistos = new Set();
+    return indices.filter(function (i) {
+      if (vistos.has(i)) return false;
+      vistos.add(i);
+      return true;
+    }).map(function (i) {
+      const p = xy[i];
+      const label = p.d.split("-").reverse().slice(0, 2).join("/");
+      const ancora = i === 0 ? "start" : i === xy.length - 1 ? "end" : "middle";
+      return '<text x="' + p.x + '" y="146" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
+    }).join("");
+  }
+
   function curvaSuave(pontos) {
     if (!pontos.length) return "";
     if (pontos.length === 1) return "M" + pontos[0].x + "," + pontos[0].y;
@@ -644,7 +672,8 @@
       const meses = (window._admEvolucaoDados && window._admEvolucaoDados["3meses"] && window._admEvolucaoDados["3meses"].meses) || [];
       document.getElementById("adm-evolucao-titulo").textContent = "Evolução -- últimos 3 meses";
       const totalMesAtual = meses.length ? meses[meses.length - 1].dados.reduce((s, p) => s + p.venda_bruta, 0) : 0;
-      document.getElementById("adm-evolucao-total").textContent = "total do mês atual: " + formatarReais(totalMesAtual);
+      document.getElementById("adm-evolucao-total-grande").textContent = formatarReais(totalMesAtual);
+      document.getElementById("adm-grafico-dica").textContent = "Total do mês atual. Toque ou passe o mouse num ponto pra ver o valor do dia.";
       compEl.textContent = "";
 
       const maxDado = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
@@ -689,16 +718,16 @@
     const pontosAnterior = conjunto.anterior || [];
     const totalPeriodo = pontos.reduce((s, p) => s + p.venda_bruta, 0);
     const totalAnterior = pontosAnterior.reduce((s, p) => s + p.venda_bruta, 0);
-    document.getElementById("adm-evolucao-total").textContent = "total no período: " + formatarReais(totalPeriodo);
+    document.getElementById("adm-evolucao-total-grande").textContent = formatarReais(totalPeriodo);
+    document.getElementById("adm-grafico-dica").textContent = "Toque ou passe o mouse num ponto pra ver o valor do dia.";
 
     if (totalAnterior) {
       const variacao = Math.round(((totalPeriodo - totalAnterior) / totalAnterior) * 1000) / 10;
       const subiu = variacao >= 0;
       compEl.innerHTML =
-        formatarReais(totalPeriodo) +
-        ' <span class="' + (subiu ? "adm-comparacao-alta" : "adm-comparacao-baixa") + '">' +
-        (subiu ? "▲ +" : "▼ ") + variacao + "%</span> vs. " +
-        formatarReais(totalAnterior) + " nos " + diasJanela + " dias anteriores";
+        '<span class="' + (subiu ? "adm-comparacao-alta" : "adm-comparacao-baixa") + '">' +
+        (subiu ? "▲ +" : "▼ ") + variacao + "%</span> vs. período anterior (" +
+        formatarReais(totalAnterior) + " nos " + diasJanela + " dias anteriores)";
     } else {
       compEl.textContent = "Sem venda no período anterior pra comparar.";
     }
@@ -730,7 +759,8 @@
       (xyAnterior.length
         ? '<path d="' + curvaSuave(xyAnterior) + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
         : "") +
-      '<path d="' + curvaSuave(xy) + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
+      '<path d="' + curvaSuave(xy) + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg +
+      desenharEixoX(xy);
   }
 
   document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (botao) {
