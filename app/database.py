@@ -132,6 +132,11 @@ _COLUNAS_ADICIONAIS = {
         "motivo_reabertura": "TEXT",
         # 15/10: "é kit?" -- só preenchido pela tela de solicitação manual.
         "kit": "BOOLEAN",
+        # 15/10: exclusão (admin/supervisor) -- não apaga a linha, só marca e guarda
+        # quem excluiu, quando e o motivo (obrigatório), pra consultar depois.
+        "excluido_por": "VARCHAR",
+        "excluido_em": "TIMESTAMP",
+        "motivo_exclusao": "TEXT",
     },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel

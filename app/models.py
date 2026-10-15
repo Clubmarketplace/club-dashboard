@@ -1009,3 +1009,11 @@ class ProdutoCadastro(Base):
     # vale pra todos os produtos dela). Produto automático do Operador fica NULL
     # -- essa marcação não existe pra ele.
     kit = Column(Boolean, nullable=True)
+
+    # --- 15/10: exclusão (admin/supervisor) -------------------------------------
+    # Excluir NÃO apaga a linha -- só marca status="excluida" e guarda quem, quando
+    # e por quê (motivo obrigatório). Some de todas as listas da tela, mas fica no
+    # banco pra auditoria (mesma lógica da reabertura acima).
+    excluido_por = Column(String, nullable=True)
+    excluido_em = Column(DateTime, nullable=True)
+    motivo_exclusao = Column(Text, nullable=True)
