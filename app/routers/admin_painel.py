@@ -17,14 +17,24 @@ estiver vinculada ao usuário dele (mesma regra de UsuarioConta que vale
 pra seller/suporte). Aqui é só o resumo simples (valor vendido), de
 todas as contas de uma vez, sem depender de vínculo.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app import auth
 from app.database import get_db
-from app.models import Conta, EstoqueSku, EventoAdesaoCmx, MensagemPosVenda, Pergunta, SolicitacaoCancelamento, Usuario, Venda
+from app.models import (
+    Conta,
+    EstoqueSku,
+    EventoAdesaoCmx,
+    MensagemPosVenda,
+    Pergunta,
+    ProdutoCadastro,
+    SolicitacaoCancelamento,
+    Usuario,
+    Venda,
+)
 from app.routers.vendas import _evolucao_3_meses, _evolucao_dias_com_anterior, _somente_vendas_validas, _FUSO_BR
 
 _STATUS_PERGUNTA_RESPONDIDA = ("respondida", "respondida_externamente")
@@ -127,6 +137,143 @@ def _setor_cancelamentos(db: Session, inicio_utc: datetime) -> dict:
         "pendentes": len(solicitacoes) - len(confirmadas),
         "top": top,
         "ranking": ranking,
+    }
+
+
+def _setor_cadastro(db: Session, inicio_utc: datetime) -> dict:
+    """Produtos novos (ProdutoCadastro) que chegaram no período -- total,
+    quantos já têm cadastro completo ("feitos" -- os 3 marketplaces
+    resolvidos) e quem mais cadastrou. Mesmo padrão de
+    _setor_cancelamentos, usando `cadastrado_por` como o "confirmado_por"
+    de lá."""
+    produtos = (
+        db.query(ProdutoCadastro)
+        .filter(ProdutoCadastro.recebido_em >= inicio_utc)
+        .filter(ProdutoCadastro.status != "excluida")
+        .all()
+    )
+    feitos = [p for p in produtos if p.status == "cadastrado"]
+    ranking = _ranking_atendimento(feitos, "cadastrado_por")
+    top = ranking[0] if ranking else None
+    return {
+        "total": len(produtos),
+        "feitos": len(feitos),
+        "pendentes": len(produtos) - len(feitos),
+        "top": top,
+        "ranking": ranking,
+    }
+
+
+def _cadastro_backlog_geral(db: Session) -> dict:
+    """Fila pendente de cadastro AGORA, sem recorte de período -- é o
+    "o que falta" de verdade (o que chegou há mais de hoje/mês também
+    conta), junto com o custo total parado nesses produtos (ainda não
+    estão à venda em lugar nenhum)."""
+    pendentes = db.query(ProdutoCadastro).filter(ProdutoCadastro.status == "pendente").all()
+    valor_parado = sum((p.custo_unitario or 0) * (p.quantidade or 0) for p in pendentes)
+    return {"pendentes": len(pendentes), "valor_parado": round(valor_parado, 2)}
+
+
+def _setor_subida_notas(db: Session, inicio_utc: datetime) -> dict:
+    """Notas fiscais que o Operador Logístico lançou no período (chegada
+    = ProdutoCadastro.data_nota) -- quantas notas distintas, quantos
+    produtos vieram nelas e o valor total (custo_unitário x quantidade),
+    com as 3 maiores notas do período. "Notas com erro/pendência" não
+    tem rastreamento próprio ainda, por isso não entra aqui -- não quis
+    inventar número."""
+    produtos = (
+        db.query(ProdutoCadastro)
+        .filter(ProdutoCadastro.data_nota.isnot(None))
+        .filter(ProdutoCadastro.data_nota >= inicio_utc)
+        .all()
+    )
+    notas: dict[str, dict] = {}
+    for p in produtos:
+        nota = notas.setdefault(
+            p.nota_id,
+            {"nota_id": p.nota_id, "numero_nota": p.numero_nota, "empresa": p.empresa_nome, "valor": 0.0, "produtos": 0},
+        )
+        nota["valor"] += (p.custo_unitario or 0) * (p.quantidade or 0)
+        nota["produtos"] += 1
+    lista_notas = sorted(notas.values(), key=lambda n: n["valor"], reverse=True)
+    for n in lista_notas:
+        n["valor"] = round(n["valor"], 2)
+    return {
+        "notas": len(notas),
+        "produtos": len(produtos),
+        "valor_total": round(sum(n["valor"] for n in lista_notas), 2),
+        "top_notas": lista_notas[:3],
+    }
+
+
+def _contas_conectadas_extra(db: Session, contas: list, inicio_dia_utc: datetime, inicio_mes_utc: datetime) -> dict:
+    """Informações extras do card "Contas conectadas": quantas contas
+    ativas estão sem nenhuma venda há 7+ dias (sinal de alerta -- conta
+    parada), e qual foi a maior venda individual (um item de pedido) de
+    hoje e do mês, com a conta correspondente."""
+    limite_7d = datetime.utcnow() - timedelta(days=7)
+    sem_venda_recente = 0
+    for conta in contas:
+        ultima = (
+            db.query(Venda.data_venda)
+            .filter(Venda.conta_id == conta.id)
+            .order_by(Venda.data_venda.desc())
+            .first()
+        )
+        if not ultima or ultima[0] < limite_7d:
+            sem_venda_recente += 1
+
+    def _maior_venda(inicio_utc: datetime):
+        linha = (
+            _somente_vendas_validas(db.query(Venda).filter(Venda.data_venda >= inicio_utc))
+            .order_by(Venda.venda_bruta.desc())
+            .first()
+        )
+        if not linha:
+            return None
+        conta = next((c for c in contas if c.id == linha.conta_id), None)
+        return {"valor": round(linha.venda_bruta, 2), "conta": conta.apelido if conta else None, "titulo": linha.titulo}
+
+    return {
+        "sem_venda_7d": sem_venda_recente,
+        "maior_venda_hoje": _maior_venda(inicio_dia_utc),
+        "maior_venda_mes": _maior_venda(inicio_mes_utc),
+    }
+
+
+def _financeiro_por_setor(db: Session, inicio_dia_utc: datetime, inicio_mes_utc: datetime) -> dict:
+    """Só os números que dá pra calcular com dado real hoje -- nada
+    estimado ou inventado num relatório que vai pro financeiro/diretor.
+
+    "Valor cancelado" (setor Cancelamento) de propósito NÃO entra aqui:
+    SolicitacaoCancelamento grava o número do pedido, não o valor da
+    venda, e cruzar esse número com `Venda` não é confiável o bastante
+    pra virar um número financeiro (pedido com vários itens, formato de
+    número diferente por plataforma). Precisa de um campo de valor
+    próprio nessa tabela pra isso funcionar direito."""
+    backlog = _cadastro_backlog_geral(db)
+
+    produtos_notas_mes = (
+        db.query(ProdutoCadastro)
+        .filter(ProdutoCadastro.data_nota.isnot(None))
+        .filter(ProdutoCadastro.data_nota >= inicio_mes_utc)
+        .all()
+    )
+    valor_notas_mes = sum((p.custo_unitario or 0) * (p.quantidade or 0) for p in produtos_notas_mes)
+
+    def _lucro_adesoes(inicio_utc: datetime) -> float:
+        linhas = (
+            db.query(EventoAdesaoCmx.lucro_liquido)
+            .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+            .all()
+        )
+        return round(sum(l[0] or 0 for l in linhas), 2)
+
+    return {
+        "cadastro": {"custo_parado_pendente": backlog["valor_parado"]},
+        "subida_notas": {"valor_notas_mes": round(valor_notas_mes, 2)},
+        "promocoes": {"lucro_hoje": _lucro_adesoes(inicio_dia_utc), "lucro_mes": _lucro_adesoes(inicio_mes_utc)},
+        "cancelamento_disponivel": False,
     }
 
 
@@ -235,4 +382,15 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "hoje": _setor_cancelamentos(db, inicio_dia_utc),
             "mes": _setor_cancelamentos(db, inicio_mes_utc),
         },
+        "setor_cadastro": {
+            "hoje": _setor_cadastro(db, inicio_dia_utc),
+            "mes": _setor_cadastro(db, inicio_mes_utc),
+            "backlog": _cadastro_backlog_geral(db),
+        },
+        "setor_subida_notas": {
+            "hoje": _setor_subida_notas(db, inicio_dia_utc),
+            "mes": _setor_subida_notas(db, inicio_mes_utc),
+        },
+        "contas_conectadas_extra": _contas_conectadas_extra(db, contas, inicio_dia_utc, inicio_mes_utc),
+        "financeiro_por_setor": _financeiro_por_setor(db, inicio_dia_utc, inicio_mes_utc),
     }
