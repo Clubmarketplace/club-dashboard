@@ -456,34 +456,35 @@
     return { colunas: new Array(largura).fill(null), inicio: 0, cabecalho: false };
   }
 
-  // Monta as linhas a partir da tabela já dividida e do mapeamento de colunas decidido
-  // (automático ou corrigido à mão nos selects). Extrai também quantidade escrita junto
-  // com o nome do produto (ex.: "Camiseta P qt:5") quando a coluna de quantidade não bate.
+  // Monta as linhas a partir da tabela já dividida e do mapeamento de colunas decidido.
+  // Extrai também quantidade escrita junto com o nome do produto (ex.: "Camiseta P qt:5")
+  // quando a coluna de quantidade não bate. NÃO bloqueia nada aqui -- número que não dá
+  // pra entender vira 0 (nunca NaN, pra nunca travar o envio) e `aviso` é só uma dica
+  // visual na prévia; quem decide de verdade se uma linha entra é o servidor (exige
+  // SKU e nome do produto, não aceita valor negativo) ao tentar incluir.
   function montarLinhas(tabela, colunas, inicio) {
     const linhas = [];
     for (let i = inicio; i < tabela.length; i++) {
       const cels = tabela[i];
-      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, numero_nota: "", bruto: cels, erro: "" };
+      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, numero_nota: "", bruto: cels, aviso: "" };
+      let qtdBruta = null; // null = coluna de quantidade não foi mapeada (não tenta extrair do texto)
       colunas.forEach((k, j) => {
         if (!k) return;
         const v = cels[j] ?? "";
-        if (k === "quantidade" || k === "custo_unitario") r[k] = numeroBr(v);
+        if (k === "custo_unitario") { const n = numeroBr(v); r.custo_unitario = isNaN(n) ? 0 : n; }
+        else if (k === "quantidade") qtdBruta = numeroBr(v);
         else r[k] = v;
       });
-      if (isNaN(r.quantidade) && r.produto) {
+      if (qtdBruta !== null && isNaN(qtdBruta) && r.produto) {
+        // coluna de quantidade mapeada, mas o valor não é número -- tenta achar "qt:5" no produto
         const m = r.produto.match(/qt[d]?\.?:?\s*(\d+(?:[.,]\d+)?)/i);
-        if (m) { r.quantidade = numeroBr(m[1]); r.produto = r.produto.replace(m[0], "").replace(/\s{2,}/g, " ").trim(); }
+        if (m) { qtdBruta = numeroBr(m[1]); r.produto = r.produto.replace(m[0], "").replace(/\s{2,}/g, " ").trim(); }
       }
-      if (!r.sku) r.erro = "sem SKU";
-      else if (!r.produto) r.erro = "sem nome do produto";
-      else if (isNaN(r.quantidade)) r.erro = "quantidade inválida";
-      else if (isNaN(r.custo_unitario)) r.erro = "custo inválido";
-      else if (r.quantidade < 0 || r.custo_unitario < 0) r.erro = "valor negativo";
-      else if (/e\+/i.test(r.gtin)) r.erro = "EAN em notação científica (formate a coluna como texto na planilha)";
+      r.quantidade = (qtdBruta === null || isNaN(qtdBruta)) ? 0 : qtdBruta;
+      if (!r.sku || !r.produto) r.aviso = "sem SKU/produto — o servidor vai recusar essa linha";
+      else if (r.quantidade < 0 || r.custo_unitario < 0) r.aviso = "valor negativo — o servidor vai recusar essa linha";
       linhas.push(r);
     }
-    const vistos = new Set();
-    linhas.forEach((r) => { if (!r.erro) { const k = r.sku.toLowerCase(); if (vistos.has(k)) r.erro = "SKU repetido nesta lista"; vistos.add(k); } });
     return linhas;
   }
 
@@ -527,39 +528,44 @@
     desenharPrevia();
   });
 
+  // O único travamento pra habilitar "Incluir" é ter algo colado + Empresa + Nota
+  // preenchidos ali em cima -- não depende mais de cada linha estar "certa". O que o
+  // servidor recusar (SKU/produto faltando, valor negativo) volta como "não entrou",
+  // igual já acontecia, só que sem bloquear o resto do lote antes de tentar.
+  function pronto() {
+    return campo("cf-colar").value.trim() !== "" && campo("cf-empresa").value.trim() !== "" && campo("cf-nota").value.trim() !== "";
+  }
+
   function atualizarBotaoIncluir() {
-    const bons = lidos.linhas.filter((r) => !r.erro);
-    campo("cf-incluir-lote").disabled = bons.length === 0;
-    campo("cf-incluir-lote").textContent = bons.length ? `Incluir ${bons.length}` : "Incluir";
+    campo("cf-incluir-lote").disabled = !pronto();
+    campo("cf-incluir-lote").textContent = lidos.linhas.length ? `Incluir ${lidos.linhas.length}` : "Incluir";
   }
 
   function desenharTabelaPrevia() {
     const caixa = campo("cf-previa");
     if (!lidos.linhas.length) { caixa.innerHTML = ""; return; }
-    const bons = lidos.linhas.filter((r) => !r.erro);
-    const ruins = lidos.linhas.length - bons.length;
-    const resumo = `${bons.length} produto(s) prontos para incluir` + (ruins ? ` · <span style="color:var(--cmx-rust)">${ruins} com problema (não entram)</span>` : "");
-    const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.erro ? "ruim" : ""}">
+    const avisos = lidos.linhas.filter((r) => r.aviso).length;
+    const resumo = `${lidos.linhas.length} linha(s) lida(s)` + (avisos ? ` · <span style="color:var(--cmx-rust)">${avisos} com aviso — confira antes de incluir</span>` : "");
+    const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.aviso ? "ruim" : ""}">
         <td>${r.n}</td><td><b>${esc(r.sku)}</b></td><td>${esc(r.produto)}</td><td>${esc(r.gtin)}</td>
-        <td>${isNaN(r.quantidade) ? "?" : esc(quantidade(r.quantidade))}</td><td>${isNaN(r.custo_unitario) ? "?" : esc(moeda(r.custo_unitario))}</td>
+        <td>${esc(quantidade(r.quantidade))}</td><td>${esc(moeda(r.custo_unitario))}</td>
         <td>${celulaNota(r)}</td>
-        <td>${r.erro ? "✖ " + esc(r.erro) : "✔"}</td></tr>`).join("");
+        <td>${r.aviso ? "⚠ " + esc(r.aviso) : "✔"}</td></tr>`).join("");
     caixa.innerHTML = `<div class="res">${resumo}</div><div class="cd-previa"><table>
       <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>EAN</th><th>Qtd</th><th>Custo un.</th><th>Nota</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
   }
 
-  // Lê o que foi colado, decide/aplica o mapeamento de colunas e marca "sem número da
-  // nota" quando a linha não trouxe a própria (coluna) nem existe uma no campo fixo acima.
+  // Lê o que foi colado e aplica o mapeamento de colunas (automático = tudo "Ignorar",
+  // ou corrigido à mão nos selects).
   function desenharPrevia() {
     lidos = lerColado(campo("cf-colar").value, mapaManual);
-    const notaCabecalho = campo("cf-nota").value.trim();
-    lidos.linhas.forEach((r) => { if (!r.erro && !r.numero_nota && !notaCabecalho) r.erro = "sem número da nota"; });
     desenharMapeamento();
     desenharTabelaPrevia();
     atualizarBotaoIncluir();
   }
   campo("cf-colar").addEventListener("input", desenharPrevia);
-  campo("cf-nota").addEventListener("input", desenharPrevia);
+  campo("cf-nota").addEventListener("input", atualizarBotaoIncluir);
+  campo("cf-empresa").addEventListener("input", atualizarBotaoIncluir);
   campo("cf-limpar").addEventListener("click", () => { campo("cf-colar").value = ""; mapaManual = null; desenharPrevia(); });
 
   // Anexar planilha salva como CSV: lê o arquivo e joga o texto na caixa (que mostra a prévia).
@@ -600,19 +606,21 @@
     carregarEmpresas();
   }
 
-  // Botão "Incluir" do modo colar: agrupa por número da nota (a da própria linha, se
-  // veio colada numa coluna "Nota" -- senão a do campo fixo acima) e manda um lote por
-  // grupo, pra cada produto ficar registrado na nota certa. O que não entrar fica na
-  // caixa pra corrigir.
+  // Botão "Incluir" do modo colar: manda TODAS as linhas lidas (sem pré-filtrar por
+  // validade -- quem recusa linha incompleta/inválida é o servidor, por item, sem
+  // travar o lote inteiro). Agrupa por número da nota (a da própria linha, se veio
+  // colada numa coluna "Nota" -- senão a do campo fixo acima) e manda um lote por
+  // grupo, pra cada produto ficar registrado na nota certa. O que o servidor recusar
+  // fica na caixa pra corrigir.
   campo("cf-incluir-lote").addEventListener("click", async () => {
     const nota = dadosDaNota();
     if (!nota.empresa) { aviso("Informe a empresa antes de incluir.", "erro"); campo("cf-empresa").focus(); return; }
-    const bons = lidos.linhas.filter((r) => !r.erro);
-    if (!bons.length) return;
+    if (!nota.numero_nota.trim()) { aviso("Informe a nota antes de incluir.", "erro"); campo("cf-nota").focus(); return; }
+    if (!lidos.linhas.length) return;
     const botao = campo("cf-incluir-lote");
     botao.disabled = true;
     const grupos = new Map(); // numero_nota efetivo -> linhas daquele grupo
-    bons.forEach((r) => {
+    lidos.linhas.forEach((r) => {
       const n = (r.numero_nota || nota.numero_nota || "").trim();
       if (!grupos.has(n)) grupos.set(n, []);
       grupos.get(n).push(r);
@@ -636,7 +644,7 @@
       }
       // deixa na caixa só o que NÃO entrou (linhas com problema + as recusadas pelo servidor), pra corrigir e incluir de novo
       const recusadas = new Set(falhasBrutas.map((x) => x.linha));
-      const ficam = lidos.linhas.filter((r) => r.erro || recusadas.has(r));
+      const ficam = lidos.linhas.filter((r) => recusadas.has(r));
       campo("cf-colar").value = ficam.map((r) => r.bruto.join("\t")).join("\n");
       desenharPrevia();
       const refaz = nota.refazer ? " para REFAZER" : "";
