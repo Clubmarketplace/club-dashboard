@@ -287,6 +287,33 @@ body {
   justify-content: space-between;
 }
 
+/* Botão "Sair" no menu lateral do seller (15/10) -- separado dos itens de
+   navegação (borda em cima) e com a cor de alerta, pra não ser confundido
+   com uma tela do sistema. */
+.cmx-nav-sair {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  margin-top: 14px;
+  padding: 9px 10px;
+  border-top: 1px solid var(--cmx-sidebar-submenu-borda);
+  border-radius: 0;
+  color: var(--cmx-rust);
+  text-decoration: none;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+}
+.cmx-nav-sair:hover {
+  background: var(--cmx-rust-fundo);
+}
+.cmx-nav-sair svg {
+  flex-shrink: 0;
+}
+
 .cmx-selo-em-breve {
   font-size: 10px;
   font-weight: 600;
