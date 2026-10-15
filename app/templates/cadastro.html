@@ -77,6 +77,13 @@
     .cd-grade-linha input.cd-campo-aviso { background:var(--cmx-rust-fundo); }
     .cd-grade-remover { border:none; border-left:1px solid var(--cmx-borda); background:transparent; color:var(--cmx-rust); cursor:pointer; font-size:13px; }
     .cd-grade-remover:hover { background:var(--cmx-rust-fundo); }
+    /* 15/10: botões de "É kit?" e canal -- cinza por padrão, ganham cor ao marcar.
+       Kit usa a cor âmbar da marca (não é um canal); canal usa a cor do próprio canal. */
+    .cf-kit, .cf-canal { border-radius:999px; border:1.5px solid var(--cmx-borda); }
+    .cf-kit.ativo { background:var(--cmx-ambar); border-color:var(--cmx-ambar); color:#1a1a1a; }
+    .cf-canal.ativo.cf-canal-ml { background:var(--canal-ml-bg); color:var(--canal-ml-tx); border-color:var(--canal-ml-bg); }
+    .cf-canal.ativo.cf-canal-tiktok { background:var(--canal-tiktok-bg); color:var(--canal-tiktok-tx); border-color:var(--canal-tiktok-bg); }
+    .cf-canal.ativo.cf-canal-shopee { background:var(--canal-shopee-bg); color:var(--canal-shopee-tx); border-color:var(--canal-shopee-bg); }
     #cf-incluidos { margin-top:14px; border-top:1px dashed var(--cmx-borda); padding-top:10px; }
     #cf-incluidos h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
     .cd-inc-item { display:flex; gap:10px; padding:5px 0; font-size:13px; border-top:1px solid var(--cmx-borda); }
@@ -172,7 +179,7 @@
 
         <form class="cd-form" id="cd-form" autocomplete="off" novalidate>
           <h3>Solicitar cadastro</h3>
-          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Escolha a conta, preencha os produtos na tabela abaixo — célula por célula ou colando um trecho da planilha — e clique em "Finalizar solicitação". Fornecedor e Nota ficam por produto, então dá pra misturar mais de uma nota numa solicitação só. Nada é gravado até finalizar.</p>
+          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Escolha a conta, preencha os produtos na tabela abaixo (SKU, nome, EAN e custo são obrigatórios) — célula por célula ou colando um trecho da planilha —, marque se é kit e em quais canais vai cadastrar, e clique em "Finalizar solicitação". Fornecedor e Nota ficam por produto, então dá pra misturar mais de uma nota numa solicitação só. Nada é gravado até finalizar.</p>
           <div class="cd-form-grade" style="grid-template-columns:repeat(3, minmax(0,1fr))">
             <div class="cd-largo"><label for="cf-conta">Conta *</label><select id="cf-conta"><option value="">Selecione a conta…</option></select></div>
             <div style="display:flex;align-items:flex-end;justify-content:flex-end">
@@ -192,6 +199,23 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap">
               <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
               <button class="cd-btn" id="cf-adicionar-linha" type="button">+ Adicionar linha</button>
+            </div>
+          </div>
+
+          <div style="margin:16px 0 6px">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:0 0 6px">É kit? *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="cd-btn cf-kit" data-kit="nao">Não é kit</button>
+              <button type="button" class="cd-btn cf-kit" data-kit="sim">É kit</button>
+            </div>
+          </div>
+
+          <div style="margin:14px 0 6px">
+            <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:0 0 6px">Cadastrar em qual canal? *</label>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button type="button" class="cd-btn cf-canal cf-canal-ml" data-canal="ml">Mercado Livre</button>
+              <button type="button" class="cd-btn cf-canal cf-canal-tiktok" data-canal="tiktok">TikTok</button>
+              <button type="button" class="cd-btn cf-canal cf-canal-shopee" data-canal="shopee">Shopee</button>
             </div>
           </div>
 
@@ -224,7 +248,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=8"></script>
+  <script src="/static/cadastro.js?v=9"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
