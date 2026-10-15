@@ -66,7 +66,13 @@
     .cd-aba { height:34px; padding:0 14px; border-radius:9px 9px 0 0; border:1px solid var(--cmx-borda); border-bottom:none; background:var(--cmx-bg); color:var(--cmx-texto-suave); font:700 13px Inter,sans-serif; cursor:pointer; }
     .cd-aba.ativo { background:var(--cmx-texto); color:var(--cmx-papel); border-color:var(--cmx-texto); }
     .cd-colar-linha { display:flex; gap:10px; align-items:stretch; }
-    .cd-colar-linha textarea { flex:1; min-width:0; border:1px solid var(--cmx-borda); border-radius:9px; padding:10px; font:13px ui-monospace,Menlo,Consolas,monospace; background:var(--cmx-bg); color:var(--cmx-texto); resize:vertical; }
+    .cd-colar-wrap { flex:1; min-width:0; display:flex; flex-direction:column; }
+    .cd-colar-cabecalho { display:flex; border:1px solid var(--cmx-borda); border-bottom:none; border-radius:9px 9px 0 0; background:var(--cmx-bg); padding:6px 10px; }
+    .cd-colar-cabecalho span { flex:1; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:6px; }
+    .cd-colar-cabecalho span:nth-child(2) { flex:2.4; }
+    .cd-colar-cabecalho span:nth-child(5) { flex:1.4; }
+    .cd-colar-linha textarea { flex:1; min-width:0; border:1px solid var(--cmx-borda); border-radius:0 0 9px 9px; padding:10px; font:13px ui-monospace,Menlo,Consolas,monospace; background:var(--cmx-bg); color:var(--cmx-texto); resize:vertical; }
+    @media (max-width:640px) { .cd-colar-cabecalho { display:none; } .cd-colar-linha textarea { border-radius:9px; } }
     .cd-colar-botoes { display:flex; flex-direction:column; gap:8px; width:150px; }
     .cd-colar-botoes .cd-btn { width:100%; height:38px; display:inline-flex; align-items:center; justify-content:center; }
     .cd-anexo { cursor:pointer; position:relative; }
@@ -185,9 +191,13 @@
 
             <!-- modo: colar da planilha -->
             <div class="cf-colar" style="grid-column:1 / -1">
-              <label for="cf-colar">Cole aqui as linhas copiadas da planilha ou de um texto simples — campos-chave: <b>SKU · Produto · EAN · Quantidade · Custo un. · Nota</b> (pode colar com cabeçalho; eu reconheço as colunas e você pode corrigir abaixo. Sem coluna "Nota", uso a Nota informada acima)</label>
+              <label for="cf-colar">Cole da planilha (com ou sem cabeçalho, em qualquer ordem) ou digite direto — os campos abaixo são só um guia, não precisa seguir essa ordem:</label>
+              <div style="background:var(--cmx-ambar-fundo);color:var(--cmx-ambar);border-radius:8px;padding:6px 12px;font-size:12.5px;margin:4px 0 6px;line-height:1.5">⚠ Faltou SKU, Produto, EAN, Quantidade, Custo ou Nota numa linha? Ela fica marcada com erro e não entra — corrija o mapeamento abaixo (sem precisar colar de novo) ou ajuste e cole outra vez.</div>
               <div class="cd-colar-linha">
-                <textarea id="cf-colar" rows="6" spellcheck="false" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)…"></textarea>
+                <div class="cd-colar-wrap">
+                  <div class="cd-colar-cabecalho"><span>SKU</span><span>Produto</span><span>EAN</span><span>Quantidade</span><span>Custo unitário</span><span>Nota</span></div>
+                  <textarea id="cf-colar" rows="6" spellcheck="false" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)… ou digite direto, um produto por linha"></textarea>
+                </div>
                 <div class="cd-colar-botoes">
                   <button class="cd-btn cd-btn-ok" id="cf-incluir-lote" type="button" disabled>Incluir</button>
                   <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
