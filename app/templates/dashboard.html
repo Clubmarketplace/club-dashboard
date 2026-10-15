@@ -28,7 +28,7 @@
     .db-atalho:hover { border-color:#2baff2; background:#e6f7ff; }
 
     /* Visão geral do admin (venda/valor) */
-    .adm-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:26px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; }
+    .adm-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:22px 24px; box-shadow:0 2px 10px rgba(0,0,0,.04); margin-bottom:20px; min-width:0; }
     .adm-cartao h2 { margin:0 0 4px; font-size:16px; }
     .adm-cartao .sub { margin:0 0 18px; font-size:13px; color:var(--cmx-texto-suave); }
     .adm-grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
@@ -74,6 +74,46 @@
     .adm-ranking-lista ol { margin:0; padding-left:18px; }
     .adm-ranking-lista li { padding:3px 0; }
     .adm-ranking-lista .adm-ranking-qtd { color:var(--cmx-texto-suave); }
+
+    /* --- Redesign 15/10: Vendas (totais + gráfico lado a lado), Setores
+       em grade e Financeiro por setor. Mobile-first porque o diretor
+       também abre isso no celular -- cada seção empilha em 1 coluna
+       abaixo de 860px, sem rolagem horizontal na página. */
+    .adm-secao-titulo { font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); margin:28px 0 12px; }
+    .adm-secao-titulo:first-child { margin-top:0; }
+
+    .adm-grid-vendas { display:grid; grid-template-columns:260px 1fr; gap:20px; align-items:stretch; }
+    @media (max-width:860px) { .adm-grid-vendas { grid-template-columns:1fr; } }
+    .adm-col-totais { display:flex; flex-direction:column; gap:14px; }
+    @media (max-width:860px) { .adm-col-totais { flex-direction:row; } }
+    @media (max-width:560px) { .adm-col-totais { flex-direction:column; } }
+    .adm-total-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:18px 20px; flex:1; box-shadow:0 2px 10px rgba(0,0,0,.04); }
+    .adm-total-card .titulo { font-size:13px; font-weight:600; color:var(--cmx-texto-suave); }
+    .adm-total-card .valor { font-size:24px; font-weight:700; margin-top:4px; }
+    .adm-total-card .nota { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+
+    .adm-grid-setores { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; }
+    @media (max-width:1180px) { .adm-grid-setores { grid-template-columns:1fr 1fr; } }
+    @media (max-width:640px) { .adm-grid-setores { grid-template-columns:1fr; } }
+    .adm-setor-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:18px 20px; box-shadow:0 2px 10px rgba(0,0,0,.04); min-width:0; }
+    .adm-setor-card h3 { margin:0; font-size:14.5px; display:flex; align-items:center; gap:8px; }
+    .adm-setor-card .sub { margin:2px 0 14px; font-size:12px; color:var(--cmx-texto-suave); }
+    .adm-setor-destaque { font-size:22px; font-weight:700; }
+    .adm-setor-linha { display:flex; justify-content:space-between; gap:10px; padding:7px 0; border-bottom:1px solid var(--cmx-borda); font-size:13px; }
+    .adm-setor-linha:last-of-type { border-bottom:none; }
+    .adm-setor-linha .r { color:var(--cmx-texto-suave); text-align:right; }
+    .adm-setor-aviso { font-size:12px; color:var(--cmx-texto-suave); margin-top:10px; padding-top:10px; border-top:1px dashed var(--cmx-borda); }
+    .adm-chip-setor { width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+
+    .adm-grid-fin { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; }
+    @media (max-width:1180px) { .adm-grid-fin { grid-template-columns:1fr 1fr; } }
+    @media (max-width:640px) { .adm-grid-fin { grid-template-columns:1fr; } }
+    .adm-fin-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:18px 20px; box-shadow:0 2px 10px rgba(0,0,0,.04); min-width:0; }
+    .adm-fin-card .titulo { font-size:13px; font-weight:600; color:var(--cmx-texto-suave); }
+    .adm-fin-card .valor { font-size:22px; font-weight:700; margin-top:4px; }
+    .adm-fin-card .nota { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .adm-fin-indisponivel { opacity:.65; }
+    .adm-fin-indisponivel .valor { font-size:14px; font-weight:600; color:var(--cmx-texto-suave); }
   </style>
 </head>
 <body>
@@ -118,44 +158,22 @@
         {% if eh_admin %}
         <div id="adm-vazio" class="adm-vazio" style="display:none;">Não consegui carregar os dados agora. Atualize a página.</div>
         <div id="adm-conteudo">
-          <div class="db-resumo-grid">
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone azul">💰</div>
-              <div class="titulo">Vendido hoje (todas as contas)</div>
-              <div class="valor" id="adm-hoje-venda">R$ 0,00</div>
-            </div>
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone verde">💰</div>
-              <div class="titulo">Vendido no mês (todas as contas)</div>
-              <div class="valor" id="adm-mes-venda">R$ 0,00</div>
-            </div>
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone laranja">👥</div>
-              <div class="titulo">Contas ativas</div>
-              <div class="valor" id="adm-qtd-contas">0</div>
-            </div>
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone vermelho">✓</div>
-              <div class="titulo">Cancelamentos no mês</div>
-              <div class="valor" id="adm-cancel-mes">0</div>
-              <div class="nota" id="adm-cancel-mes-nota"></div>
-            </div>
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone verde">💬</div>
-              <div class="titulo">Mensagens respondidas (mês)</div>
-              <div class="valor" id="adm-mensagens-mes">0</div>
-              <div class="nota" id="adm-mensagens-mes-nota"></div>
-            </div>
-            <div class="db-card" style="cursor:default;">
-              <div class="icone db-icone verde">🧩</div>
-              <div class="titulo">Promoções aderidas (mês)</div>
-              <div class="valor" id="adm-promocoes-mes">0</div>
-              <div class="nota" id="adm-promocoes-mes-nota"></div>
-            </div>
-          </div>
 
-          <div class="adm-grid-2">
-            <div class="adm-cartao">
+          <div class="adm-secao-titulo">Vendas</div>
+          <div class="adm-grid-vendas">
+            <div class="adm-col-totais">
+              <div class="adm-total-card">
+                <div class="titulo">Vendido hoje (todas as contas)</div>
+                <div class="valor" id="adm-hoje-venda">R$ 0,00</div>
+              </div>
+              <div class="adm-total-card">
+                <div class="titulo">Vendido no mês (todas as contas)</div>
+                <div class="valor" id="adm-mes-venda">R$ 0,00</div>
+                <div class="nota" id="adm-qtd-contas-nota">0 contas ativas</div>
+              </div>
+            </div>
+
+            <div class="adm-cartao" style="margin-bottom:0;">
               <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                 <div>
                   <h2 id="adm-evolucao-titulo" style="margin-bottom:0;">Evolução -- últimos 15 dias</h2>
@@ -173,13 +191,62 @@
               </div>
               <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
             </div>
+          </div>
 
-            <div class="adm-cartao">
-              <h2>Anúncios cadastrados</h2>
-              <p class="sub">Status atual no Mercado Livre -- todas as contas</p>
-              <div class="adm-barra-item">
+          <div class="adm-secao-titulo">Setores</div>
+          <div class="adm-grid-setores">
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone laranja">📦</span>Cadastro</h3>
+              <p class="sub">Produtos novos chegados pelo Operador Logístico</p>
+              <div class="adm-setor-destaque" id="adm-cad-feitos">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">cadastrados no mês</div>
+              <div class="adm-setor-linha"><span>Quem fez mais (mês)</span><span class="r" id="adm-cad-top">--</span></div>
+              <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-cad-hoje">0 feito(s)</span></div>
+              <div class="adm-setor-linha"><span>O que falta (fila agora)</span><span class="r" id="adm-cad-falta">0 pendente(s)</span></div>
+              <button type="button" class="adm-ver-ranking" data-alvo="cadastro">Ver ranking completo do mês ▾</button>
+              <div class="adm-ranking-lista" id="adm-cadastro-ranking" style="display:none;"></div>
+            </div>
+
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone vermelho">✓</span>Cancelamento</h3>
+              <p class="sub">Solicitações feitas pelas contas</p>
+              <div class="adm-setor-destaque" id="adm-cancel-mes">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-cancel-mes-nota"></div>
+              <div class="adm-setor-linha"><span>Quem mais confirmou (mês)</span><span class="r" id="adm-cancel-mes-setor-top">--</span></div>
+              <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-cancel-hoje">0/0</span></div>
+              <button type="button" class="adm-ver-ranking" data-alvo="cancelamentos">Ver ranking completo do mês ▾</button>
+              <div class="adm-ranking-lista" id="adm-cancelamentos-ranking" style="display:none;"></div>
+            </div>
+
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone azul">🧾</span>Subida de notas</h3>
+              <p class="sub">Notas lançadas pelo Operador Logístico</p>
+              <div class="adm-setor-destaque" id="adm-notas-qtd-mes">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">notas lançadas no mês</div>
+              <div class="adm-setor-linha"><span>Produtos extraídos (mês)</span><span class="r" id="adm-notas-produtos-mes">0</span></div>
+              <div class="adm-setor-linha"><span>Valor total das notas (mês)</span><span class="r" id="adm-notas-valor-mes">R$ 0,00</span></div>
+              <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-notas-hoje">0 nota(s)</span></div>
+              <div class="adm-setor-aviso">"Notas com erro/pendência" ainda não tem rastreamento próprio no sistema -- não entra aqui.</div>
+            </div>
+
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas</h3>
+              <p class="sub">Aderidas automaticamente pelo Precificador</p>
+              <div class="adm-setor-destaque" id="adm-promocoes-mes">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-promocoes-mes-nota"></div>
+            </div>
+
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone azul">👥</span>Contas conectadas</h3>
+              <p class="sub">Vendas e anúncios de todas as contas</p>
+              <div class="adm-setor-destaque" id="adm-qtd-contas">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">contas ativas</div>
+              <div class="adm-setor-linha"><span>Sem venda há 7+ dias</span><span class="r" id="adm-contas-sem-venda">0</span></div>
+              <div class="adm-setor-linha"><span>Maior venda hoje</span><span class="r" id="adm-maior-venda-hoje">--</span></div>
+              <div class="adm-setor-linha"><span>Maior venda no mês</span><span class="r" id="adm-maior-venda-mes">--</span></div>
+              <div class="adm-barra-item" style="padding-top:12px;">
                 <div class="adm-barra-cabecalho">
-                  <span class="adm-barra-nome">Ativos</span>
+                  <span class="adm-barra-nome">Anúncios ativos</span>
                   <span class="adm-barra-numeros" id="adm-anuncios-ativos-num">0</span>
                 </div>
                 <div class="adm-barra-dupla"><div class="adm-parte-ok" id="adm-anuncios-ativos-barra" style="width:0%"></div></div>
@@ -199,57 +266,52 @@
                 <div class="adm-barra-dupla"><div class="adm-parte-alerta" id="adm-anuncios-pausados-barra" style="width:0%"></div></div>
               </div>
             </div>
-          </div>
 
-          <div class="adm-grid-3">
-            <div class="adm-cartao">
-              <h2>Chamados</h2>
-              <p class="sub">Pré-venda + pós-venda</p>
-              <div class="adm-setor-item">
-                <strong>Hoje:</strong> <span class="adm-setor-numeros" id="adm-chamados-hoje"></span>
-                <div class="adm-setor-top" id="adm-chamados-hoje-top"></div>
-              </div>
-              <div class="adm-setor-item">
-                <strong>No mês:</strong> <span class="adm-setor-numeros" id="adm-chamados-mes"></span>
-                <div class="adm-setor-top" id="adm-chamados-mes-top"></div>
-              </div>
+            <div class="adm-setor-card">
+              <h3><span class="adm-chip-setor db-icone verde">💬</span>Mensagens</h3>
+              <p class="sub">Pré-venda + pós-venda (chamados)</p>
+              <div class="adm-setor-destaque" id="adm-mensagens-mes">0</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-mensagens-mes-nota"></div>
+              <div class="adm-setor-linha"><span>Quem mais respondeu (mês)</span><span class="r" id="adm-chamados-mes-top">--</span></div>
+              <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-chamados-hoje">0/0</span></div>
               <button type="button" class="adm-ver-ranking" data-alvo="chamados">Ver ranking completo do mês ▾</button>
               <div class="adm-ranking-lista" id="adm-chamados-ranking" style="display:none;"></div>
             </div>
-            <div class="adm-cartao">
-              <h2>Cancelamentos</h2>
-              <p class="sub">Solicitações feitas pelas contas</p>
-              <div class="adm-setor-item">
-                <strong>Hoje:</strong> <span class="adm-setor-numeros" id="adm-cancel-hoje"></span>
-                <div class="adm-setor-top" id="adm-cancel-hoje-top"></div>
-              </div>
-              <div class="adm-setor-item">
-                <strong>No mês:</strong> <span class="adm-setor-numeros" id="adm-cancel-mes-setor"></span>
-                <div class="adm-setor-top" id="adm-cancel-mes-setor-top"></div>
-              </div>
-              <button type="button" class="adm-ver-ranking" data-alvo="cancelamentos">Ver ranking completo do mês ▾</button>
-              <div class="adm-ranking-lista" id="adm-cancelamentos-ranking" style="display:none;"></div>
+          </div>
+
+          <div class="adm-secao-titulo">Financeiro -- por setor</div>
+          <div class="adm-grid-fin">
+            <div class="adm-fin-card">
+              <div class="titulo">Cadastro -- custo parado</div>
+              <div class="valor" id="adm-fin-cadastro-parado">R$ 0,00</div>
+              <div class="nota">em produtos que chegaram e ainda não foram cadastrados em nenhum marketplace</div>
             </div>
-            <div class="adm-cartao">
-              <h2>Cadastro</h2>
-              <p class="sub">Cadastro/atualização de anúncios</p>
-              <p class="sub" style="margin-bottom:0;">
-                Esse setor ainda não tem um registro próprio no sistema (quem cadastrou o quê, quando) --
-                hoje só existe o que o ClubMarketplaceX lê direto do Mercado Livre (estoque, preço),
-                sem ligar a ação a um atendente. Pra esse card funcionar como os outros dois, precisa criar
-                esse rastreamento primeiro (ação do usuário gravada com autor e data). Não quis inventar
-                número aqui.
-              </p>
+            <div class="adm-fin-card">
+              <div class="titulo">Subida de notas -- valor no mês</div>
+              <div class="valor" id="adm-fin-notas-mes">R$ 0,00</div>
+              <div class="nota">total das notas lançadas pelo Operador Logístico este mês</div>
+            </div>
+            <div class="adm-fin-card">
+              <div class="titulo">Promoções -- lucro líquido (mês)</div>
+              <div class="valor" id="adm-fin-promocoes-mes">R$ 0,00</div>
+              <div class="nota" id="adm-fin-promocoes-hoje-nota"></div>
+            </div>
+            <div class="adm-fin-card adm-fin-indisponivel">
+              <div class="titulo">Cancelamento -- valor cancelado</div>
+              <div class="valor">Não disponível</div>
+              <div class="nota">a solicitação de cancelamento grava o número do pedido, não o valor da venda -- cruzar os dois ainda não é confiável o bastante pra um número financeiro. Precisa de um campo de valor próprio nessa tabela.</div>
             </div>
           </div>
 
-          <div class="adm-cartao">
+          <div class="adm-cartao" style="margin-top:28px;">
             <h2>Ranking de contas</h2>
             <p class="sub">Quem mais vendeu no mês</p>
-            <table class="adm-tabela">
-              <thead><tr><th>Conta</th><th class="adm-col-num">Hoje</th><th class="adm-col-num">No mês</th><th class="adm-col-num">Pedidos (mês)</th></tr></thead>
-              <tbody id="adm-ranking-corpo"></tbody>
-            </table>
+            <div class="adm-grafico-wrap">
+              <table class="adm-tabela">
+                <thead><tr><th>Conta</th><th class="adm-col-num">Hoje</th><th class="adm-col-num">No mês</th><th class="adm-col-num">Pedidos (mês)</th></tr></thead>
+                <tbody id="adm-ranking-corpo"></tbody>
+              </table>
+            </div>
           </div>
         </div>
         {% else %}
@@ -317,14 +379,52 @@
       const setorChamados = d.setor_chamados || {};
       const setorChamadosMes = setorChamados.mes || {};
       const promoAderidas = d.promocoes_aderidas || {};
+      const setorCadastro = d.setor_cadastro || {};
+      const cadMes = setorCadastro.mes || {};
+      const cadHoje = setorCadastro.hoje || {};
+      const cadBacklog = setorCadastro.backlog || {};
+      const setorNotas = d.setor_subida_notas || {};
+      const notasMes = setorNotas.mes || {};
+      const notasHoje = setorNotas.hoje || {};
+      const contasExtra = d.contas_conectadas_extra || {};
+      const fin = d.financeiro_por_setor || {};
 
       document.getElementById("adm-hoje-venda").textContent = formatarReais(totalGeral.vendido_hoje);
       document.getElementById("adm-mes-venda").textContent = formatarReais(totalGeral.vendido_mes);
       document.getElementById("adm-qtd-contas").textContent = totalGeral.quantidade_contas || 0;
+      document.getElementById("adm-qtd-contas-nota").textContent = (totalGeral.quantidade_contas || 0) + " contas ativas";
       document.getElementById("adm-cancel-mes").textContent = setorCancelMes.total || 0;
-      document.getElementById("adm-cancel-mes-nota").textContent = (setorCancelMes.confirmadas || 0) + " confirmado(s)";
+      document.getElementById("adm-cancel-mes-nota").textContent = (setorCancelMes.confirmadas || 0) + " confirmado(s) no mês";
       document.getElementById("adm-mensagens-mes").textContent = setorChamadosMes.respondidas || 0;
       document.getElementById("adm-mensagens-mes-nota").textContent = "de " + (setorChamadosMes.total || 0) + " recebidas (pré + pós-venda)";
+
+      // Cadastro (setor) -- total feito no mês, quem fez mais, e a fila
+      // pendente AGORA (sem recorte de período -- é o "o que falta" real).
+      document.getElementById("adm-cad-feitos").textContent = cadMes.feitos || 0;
+      document.getElementById("adm-cad-top").textContent = cadMes.top ? cadMes.top.nome + " (" + cadMes.top.quantidade + ")" : "ninguém ainda";
+      document.getElementById("adm-cad-hoje").textContent = (cadHoje.feitos || 0) + " feito(s)";
+      document.getElementById("adm-cad-falta").textContent = (cadBacklog.pendentes || 0) + " pendente(s)";
+      renderizarRanking("adm-cadastro-ranking", cadMes.ranking);
+
+      // Subida de notas (setor) -- real, a partir do ProdutoCadastro.
+      document.getElementById("adm-notas-qtd-mes").textContent = notasMes.notas || 0;
+      document.getElementById("adm-notas-produtos-mes").textContent = notasMes.produtos || 0;
+      document.getElementById("adm-notas-valor-mes").textContent = formatarReais(notasMes.valor_total);
+      document.getElementById("adm-notas-hoje").textContent = (notasHoje.notas || 0) + " nota(s)";
+
+      // Contas conectadas -- extras (sem venda há 7+ dias, maior venda).
+      document.getElementById("adm-contas-sem-venda").textContent = contasExtra.sem_venda_7d || 0;
+      const mvHoje = contasExtra.maior_venda_hoje;
+      document.getElementById("adm-maior-venda-hoje").textContent = mvHoje ? formatarReais(mvHoje.valor) + " (" + mvHoje.conta + ")" : "--";
+      const mvMes = contasExtra.maior_venda_mes;
+      document.getElementById("adm-maior-venda-mes").textContent = mvMes ? formatarReais(mvMes.valor) + " (" + mvMes.conta + ")" : "--";
+
+      // Financeiro por setor -- só número real (ver nota do card de
+      // Cancelamento, que fica marcado como indisponível de propósito).
+      document.getElementById("adm-fin-cadastro-parado").textContent = formatarReais((fin.cadastro || {}).custo_parado_pendente);
+      document.getElementById("adm-fin-notas-mes").textContent = formatarReais((fin.subida_notas || {}).valor_notas_mes);
+      document.getElementById("adm-fin-promocoes-mes").textContent = formatarReais((fin.promocoes || {}).lucro_mes);
+      document.getElementById("adm-fin-promocoes-hoje-nota").textContent = formatarReais((fin.promocoes || {}).lucro_hoje) + " hoje";
 
       // Promoções aderidas AUTOMATICAMENTE pelo Precificador -- contagem
       // real de eventos no mês (soma de todas as contas), não "quantos
@@ -363,9 +463,7 @@
       const chHoje = ch.hoje || {};
       const chMes = ch.mes || {};
       document.getElementById("adm-chamados-hoje").textContent = (chHoje.respondidas || 0) + "/" + (chHoje.total || 0) + " respondidas (" + (chHoje.pendentes || 0) + " pendente(s))";
-      document.getElementById("adm-chamados-hoje-top").textContent = chHoje.top ? "Quem mais respondeu hoje: " + chHoje.top.nome + " (" + chHoje.top.quantidade + ")" : "";
-      document.getElementById("adm-chamados-mes").textContent = (chMes.respondidas || 0) + "/" + (chMes.total || 0) + " respondidas (" + (chMes.pendentes || 0) + " pendente(s))";
-      document.getElementById("adm-chamados-mes-top").textContent = chMes.top ? "Quem mais respondeu no mês: " + chMes.top.nome + " (" + chMes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      document.getElementById("adm-chamados-mes-top").textContent = chMes.top ? chMes.top.nome + " (" + chMes.top.quantidade + ")" : "ninguém ainda";
       renderizarRanking("adm-chamados-ranking", chMes.ranking);
 
       // Cancelamentos (setor) -- mesmo padrão, quem mais confirmou +
@@ -374,9 +472,7 @@
       const caHoje = ca.hoje || {};
       const caMes = ca.mes || {};
       document.getElementById("adm-cancel-hoje").textContent = (caHoje.confirmadas || 0) + "/" + (caHoje.total || 0) + " confirmadas (" + (caHoje.pendentes || 0) + " pendente(s))";
-      document.getElementById("adm-cancel-hoje-top").textContent = caHoje.top ? "Quem mais confirmou hoje: " + caHoje.top.nome + " (" + caHoje.top.quantidade + ")" : "";
-      document.getElementById("adm-cancel-mes-setor").textContent = (caMes.confirmadas || 0) + "/" + (caMes.total || 0) + " confirmadas (" + (caMes.pendentes || 0) + " pendente(s))";
-      document.getElementById("adm-cancel-mes-setor-top").textContent = caMes.top ? "Quem mais confirmou no mês: " + caMes.top.nome + " (" + caMes.top.quantidade + ")" : "Ninguém com atendimento identificado ainda no mês.";
+      document.getElementById("adm-cancel-mes-setor-top").textContent = caMes.top ? caMes.top.nome + " (" + caMes.top.quantidade + ")" : "ninguém ainda";
       renderizarRanking("adm-cancelamentos-ranking", caMes.ranking);
 
       // Ranking
