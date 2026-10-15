@@ -155,10 +155,12 @@ def _setor_cadastro(db: Session, inicio_utc: datetime) -> dict:
     feitos = [p for p in produtos if p.status == "cadastrado"]
     ranking = _ranking_atendimento(feitos, "cadastrado_por")
     top = ranking[0] if ranking else None
+    empresas = {p.empresa_chave for p in produtos if p.empresa_chave}
     return {
         "total": len(produtos),
         "feitos": len(feitos),
         "pendentes": len(produtos) - len(feitos),
+        "empresas": len(empresas),
         "top": top,
         "ranking": ranking,
     }
@@ -206,11 +208,10 @@ def _setor_subida_notas(db: Session, inicio_utc: datetime) -> dict:
     }
 
 
-def _contas_conectadas_extra(db: Session, contas: list, inicio_dia_utc: datetime, inicio_mes_utc: datetime) -> dict:
+def _contas_conectadas_extra(db: Session, contas: list) -> dict:
     """Informações extras do card "Contas conectadas": quantas contas
     ativas estão sem nenhuma venda há 7+ dias (sinal de alerta -- conta
-    parada), e qual foi a maior venda individual (um item de pedido) de
-    hoje e do mês, com a conta correspondente."""
+    parada)."""
     limite_7d = datetime.utcnow() - timedelta(days=7)
     sem_venda_recente = 0
     for conta in contas:
@@ -223,22 +224,7 @@ def _contas_conectadas_extra(db: Session, contas: list, inicio_dia_utc: datetime
         if not ultima or ultima[0] < limite_7d:
             sem_venda_recente += 1
 
-    def _maior_venda(inicio_utc: datetime):
-        linha = (
-            _somente_vendas_validas(db.query(Venda).filter(Venda.data_venda >= inicio_utc))
-            .order_by(Venda.venda_bruta.desc())
-            .first()
-        )
-        if not linha:
-            return None
-        conta = next((c for c in contas if c.id == linha.conta_id), None)
-        return {"valor": round(linha.venda_bruta, 2), "conta": conta.apelido if conta else None, "titulo": linha.titulo}
-
-    return {
-        "sem_venda_7d": sem_venda_recente,
-        "maior_venda_hoje": _maior_venda(inicio_dia_utc),
-        "maior_venda_mes": _maior_venda(inicio_mes_utc),
-    }
+    return {"sem_venda_7d": sem_venda_recente}
 
 
 def _financeiro_por_setor(db: Session, inicio_dia_utc: datetime, inicio_mes_utc: datetime) -> dict:
@@ -391,6 +377,6 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "hoje": _setor_subida_notas(db, inicio_dia_utc),
             "mes": _setor_subida_notas(db, inicio_mes_utc),
         },
-        "contas_conectadas_extra": _contas_conectadas_extra(db, contas, inicio_dia_utc, inicio_mes_utc),
+        "contas_conectadas_extra": _contas_conectadas_extra(db, contas),
         "financeiro_por_setor": _financeiro_por_setor(db, inicio_dia_utc, inicio_mes_utc),
     }
