@@ -130,6 +130,8 @@ _COLUNAS_ADICIONAIS = {
         "reaberto_por": "VARCHAR",
         "reaberto_em": "TIMESTAMP",
         "motivo_reabertura": "TEXT",
+        # 15/10: "é kit?" -- só preenchido pela tela de solicitação manual.
+        "kit": "BOOLEAN",
     },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel

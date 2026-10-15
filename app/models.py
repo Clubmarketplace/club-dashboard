@@ -1003,3 +1003,9 @@ class ProdutoCadastro(Base):
     reaberto_por = Column(String, nullable=True)
     reaberto_em = Column(DateTime, nullable=True)
     motivo_reabertura = Column(Text, nullable=True)
+
+    # --- 15/10: "é kit?" -------------------------------------------------------
+    # Marcado só na tela de solicitação manual (uma marcação só por solicitação,
+    # vale pra todos os produtos dela). Produto automático do Operador fica NULL
+    # -- essa marcação não existe pra ele.
+    kit = Column(Boolean, nullable=True)
