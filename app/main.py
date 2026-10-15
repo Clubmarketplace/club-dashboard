@@ -5,7 +5,7 @@ from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
 from datetime import datetime, timedelta, timezone
 from sqlalchemy import func, or_
-from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta
+from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta, ProdutoCadastro
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
@@ -882,7 +882,7 @@ def pagina_solicitacoes_galpao(request: Request):
 
 @app.get("/meus-cancelamentos", response_class=HTMLResponse)
 def pagina_meus_cancelamentos(request: Request):
-    """Tela do seller: só as solicitações (cancelamento e reputação) da conta vinculada a ele."""
+    """Tela do seller: as solicitações (cancelamento, reputação e cadastro) da conta vinculada a ele."""
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         if not _eh_painel_seller(usuario):
@@ -894,10 +894,19 @@ def pagina_meus_cancelamentos(request: Request):
             .order_by(SolicitacaoCancelamento.confirmado_por.is_(None).desc(), SolicitacaoCancelamento.criado_em.desc())
             .all()
         )
+        # Cadastro (15/10): mesma conta, sem contar as excluídas -- igual às outras
+        # listas da tela "Cadastro", nunca aparece o que foi excluído (ver _admin_supervisor_logado).
+        cadastros = (
+            db.query(ProdutoCadastro)
+            .filter(ProdutoCadastro.empresa_chave == chave_conta(usuario.conta_vinculada))
+            .filter(ProdutoCadastro.status != "excluida")
+            .order_by((ProdutoCadastro.status == "cadastrado"), ProdutoCadastro.recebido_em.desc())
+            .all()
+        )
         return templates.TemplateResponse(
             request=request,
             name="meus-cancelamentos.html",
-            context={"usuario": usuario, "solicitacoes": solicitacoes, "papel_logado": usuario.papel},
+            context={"usuario": usuario, "solicitacoes": solicitacoes, "cadastros": cadastros, "papel_logado": usuario.papel},
         )
 
 
