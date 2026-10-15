@@ -30,7 +30,7 @@
   const estado = {
     itens: [], contagem: { pendente: 0, cadastrado: 0 }, status: "pendente", busca: "", falta: "",
     truncado: false, ocupado: false,
-    mpOcupados: new Set(), resp: "", eu: "", papel: "",
+    mpOcupados: new Set(), resp: "", eu: "", papel: "", conta: "",
   };
 
   function esc(t) {
@@ -173,8 +173,13 @@
         ? `<button class="cd-btn cd-mini" type="button" data-reabrir="${p.id}" title="Volta pra pendente, pede o motivo e fica registrado">↻ Reabrir</button>`
         : `<small class="cd-quem">Travado — só supervisor/admin pode reabrir.</small>`;
     }
+    // 15/10: excluir uma solicitação PENDENTE -- só admin/supervisor, motivo obrigatório.
+    // Não apaga de verdade (o servidor só marca "excluida"); some da lista.
+    const excluir = (!feito && souSupervisao())
+      ? `<button class="cd-btn cd-mini cd-btn-excluir" type="button" data-excluir="${p.id}" title="Remove da lista; pede o motivo e fica registrado">🗑 Excluir</button>`
+      : "";
     const tempo = blocoTempo(p);
-    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${atalho}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${atalho}${excluir}</div>`;
   }
 
   // Quem assumiu, desde quando e quanto tempo está levando / levou.
@@ -230,6 +235,10 @@
 
   function itensVisiveis() {
     let itens = estado.itens;
+    // 15/10: filtro por Conta -- compara pela mesma "chave" usada pra agrupar (ignora
+    // acento/maiúscula), porque o nome do produto vem do Operador e pode não bater
+    // letra a letra com o apelido cadastrado em "Contas conectadas".
+    if (estado.conta) itens = itens.filter((p) => chaveEmpresa(p.empresa) === chaveEmpresa(estado.conta));
     if (estado.falta) itens = itens.filter((p) => p.status !== "cadastrado" && !mpDe(p, estado.falta).estado);
     if (estado.resp === "meus") itens = itens.filter((p) => p.assumido_por && p.assumido_por === estado.eu);
     if (estado.resp === "ninguem") itens = itens.filter((p) => !p.assumido_por);
@@ -345,6 +354,8 @@
     if (solt) return assumir(Number(solt.dataset.soltar), false, false);
     const reabrir = e.target.closest("[data-reabrir]");
     if (reabrir) return reabrirProduto(Number(reabrir.dataset.reabrir));
+    const excl = e.target.closest("[data-excluir]");
+    if (excl) return excluirProduto(Number(excl.dataset.excluir));
   });
 
   // Reabrir um produto travado (só aparece o botão pra admin/supervisor -- o servidor confere de novo).
@@ -359,6 +370,23 @@
       carregarContagem();
     } catch (e) {
       aviso("Não consegui reabrir: " + e.message, "erro");
+    }
+  }
+
+  // Exclui uma solicitação PENDENTE (admin/supervisor, 15/10). Não apaga de verdade --
+  // o servidor só marca "excluida" e guarda quem, quando e o motivo; aqui só some da lista.
+  async function excluirProduto(id) {
+    const motivo = window.prompt("Por que esta solicitação está sendo excluída? (fica registrado)");
+    if (motivo === null) return; // cancelou
+    if (motivo.trim().length < 5) { aviso("Descreva o motivo com um pouco mais de detalhe (mínimo 5 caracteres).", "erro"); return; }
+    try {
+      await api(`/produtos/${id}/excluir`, { method: "POST", body: JSON.stringify({ motivo: motivo.trim() }) });
+      estado.itens = estado.itens.filter((x) => x.id !== id);
+      desenhar();
+      aviso("Solicitação excluída.", "ok");
+      carregarContagem();
+    } catch (e) {
+      aviso("Não consegui excluir: " + e.message, "erro");
     }
   }
 
@@ -379,6 +407,7 @@
   });
 
   document.getElementById("cd-resp").addEventListener("change", (e) => { estado.resp = e.target.value; desenhar(); });
+  document.getElementById("cd-conta").addEventListener("change", (e) => { estado.conta = e.target.value; desenhar(); });
   estado.eu = document.getElementById("cd-lista").dataset.eu || "";
   estado.papel = document.getElementById("cd-lista").dataset.papel || "";
 
@@ -423,14 +452,20 @@
     document.querySelectorAll(".cf-kit, .cf-canal").forEach((b) => b.classList.remove("ativo"));
   }
 
+  // Mesma lista (tabela "contas") alimenta DOIS seletores: o da solicitação ("Conta *",
+  // obrigatório escolher) e o filtro da lista de pendentes/cadastrados ("Conta: todas",
+  // opcional). Uma chamada só na API, cada um com seu texto de placeholder.
   async function carregarContas() {
     try {
       const d = await api("/contas");
-      const sel = campo("cf-conta");
-      const atual = sel.value;
-      sel.innerHTML = '<option value="">Selecione a conta…</option>' + d.contas.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
-      if (atual && d.contas.includes(atual)) sel.value = atual;
-    } catch (e) { /* select fica só com o placeholder; dá pra tentar de novo reabrindo o formulário */ }
+      const preencher = (sel, placeholder) => {
+        const atual = sel.value;
+        sel.innerHTML = `<option value="">${esc(placeholder)}</option>` + d.contas.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+        if (atual && d.contas.includes(atual)) sel.value = atual;
+      };
+      preencher(campo("cf-conta"), "Selecione a conta…");
+      preencher(document.getElementById("cd-conta"), "Conta: todas");
+    } catch (e) { /* select fica só com o placeholder; dá pra tentar de novo reabrindo o formulário ou atualizando a página */ }
   }
 
   function pintarRefazer() { campo("cf-refazer-btn").classList.toggle("ligado", marcaRefazer.checked); }
@@ -680,4 +715,5 @@
 
   desenharGrade();
   carregar();
+  carregarContas(); // popula o filtro "Conta" da lista já na abertura da tela
 })();
