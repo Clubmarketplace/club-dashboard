@@ -172,11 +172,11 @@
 
         <form class="cd-form modo-colar" id="cd-form" autocomplete="off" novalidate>
           <h3>Incluir produtos manualmente</h3>
-          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Preencha a empresa, o fornecedor e a nota <b>uma vez</b> e inclua os produtos: eles entram como pendentes, marcados como “incluído à mão” com o seu nome.</p>
+          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Preencha a empresa e o fornecedor <b>uma vez</b>; a nota pode ser preenchida aqui (vale pra tudo) ou, ao colar da planilha, numa coluna “Nota” — cada linha com a sua. Os produtos entram como pendentes, marcados como “incluído à mão” com o seu nome.</p>
           <div class="cd-form-grade">
             <div class="cd-largo"><label for="cf-empresa">Empresa *</label><input id="cf-empresa" list="cf-empresas" maxlength="120" /><datalist id="cf-empresas"></datalist></div>
             <div class="cd-largo"><label for="cf-fornecedor">Fornecedor</label><input id="cf-fornecedor" maxlength="160" /></div>
-            <div><label for="cf-nota">Nota</label><input id="cf-nota" maxlength="40" /></div>
+            <div><label for="cf-nota" title="Obrigatório para digitar um produto por vez. Ao colar da planilha, pode informar aqui (vale pra tudo) ou incluir uma coluna &quot;Nota&quot; no texto colado, cada linha com a sua.">Nota *</label><input id="cf-nota" maxlength="40" /></div>
             <div style="grid-column:span 3;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
               <button type="button" class="cd-aba ativo" id="cf-aba-colar">📋 Colar da planilha</button>
               <button type="button" class="cd-aba" id="cf-aba-um">✏️ Digitar um produto</button>
@@ -185,7 +185,7 @@
 
             <!-- modo: colar da planilha -->
             <div class="cf-colar" style="grid-column:1 / -1">
-              <label for="cf-colar">Cole aqui as linhas copiadas da planilha — colunas: <b>SKU · Produto · EAN · Qtd · Custo un.</b> (pode colar com o cabeçalho; eu reconheço as colunas)</label>
+              <label for="cf-colar">Cole aqui as linhas copiadas da planilha ou de um texto simples — campos-chave: <b>SKU · Produto · EAN · Quantidade · Custo un. · Nota</b> (pode colar com cabeçalho; eu reconheço as colunas e você pode corrigir abaixo. Sem coluna "Nota", uso a Nota informada acima)</label>
               <div class="cd-colar-linha">
                 <textarea id="cf-colar" rows="6" spellcheck="false" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)…"></textarea>
                 <div class="cd-colar-botoes">
@@ -194,6 +194,7 @@
                   <button class="cd-btn" id="cf-limpar" type="button">Limpar</button>
                 </div>
               </div>
+              <div id="cf-mapeamento"></div>
               <div id="cf-previa"></div>
               <small style="color:var(--cmx-texto-suave)">Planilha .xlsx? Abra, selecione as linhas, copie e cole aqui. Números como 1.234,50 são entendidos.</small>
             </div>
@@ -235,7 +236,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=6"></script>
+  <script src="/static/cadastro.js?v=7"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
