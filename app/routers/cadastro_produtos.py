@@ -28,7 +28,9 @@ a informação empurra, o backend só recebe. Nada aqui lê a planilha do Operad
         (feito, não se aplica ou volta a pendente), guardando quem e quando.
         O produto só fica "cadastrado" (OK) quando os 3 estão resolvidos.
   POST /api/cadastro/produtos/{id}/status-> atalho: marca/desmarca os 3 de uma vez.
-  POST /api/cadastro/produtos/lote       -> inclusão MANUAL de VÁRIOS produtos de uma nota (colar da planilha).
+  POST /api/cadastro/produtos/lote       -> inclusão MANUAL de VÁRIOS produtos de uma nota (colar da
+        planilha). Exige "kit" e "plataformas" (pelo menos 1 canal) -- valem pra todos os
+        produtos do envio; EAN e custo > 0 são obrigatórios por produto (15/10).
   POST /api/cadastro/produtos/{id}/assumir -> "assumi este cadastro" (ou solta); guarda quem e quando.
   POST /api/cadastro/produtos/{id}/reabrir -> reabre um produto TRAVADO (já cadastrado), com
         motivo obrigatório. Só admin/supervisor (ver "TRAVA" abaixo).
@@ -312,6 +314,7 @@ def _produto_json(p: ProdutoCadastro) -> dict:
         "criado_por": p.criado_por,
         "marketplaces": _dados_marketplaces(p),
         "refazer": bool(p.refazer),
+        "kit": bool(p.kit),
         "assumido_por": p.assumido_por,
         "assumido_em": _iso_utc(p.assumido_em),
         "travado": p.status == "cadastrado",
@@ -520,6 +523,12 @@ class LoteManualIn(BaseModel):
     fornecedor: Optional[str] = ""
     numero_nota: Optional[str] = ""
     refazer: bool = False
+    # 15/10: "é kit" e os canais marcados valem pra TODOS os produtos desta
+    # solicitação -- é uma marcação só, feita uma vez na tela, não por produto.
+    # Os dois são obrigatórios na tela (botão Finalizar fica travado sem eles);
+    # aqui só confere que não chegou nada vazio/fora do esperado.
+    kit: bool
+    plataformas: List[str]
     itens: List[ItemLoteIn]
 
 
@@ -535,11 +544,14 @@ def incluir_lote_manual(
     """
     Inclusão manual de VÁRIOS produtos de uma vez (tabela/planilha da tela de
     solicitação). Cada produto é conferido sozinho: os bons entram, os que não
-    podem (SKU já pendente, campo faltando...) voltam em `ignorados` com o
-    motivo -- nada some em silêncio. Empresa e a marca "refazer" valem pra
-    todos; fornecedor e nota valem por produto (ou o do lote, se o item não
-    trouxer o seu -- ver ItemLoteIn), então um envio só pode juntar produtos
-    de mais de uma nota/fornecedor.
+    podem (SKU já pendente, campo faltando, EAN vazio, custo zerado...) voltam
+    em `ignorados` com o motivo -- nada some em silêncio. Empresa, "refazer",
+    "kit" e os canais marcados (`plataformas`) valem pra todos os produtos da
+    solicitação; fornecedor e nota valem por produto (ou o do lote, se o item
+    não trouxer o seu -- ver ItemLoteIn), então um envio só pode juntar
+    produtos de mais de uma nota/fornecedor. Canal NÃO marcado em
+    `plataformas` já entra como "não se aplica" pra cada produto criado --
+    não fica pendente esperando um cadastro que nem era pra acontecer ali.
     """
     if not (corpo.empresa or "").strip():
         raise HTTPException(status_code=422, detail="Informe a empresa.")
@@ -547,10 +559,22 @@ def incluir_lote_manual(
         raise HTTPException(status_code=422, detail="Nenhum produto para incluir.")
     if len(corpo.itens) > LIMITE_LOTE_MANUAL:
         raise HTTPException(status_code=413, detail=f"Máximo de {LIMITE_LOTE_MANUAL} produtos por vez.")
+    plataformas = {(p or "").strip().lower() for p in corpo.plataformas}
+    if not plataformas:
+        raise HTTPException(status_code=422, detail="Escolha pelo menos um canal para cadastro.")
+    if not plataformas.issubset(MARKETPLACES):
+        raise HTTPException(status_code=422, detail="Canal inválido -- use ml, tiktok ou shopee.")
+
     criados, ignorados, avisos = [], [], []
     try:
         for n, it in enumerate(corpo.itens, start=1):
             try:
+                # EAN e custo > 0 são obrigatórios nesta tela (15/10) -- SKU/nome
+                # já são conferidos dentro de _incluir_um.
+                if not (it.gtin or "").strip():
+                    raise HTTPException(status_code=422, detail="EAN é obrigatório.")
+                if not (it.custo_unitario or 0) > 0:
+                    raise HTTPException(status_code=422, detail="Custo precisa ser maior que zero.")
                 registro, aviso = _incluir_um(
                     db, usuario, empresa=corpo.empresa, produto=it.produto, sku=it.sku,
                     fornecedor=(it.fornecedor or corpo.fornecedor),
@@ -561,6 +585,12 @@ def incluir_lote_manual(
             except HTTPException as e:
                 ignorados.append({"linha": n, "sku": (it.sku or "").strip(), "motivo": e.detail})
                 continue
+            registro.kit = corpo.kit
+            for chave in MARKETPLACES:
+                if chave not in plataformas:
+                    setattr(registro, f"{chave}_status", "nao_se_aplica")
+                    setattr(registro, f"{chave}_por", usuario.nome_exibicao)
+                    setattr(registro, f"{chave}_em", datetime.utcnow())
             criados.append(registro)
             if aviso:
                 avisos.append({"linha": n, "sku": registro.sku, "aviso": aviso})
