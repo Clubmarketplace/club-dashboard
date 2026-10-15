@@ -437,6 +437,9 @@
     gtin: ["ean", "gtin", "ean/gtin", "codigo de barras", "cod barras", "barras"],
     quantidade: ["qtd", "qtde", "quantidade", "quant", "qtd.", "qtde."],
     custo_unitario: ["custo", "custo un", "custo un.", "custo unitario", "custo unit", "valor unit", "valor unitario", "preco", "preco unitario", "vl unit"],
+    // 14/10 (2): a nota também pode vir como coluna do próprio texto colado -- cada
+    // linha com a sua -- em vez de só o campo fixo acima da caixa de colar.
+    numero_nota: ["nota", "numero da nota", "numero nota", "n da nota", "n nota", "no nota", "no da nota", "nf", "numero da nf", "nota fiscal", "num nota"],
   };
 
   function campoDoCabecalho(txt) {
@@ -460,29 +463,44 @@
     3: ["sku", "produto", "quantidade"],
     4: ["sku", "produto", "quantidade", "custo_unitario"],
     5: ["sku", "produto", "gtin", "quantidade", "custo_unitario"],
+    6: ["sku", "produto", "gtin", "quantidade", "custo_unitario", "numero_nota"],
   };
 
-  // Devolve { linhas: [{n, sku, produto, gtin, quantidade, custo_unitario, bruto, erro}], colunas: [...], cabecalho: bool }
-  function lerColado(texto) {
-    const tabela = dividirTabela(texto);
-    if (!tabela.length) return { linhas: [], colunas: [], cabecalho: false };
-    let colunas = null, inicio = 0, cabecalho = false;
+  // Opções do mapeamento de colunas (mostrado depois de colar, pra conferir/corrigir).
+  const OPCOES_CAMPO = [
+    ["", "Ignorar"], ["sku", "SKU"], ["produto", "Produto"], ["gtin", "EAN"],
+    ["quantidade", "Quantidade"], ["custo_unitario", "Custo un."], ["numero_nota", "Nota"],
+  ];
+
+  // Decide as colunas automaticamente: usa cabeçalho se reconhecer >= 2 campos (com SKU);
+  // senão, chuta pela posição (ORDEM_PADRAO) de acordo com a largura da tabela.
+  function detectarColunas(tabela) {
     const mapeadas = tabela[0].map(campoDoCabecalho);
-    if (mapeadas.filter(Boolean).length >= 2 && mapeadas.includes("sku")) { colunas = mapeadas; inicio = 1; cabecalho = true; }
-    if (!colunas) {
-      const largura = Math.min(5, Math.max(2, Math.max(...tabela.map((l) => l.length))));
-      colunas = (ORDEM_PADRAO[largura] || ORDEM_PADRAO[5]).slice();
+    if (mapeadas.filter(Boolean).length >= 2 && mapeadas.includes("sku")) {
+      return { colunas: mapeadas, inicio: 1, cabecalho: true };
     }
+    const largura = Math.min(6, Math.max(2, Math.max(...tabela.map((l) => l.length))));
+    return { colunas: (ORDEM_PADRAO[largura] || ORDEM_PADRAO[6]).slice(), inicio: 0, cabecalho: false };
+  }
+
+  // Monta as linhas a partir da tabela já dividida e do mapeamento de colunas decidido
+  // (automático ou corrigido à mão nos selects). Extrai também quantidade escrita junto
+  // com o nome do produto (ex.: "Camiseta P qt:5") quando a coluna de quantidade não bate.
+  function montarLinhas(tabela, colunas, inicio) {
     const linhas = [];
     for (let i = inicio; i < tabela.length; i++) {
       const cels = tabela[i];
-      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, bruto: cels, erro: "" };
+      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, numero_nota: "", bruto: cels, erro: "" };
       colunas.forEach((k, j) => {
         if (!k) return;
         const v = cels[j] ?? "";
         if (k === "quantidade" || k === "custo_unitario") r[k] = numeroBr(v);
         else r[k] = v;
       });
+      if (isNaN(r.quantidade) && r.produto) {
+        const m = r.produto.match(/qt[d]?\.?:?\s*(\d+(?:[.,]\d+)?)/i);
+        if (m) { r.quantidade = numeroBr(m[1]); r.produto = r.produto.replace(m[0], "").replace(/\s{2,}/g, " ").trim(); }
+      }
       if (!r.sku) r.erro = "sem SKU";
       else if (!r.produto) r.erro = "sem nome do produto";
       else if (isNaN(r.quantidade)) r.erro = "quantidade inválida";
@@ -493,29 +511,83 @@
     }
     const vistos = new Set();
     linhas.forEach((r) => { if (!r.erro) { const k = r.sku.toLowerCase(); if (vistos.has(k)) r.erro = "SKU repetido nesta lista"; vistos.add(k); } });
-    return { linhas, colunas, cabecalho };
+    return linhas;
   }
 
-  let lidos = { linhas: [] };
+  // Devolve { linhas, colunas, cabecalho, inicio, amostra }. `colunasForcadas` é o
+  // mapeamento corrigido à mão (se o usuário mudou algum select); largura diferente da
+  // tabela atual é ignorada (texto mudou desde a correção) e volta a detectar sozinho.
+  function lerColado(texto, colunasForcadas) {
+    const tabela = dividirTabela(texto);
+    if (!tabela.length) return { linhas: [], colunas: [], cabecalho: false, inicio: 0, amostra: [] };
+    const det = detectarColunas(tabela);
+    const colunas = (colunasForcadas && colunasForcadas.length === det.colunas.length) ? colunasForcadas : det.colunas;
+    const linhas = montarLinhas(tabela, colunas, det.inicio);
+    return { linhas, colunas, cabecalho: det.cabecalho, inicio: det.inicio, amostra: tabela[det.inicio] || tabela[0] || [] };
+  }
 
-  function desenharPrevia() {
-    lidos = lerColado(campo("cf-colar").value);
-    const caixa = campo("cf-previa");
+  let lidos = { linhas: [], colunas: [], cabecalho: false };
+  let mapaManual = null; // mapeamento de colunas corrigido à mão nos selects (null = automático)
+
+  function celulaNota(r) {
+    return r.numero_nota ? esc(r.numero_nota) : '<small style="color:var(--cmx-texto-suave)">usa a nota acima</small>';
+  }
+
+  // Mostra o que cada coluna colada foi entendida como, com um exemplo, e deixa corrigir.
+  function desenharMapeamento() {
+    const alvo = campo("cf-mapeamento");
+    if (!lidos.colunas.length) { alvo.innerHTML = ""; return; }
+    const amostra = lidos.amostra || [];
+    alvo.innerHTML = `<small style="color:var(--cmx-texto-suave);display:block;margin:6px 0 3px">Confira o que entendi de cada coluna (campos-chave: SKU, Produto, EAN, Quantidade, Custo, Nota) — corrija se precisar:</small>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${lidos.colunas.map((k, j) => `
+        <div style="display:flex;flex-direction:column;gap:2px;min-width:100px;max-width:160px">
+          <select data-col="${j}" style="font-size:12.5px;padding:2px 4px">${OPCOES_CAMPO.map(([v, l]) => `<option value="${v}"${v === (k || "") ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
+          <small style="color:var(--cmx-texto-suave);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(amostra[j] || "")}">${esc(amostra[j] || "—")}</small>
+        </div>`).join("")}</div>`;
+  }
+  campo("cf-mapeamento").addEventListener("change", (e) => {
+    const sel = e.target.closest("select[data-col]");
+    if (!sel) return;
+    const j = Number(sel.dataset.col);
+    if (!mapaManual) mapaManual = lidos.colunas.slice();
+    mapaManual[j] = sel.value || null;
+    desenharPrevia();
+  });
+
+  function atualizarBotaoIncluir() {
     const bons = lidos.linhas.filter((r) => !r.erro);
     campo("cf-incluir-lote").disabled = bons.length === 0;
     campo("cf-incluir-lote").textContent = bons.length ? `Incluir ${bons.length}` : "Incluir";
+  }
+
+  function desenharTabelaPrevia() {
+    const caixa = campo("cf-previa");
     if (!lidos.linhas.length) { caixa.innerHTML = ""; return; }
+    const bons = lidos.linhas.filter((r) => !r.erro);
     const ruins = lidos.linhas.length - bons.length;
     const resumo = `${bons.length} produto(s) prontos para incluir` + (ruins ? ` · <span style="color:var(--cmx-rust)">${ruins} com problema (não entram)</span>` : "") + (lidos.cabecalho ? " · cabeçalho reconhecido" : "");
     const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.erro ? "ruim" : ""}">
         <td>${r.n}</td><td><b>${esc(r.sku)}</b></td><td>${esc(r.produto)}</td><td>${esc(r.gtin)}</td>
         <td>${isNaN(r.quantidade) ? "?" : esc(quantidade(r.quantidade))}</td><td>${isNaN(r.custo_unitario) ? "?" : esc(moeda(r.custo_unitario))}</td>
+        <td>${celulaNota(r)}</td>
         <td>${r.erro ? "✖ " + esc(r.erro) : "✔"}</td></tr>`).join("");
     caixa.innerHTML = `<div class="res">${resumo}</div><div class="cd-previa"><table>
-      <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>EAN</th><th>Qtd</th><th>Custo un.</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+      <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>EAN</th><th>Qtd</th><th>Custo un.</th><th>Nota</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
+  }
+
+  // Lê o que foi colado, decide/aplica o mapeamento de colunas e marca "sem número da
+  // nota" quando a linha não trouxe a própria (coluna) nem existe uma no campo fixo acima.
+  function desenharPrevia() {
+    lidos = lerColado(campo("cf-colar").value, mapaManual);
+    const notaCabecalho = campo("cf-nota").value.trim();
+    lidos.linhas.forEach((r) => { if (!r.erro && !r.numero_nota && !notaCabecalho) r.erro = "sem número da nota"; });
+    desenharMapeamento();
+    desenharTabelaPrevia();
+    atualizarBotaoIncluir();
   }
   campo("cf-colar").addEventListener("input", desenharPrevia);
-  campo("cf-limpar").addEventListener("click", () => { campo("cf-colar").value = ""; desenharPrevia(); });
+  campo("cf-nota").addEventListener("input", desenharPrevia);
+  campo("cf-limpar").addEventListener("click", () => { campo("cf-colar").value = ""; mapaManual = null; desenharPrevia(); });
 
   // Anexar planilha salva como CSV: lê o arquivo e joga o texto na caixa (que mostra a prévia).
   campo("cf-arquivo").addEventListener("change", async (e) => {
@@ -526,6 +598,7 @@
       let texto;
       try { texto = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { texto = new TextDecoder("windows-1252").decode(buf); }
       campo("cf-colar").value = texto.replace(/^﻿/, "");
+      mapaManual = null;
       desenharPrevia();
     } catch (err) {
       aviso("Não consegui ler o arquivo: " + err.message, "erro");
@@ -554,7 +627,10 @@
     carregarEmpresas();
   }
 
-  // Botão "Incluir" do modo colar: manda tudo de uma vez; o que não entrar fica na caixa pra corrigir.
+  // Botão "Incluir" do modo colar: agrupa por número da nota (a da própria linha, se
+  // veio colada numa coluna "Nota" -- senão a do campo fixo acima) e manda um lote por
+  // grupo, pra cada produto ficar registrado na nota certa. O que não entrar fica na
+  // caixa pra corrigir.
   campo("cf-incluir-lote").addEventListener("click", async () => {
     const nota = dadosDaNota();
     if (!nota.empresa) { aviso("Informe a empresa antes de incluir.", "erro"); campo("cf-empresa").focus(); return; }
@@ -562,25 +638,41 @@
     if (!bons.length) return;
     const botao = campo("cf-incluir-lote");
     botao.disabled = true;
+    const grupos = new Map(); // numero_nota efetivo -> linhas daquele grupo
+    bons.forEach((r) => {
+      const n = (r.numero_nota || nota.numero_nota || "").trim();
+      if (!grupos.has(n)) grupos.set(n, []);
+      grupos.get(n).push(r);
+    });
+    const falhasBrutas = []; // { linha: objeto da linha, motivo }
+    let totalCriados = 0;
+    const mostrarParcial = () => desenharIncluidos(falhasBrutas.map((x) => ({ linha: x.linha ? x.linha.n : "?", sku: x.linha ? x.linha.sku : "", motivo: x.motivo })));
     try {
-      const d = await api("/produtos/lote", {
-        method: "POST",
-        body: JSON.stringify(Object.assign({}, nota, { itens: bons.map((r) => ({ sku: r.sku, produto: r.produto, gtin: r.gtin, quantidade: r.quantidade, custo_unitario: r.custo_unitario })) })),
-      });
-      d.criados.forEach((p) => incluidos.push(p));
-      const falhas = d.ignorados.map((x) => Object.assign({}, x, { linha: bons[x.linha - 1] ? bons[x.linha - 1].n : x.linha }));
-      desenharIncluidos(falhas);
+      for (const [numeroNota, linhasGrupo] of grupos) {
+        const d = await api("/produtos/lote", {
+          method: "POST",
+          body: JSON.stringify({
+            empresa: nota.empresa, fornecedor: nota.fornecedor, numero_nota: numeroNota, refazer: nota.refazer,
+            itens: linhasGrupo.map((r) => ({ sku: r.sku, produto: r.produto, gtin: r.gtin, quantidade: r.quantidade, custo_unitario: r.custo_unitario })),
+          }),
+        });
+        d.criados.forEach((p) => incluidos.push(p));
+        totalCriados += d.criados.length;
+        d.ignorados.forEach((x) => falhasBrutas.push({ linha: linhasGrupo[x.linha - 1], motivo: x.motivo }));
+        mostrarParcial();
+      }
       // deixa na caixa só o que NÃO entrou (linhas com problema + as recusadas pelo servidor), pra corrigir e incluir de novo
-      const recusadas = new Set(d.ignorados.map((x) => bons[x.linha - 1]));
+      const recusadas = new Set(falhasBrutas.map((x) => x.linha));
       const ficam = lidos.linhas.filter((r) => r.erro || recusadas.has(r));
       campo("cf-colar").value = ficam.map((r) => r.bruto.join("\t")).join("\n");
       desenharPrevia();
       const refaz = nota.refazer ? " para REFAZER" : "";
-      aviso(`${d.criados.length} produto(s) incluído(s)${refaz}.` + (falhas.length ? ` ${falhas.length} não entrou(aram) — veja abaixo.` : ""), falhas.length ? "aviso" : "ok");
+      aviso(`${totalCriados} produto(s) incluído(s)${refaz}.` + (falhasBrutas.length ? ` ${falhasBrutas.length} não entrou(aram) — veja abaixo.` : ""), falhasBrutas.length ? "aviso" : "ok");
       marcaRefazer.checked = false; pintarRefazer();
       await aposIncluir();
     } catch (e) {
-      aviso("Não consegui incluir: " + e.message, "erro");
+      mostrarParcial();
+      aviso(`Inclusão interrompida: ${e.message}` + (totalCriados ? ` — ${totalCriados} produto(s) já tinham entrado antes do erro (veja "Incluídos agora").` : ""), "erro");
       desenharPrevia();
     }
   });
@@ -594,7 +686,7 @@
   function finalizar() {
     form.style.display = "none";
     incluidos.length = 0; desenharIncluidos([]);
-    campo("cf-colar").value = ""; desenharPrevia();
+    campo("cf-colar").value = ""; mapaManual = null; desenharPrevia();
     ["cf-sku", "cf-produto", "cf-gtin"].forEach((id) => { campo(id).value = ""; });
     marcaRefazer.checked = false; pintarRefazer();
   }
@@ -605,8 +697,8 @@
     e.preventDefault();
     const botao = campo("cf-salvar");
     const nota = dadosDaNota();
-    if (!nota.empresa || !campo("cf-sku").value.trim() || !campo("cf-produto").value.trim()) {
-      aviso("Preencha empresa, SKU e nome do produto.", "erro");
+    if (!nota.empresa || !campo("cf-nota").value.trim() || !campo("cf-sku").value.trim() || !campo("cf-produto").value.trim()) {
+      aviso("Preencha empresa, nota, SKU e nome do produto.", "erro");
       return;
     }
     botao.disabled = true;
