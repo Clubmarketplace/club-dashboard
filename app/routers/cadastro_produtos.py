@@ -34,6 +34,8 @@ a informação empurra, o backend só recebe. Nada aqui lê a planilha do Operad
   POST /api/cadastro/produtos/{id}/assumir -> "assumi este cadastro" (ou solta); guarda quem e quando.
   POST /api/cadastro/produtos/{id}/reabrir -> reabre um produto TRAVADO (já cadastrado), com
         motivo obrigatório. Só admin/supervisor (ver "TRAVA" abaixo).
+  POST /api/cadastro/produtos/{id}/excluir -> exclui uma solicitação PENDENTE (motivo
+        obrigatório, só admin/supervisor). Não apaga -- marca "excluida" e some das listas.
   GET  /api/cadastro/empresas            -> nomes de empresa já usados (sugestão no formulário antigo).
   GET  /api/cadastro/contas              -> contas ativas (tabela "contas", a mesma de "Contas
         conectadas") -- fonte do seletor "Conta" da solicitação manual (15/10). Em vez de digitar
@@ -124,6 +126,15 @@ def _supervisao_logado(request: Request, db: Session = Depends(get_db)) -> Usuar
     usuario = auth.usuario_atual(request, db)
     if not auth.pode_ver_produtividade(usuario, "cadastro"):
         raise HTTPException(status_code=403, detail="Acesso restrito.")
+    return usuario
+
+
+def _admin_supervisor_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
+    """Excluir solicitação (15/10): SÓ admin e supervisor -- diferente de
+    _supervisao_logado acima, aqui "gerente_setor" não entra."""
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+        raise HTTPException(status_code=403, detail="Acesso restrito a admin e supervisor.")
     return usuario
 
 
@@ -350,7 +361,9 @@ def listar_produtos_cadastro(
         if st in contagem:
             contagem[st] = total
 
-    consulta = db.query(ProdutoCadastro)
+    # Excluída (15/10) nunca aparece em nenhuma aba -- nem em "Todos" -- mas continua
+    # gravada no banco (ver rota /excluir).
+    consulta = db.query(ProdutoCadastro).filter(ProdutoCadastro.status != "excluida")
     if status != "todos":
         consulta = consulta.filter(ProdutoCadastro.status == status)
     if busca and busca.strip():
@@ -698,6 +711,51 @@ def reabrir_produto(
 
     logger.info("Produto de cadastro reaberto: id=%s por=%s motivo=%s", produto_id, usuario.nome_exibicao, motivo)
     return {"ok": True, "item": _produto_json(produto)}
+
+
+class ExcluirIn(BaseModel):
+    motivo: str
+
+
+@router.post("/api/cadastro/produtos/{produto_id}/excluir")
+def excluir_produto(
+    produto_id: int,
+    corpo: ExcluirIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_admin_supervisor_logado),  # só admin/supervisor -- ver _admin_supervisor_logado
+):
+    """
+    Exclui uma solicitação PENDENTE (15/10). Não apaga a linha -- marca
+    status="excluida" e grava quem excluiu, quando e o motivo (obrigatório,
+    mínimo 5 caracteres). Some de qualquer aba da tela (Pendentes/Cadastrados/
+    Todos), mas continua no banco pra consultar depois se precisar. Só vale
+    pra pendente: produto já cadastrado (travado) ou já excluído não entra
+    por aqui.
+    """
+    motivo = (corpo.motivo or "").strip()
+    if len(motivo) < 5:
+        raise HTTPException(status_code=422, detail="Informe o motivo da exclusão (mínimo 5 caracteres).")
+
+    produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status != "pendente":
+        raise HTTPException(status_code=409, detail="Só é possível excluir uma solicitação pendente.")
+
+    produto.status = "excluida"
+    produto.excluido_por = usuario.nome_exibicao
+    produto.excluido_em = datetime.utcnow()
+    produto.motivo_exclusao = motivo
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao excluir produto do Cadastro (id=%s)", produto_id)
+        raise HTTPException(status_code=500, detail="Erro ao excluir no servidor.")
+
+    logger.info("Produto de cadastro excluído: id=%s por=%s motivo=%s", produto_id, usuario.nome_exibicao, motivo)
+    return {"ok": True, "id": produto.id}
 
 
 class MarketplaceIn(BaseModel):
