@@ -43,6 +43,7 @@
     /* Tipo da solicitação */
     .badge.tipo-cancelamento { background:#eef1f4; color:#1b2430; }
     .badge.tipo-reputacao { background:#efeafd; color:#5a3cc4; }
+    .badge.tipo-cadastro { background:var(--cmx-leve); color:var(--cmx-atencao); }
     .filtro-tipo { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
     .filtro-tipo button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:999px; padding:7px 14px;
       font-family:inherit; font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; }
@@ -105,24 +106,26 @@
       </header>
 
   <main>
+    {% set cadastros_feitos = cadastros|selectattr("status", "equalto", "cadastrado")|list %}
     <div class="resumo">
-      <div class="item"><div class="valor" id="resumo-total">{{ solicitacoes|length }}</div><div class="rotulo">Total</div></div>
-      <div class="item"><div class="valor" id="resumo-confirmados">{{ solicitacoes|selectattr("confirmado_por")|list|length }}</div><div class="rotulo">Resolvidas</div></div>
-      <div class="item"><div class="valor" id="resumo-pendentes">{{ solicitacoes|rejectattr("confirmado_por")|list|length }}</div><div class="rotulo">Pendentes</div></div>
+      <div class="item"><div class="valor" id="resumo-total">{{ solicitacoes|length + cadastros|length }}</div><div class="rotulo">Total</div></div>
+      <div class="item"><div class="valor" id="resumo-confirmados">{{ solicitacoes|selectattr("confirmado_por")|list|length + cadastros_feitos|length }}</div><div class="rotulo">Resolvidas</div></div>
+      <div class="item"><div class="valor" id="resumo-pendentes">{{ solicitacoes|rejectattr("confirmado_por")|list|length + (cadastros|length - cadastros_feitos|length) }}</div><div class="rotulo">Pendentes</div></div>
     </div>
 
-    {% if solicitacoes %}
+    {% if solicitacoes or cadastros %}
     {# Filtro por tipo (feito aqui na tela: a lista já vem só com a conta do seller) #}
     {% set qtd_reputacao = solicitacoes|selectattr("tipo", "equalto", "reputacao")|list|length %}
     <div class="filtro-tipo" id="filtro-tipo">
-      <button type="button" data-tipo="" class="ativo">Todas ({{ solicitacoes|length }})</button>
+      <button type="button" data-tipo="" class="ativo">Todas ({{ solicitacoes|length + cadastros|length }})</button>
       <button type="button" data-tipo="cancelamento">Cancelamento ({{ solicitacoes|length - qtd_reputacao }})</button>
       <button type="button" data-tipo="reputacao">Reputação ({{ qtd_reputacao }})</button>
+      <button type="button" data-tipo="cadastro">Cadastro ({{ cadastros|length }})</button>
     </div>
     {% endif %}
 
     <div class="lista-cartao">
-      {% if solicitacoes %}
+      {% if solicitacoes or cadastros %}
       <table>
         <thead><tr><th>Data</th><th>Tipo</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
         <tbody>
@@ -139,6 +142,30 @@
               <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
               {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>
               {% elif s.protocolo == "" and s.confirmado_por %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} pelo painel do ML</b> (sem protocolo)</div>{% endif %}
+              {% else %}
+              <span class="status-pendente">Pendente</span>
+              {% endif %}
+            </div></td>
+          </tr>
+          {% endfor %}
+          {# Cadastro (15/10): mesma tabela, reaproveitando as colunas -- "Nº da venda"
+             vira o SKU e "Motivo" vira o nome do produto (ver explicação combinada
+             com o usuário antes de implementar). #}
+          {% for c in cadastros %}
+          {% set feito = c.status == "cadastrado" %}
+          <tr data-tipo="cadastro" data-confirmado="{{ '1' if feito else '0' }}">
+            <td data-rotulo="Data">{{ c.recebido_em | hora_br }}</td>
+            <td data-rotulo="Tipo"><span class="badge tipo-cadastro">Cadastro</span></td>
+            <td data-rotulo="Plataforma">
+              {% if c.ml_status != "nao_se_aplica" %}<span class="badge ml">Mercado Livre</span>{% endif %}
+              {% if c.tiktok_status != "nao_se_aplica" %}<span class="badge tiktok">TikTok</span>{% endif %}
+              {% if c.shopee_status != "nao_se_aplica" %}<span class="badge shopee">Shopee</span>{% endif %}
+            </td>
+            <td data-rotulo="SKU">{{ c.sku }}</td>
+            <td data-rotulo="Produto">{{ c.produto }}</td>
+            <td data-rotulo="Status"><div>
+              {% if feito %}
+              <span class="status-confirmado">✓ Cadastro feito{% if c.cadastrado_por %} por {{ c.cadastrado_por }}{% endif %}</span>
               {% else %}
               <span class="status-pendente">Pendente</span>
               {% endif %}
