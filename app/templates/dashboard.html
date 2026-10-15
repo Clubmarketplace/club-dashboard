@@ -114,6 +114,25 @@
     .adm-fin-card .nota { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
     .adm-fin-indisponivel { opacity:.65; }
     .adm-fin-indisponivel .valor { font-size:14px; font-weight:600; color:var(--cmx-texto-suave); }
+
+    .adm-top3 { margin-top:14px; padding-top:12px; border-top:1px dashed var(--cmx-borda); }
+    .adm-top3-cabecalho { display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+    .adm-top3-titulo { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--cmx-texto-suave); }
+    .adm-top3-toggle { display:flex; gap:4px; flex-shrink:0; }
+    .adm-btn-top3 {
+      border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
+      border-radius:14px; padding:3px 10px; font-size:11px; font-weight:600; font-family:inherit; cursor:pointer;
+    }
+    .adm-btn-top3.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
+    .adm-top3-item { display:flex; justify-content:space-between; gap:10px; font-size:12.5px; padding:3px 0; }
+    .adm-top3-item .nome { color:var(--cmx-texto); font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .adm-top3-item .valor { color:var(--cmx-texto-suave); flex-shrink:0; }
+
+    .adm-btn-filtro-ranking {
+      border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto);
+      border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer;
+    }
+    .adm-btn-filtro-ranking.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
   </style>
 </head>
 <body>
@@ -165,11 +184,31 @@
               <div class="adm-total-card">
                 <div class="titulo">Vendido hoje (todas as contas)</div>
                 <div class="valor" id="adm-hoje-venda">R$ 0,00</div>
+                <div class="adm-top3">
+                  <div class="adm-top3-cabecalho">
+                    <span class="adm-top3-titulo">Top 3</span>
+                    <div class="adm-top3-toggle" data-alvo="top3-hoje-lista">
+                      <button type="button" class="adm-btn-top3 ativo" data-criterio="hoje">Hoje</button>
+                      <button type="button" class="adm-btn-top3" data-criterio="mes">Mês</button>
+                    </div>
+                  </div>
+                  <div id="adm-top3-hoje-lista"></div>
+                </div>
               </div>
               <div class="adm-total-card">
                 <div class="titulo">Vendido no mês (todas as contas)</div>
                 <div class="valor" id="adm-mes-venda">R$ 0,00</div>
                 <div class="nota" id="adm-qtd-contas-nota">0 contas ativas</div>
+                <div class="adm-top3">
+                  <div class="adm-top3-cabecalho">
+                    <span class="adm-top3-titulo">Top 3</span>
+                    <div class="adm-top3-toggle" data-alvo="top3-mes-lista">
+                      <button type="button" class="adm-btn-top3" data-criterio="hoje">Hoje</button>
+                      <button type="button" class="adm-btn-top3 ativo" data-criterio="mes">Mês</button>
+                    </div>
+                  </div>
+                  <div id="adm-top3-mes-lista"></div>
+                </div>
               </div>
             </div>
 
@@ -200,8 +239,9 @@
               <p class="sub">Produtos novos chegados pelo Operador Logístico</p>
               <div class="adm-setor-destaque" id="adm-cad-feitos">0</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">cadastrados no mês</div>
+              <div class="adm-setor-linha"><span>Chegou hoje</span><span class="r" id="adm-cad-chegou-hoje">0 item(ns) de 0 empresa(s)</span></div>
+              <div class="adm-setor-linha"><span>Feito hoje</span><span class="r" id="adm-cad-hoje">0 feito(s)</span></div>
               <div class="adm-setor-linha"><span>Quem fez mais (mês)</span><span class="r" id="adm-cad-top">--</span></div>
-              <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-cad-hoje">0 feito(s)</span></div>
               <div class="adm-setor-linha"><span>O que falta (fila agora)</span><span class="r" id="adm-cad-falta">0 pendente(s)</span></div>
               <button type="button" class="adm-ver-ranking" data-alvo="cadastro">Ver ranking completo do mês ▾</button>
               <div class="adm-ranking-lista" id="adm-cadastro-ranking" style="display:none;"></div>
@@ -242,8 +282,6 @@
               <div class="adm-setor-destaque" id="adm-qtd-contas">0</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">contas ativas</div>
               <div class="adm-setor-linha"><span>Sem venda há 7+ dias</span><span class="r" id="adm-contas-sem-venda">0</span></div>
-              <div class="adm-setor-linha"><span>Maior venda hoje</span><span class="r" id="adm-maior-venda-hoje">--</span></div>
-              <div class="adm-setor-linha"><span>Maior venda no mês</span><span class="r" id="adm-maior-venda-mes">--</span></div>
               <div class="adm-barra-item" style="padding-top:12px;">
                 <div class="adm-barra-cabecalho">
                   <span class="adm-barra-nome">Anúncios ativos</span>
@@ -304,9 +342,17 @@
           </div>
 
           <div class="adm-cartao" style="margin-top:28px;">
-            <h2>Ranking de contas</h2>
-            <p class="sub">Quem mais vendeu no mês</p>
-            <div class="adm-grafico-wrap">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+              <div>
+                <h2 style="margin-bottom:0;">Ranking de contas</h2>
+                <p class="sub" id="adm-ranking-sub" style="margin-bottom:0;">Quem mais vendeu no mês</p>
+              </div>
+              <div class="adm-filtro-evolucao">
+                <button type="button" class="adm-btn-filtro-ranking" data-criterio="hoje">Hoje</button>
+                <button type="button" class="adm-btn-filtro-ranking ativo" data-criterio="mes">No mês</button>
+              </div>
+            </div>
+            <div class="adm-grafico-wrap" style="margin-top:14px;">
               <table class="adm-tabela">
                 <thead><tr><th>Conta</th><th class="adm-col-num">Hoje</th><th class="adm-col-num">No mês</th><th class="adm-col-num">Pedidos (mês)</th></tr></thead>
                 <tbody id="adm-ranking-corpo"></tbody>
@@ -402,6 +448,7 @@
       // pendente AGORA (sem recorte de período -- é o "o que falta" real).
       document.getElementById("adm-cad-feitos").textContent = cadMes.feitos || 0;
       document.getElementById("adm-cad-top").textContent = cadMes.top ? cadMes.top.nome + " (" + cadMes.top.quantidade + ")" : "ninguém ainda";
+      document.getElementById("adm-cad-chegou-hoje").textContent = (cadHoje.total || 0) + " item(ns) de " + (cadHoje.empresas || 0) + " empresa(s)";
       document.getElementById("adm-cad-hoje").textContent = (cadHoje.feitos || 0) + " feito(s)";
       document.getElementById("adm-cad-falta").textContent = (cadBacklog.pendentes || 0) + " pendente(s)";
       renderizarRanking("adm-cadastro-ranking", cadMes.ranking);
@@ -412,12 +459,8 @@
       document.getElementById("adm-notas-valor-mes").textContent = formatarReais(notasMes.valor_total);
       document.getElementById("adm-notas-hoje").textContent = (notasHoje.notas || 0) + " nota(s)";
 
-      // Contas conectadas -- extras (sem venda há 7+ dias, maior venda).
+      // Contas conectadas -- extras (sem venda há 7+ dias).
       document.getElementById("adm-contas-sem-venda").textContent = contasExtra.sem_venda_7d || 0;
-      const mvHoje = contasExtra.maior_venda_hoje;
-      document.getElementById("adm-maior-venda-hoje").textContent = mvHoje ? formatarReais(mvHoje.valor) + " (" + mvHoje.conta + ")" : "--";
-      const mvMes = contasExtra.maior_venda_mes;
-      document.getElementById("adm-maior-venda-mes").textContent = mvMes ? formatarReais(mvMes.valor) + " (" + mvMes.conta + ")" : "--";
 
       // Financeiro por setor -- só número real (ver nota do card de
       // Cancelamento, que fica marcado como indisponível de propósito).
@@ -475,12 +518,14 @@
       document.getElementById("adm-cancel-mes-setor-top").textContent = caMes.top ? caMes.top.nome + " (" + caMes.top.quantidade + ")" : "ninguém ainda";
       renderizarRanking("adm-cancelamentos-ranking", caMes.ranking);
 
-      // Ranking
-      const corpo = document.getElementById("adm-ranking-corpo");
-      corpo.innerHTML = (d.contas || []).map(c =>
-        "<tr><td>" + c.apelido + "</td><td class='adm-col-num'>" + formatarReais(c.vendido_hoje) +
-        "</td><td class='adm-col-num'>" + formatarReais(c.vendido_mes) + "</td><td class='adm-col-num'>" + c.pedidos_mes + "</td></tr>"
-      ).join("") || "<tr><td colspan='4' class='adm-vazio'>Nenhuma conta ativa.</td></tr>";
+      // Ranking + Top 3 -- guarda a lista completa (já vem com hoje/mês por
+      // conta) pra poder trocar o critério (Hoje/No mês) sem buscar de novo.
+      window._admContasDados = d.contas || [];
+      document.querySelectorAll(".adm-top3-toggle").forEach(function (grupo) {
+        const ativo = grupo.querySelector(".adm-btn-top3.ativo");
+        renderizarTop3("adm-" + grupo.dataset.alvo, ativo ? ativo.dataset.criterio : "mes");
+      });
+      renderizarRankingContas(document.querySelector(".adm-btn-filtro-ranking.ativo").dataset.criterio);
     } catch (e) {
       console.error("Erro ao carregar o dashboard do admin:", e);
       document.getElementById("adm-vazio").style.display = "block";
@@ -500,6 +545,56 @@
       "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)</span></li>"
     ).join("") + "</ol>";
   }
+
+  // Top 3 contas -- aparece dentro dos cards "Vendido hoje"/"Vendido no
+  // mês", cada um com seu próprio toggle Hoje/Mês (independente um do
+  // outro), calculado em cima da mesma lista de contas que já veio da API
+  // (sem buscar de novo).
+  function renderizarTop3(idAlvo, criterio) {
+    const contas = window._admContasDados || [];
+    const campo = criterio === "hoje" ? "vendido_hoje" : "vendido_mes";
+    const lista = contas.slice().sort(function (a, b) { return (b[campo] || 0) - (a[campo] || 0); }).slice(0, 3);
+    const el = document.getElementById(idAlvo);
+    if (!lista.length) { el.innerHTML = '<p class="sub" style="margin:0;">Sem venda ainda.</p>'; return; }
+    el.innerHTML = lista.map(function (c, i) {
+      return '<div class="adm-top3-item"><span class="nome">' + (i + 1) + ". " + c.apelido + '</span><span class="valor">' + formatarReais(c[campo]) + "</span></div>";
+    }).join("");
+  }
+
+  document.querySelectorAll(".adm-top3-toggle").forEach(function (grupo) {
+    const alvo = "adm-" + grupo.dataset.alvo;
+    grupo.querySelectorAll(".adm-btn-top3").forEach(function (botao) {
+      botao.addEventListener("click", function () {
+        grupo.querySelectorAll(".adm-btn-top3").forEach(function (b) { b.classList.remove("ativo"); });
+        botao.classList.add("ativo");
+        renderizarTop3(alvo, botao.dataset.criterio);
+      });
+    });
+  });
+
+  // Tabela "Ranking de contas" completa -- reordena a mesma lista pelo
+  // critério escolhido (Hoje ou No mês), sem precisar buscar de novo.
+  function renderizarRankingContas(criterio) {
+    const contas = window._admContasDados || [];
+    const campo = criterio === "hoje" ? "vendido_hoje" : "vendido_mes";
+    const ordenado = contas.slice().sort(function (a, b) { return (b[campo] || 0) - (a[campo] || 0); });
+    const corpo = document.getElementById("adm-ranking-corpo");
+    corpo.innerHTML = ordenado.map(function (c) {
+      return (
+        "<tr><td>" + c.apelido + "</td><td class='adm-col-num'>" + formatarReais(c.vendido_hoje) +
+        "</td><td class='adm-col-num'>" + formatarReais(c.vendido_mes) + "</td><td class='adm-col-num'>" + c.pedidos_mes + "</td></tr>"
+      );
+    }).join("") || "<tr><td colspan='4' class='adm-vazio'>Nenhuma conta ativa.</td></tr>";
+    document.getElementById("adm-ranking-sub").textContent = criterio === "hoje" ? "Quem mais vendeu hoje" : "Quem mais vendeu no mês (até hoje)";
+  }
+
+  document.querySelectorAll(".adm-btn-filtro-ranking").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      document.querySelectorAll(".adm-btn-filtro-ranking").forEach(function (b) { b.classList.remove("ativo"); });
+      botao.classList.add("ativo");
+      renderizarRankingContas(botao.dataset.criterio);
+    });
+  });
 
   document.querySelectorAll(".adm-ver-ranking").forEach(function (botao) {
     botao.addEventListener("click", function () {
