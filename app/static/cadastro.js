@@ -429,25 +429,6 @@
     return linhas.map((l) => l.map((x) => x.trim())).filter((l) => l.some((x) => x !== ""));
   }
 
-  function semAcento(x) { return String(x || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim(); }
-
-  const CABECALHOS = {
-    sku: ["sku", "codigo", "cod", "ref", "referencia", "cod produto", "codigo produto", "codigo do produto"],
-    produto: ["produto", "descricao", "nome", "item", "descricao do produto", "nome do produto"],
-    gtin: ["ean", "gtin", "ean/gtin", "codigo de barras", "cod barras", "barras"],
-    quantidade: ["qtd", "qtde", "quantidade", "quant", "qtd.", "qtde."],
-    custo_unitario: ["custo", "custo un", "custo un.", "custo unitario", "custo unit", "valor unit", "valor unitario", "preco", "preco unitario", "vl unit"],
-    // 14/10 (2): a nota também pode vir como coluna do próprio texto colado -- cada
-    // linha com a sua -- em vez de só o campo fixo acima da caixa de colar.
-    numero_nota: ["nota", "numero da nota", "numero nota", "n da nota", "n nota", "no nota", "no da nota", "nf", "numero da nf", "nota fiscal", "num nota"],
-  };
-
-  function campoDoCabecalho(txt) {
-    const n = semAcento(txt);
-    for (const [k, lista] of Object.entries(CABECALHOS)) if (lista.includes(n)) return k;
-    return null;
-  }
-
   // "1.234,50" -> 1234.5 ; "R$ 12,5" -> 12.5 ; "1.234" -> 1234 ; "12.5" -> 12.5
   function numeroBr(x) {
     let v = String(x ?? "").replace(/R\$|\s/g, "");
@@ -458,29 +439,21 @@
     return isFinite(n) ? n : NaN;
   }
 
-  const ORDEM_PADRAO = {
-    2: ["sku", "produto"],
-    3: ["sku", "produto", "quantidade"],
-    4: ["sku", "produto", "quantidade", "custo_unitario"],
-    5: ["sku", "produto", "gtin", "quantidade", "custo_unitario"],
-    6: ["sku", "produto", "gtin", "quantidade", "custo_unitario", "numero_nota"],
-  };
-
   // Opções do mapeamento de colunas (mostrado depois de colar, pra conferir/corrigir).
   const OPCOES_CAMPO = [
     ["", "Ignorar"], ["sku", "SKU"], ["produto", "Produto"], ["gtin", "EAN"],
     ["quantidade", "Quantidade"], ["custo_unitario", "Custo un."], ["numero_nota", "Nota"],
   ];
 
-  // Decide as colunas automaticamente: usa cabeçalho se reconhecer >= 2 campos (com SKU);
-  // senão, chuta pela posição (ORDEM_PADRAO) de acordo com a largura da tabela.
+  // Decide as colunas: NÃO tenta identificar nada sozinho -- nem por posição, nem por
+  // nome de cabeçalho. Planilhas reais variam demais (colunas extras, em branco, fora
+  // de ordem, cabeçalho ausente ou com nomes diferentes) e um palpite errado confundia
+  // mais do que ajudava. Todas as colunas começam como "Ignorar"; a pessoa mapeia cada
+  // uma no mapeamento mostrado abaixo da caixa de colar (o guia de campos acima da
+  // caixa é só informativo, não alimenta nenhuma lógica).
   function detectarColunas(tabela) {
-    const mapeadas = tabela[0].map(campoDoCabecalho);
-    if (mapeadas.filter(Boolean).length >= 2 && mapeadas.includes("sku")) {
-      return { colunas: mapeadas, inicio: 1, cabecalho: true };
-    }
-    const largura = Math.min(6, Math.max(2, Math.max(...tabela.map((l) => l.length))));
-    return { colunas: (ORDEM_PADRAO[largura] || ORDEM_PADRAO[6]).slice(), inicio: 0, cabecalho: false };
+    const largura = Math.max(2, Math.max(...tabela.map((l) => l.length)));
+    return { colunas: new Array(largura).fill(null), inicio: 0, cabecalho: false };
   }
 
   // Monta as linhas a partir da tabela já dividida e do mapeamento de colunas decidido
@@ -565,7 +538,7 @@
     if (!lidos.linhas.length) { caixa.innerHTML = ""; return; }
     const bons = lidos.linhas.filter((r) => !r.erro);
     const ruins = lidos.linhas.length - bons.length;
-    const resumo = `${bons.length} produto(s) prontos para incluir` + (ruins ? ` · <span style="color:var(--cmx-rust)">${ruins} com problema (não entram)</span>` : "") + (lidos.cabecalho ? " · cabeçalho reconhecido" : "");
+    const resumo = `${bons.length} produto(s) prontos para incluir` + (ruins ? ` · <span style="color:var(--cmx-rust)">${ruins} com problema (não entram)</span>` : "");
     const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.erro ? "ruim" : ""}">
         <td>${r.n}</td><td><b>${esc(r.sku)}</b></td><td>${esc(r.produto)}</td><td>${esc(r.gtin)}</td>
         <td>${isNaN(r.quantidade) ? "?" : esc(quantidade(r.quantidade))}</td><td>${isNaN(r.custo_unitario) ? "?" : esc(moeda(r.custo_unitario))}</td>
