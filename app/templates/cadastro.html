@@ -52,6 +52,8 @@
     .cd-quem-nome { color:var(--cmx-texto); font-weight:700; }
     .cd-ok { display:inline-block; font-size:12.5px; font-weight:700; color:var(--cmx-verde); background:var(--cmx-verde-fundo); border-radius:999px; padding:3px 11px; margin-bottom:6px; }
     .cd-mini { height:26px; padding:0 9px; font-size:12px; margin-top:6px; }
+    .cd-btn-excluir { color:var(--cmx-rust); border-color:var(--cmx-rust); margin-left:6px; }
+    .cd-btn-excluir:hover { background:var(--cmx-rust-fundo); }
     .cd-selo-manual { display:inline-block; font-size:11px; font-weight:700; color:var(--cmx-ambar); background:var(--cmx-ambar-fundo); border-radius:6px; padding:1px 6px; margin-top:4px; }
     .cd-select { height:34px; border:1px solid var(--cmx-borda); border-radius:9px; padding:0 8px; font:600 13px Inter,sans-serif; background:var(--cmx-papel); color:var(--cmx-texto); }
     .cd-form { display:none; background:var(--cmx-papel); border:1px solid var(--cmx-borda); border-radius:14px; padding:16px; margin:0 0 16px; }
@@ -171,6 +173,10 @@
             <option value="meus">Só os meus</option>
             <option value="ninguem">Sem responsável</option>
           </select>
+          <label for="cd-conta" style="position:absolute;left:-9999px">Conta</label>
+          <select id="cd-conta" class="cd-select" title="Filtrar por conta (mesma lista de Contas conectadas)">
+            <option value="">Conta: todas</option>
+          </select>
           <button class="cd-btn" id="cd-atualizar" type="button">↻ Atualizar</button>
           <button class="cd-btn cd-btn-ok" id="cd-novo" type="button">+ Incluir produto</button>
           {% if pode_ver_produtividade %}<a class="cd-btn" href="/cadastro/produtividade" style="display:inline-flex;align-items:center;text-decoration:none;">📊 Produtividade</a>{% endif %}
@@ -248,7 +254,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=9"></script>
+  <script src="/static/cadastro.js?v=11"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
