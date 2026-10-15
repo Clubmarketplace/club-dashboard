@@ -384,33 +384,33 @@
 
   document.getElementById("cd-atualizar").addEventListener("click", () => carregar());
 
-  // ------------------------------------------------------- inclusão manual
+  // ------------------------------------------------------- solicitação manual (15/10)
+  // Uma linha por produto, numa tabela editável (como planilha): digita célula por
+  // célula ou cola um trecho copiado de uma planilha de verdade (preenche várias
+  // linhas/colunas de uma vez a partir da célula clicada). Nada é mandado pro servidor
+  // enquanto preenche -- só ao clicar em "Finalizar solicitação", que manda tudo numa
+  // chamada só pro /produtos/lote. Fornecedor e Nota são por linha (cada produto pode
+  // ter o seu), não mais um campo único lá em cima.
   const form = document.getElementById("cd-form");
   const campo = (id) => document.getElementById(id);
   const marcaRefazer = campo("cf-refazer");
-  const incluidos = []; // produtos incluídos desde que o formulário foi aberto (a lista "Incluídos agora")
+  const incluidos = []; // produtos incluídos na última chamada bem-sucedida (lista "Incluídos agora")
 
-  async function carregarEmpresas() {
+  async function carregarContas() {
     try {
-      const d = await api("/empresas");
-      campo("cf-empresas").innerHTML = d.empresas.map((n) => `<option value="${esc(n)}"></option>`).join("");
-    } catch (e) { /* a lista de sugestões é só conforto */ }
+      const d = await api("/contas");
+      const sel = campo("cf-conta");
+      const atual = sel.value;
+      sel.innerHTML = '<option value="">Selecione a conta…</option>' + d.contas.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      if (atual && d.contas.includes(atual)) sel.value = atual;
+    } catch (e) { /* select fica só com o placeholder; dá pra tentar de novo reabrindo o formulário */ }
   }
 
   function pintarRefazer() { campo("cf-refazer-btn").classList.toggle("ligado", marcaRefazer.checked); }
   marcaRefazer.addEventListener("change", pintarRefazer);
 
-  function modo(qual) {
-    form.classList.toggle("modo-colar", qual === "colar");
-    form.classList.toggle("modo-um", qual === "um");
-    campo("cf-aba-colar").classList.toggle("ativo", qual === "colar");
-    campo("cf-aba-um").classList.toggle("ativo", qual === "um");
-  }
-  campo("cf-aba-colar").addEventListener("click", () => modo("colar"));
-  campo("cf-aba-um").addEventListener("click", () => { modo("um"); campo("cf-sku").focus(); });
-
-  // ---------- ler o que foi colado da planilha ----------
-  // Divide em linhas e colunas respeitando aspas (descrição com vírgula/quebra de linha dentro de "...").
+  // Divide em linhas e colunas respeitando aspas (descrição com vírgula/quebra de linha
+  // dentro de "..."). Usado tanto pro CSV anexado quanto pro texto colado numa célula.
   function dividirTabela(texto) {
     const t = String(texto || "").replace(/\r\n?/g, "\n");
     const delim = t.includes("\t") ? "\t" : (t.includes(";") ? ";" : ",");
@@ -438,137 +438,81 @@
     const n = Number(v);
     return isFinite(n) ? n : NaN;
   }
+  // Número que não dá pra entender vira 0, nunca NaN -- um NaN no JSON vira `null` e
+  // derrubaria o lote inteiro no servidor (erro de tipo), em vez de só essa linha.
+  function numeroOuZero(x) { const n = numeroBr(x); return isNaN(n) ? 0 : n; }
 
-  // Opções do mapeamento de colunas (mostrado depois de colar, pra conferir/corrigir).
-  const OPCOES_CAMPO = [
-    ["", "Ignorar"], ["sku", "SKU"], ["produto", "Produto"], ["gtin", "EAN"],
-    ["quantidade", "Quantidade"], ["custo_unitario", "Custo un."], ["numero_nota", "Nota"],
-  ];
+  // Ordem das colunas da grade -- mesma ordem do cabeçalho na tela.
+  const CAMPOS_GRADE = ["sku", "produto", "gtin", "quantidade", "custo_unitario", "fornecedor", "numero_nota"];
 
-  // Decide as colunas: NÃO tenta identificar nada sozinho -- nem por posição, nem por
-  // nome de cabeçalho. Planilhas reais variam demais (colunas extras, em branco, fora
-  // de ordem, cabeçalho ausente ou com nomes diferentes) e um palpite errado confundia
-  // mais do que ajudava. Todas as colunas começam como "Ignorar"; a pessoa mapeia cada
-  // uma no mapeamento mostrado abaixo da caixa de colar (o guia de campos acima da
-  // caixa é só informativo, não alimenta nenhuma lógica).
-  function detectarColunas(tabela) {
-    const largura = Math.max(2, Math.max(...tabela.map((l) => l.length)));
-    return { colunas: new Array(largura).fill(null), inicio: 0, cabecalho: false };
+  function linhaVazia() {
+    return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "" };
+  }
+  function linhaTemConteudo(r) { return CAMPOS_GRADE.some((c) => String(r[c] || "").trim() !== ""); }
+  // Mínimo pra uma linha "contar" como produto de verdade (habilita o Finalizar). O
+  // servidor é quem decide de fato se aceita -- isto é só pra não deixar finalizar uma
+  // grade totalmente vazia.
+  function linhaPreenchida(r) { return !!(String(r.sku || "").trim() && String(r.produto || "").trim()); }
+
+  let linhasGrade = [linhaVazia(), linhaVazia(), linhaVazia()];
+
+  function desenharGrade() {
+    campo("cf-grade-corpo").innerHTML = linhasGrade.map((r, i) => `
+      <div class="cd-grade-linha" data-linha="${i}">
+        <input data-campo="sku" value="${esc(r.sku)}" aria-label="SKU" />
+        <input data-campo="produto" value="${esc(r.produto)}" aria-label="Produto" />
+        <input data-campo="gtin" value="${esc(r.gtin)}" aria-label="EAN" />
+        <input data-campo="quantidade" value="${esc(r.quantidade)}" aria-label="Quantidade" />
+        <input data-campo="custo_unitario" value="${esc(r.custo_unitario)}" aria-label="Custo unitário" />
+        <input data-campo="fornecedor" value="${esc(r.fornecedor)}" aria-label="Fornecedor" />
+        <input data-campo="numero_nota" value="${esc(r.numero_nota)}" aria-label="Nota" />
+        <button type="button" class="cd-grade-remover" data-remover="${i}" title="Remover linha" aria-label="Remover linha">✕</button>
+      </div>`).join("");
+    atualizarBotaoFinalizar();
   }
 
-  // Monta as linhas a partir da tabela já dividida e do mapeamento de colunas decidido.
-  // Extrai também quantidade escrita junto com o nome do produto (ex.: "Camiseta P qt:5")
-  // quando a coluna de quantidade não bate. NÃO bloqueia nada aqui -- número que não dá
-  // pra entender vira 0 (nunca NaN, pra nunca travar o envio) e `aviso` é só uma dica
-  // visual na prévia; quem decide de verdade se uma linha entra é o servidor (exige
-  // SKU e nome do produto, não aceita valor negativo) ao tentar incluir.
-  function montarLinhas(tabela, colunas, inicio) {
-    const linhas = [];
-    for (let i = inicio; i < tabela.length; i++) {
-      const cels = tabela[i];
-      const r = { n: linhas.length + 1, sku: "", produto: "", gtin: "", quantidade: 0, custo_unitario: 0, numero_nota: "", bruto: cels, aviso: "" };
-      let qtdBruta = null; // null = coluna de quantidade não foi mapeada (não tenta extrair do texto)
-      colunas.forEach((k, j) => {
-        if (!k) return;
-        const v = cels[j] ?? "";
-        if (k === "custo_unitario") { const n = numeroBr(v); r.custo_unitario = isNaN(n) ? 0 : n; }
-        else if (k === "quantidade") qtdBruta = numeroBr(v);
-        else r[k] = v;
-      });
-      if (qtdBruta !== null && isNaN(qtdBruta) && r.produto) {
-        // coluna de quantidade mapeada, mas o valor não é número -- tenta achar "qt:5" no produto
-        const m = r.produto.match(/qt[d]?\.?:?\s*(\d+(?:[.,]\d+)?)/i);
-        if (m) { qtdBruta = numeroBr(m[1]); r.produto = r.produto.replace(m[0], "").replace(/\s{2,}/g, " ").trim(); }
-      }
-      r.quantidade = (qtdBruta === null || isNaN(qtdBruta)) ? 0 : qtdBruta;
-      if (!r.sku || !r.produto) r.aviso = "sem SKU/produto — o servidor vai recusar essa linha";
-      else if (r.quantidade < 0 || r.custo_unitario < 0) r.aviso = "valor negativo — o servidor vai recusar essa linha";
-      linhas.push(r);
-    }
-    return linhas;
-  }
-
-  // Devolve { linhas, colunas, cabecalho, inicio, amostra }. `colunasForcadas` é o
-  // mapeamento corrigido à mão (se o usuário mudou algum select); largura diferente da
-  // tabela atual é ignorada (texto mudou desde a correção) e volta a detectar sozinho.
-  function lerColado(texto, colunasForcadas) {
+  // Espalha um trecho colado (texto com várias linhas/colunas) a partir da célula onde
+  // o Ctrl+V foi feito -- mesmo comportamento de colar numa planilha de verdade. Cria
+  // linhas novas no fim se o trecho colado tiver mais linhas do que a grade atual.
+  function espalharColado(linhaInicio, colInicio, texto) {
     const tabela = dividirTabela(texto);
-    if (!tabela.length) return { linhas: [], colunas: [], cabecalho: false, inicio: 0, amostra: [] };
-    const det = detectarColunas(tabela);
-    const colunas = (colunasForcadas && colunasForcadas.length === det.colunas.length) ? colunasForcadas : det.colunas;
-    const linhas = montarLinhas(tabela, colunas, det.inicio);
-    return { linhas, colunas, cabecalho: det.cabecalho, inicio: det.inicio, amostra: tabela[det.inicio] || tabela[0] || [] };
+    if (!tabela.length) return;
+    tabela.forEach((cels, r) => {
+      const alvo = linhaInicio + r;
+      while (alvo >= linhasGrade.length) linhasGrade.push(linhaVazia());
+      cels.forEach((valor, c) => {
+        const col = colInicio + c;
+        if (col < CAMPOS_GRADE.length) linhasGrade[alvo][CAMPOS_GRADE[col]] = valor;
+      });
+    });
   }
 
-  let lidos = { linhas: [], colunas: [], cabecalho: false };
-  let mapaManual = null; // mapeamento de colunas corrigido à mão nos selects (null = automático)
-
-  function celulaNota(r) {
-    return r.numero_nota ? esc(r.numero_nota) : '<small style="color:var(--cmx-texto-suave)">usa a nota acima</small>';
-  }
-
-  // Mostra o que cada coluna colada foi entendida como, com um exemplo, e deixa corrigir.
-  function desenharMapeamento() {
-    const alvo = campo("cf-mapeamento");
-    if (!lidos.colunas.length) { alvo.innerHTML = ""; return; }
-    const amostra = lidos.amostra || [];
-    alvo.innerHTML = `<small style="color:var(--cmx-texto-suave);display:block;margin:6px 0 3px">Confira o que entendi de cada coluna (campos-chave: SKU, Produto, EAN, Quantidade, Custo, Nota) — corrija se precisar:</small>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px">${lidos.colunas.map((k, j) => `
-        <div style="display:flex;flex-direction:column;gap:2px;min-width:100px;max-width:160px">
-          <select data-col="${j}" style="font-size:12.5px;padding:2px 4px">${OPCOES_CAMPO.map(([v, l]) => `<option value="${v}"${v === (k || "") ? " selected" : ""}>${esc(l)}</option>`).join("")}</select>
-          <small style="color:var(--cmx-texto-suave);font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(amostra[j] || "")}">${esc(amostra[j] || "—")}</small>
-        </div>`).join("")}</div>`;
-  }
-  campo("cf-mapeamento").addEventListener("change", (e) => {
-    const sel = e.target.closest("select[data-col]");
-    if (!sel) return;
-    const j = Number(sel.dataset.col);
-    if (!mapaManual) mapaManual = lidos.colunas.slice();
-    mapaManual[j] = sel.value || null;
-    desenharPrevia();
+  campo("cf-grade-corpo").addEventListener("input", (e) => {
+    const alvo = e.target.closest("input[data-campo]");
+    if (!alvo) return;
+    linhasGrade[Number(alvo.closest("[data-linha]").dataset.linha)][alvo.dataset.campo] = alvo.value;
+    atualizarBotaoFinalizar();
   });
+  campo("cf-grade-corpo").addEventListener("paste", (e) => {
+    const alvo = e.target.closest("input[data-campo]");
+    if (!alvo) return;
+    const texto = (e.clipboardData || window.clipboardData).getData("text");
+    if (!texto) return;
+    e.preventDefault();
+    espalharColado(Number(alvo.closest("[data-linha]").dataset.linha), CAMPOS_GRADE.indexOf(alvo.dataset.campo), texto);
+    desenharGrade();
+  });
+  campo("cf-grade-corpo").addEventListener("click", (e) => {
+    const rem = e.target.closest("[data-remover]");
+    if (!rem) return;
+    linhasGrade.splice(Number(rem.dataset.remover), 1);
+    if (!linhasGrade.length) linhasGrade.push(linhaVazia());
+    desenharGrade();
+  });
+  campo("cf-adicionar-linha").addEventListener("click", () => { linhasGrade.push(linhaVazia()); desenharGrade(); });
 
-  // O único travamento pra habilitar "Incluir" é ter algo colado + Empresa + Nota
-  // preenchidos ali em cima -- não depende mais de cada linha estar "certa". O que o
-  // servidor recusar (SKU/produto faltando, valor negativo) volta como "não entrou",
-  // igual já acontecia, só que sem bloquear o resto do lote antes de tentar.
-  function pronto() {
-    return campo("cf-colar").value.trim() !== "" && campo("cf-empresa").value.trim() !== "" && campo("cf-nota").value.trim() !== "";
-  }
-
-  function atualizarBotaoIncluir() {
-    campo("cf-incluir-lote").disabled = !pronto();
-    campo("cf-incluir-lote").textContent = lidos.linhas.length ? `Incluir ${lidos.linhas.length}` : "Incluir";
-  }
-
-  function desenharTabelaPrevia() {
-    const caixa = campo("cf-previa");
-    if (!lidos.linhas.length) { caixa.innerHTML = ""; return; }
-    const avisos = lidos.linhas.filter((r) => r.aviso).length;
-    const resumo = `${lidos.linhas.length} linha(s) lida(s)` + (avisos ? ` · <span style="color:var(--cmx-rust)">${avisos} com aviso — confira antes de incluir</span>` : "");
-    const linhas = lidos.linhas.slice(0, 200).map((r) => `<tr class="${r.aviso ? "ruim" : ""}">
-        <td>${r.n}</td><td><b>${esc(r.sku)}</b></td><td>${esc(r.produto)}</td><td>${esc(r.gtin)}</td>
-        <td>${esc(quantidade(r.quantidade))}</td><td>${esc(moeda(r.custo_unitario))}</td>
-        <td>${celulaNota(r)}</td>
-        <td>${r.aviso ? "⚠ " + esc(r.aviso) : "✔"}</td></tr>`).join("");
-    caixa.innerHTML = `<div class="res">${resumo}</div><div class="cd-previa"><table>
-      <thead><tr><th>#</th><th>SKU</th><th>Produto</th><th>EAN</th><th>Qtd</th><th>Custo un.</th><th>Nota</th><th></th></tr></thead><tbody>${linhas}</tbody></table></div>`;
-  }
-
-  // Lê o que foi colado e aplica o mapeamento de colunas (automático = tudo "Ignorar",
-  // ou corrigido à mão nos selects).
-  function desenharPrevia() {
-    lidos = lerColado(campo("cf-colar").value, mapaManual);
-    desenharMapeamento();
-    desenharTabelaPrevia();
-    atualizarBotaoIncluir();
-  }
-  campo("cf-colar").addEventListener("input", desenharPrevia);
-  campo("cf-nota").addEventListener("input", atualizarBotaoIncluir);
-  campo("cf-empresa").addEventListener("input", atualizarBotaoIncluir);
-  campo("cf-limpar").addEventListener("click", () => { campo("cf-colar").value = ""; mapaManual = null; desenharPrevia(); });
-
-  // Anexar planilha salva como CSV: lê o arquivo e joga o texto na caixa (que mostra a prévia).
+  // Anexar planilha salva como CSV: lê o arquivo e substitui a grade inteira por ele
+  // (mesma ordem de colunas do cabeçalho: SKU, Produto, EAN, Qtd., Custo, Fornecedor, Nota).
   campo("cf-arquivo").addEventListener("change", async (e) => {
     const arq = e.target.files && e.target.files[0];
     if (!arq) return;
@@ -576,14 +520,32 @@
       const buf = await arq.arrayBuffer();
       let texto;
       try { texto = new TextDecoder("utf-8", { fatal: true }).decode(buf); } catch (err) { texto = new TextDecoder("windows-1252").decode(buf); }
-      campo("cf-colar").value = texto.replace(/^﻿/, "");
-      mapaManual = null;
-      desenharPrevia();
+      const tabela = dividirTabela(texto.replace(/^﻿/, ""));
+      linhasGrade = tabela.length
+        ? tabela.map((cels) => { const r = linhaVazia(); CAMPOS_GRADE.forEach((c, i) => { r[c] = cels[i] || ""; }); return r; })
+        : [linhaVazia(), linhaVazia(), linhaVazia()];
+      desenharGrade();
     } catch (err) {
       aviso("Não consegui ler o arquivo: " + err.message, "erro");
     }
     e.target.value = "";
   });
+
+  // O que falta pra habilitar "Finalizar solicitação": Conta e pelo menos 1 produto com
+  // SKU e nome. Não depende da grade inteira estar "certa" -- o que o servidor recusar
+  // (SKU/produto faltando, valor negativo) volta em `ignorados`, sem travar o resto.
+  function faltando() {
+    const f = [];
+    if (!campo("cf-conta").value.trim()) f.push("conta");
+    if (!linhasGrade.some(linhaPreenchida)) f.push("pelo menos 1 produto (SKU e nome)");
+    return f;
+  }
+  function atualizarBotaoFinalizar() {
+    const f = faltando();
+    campo("cf-finalizar").disabled = f.length > 0;
+    campo("cf-finalizar-ajuda").textContent = f.length ? `Falta: ${f.join(", ")}.` : 'Nada é gravado até clicar aqui.';
+  }
+  campo("cf-conta").addEventListener("change", atualizarBotaoFinalizar);
 
   // ---------- lista "Incluídos agora" ----------
   function desenharIncluidos(erros) {
@@ -595,122 +557,86 @@
       incluidos.slice().reverse().map((p) => `<div class="cd-inc-item"><b>${esc(p.sku)}</b><span style="flex:1">${esc(p.produto)}</span><span>${esc(quantidade(p.quantidade))} un · ${esc(moeda(p.custo_unitario))}</span></div>`).join("");
   }
 
-  function dadosDaNota() {
-    return { empresa: campo("cf-empresa").value.trim(), fornecedor: campo("cf-fornecedor").value, numero_nota: campo("cf-nota").value, refazer: marcaRefazer.checked };
-  }
-
   async function aposIncluir() {
     estado.status = "pendente"; estado.falta = ""; campo("cd-falta").value = ""; estado.resp = ""; campo("cd-resp").value = "";
     estado.ocupado = false;
     await carregar(true);
-    carregarEmpresas();
+    carregarContas();
   }
 
-  // Botão "Incluir" do modo colar: manda TODAS as linhas lidas (sem pré-filtrar por
-  // validade -- quem recusa linha incompleta/inválida é o servidor, por item, sem
-  // travar o lote inteiro). Agrupa por número da nota (a da própria linha, se veio
-  // colada numa coluna "Nota" -- senão a do campo fixo acima) e manda um lote por
-  // grupo, pra cada produto ficar registrado na nota certa. O que o servidor recusar
-  // fica na caixa pra corrigir.
-  campo("cf-incluir-lote").addEventListener("click", async () => {
-    const nota = dadosDaNota();
-    if (!nota.empresa) { aviso("Informe a empresa antes de incluir.", "erro"); campo("cf-empresa").focus(); return; }
-    if (!nota.numero_nota.trim()) { aviso("Informe a nota antes de incluir.", "erro"); campo("cf-nota").focus(); return; }
-    if (!lidos.linhas.length) return;
-    const botao = campo("cf-incluir-lote");
+  function limparGrade() {
+    linhasGrade = [linhaVazia(), linhaVazia(), linhaVazia()];
+    desenharGrade();
+  }
+
+  // "Finalizar solicitação": manda TODA linha com algo preenchido numa chamada só pro
+  // /produtos/lote (cada uma já carrega seu fornecedor/nota) -- quem recusa linha
+  // incompleta/inválida é o servidor, por item, sem travar as demais. Se tudo entrou,
+  // fecha o formulário; se sobrou alguma recusada, deixa só essas na grade pra corrigir
+  // e finalizar de novo.
+  campo("cf-finalizar").addEventListener("click", async () => {
+    if (faltando().length) { atualizarBotaoFinalizar(); return; } // defesa -- o botão já estaria desabilitado
+    const conta = campo("cf-conta").value.trim();
+    const itensValidos = linhasGrade.filter(linhaTemConteudo);
+    const botao = campo("cf-finalizar");
     botao.disabled = true;
-    const grupos = new Map(); // numero_nota efetivo -> linhas daquele grupo
-    lidos.linhas.forEach((r) => {
-      const n = (r.numero_nota || nota.numero_nota || "").trim();
-      if (!grupos.has(n)) grupos.set(n, []);
-      grupos.get(n).push(r);
-    });
-    const falhasBrutas = []; // { linha: objeto da linha, motivo }
-    let totalCriados = 0;
-    const mostrarParcial = () => desenharIncluidos(falhasBrutas.map((x) => ({ linha: x.linha ? x.linha.n : "?", sku: x.linha ? x.linha.sku : "", motivo: x.motivo })));
     try {
-      for (const [numeroNota, linhasGrupo] of grupos) {
-        const d = await api("/produtos/lote", {
-          method: "POST",
-          body: JSON.stringify({
-            empresa: nota.empresa, fornecedor: nota.fornecedor, numero_nota: numeroNota, refazer: nota.refazer,
-            itens: linhasGrupo.map((r) => ({ sku: r.sku, produto: r.produto, gtin: r.gtin, quantidade: r.quantidade, custo_unitario: r.custo_unitario })),
-          }),
-        });
-        d.criados.forEach((p) => incluidos.push(p));
-        totalCriados += d.criados.length;
-        d.ignorados.forEach((x) => falhasBrutas.push({ linha: linhasGrupo[x.linha - 1], motivo: x.motivo }));
-        mostrarParcial();
+      const d = await api("/produtos/lote", {
+        method: "POST",
+        body: JSON.stringify({
+          empresa: conta,
+          refazer: marcaRefazer.checked,
+          itens: itensValidos.map((r) => ({
+            sku: r.sku, produto: r.produto, gtin: r.gtin,
+            quantidade: numeroOuZero(r.quantidade), custo_unitario: numeroOuZero(r.custo_unitario),
+            fornecedor: r.fornecedor, numero_nota: r.numero_nota,
+          })),
+        }),
+      });
+      d.criados.forEach((p) => incluidos.push(p));
+      desenharIncluidos(d.ignorados);
+      const refaz = marcaRefazer.checked ? " para REFAZER" : "";
+      aviso(`${d.criados.length} produto(s) incluído(s)${refaz}.` + (d.ignorados.length ? ` ${d.ignorados.length} não entrou(aram) — corrija e finalize de novo.` : ""), d.ignorados.length ? "aviso" : "ok");
+      if (d.ignorados.length) {
+        const recusadas = new Set(d.ignorados.map((x) => x.linha));
+        linhasGrade = itensValidos.filter((_, i) => recusadas.has(i + 1));
+        desenharGrade();
+      } else {
+        form.style.display = "none";
+        incluidos.length = 0;
+        campo("cf-conta").value = "";
+        limparGrade();
+        marcaRefazer.checked = false; pintarRefazer();
       }
-      // deixa na caixa só o que NÃO entrou (linhas com problema + as recusadas pelo servidor), pra corrigir e incluir de novo
-      const recusadas = new Set(falhasBrutas.map((x) => x.linha));
-      const ficam = lidos.linhas.filter((r) => recusadas.has(r));
-      campo("cf-colar").value = ficam.map((r) => r.bruto.join("\t")).join("\n");
-      desenharPrevia();
-      const refaz = nota.refazer ? " para REFAZER" : "";
-      aviso(`${totalCriados} produto(s) incluído(s)${refaz}.` + (falhasBrutas.length ? ` ${falhasBrutas.length} não entrou(aram) — veja abaixo.` : ""), falhasBrutas.length ? "aviso" : "ok");
-      marcaRefazer.checked = false; pintarRefazer();
       await aposIncluir();
     } catch (e) {
-      mostrarParcial();
-      aviso(`Inclusão interrompida: ${e.message}` + (totalCriados ? ` — ${totalCriados} produto(s) já tinham entrado antes do erro (veja "Incluídos agora").` : ""), "erro");
-      desenharPrevia();
+      aviso("Não consegui enviar a solicitação: " + e.message, "erro");
+    } finally {
+      atualizarBotaoFinalizar();
     }
   });
 
   document.getElementById("cd-novo").addEventListener("click", () => {
     const aberto = form.style.display === "block";
     form.style.display = aberto ? "none" : "block";
-    if (!aberto) { carregarEmpresas(); (campo("cf-empresa").value ? campo("cf-colar") : campo("cf-empresa")).focus(); }
+    if (!aberto) {
+      carregarContas();
+      (campo("cf-conta").value ? campo("cf-grade-corpo").querySelector("input") : campo("cf-conta")).focus();
+    }
   });
 
-  function finalizar() {
+  campo("cf-cancelar").addEventListener("click", () => {
     form.style.display = "none";
     incluidos.length = 0; desenharIncluidos([]);
-    campo("cf-colar").value = ""; mapaManual = null; desenharPrevia();
-    ["cf-sku", "cf-produto", "cf-gtin"].forEach((id) => { campo(id).value = ""; });
+    campo("cf-conta").value = "";
+    limparGrade();
     marcaRefazer.checked = false; pintarRefazer();
-  }
-  campo("cf-fechar").addEventListener("click", finalizar);
-
-  // Modo "digitar um produto" (um de cada vez).
-  form.addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const botao = campo("cf-salvar");
-    const nota = dadosDaNota();
-    if (!nota.empresa || !campo("cf-nota").value.trim() || !campo("cf-sku").value.trim() || !campo("cf-produto").value.trim()) {
-      aviso("Preencha empresa, nota, SKU e nome do produto.", "erro");
-      return;
-    }
-    botao.disabled = true;
-    try {
-      const corpo = Object.assign({}, nota, {
-        produto: campo("cf-produto").value,
-        sku: campo("cf-sku").value,
-        gtin: campo("cf-gtin").value,
-        quantidade: Number(campo("cf-qtd").value || 0),
-        custo_unitario: Number(campo("cf-custo").value || 0),
-      });
-      const d = await api("/produtos", { method: "POST", body: JSON.stringify(corpo) });
-      incluidos.push(d.item); desenharIncluidos([]);
-      aviso((corpo.refazer ? `Incluído para REFAZER: ${d.item.sku} — ${d.item.produto}.` : `Incluído: ${d.item.sku} — ${d.item.produto}.`) + (d.aviso ? " " + d.aviso : ""), d.aviso ? "aviso" : "ok");
-      // limpa só o que muda de um produto pro outro; empresa, fornecedor e nota ficam pro próximo da mesma nota
-      ["cf-sku", "cf-produto", "cf-gtin"].forEach((id) => { campo(id).value = ""; });
-      campo("cf-qtd").value = "0";
-      campo("cf-custo").value = "0";
-      marcaRefazer.checked = false; pintarRefazer();
-      campo("cf-sku").focus();
-      await aposIncluir();
-    } catch (err) {
-      aviso("Não consegui incluir: " + err.message, "erro");
-    } finally {
-      botao.disabled = false;
-    }
+    aviso("");
   });
 
   // Atualiza sozinha a cada minuto (só com a aba visível) -- produto novo aparece e os tempos andam, sem recarregar.
   setInterval(() => { if (!document.hidden) { if (form.style.display !== "block") carregar(true); else desenhar(); } }, 60000);
 
-  desenharPrevia();
+  desenharGrade();
   carregar();
 })();
