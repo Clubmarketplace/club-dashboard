@@ -126,6 +126,11 @@
     } else if (m.estado === "nao_se_aplica") {
       classe += " cd-mp-na";
       dica = `${nome.longo}: não se aplica (marcado por ${m.por || "—"} em ${dataBr(m.em)}). Clique para desfazer.`;
+    } else if (p.assumido_por) {
+      // 15/10: alguém já assumiu o produto -- destaca com a cor do canal
+      // qual plataforma ainda falta, em vez de ficar igual às "não se aplica".
+      classe += " cd-mp-emandamento";
+      dica = `${nome.longo}: falta cadastrar (${p.assumido_por} está com este produto). Clique quando cadastrar.`;
     } else {
       dica = `${nome.longo}: falta cadastrar. Clique quando cadastrar.`;
     }
@@ -205,7 +210,7 @@
         const demora = decorrido > HORAS_DEMORA * 3600000 ? ' class="cd-demora"' : "";
         linhas.push(`Sem responsável · aguardando há <b${demora}>${esc(duracao(decorrido))}</b>`);
       }
-      if (p.assumido_por && !isNaN(chegou)) linhas.push(`<small>Chegou há ${esc(duracao(agora - chegou))}</small>`);
+      if (p.assumido_por && !isNaN(chegou)) linhas.push(`<span class="cd-chegou">📅 Chegou ${esc(dataBr(p.data_nota))}</span> <small>(há ${esc(duracao(agora - chegou))})</small>`);
     }
     let botao = "";
     if (p.status !== "cadastrado") {
