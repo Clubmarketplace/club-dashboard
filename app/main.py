@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Co
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -392,6 +392,8 @@ async def exigir_login(request: Request, call_next):
         "/dashboard",
         "/meus-cancelamentos", "/logout",
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
+        # "Cadastro", dentro de "Minhas solicitações" -- pedir cadastro de produto novo (15/10).
+        "/cadastro-seller",
         "/extensao",
         "/custos", "/api/painel/custos",
         "/produtos", "/produtos/lista", "/api/painel/produtos/lista",
@@ -413,6 +415,7 @@ async def exigir_login(request: Request, call_next):
         or caminho.startswith("/api/painel/taxas")
         or caminho.startswith("/api/painel/vendas")
         or caminho.startswith("/api/painel/dashboard")
+        or caminho.startswith("/api/painel/cadastro")
     )
 
     # Seller e suporte passam pelas mesmas portas (a diferença é só quem é a pessoa).
@@ -451,6 +454,7 @@ app.include_router(historico_adesoes_painel_rotas.router)  # tela "Histórico de
 app.include_router(admin_painel_rotas.router)  # resumo de vendas de todas as contas -- só admin (12/10)
 app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel do seller (12/10)
 app.include_router(cadastro_produtos_rotas.router)  # produtos novos das notas do Operador Logístico, pra tela "Cadastro" (13/10)
+app.include_router(cadastro_seller_rotas.router)  # "Solicitar cadastro" dentro de "Minhas solicitações" do seller (15/10)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 templates = Jinja2Templates(directory="app/templates")
@@ -759,6 +763,27 @@ def pagina_produtos_lista(request: Request):
     return templates.TemplateResponse(
         request=request,
         name="produtos_lista.html",
+        context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
+    )
+
+
+@app.get("/cadastro-seller", response_class=HTMLResponse)
+def pagina_cadastro_seller(request: Request):
+    """
+    Tela "Cadastro" do seller, dentro de "Minhas solicitações" (15/10): o
+    mesmo formulário de solicitar cadastro de produto novo que a equipe usa
+    (/cadastro), só que sem escolher a Conta -- ela vem travada da sessão
+    (conta_logada) e o servidor nunca aceita outra (ver
+    app/routers/cadastro_seller.py). Cai na mesma tabela/fila que a equipe
+    de Cadastro já usa.
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        conta_logada = _conta_logada_de(usuario)
+        seller_logado = bool(conta_logada)
+    return templates.TemplateResponse(
+        request=request,
+        name="cadastro-seller.html",
         context={"conta_logada": conta_logada, "seller_logado": seller_logado, "papel_logado": usuario.papel if usuario else None},
     )
 
