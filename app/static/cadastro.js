@@ -396,6 +396,33 @@
   const marcaRefazer = campo("cf-refazer");
   const incluidos = []; // produtos incluídos na última chamada bem-sucedida (lista "Incluídos agora")
 
+  // 15/10: "é kit" e os canais marcados -- valem pra toda a solicitação (uma
+  // marcação só, não por linha da grade). Os dois são obrigatórios: enquanto
+  // não escolhidos, o Finalizar fica travado (ver faltando()).
+  let kitEscolhido = null; // null = ainda não escolheu | true | false
+  const plataformasEscolhidas = new Set();
+
+  document.querySelectorAll(".cf-kit").forEach((b) => {
+    b.addEventListener("click", () => {
+      kitEscolhido = b.dataset.kit === "sim";
+      document.querySelectorAll(".cf-kit").forEach((x) => x.classList.toggle("ativo", x === b));
+      atualizarBotaoFinalizar();
+    });
+  });
+  document.querySelectorAll(".cf-canal").forEach((b) => {
+    b.addEventListener("click", () => {
+      const chave = b.dataset.canal;
+      if (plataformasEscolhidas.has(chave)) plataformasEscolhidas.delete(chave); else plataformasEscolhidas.add(chave);
+      b.classList.toggle("ativo");
+      atualizarBotaoFinalizar();
+    });
+  });
+  function limparSelecoes() {
+    kitEscolhido = null;
+    plataformasEscolhidas.clear();
+    document.querySelectorAll(".cf-kit, .cf-canal").forEach((b) => b.classList.remove("ativo"));
+  }
+
   async function carregarContas() {
     try {
       const d = await api("/contas");
@@ -449,10 +476,16 @@
     return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "" };
   }
   function linhaTemConteudo(r) { return CAMPOS_GRADE.some((c) => String(r[c] || "").trim() !== ""); }
-  // Mínimo pra uma linha "contar" como produto de verdade (habilita o Finalizar). O
-  // servidor é quem decide de fato se aceita -- isto é só pra não deixar finalizar uma
-  // grade totalmente vazia.
-  function linhaPreenchida(r) { return !!(String(r.sku || "").trim() && String(r.produto || "").trim()); }
+  // 15/10: obrigatórios por produto -- SKU, nome, EAN e custo maior que zero.
+  // Habilita o Finalizar; quem recusa de fato (SKU repetido etc.) é o servidor.
+  function linhaPreenchida(r) {
+    return !!(
+      String(r.sku || "").trim() &&
+      String(r.produto || "").trim() &&
+      String(r.gtin || "").trim() &&
+      numeroBr(r.custo_unitario) > 0
+    );
+  }
 
   let linhasGrade = [linhaVazia(), linhaVazia(), linhaVazia()];
 
@@ -531,13 +564,17 @@
     e.target.value = "";
   });
 
-  // O que falta pra habilitar "Finalizar solicitação": Conta e pelo menos 1 produto com
-  // SKU e nome. Não depende da grade inteira estar "certa" -- o que o servidor recusar
-  // (SKU/produto faltando, valor negativo) volta em `ignorados`, sem travar o resto.
+  // O que falta pra habilitar "Finalizar solicitação": Conta, pelo menos 1 produto
+  // completo (SKU, nome, EAN, custo > 0), pelo menos 1 canal marcado e "é kit"
+  // escolhido. Não depende da grade inteira estar "certa" -- o que o servidor
+  // recusar linha a linha (SKU repetido, EAN faltando...) volta em `ignorados`,
+  // sem travar o resto.
   function faltando() {
     const f = [];
     if (!campo("cf-conta").value.trim()) f.push("conta");
-    if (!linhasGrade.some(linhaPreenchida)) f.push("pelo menos 1 produto (SKU e nome)");
+    if (!linhasGrade.some(linhaPreenchida)) f.push("pelo menos 1 produto completo (SKU, nome, EAN e custo maior que zero)");
+    if (!plataformasEscolhidas.size) f.push("pelo menos 1 canal");
+    if (kitEscolhido === null) f.push("se é kit");
     return f;
   }
   function atualizarBotaoFinalizar() {
@@ -586,6 +623,8 @@
         body: JSON.stringify({
           empresa: conta,
           refazer: marcaRefazer.checked,
+          kit: kitEscolhido,
+          plataformas: Array.from(plataformasEscolhidas),
           itens: itensValidos.map((r) => ({
             sku: r.sku, produto: r.produto, gtin: r.gtin,
             quantidade: numeroOuZero(r.quantidade), custo_unitario: numeroOuZero(r.custo_unitario),
@@ -607,6 +646,7 @@
         campo("cf-conta").value = "";
         limparGrade();
         marcaRefazer.checked = false; pintarRefazer();
+        limparSelecoes();
       }
       await aposIncluir();
     } catch (e) {
@@ -631,6 +671,7 @@
     campo("cf-conta").value = "";
     limparGrade();
     marcaRefazer.checked = false; pintarRefazer();
+    limparSelecoes();
     aviso("");
   });
 
