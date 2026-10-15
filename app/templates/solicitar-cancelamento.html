@@ -74,6 +74,16 @@
   .aviso-caixa button.principal { background:#1b2430; border-color:#1b2430; color:#fff; }
   .logado-como { font-size:12.5px; color:var(--text-dim); margin:0 0 20px; }
 
+  /* Botão "Sair" do seller (15/10) -- antes só existia como link de texto
+     pra Logística; o seller não tinha nenhum jeito de sair por aqui. */
+  .btn-sair {
+    display:inline-flex; align-items:center; gap:6px;
+    padding:7px 14px; border-radius:9px; border:1.5px solid var(--red);
+    color:var(--red); background:transparent; font-weight:600; font-size:12.5px;
+    text-decoration:none; cursor:pointer; white-space:nowrap;
+  }
+  .btn-sair:hover { background:rgba(214,69,65,.08); }
+
   input[type="text"], textarea {
     width:100%; padding:11px 13px; border-radius:9px; border:1.5px solid var(--line);
     font-family:inherit; font-size:14px; color:var(--text); background:#fff;
@@ -107,12 +117,18 @@
   /* Tipo da solicitação (Cancelamento / Reputação) -- mesmo visual dos botões de plataforma */
   .grupo-tipo { margin-bottom:18px; }
   .opcoes-tipo { display:flex; gap:10px; max-width:420px; }
+  .opcoes-tipo.com-cadastro { max-width:630px; }
   .opcao-tipo { flex:1 1 0; min-width:0; height:46px; margin:0 !important; border:1.5px solid var(--line); border-radius:10px; padding:0 8px;
     display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:600; font-size:13.5px; color:var(--text-dim);
-    transition:border-color .15s, background .15s, color .15s; }
+    transition:border-color .15s, background .15s, color .15s; text-decoration:none; }
   .opcao-tipo input { display:none; }
   .opcao-tipo.selecionada { border-color:#1b2430; background:#1b2430; color:#fff; }
   .opcao-tipo#tipo-reputacao.selecionada { border-color:#6d4bd8; background:#6d4bd8; color:#fff; }
+  /* "Cadastro" (15/10) não é uma opção de rádio como as outras duas --
+     é um atalho pra outra tela (/cadastro-seller), por isso é um <a>
+     normal dentro do mesmo grupo visual, nunca fica "selecionada". */
+  .opcao-tipo-link { border-color:var(--line); color:var(--text-dim); }
+  .opcao-tipo-link:hover { border-color:#f0a93d; background:#fff7e8; color:var(--text); }
   .dica-tipo { font-size:12px; color:var(--text-dim); margin:6px 0 0; }
 
   .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
@@ -230,6 +246,13 @@
         {% if logistica_logado %}
         <p class="logado-como">Logística · logado como <b>{{ nome_usuario }}</b> · <a href="/logout" style="color:inherit;">Sair</a></p>
         {% endif %}
+        {% if seller_logado %}
+        <p class="logado-como" style="margin-bottom:10px;">Logado como <b>{{ conta_pre_preenchida }}</b></p>
+        <a href="/logout" class="btn-sair">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          Sair
+        </a>
+        {% endif %}
       </div>
     </div>
 
@@ -238,7 +261,7 @@
       <!-- Tipo da solicitação. Galpão só pede cancelamento (o servidor também trava). -->
       <div class="grupo-tipo">
         <label>Tipo de solicitação</label>
-        <div class="opcoes-tipo">
+        <div class="opcoes-tipo{% if seller_logado %} com-cadastro{% endif %}">
           <label class="opcao-tipo selecionada" id="tipo-cancelamento">
             <input type="radio" name="tipo" value="cancelamento" checked />
             Cancelamento
@@ -247,6 +270,11 @@
             <input type="radio" name="tipo" value="reputacao" />
             Reputação
           </label>
+          {% if seller_logado %}
+          <a class="opcao-tipo opcao-tipo-link" id="tipo-cadastro" href="/cadastro-seller">
+            Cadastro
+          </a>
+          {% endif %}
         </div>
         <p class="dica-tipo" id="dica-tipo"></p>
       </div>
