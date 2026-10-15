@@ -61,28 +61,22 @@
     .cd-form label { display:block; font-size:12px; font-weight:700; color:var(--cmx-texto-suave); margin:0 0 4px; }
     .cd-form input { width:100%; box-sizing:border-box; height:38px; border:1px solid var(--cmx-borda); border-radius:9px; padding:0 10px; font:14px Inter,sans-serif; background:var(--cmx-bg); color:var(--cmx-texto); }
     .cd-form .cd-largo { grid-column:span 2; }
-    .cd-form.modo-colar .cf-um { display:none; }
-    .cd-form.modo-um .cf-colar { display:none; }
-    .cd-aba { height:34px; padding:0 14px; border-radius:9px 9px 0 0; border:1px solid var(--cmx-borda); border-bottom:none; background:var(--cmx-bg); color:var(--cmx-texto-suave); font:700 13px Inter,sans-serif; cursor:pointer; }
-    .cd-aba.ativo { background:var(--cmx-texto); color:var(--cmx-papel); border-color:var(--cmx-texto); }
-    .cd-colar-linha { display:flex; gap:10px; align-items:stretch; }
-    .cd-colar-wrap { flex:1; min-width:0; display:flex; flex-direction:column; }
-    .cd-colar-cabecalho { display:flex; border:1px solid var(--cmx-borda); border-bottom:none; border-radius:9px 9px 0 0; background:var(--cmx-bg); padding:6px 10px; }
-    .cd-colar-cabecalho span { flex:1; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:6px; }
-    .cd-colar-cabecalho span:nth-child(2) { flex:2.4; }
-    .cd-colar-cabecalho span:nth-child(5) { flex:1.4; }
-    .cd-colar-linha textarea { flex:1; min-width:0; border:1px solid var(--cmx-borda); border-radius:0 0 9px 9px; padding:10px; font:13px ui-monospace,Menlo,Consolas,monospace; background:var(--cmx-bg); color:var(--cmx-texto); resize:vertical; }
-    @media (max-width:640px) { .cd-colar-cabecalho { display:none; } .cd-colar-linha textarea { border-radius:9px; } }
-    .cd-colar-botoes { display:flex; flex-direction:column; gap:8px; width:150px; }
-    .cd-colar-botoes .cd-btn { width:100%; height:38px; display:inline-flex; align-items:center; justify-content:center; }
+    /* 15/10: tabela/planilha editável pra solicitar cadastro -- uma linha por produto,
+       cola direto da planilha numa célula (preenche várias linhas/colunas de uma vez)
+       ou digita célula por célula. Substitui as abas "Colar"/"Digitar um produto" antigas. */
     .cd-anexo { cursor:pointer; position:relative; }
     .cd-anexo input { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
-    .cd-previa { margin:10px 0 6px; border:1px solid var(--cmx-borda); border-radius:10px; overflow:auto; max-height:260px; background:var(--cmx-papel); }
-    .cd-previa table { width:100%; border-collapse:collapse; font-size:12.5px; }
-    .cd-previa th { position:sticky; top:0; background:var(--cmx-bg); text-align:left; padding:6px 8px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
-    .cd-previa td { padding:5px 8px; border-top:1px solid var(--cmx-borda); }
-    .cd-previa tr.ruim td { background:var(--cmx-rust-fundo); color:var(--cmx-rust); }
-    .cd-previa .res { font-weight:700; margin:8px 0 4px; font-size:13px; }
+    .cd-grade { border:1px solid var(--cmx-borda); border-radius:10px; overflow-x:auto; background:var(--cmx-papel); }
+    .cd-grade-cab, .cd-grade-linha { display:grid; grid-template-columns:100px 1.4fr 110px 70px 90px 140px 100px 34px; min-width:780px; }
+    .cd-grade-cab { background:var(--cmx-bg); border-bottom:1px solid var(--cmx-borda); }
+    .cd-grade-cab span { padding:8px 10px; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); font-weight:700; }
+    .cd-grade-linha { border-top:1px solid var(--cmx-borda); }
+    .cd-grade-linha:first-child { border-top:none; }
+    .cd-grade-linha input { width:100%; box-sizing:border-box; height:36px; border:none; border-right:1px solid var(--cmx-borda); padding:0 8px; font:13px Inter,sans-serif; background:transparent; color:var(--cmx-texto); }
+    .cd-grade-linha input:focus { outline:2px solid var(--cmx-ambar); outline-offset:-2px; position:relative; z-index:1; }
+    .cd-grade-linha input.cd-campo-aviso { background:var(--cmx-rust-fundo); }
+    .cd-grade-remover { border:none; border-left:1px solid var(--cmx-borda); background:transparent; color:var(--cmx-rust); cursor:pointer; font-size:13px; }
+    .cd-grade-remover:hover { background:var(--cmx-rust-fundo); }
     #cf-incluidos { margin-top:14px; border-top:1px dashed var(--cmx-borda); padding-top:10px; }
     #cf-incluidos h4 { margin:0 0 6px; font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); }
     .cd-inc-item { display:flex; gap:10px; padding:5px 0; font-size:13px; border-top:1px solid var(--cmx-borda); }
@@ -176,46 +170,29 @@
           <span class="cd-contador" id="cd-contador"></span>
         </div>
 
-        <form class="cd-form modo-colar" id="cd-form" autocomplete="off" novalidate>
-          <h3>Incluir produtos manualmente</h3>
-          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Preencha a empresa e o fornecedor <b>uma vez</b>; a nota pode ser preenchida aqui (vale pra tudo) ou, ao colar da planilha, numa coluna “Nota” — cada linha com a sua. Os produtos entram como pendentes, marcados como “incluído à mão” com o seu nome.</p>
-          <div class="cd-form-grade">
-            <div class="cd-largo"><label for="cf-empresa">Empresa *</label><input id="cf-empresa" list="cf-empresas" maxlength="120" /><datalist id="cf-empresas"></datalist></div>
-            <div class="cd-largo"><label for="cf-fornecedor">Fornecedor</label><input id="cf-fornecedor" maxlength="160" /></div>
-            <div><label for="cf-nota" title="Obrigatório para digitar um produto por vez. Ao colar da planilha, pode informar aqui (vale pra tudo) ou incluir uma coluna &quot;Nota&quot; no texto colado, cada linha com a sua.">Nota *</label><input id="cf-nota" maxlength="40" /></div>
-            <div style="grid-column:span 3;display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap">
-              <button type="button" class="cd-aba ativo" id="cf-aba-colar">📋 Colar da planilha</button>
-              <button type="button" class="cd-aba" id="cf-aba-um">✏️ Digitar um produto</button>
-              <label class="cd-refazer-btn" id="cf-refazer-btn" for="cf-refazer" title="Marque se estes produtos já foram cadastrados antes e estão sendo refeitos" style="margin-left:auto"><input id="cf-refazer" type="checkbox" />↻ REFAZER</label>
+        <form class="cd-form" id="cd-form" autocomplete="off" novalidate>
+          <h3>Solicitar cadastro</h3>
+          <p>Para produto que não chegou sozinho do Operador, ou para um cadastro que precisa ser refeito. Escolha a conta, preencha os produtos na tabela abaixo — célula por célula ou colando um trecho da planilha — e clique em "Finalizar solicitação". Fornecedor e Nota ficam por produto, então dá pra misturar mais de uma nota numa solicitação só. Nada é gravado até finalizar.</p>
+          <div class="cd-form-grade" style="grid-template-columns:repeat(3, minmax(0,1fr))">
+            <div class="cd-largo"><label for="cf-conta">Conta *</label><select id="cf-conta"><option value="">Selecione a conta…</option></select></div>
+            <div style="display:flex;align-items:flex-end;justify-content:flex-end">
+              <label class="cd-refazer-btn" id="cf-refazer-btn" for="cf-refazer" title="Marque se estes produtos já foram cadastrados antes e estão sendo refeitos"><input id="cf-refazer" type="checkbox" />↻ REFAZER</label>
             </div>
+          </div>
 
-            <!-- modo: colar da planilha -->
-            <div class="cf-colar" style="grid-column:1 / -1">
-              <label for="cf-colar">Cole da planilha (com ou sem cabeçalho, em qualquer ordem) ou digite direto — os campos abaixo são só um guia, não precisa seguir essa ordem:</label>
-              <div style="background:var(--cmx-ambar-fundo);color:var(--cmx-ambar);border-radius:8px;padding:6px 12px;font-size:12.5px;margin:4px 0 6px;line-height:1.5">⚠ Preencha Empresa e Nota ali em cima pra habilitar o "Incluir". Linha sem SKU, sem produto ou com valor negativo recebe um aviso na prévia e o servidor não cadastra ela (mas não trava as demais) — confira antes de incluir.</div>
-              <div class="cd-colar-linha">
-                <div class="cd-colar-wrap">
-                  <div class="cd-colar-cabecalho"><span>SKU</span><span>Produto</span><span>EAN</span><span>Quantidade</span><span>Custo unitário</span><span>Nota</span></div>
-                  <textarea id="cf-colar" rows="6" spellcheck="false" placeholder="Copie as linhas na planilha (Ctrl+C) e cole aqui (Ctrl+V)… ou digite direto, um produto por linha"></textarea>
-                </div>
-                <div class="cd-colar-botoes">
-                  <button class="cd-btn cd-btn-ok" id="cf-incluir-lote" type="button" disabled>Incluir</button>
-                  <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
-                  <button class="cd-btn" id="cf-limpar" type="button">Limpar</button>
-                </div>
-              </div>
-              <div id="cf-mapeamento"></div>
-              <div id="cf-previa"></div>
-              <small style="color:var(--cmx-texto-suave)">Planilha .xlsx? Abra, selecione as linhas, copie e cole aqui. Números como 1.234,50 são entendidos.</small>
+          <label style="display:block;font-size:12px;font-weight:700;color:var(--cmx-texto-suave);margin:16px 0 6px">Produtos *</label>
+          <div class="cd-grade">
+            <div class="cd-grade-cab">
+              <span>SKU</span><span>Produto</span><span>EAN</span><span>Qtd.</span><span>Custo</span><span>Fornecedor</span><span>Nota</span><span></span>
             </div>
-
-            <!-- modo: digitar um produto -->
-            <div class="cf-um"><label for="cf-sku">SKU *</label><input id="cf-sku" maxlength="80" /></div>
-            <div class="cf-um cd-largo"><label for="cf-produto">Nome do produto *</label><input id="cf-produto" maxlength="300" /></div>
-            <div class="cf-um"><label for="cf-gtin">EAN</label><input id="cf-gtin" inputmode="numeric" maxlength="20" /></div>
-            <div class="cf-um"><label for="cf-qtd">Quantidade</label><input id="cf-qtd" type="number" min="0" step="any" value="0" /></div>
-            <div class="cf-um"><label for="cf-custo">Custo un. (R$)</label><input id="cf-custo" type="number" min="0" step="any" value="0" /></div>
-            <div class="cf-um" style="align-self:end"><button class="cd-btn cd-btn-ok" id="cf-salvar" type="submit">Incluir</button></div>
+            <div id="cf-grade-corpo"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 0 2px">
+            <small style="color:var(--cmx-texto-suave)">Clique numa célula e cole (Ctrl+V) um trecho copiado da planilha — preenche várias linhas e colunas de uma vez a partir dali. Números como 1.234,50 são entendidos.</small>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <label class="cd-btn cd-anexo" for="cf-arquivo" title="Anexar uma planilha salva como CSV">📎 Anexar CSV<input id="cf-arquivo" type="file" accept=".csv,.tsv,.txt,text/csv,text/plain" /></label>
+              <button class="cd-btn" id="cf-adicionar-linha" type="button">+ Adicionar linha</button>
+            </div>
           </div>
 
           <div id="cf-incluidos" style="display:none">
@@ -223,8 +200,9 @@
             <div id="cf-incluidos-lista"></div>
           </div>
           <div class="cd-form-acoes">
-            <button class="cd-btn" id="cf-fechar" type="button">Finalizar inclusão</button>
-            <span style="font-size:12.5px;color:var(--cmx-texto-suave)">Pode incluir quantas vezes quiser; ao terminar a nota, clique em Finalizar.</span>
+            <button class="cd-btn cd-btn-ok" id="cf-finalizar" type="button">Finalizar solicitação</button>
+            <button class="cd-btn" id="cf-cancelar" type="button">Cancelar</button>
+            <span id="cf-finalizar-ajuda" style="font-size:12.5px;color:var(--cmx-texto-suave)">Nada é gravado até clicar aqui.</span>
           </div>
         </form>
 
@@ -246,7 +224,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=7"></script>
+  <script src="/static/cadastro.js?v=8"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
