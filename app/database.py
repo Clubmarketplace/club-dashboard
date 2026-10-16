@@ -94,8 +94,8 @@ _COLUNAS_ADICIONAIS = {
         "excluido_por": "VARCHAR",
         "excluido_em": "TIMESTAMP",
         "motivo_exclusao": "TEXT",
-        # 16/10: evidência (foto em base64 + link), opcional -- ver app/models.py.
-        "foto_base64": "TEXT",
+        # 16/10: evidência (fotos em base64, lista JSON, + link), opcional -- ver app/models.py.
+        "fotos_base64": "TEXT",
         "link_evidencia": "VARCHAR",
     },
     "variaveis_conta": {

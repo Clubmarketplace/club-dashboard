@@ -411,14 +411,16 @@ class SolicitacaoCancelamento(Base):
     excluido_em = Column(DateTime, nullable=True)
     motivo_exclusao = Column(Text, nullable=True)
 
-    # --- 16/10: evidência (foto e/ou link) -- pedida principalmente pra
-    # Reputação, mas vale pros dois tipos (mesmo painel). A foto é gravada
-    # direto no banco como data URL base64 (já redimensionada/comprimida
-    # no navegador antes de enviar) -- NÃO vai pro disco do container, que
-    # é efêmero no Railway (perderia tudo a cada deploy); ver
-    # app/manuais_storage.py pro mesmo problema resolvido com S3 pros manuais.
-    # Ambos opcionais e independentes; nulo = não anexado.
-    foto_base64 = Column(Text, nullable=True)
+    # --- 16/10: evidência (fotos e/ou link) -- pedida principalmente pra
+    # Reputação, mas vale pros dois tipos (mesmo painel). Cada solicitação
+    # (uma por venda) pode ter VÁRIAS fotos -- gravadas direto no banco como
+    # uma lista JSON de data URLs base64 (cada uma já redimensionada/
+    # comprimida no navegador antes de enviar). NÃO vai pro disco do
+    # container, que é efêmero no Railway (perderia tudo a cada deploy);
+    # ver app/manuais_storage.py pro mesmo problema resolvido com S3 pros
+    # manuais. Foto(s) e link são opcionais e independentes; nulo = não
+    # anexado. fotos_base64 nulo ou "[]" = nenhuma foto.
+    fotos_base64 = Column(Text, nullable=True)
     link_evidencia = Column(String, nullable=True)
 
 
