@@ -288,9 +288,11 @@
     const manual = (p.origem === "manual"
       ? `<div><span class="cd-selo-manual" title="Incluído à mão por ${esc(p.criado_por || "—")}">incluído à mão${p.criado_por ? " · " + esc(p.criado_por) : ""}</span></div>`
       : "") + (p.refazer ? `<div><span class="cd-selo-refazer" title="Este produto já foi cadastrado antes e está sendo refeito">↻ REFAZER</span></div>` : "");
+    // 16/10: link das fotos (Drive etc.), quando preenchido na solicitação.
+    const fotos = p.link_fotos ? `<div><a class="cd-link-fotos" href="${esc(p.link_fotos)}" target="_blank" rel="noopener">📷 Fotos</a></div>` : "";
     const nota = `<div class="cd-nota"><b>${p.numero_nota ? "Nota " + esc(p.numero_nota) : "—"}</b><small>${esc(p.fornecedor || "sem fornecedor")} · ${esc(dataBr(p.data_nota))}</small></div>`;
     return `<div class="cd-linha${feito ? " feito" : ""}" data-linha="${p.id}">
-      <div><div class="cd-sku">${esc(p.sku)}</div>${manual}</div>
+      <div><div class="cd-sku">${esc(p.sku)}</div>${manual}${fotos}</div>
       <div class="cd-produto" title="${esc(p.produto)}">${esc(p.produto || "—")}</div>
       <div class="cd-mono" data-rot="EAN">${esc(p.gtin || "não informado")}</div>
       <div data-rot="Qtd">${esc(quantidade(p.quantidade))}</div>
@@ -638,7 +640,7 @@
   const CAMPOS_GRADE = ["sku", "produto", "gtin", "quantidade", "custo_unitario", "fornecedor", "numero_nota"];
 
   function linhaVazia() {
-    return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "" };
+    return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "", link_fotos: "" };
   }
   function linhaTemConteudo(r) { return CAMPOS_GRADE.some((c) => String(r[c] || "").trim() !== ""); }
   // 15/10: obrigatórios por produto -- SKU, nome, EAN e custo maior que zero.
@@ -654,6 +656,17 @@
 
   let linhasGrade = [linhaVazia(), linhaVazia(), linhaVazia()];
 
+  // 16/10: posiciona o popover do link em "fixed" (calculado pelo botão que abriu),
+  // em vez de "absolute" dentro da grade -- a grade tem overflow-x:auto, que corta
+  // qualquer coisa "absolute" que passe da borda vertical dela.
+  function posicionarPopoverLink(botao, pop) {
+    const r = botao.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + "px";
+    let esquerda = r.right - 300;
+    if (esquerda < 8) esquerda = 8;
+    pop.style.left = esquerda + "px";
+  }
+
   function desenharGrade() {
     campo("cf-grade-corpo").innerHTML = linhasGrade.map((r, i) => `
       <div class="cd-grade-linha" data-linha="${i}">
@@ -664,6 +677,18 @@
         <input data-campo="custo_unitario" value="${esc(r.custo_unitario)}" aria-label="Custo unitário" />
         <input data-campo="fornecedor" value="${esc(r.fornecedor)}" aria-label="Fornecedor" />
         <input data-campo="numero_nota" value="${esc(r.numero_nota)}" aria-label="Nota" />
+        <div class="cd-grade-link">
+          <button type="button" class="cd-link-btn${r.link_fotos ? " tem-link" : ""}" data-abrir-link="${i}" title="${r.link_fotos ? "Link salvo — clique pra ver/editar" : "Sem link — clique pra adicionar (opcional)"}">🔗</button>
+          <div class="cd-link-popover" data-link-popover="${i}">
+            <label>Link das fotos (Drive, etc.)</label>
+            <input type="url" data-link-input="${i}" value="${esc(r.link_fotos)}" placeholder="https://drive.google.com/…" />
+            <div class="cd-link-acoes">
+              <button type="button" class="cd-btn cd-mini cd-link-remover-btn" data-limpar-link="${i}">Remover</button>
+              <button type="button" class="cd-btn cd-mini" data-cancelar-link="${i}">Cancelar</button>
+              <button type="button" class="cd-btn cd-mini cd-btn-ok" data-salvar-link="${i}">Salvar</button>
+            </div>
+          </div>
+        </div>
         <button type="button" class="cd-grade-remover" data-remover="${i}" title="Remover linha" aria-label="Remover linha">✕</button>
       </div>`).join("");
     atualizarBotaoFinalizar();
@@ -702,10 +727,49 @@
   });
   campo("cf-grade-corpo").addEventListener("click", (e) => {
     const rem = e.target.closest("[data-remover]");
-    if (!rem) return;
-    linhasGrade.splice(Number(rem.dataset.remover), 1);
-    if (!linhasGrade.length) linhasGrade.push(linhaVazia());
-    desenharGrade();
+    if (rem) {
+      linhasGrade.splice(Number(rem.dataset.remover), 1);
+      if (!linhasGrade.length) linhasGrade.push(linhaVazia());
+      desenharGrade();
+      return;
+    }
+    const abrirLink = e.target.closest("[data-abrir-link]");
+    if (abrirLink) {
+      e.stopPropagation();
+      const i = abrirLink.dataset.abrirLink;
+      const pop = campo("cf-grade-corpo").querySelector(`.cd-link-popover[data-link-popover="${i}"]`);
+      const jaAberto = pop.classList.contains("aberto");
+      campo("cf-grade-corpo").querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
+      if (!jaAberto) {
+        posicionarPopoverLink(abrirLink, pop);
+        pop.classList.add("aberto");
+        pop.querySelector("input").focus();
+      }
+      return;
+    }
+    const salvarLink = e.target.closest("[data-salvar-link]");
+    if (salvarLink) {
+      const i = Number(salvarLink.dataset.salvarLink);
+      linhasGrade[i].link_fotos = campo("cf-grade-corpo").querySelector(`[data-link-input="${i}"]`).value.trim();
+      desenharGrade();
+      return;
+    }
+    const cancelarLink = e.target.closest("[data-cancelar-link]");
+    if (cancelarLink) {
+      campo("cf-grade-corpo").querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
+      return;
+    }
+    const limparLink = e.target.closest("[data-limpar-link]");
+    if (limparLink) {
+      linhasGrade[Number(limparLink.dataset.limparLink)].link_fotos = "";
+      desenharGrade();
+      return;
+    }
+  });
+  // Clique fora de um popover de link aberto -- fecha (sem perder o que já foi salvo).
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".cd-link-popover") || e.target.closest("[data-abrir-link]")) return;
+    document.querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
   });
   campo("cf-adicionar-linha").addEventListener("click", () => { linhasGrade.push(linhaVazia()); desenharGrade(); });
 
@@ -793,7 +857,7 @@
           itens: itensValidos.map((r) => ({
             sku: r.sku, produto: r.produto, gtin: r.gtin,
             quantidade: numeroOuZero(r.quantidade), custo_unitario: numeroOuZero(r.custo_unitario),
-            fornecedor: r.fornecedor, numero_nota: r.numero_nota,
+            fornecedor: r.fornecedor, numero_nota: r.numero_nota, link_fotos: r.link_fotos,
           })),
         }),
       });
@@ -821,14 +885,25 @@
     }
   });
 
+  function abrirFormNovo() {
+    form.style.display = "block";
+    carregarContas();
+    (campo("cf-conta").value ? campo("cf-grade-corpo").querySelector("input") : campo("cf-conta")).focus();
+  }
+
   document.getElementById("cd-novo").addEventListener("click", () => {
-    const aberto = form.style.display === "block";
-    form.style.display = aberto ? "none" : "block";
-    if (!aberto) {
-      carregarContas();
-      (campo("cf-conta").value ? campo("cf-grade-corpo").querySelector("input") : campo("cf-conta")).focus();
-    }
+    if (form.style.display === "block") { form.style.display = "none"; return; }
+    abrirFormNovo();
   });
+
+  // 16/10: link "Nova solicitação" do menu lateral manda pra /cadastro?novo=1 --
+  // já abre o formulário direto (igual o /cadastro-seller faz pro seller), sem
+  // precisar achar o botão "+ Incluir produto" na tela. Limpa o "?novo=1" da URL
+  // depois (replaceState) pra um F5 não reabrir sozinho.
+  if (new URLSearchParams(location.search).get("novo") === "1") {
+    abrirFormNovo();
+    history.replaceState(null, "", location.pathname);
+  }
 
   campo("cf-cancelar").addEventListener("click", () => {
     form.style.display = "none";

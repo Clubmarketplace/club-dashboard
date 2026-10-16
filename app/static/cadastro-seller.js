@@ -70,7 +70,7 @@
 
   const CAMPOS_GRADE = ["sku", "produto", "gtin", "quantidade", "custo_unitario", "fornecedor", "numero_nota"];
   function linhaVazia() {
-    return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "" };
+    return { sku: "", produto: "", gtin: "", quantidade: "", custo_unitario: "", fornecedor: "", numero_nota: "", link_fotos: "" };
   }
   function linhaTemConteudo(r) { return CAMPOS_GRADE.some((c) => String(r[c] || "").trim() !== ""); }
   // Obrigatórios por produto: SKU, nome, EAN e custo maior que zero.
@@ -85,6 +85,16 @@
 
   let linhasGrade = [linhaVazia(), linhaVazia(), linhaVazia()];
 
+  // 16/10: popover do link em "fixed" (calculado pelo botão) -- a grade tem
+  // overflow-x:auto, que corta um "absolute" que passe da borda vertical dela.
+  function posicionarPopoverLink(botao, pop) {
+    const r = botao.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + "px";
+    let esquerda = r.right - 300;
+    if (esquerda < 8) esquerda = 8;
+    pop.style.left = esquerda + "px";
+  }
+
   function desenharGrade() {
     campo("cf-grade-corpo").innerHTML = linhasGrade.map((r, i) => `
       <div class="cd-grade-linha" data-linha="${i}">
@@ -95,6 +105,18 @@
         <input data-campo="custo_unitario" value="${esc(r.custo_unitario)}" aria-label="Custo unitário" />
         <input data-campo="fornecedor" value="${esc(r.fornecedor)}" aria-label="Fornecedor" />
         <input data-campo="numero_nota" value="${esc(r.numero_nota)}" aria-label="Nota" />
+        <div class="cd-grade-link">
+          <button type="button" class="cd-link-btn${r.link_fotos ? " tem-link" : ""}" data-abrir-link="${i}" title="${r.link_fotos ? "Link salvo — clique pra ver/editar" : "Sem link — clique pra adicionar (opcional)"}">🔗</button>
+          <div class="cd-link-popover" data-link-popover="${i}">
+            <label>Link das fotos (Drive, etc.)</label>
+            <input type="url" data-link-input="${i}" value="${esc(r.link_fotos)}" placeholder="https://drive.google.com/…" />
+            <div class="cd-link-acoes">
+              <button type="button" class="cd-btn cd-mini cd-link-remover-btn" data-limpar-link="${i}">Remover</button>
+              <button type="button" class="cd-btn cd-mini" data-cancelar-link="${i}">Cancelar</button>
+              <button type="button" class="cd-btn cd-mini cd-btn-ok" data-salvar-link="${i}">Salvar</button>
+            </div>
+          </div>
+        </div>
         <button type="button" class="cd-grade-remover" data-remover="${i}" title="Remover linha" aria-label="Remover linha">✕</button>
       </div>`).join("");
     atualizarBotaoFinalizar();
@@ -130,10 +152,48 @@
   });
   campo("cf-grade-corpo").addEventListener("click", (e) => {
     const rem = e.target.closest("[data-remover]");
-    if (!rem) return;
-    linhasGrade.splice(Number(rem.dataset.remover), 1);
-    if (!linhasGrade.length) linhasGrade.push(linhaVazia());
-    desenharGrade();
+    if (rem) {
+      linhasGrade.splice(Number(rem.dataset.remover), 1);
+      if (!linhasGrade.length) linhasGrade.push(linhaVazia());
+      desenharGrade();
+      return;
+    }
+    const abrirLink = e.target.closest("[data-abrir-link]");
+    if (abrirLink) {
+      e.stopPropagation();
+      const i = abrirLink.dataset.abrirLink;
+      const pop = campo("cf-grade-corpo").querySelector(`.cd-link-popover[data-link-popover="${i}"]`);
+      const jaAberto = pop.classList.contains("aberto");
+      campo("cf-grade-corpo").querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
+      if (!jaAberto) {
+        posicionarPopoverLink(abrirLink, pop);
+        pop.classList.add("aberto");
+        pop.querySelector("input").focus();
+      }
+      return;
+    }
+    const salvarLink = e.target.closest("[data-salvar-link]");
+    if (salvarLink) {
+      const i = Number(salvarLink.dataset.salvarLink);
+      linhasGrade[i].link_fotos = campo("cf-grade-corpo").querySelector(`[data-link-input="${i}"]`).value.trim();
+      desenharGrade();
+      return;
+    }
+    const cancelarLink = e.target.closest("[data-cancelar-link]");
+    if (cancelarLink) {
+      campo("cf-grade-corpo").querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
+      return;
+    }
+    const limparLink = e.target.closest("[data-limpar-link]");
+    if (limparLink) {
+      linhasGrade[Number(limparLink.dataset.limparLink)].link_fotos = "";
+      desenharGrade();
+      return;
+    }
+  });
+  document.addEventListener("click", (e) => {
+    if (e.target.closest(".cd-link-popover") || e.target.closest("[data-abrir-link]")) return;
+    document.querySelectorAll(".cd-link-popover.aberto").forEach((p) => p.classList.remove("aberto"));
   });
   campo("cf-adicionar-linha").addEventListener("click", () => { linhasGrade.push(linhaVazia()); desenharGrade(); });
 
@@ -224,7 +284,7 @@
           itens: itensValidos.map((r) => ({
             sku: r.sku, produto: r.produto, gtin: r.gtin,
             quantidade: numeroOuZero(r.quantidade), custo_unitario: numeroOuZero(r.custo_unitario),
-            fornecedor: r.fornecedor, numero_nota: r.numero_nota,
+            fornecedor: r.fornecedor, numero_nota: r.numero_nota, link_fotos: r.link_fotos,
           })),
         }),
       });
