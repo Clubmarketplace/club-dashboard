@@ -411,6 +411,16 @@ class SolicitacaoCancelamento(Base):
     excluido_em = Column(DateTime, nullable=True)
     motivo_exclusao = Column(Text, nullable=True)
 
+    # --- 16/10: evidência (foto e/ou link) -- pedida principalmente pra
+    # Reputação, mas vale pros dois tipos (mesmo painel). A foto é gravada
+    # direto no banco como data URL base64 (já redimensionada/comprimida
+    # no navegador antes de enviar) -- NÃO vai pro disco do container, que
+    # é efêmero no Railway (perderia tudo a cada deploy); ver
+    # app/manuais_storage.py pro mesmo problema resolvido com S3 pros manuais.
+    # Ambos opcionais e independentes; nulo = não anexado.
+    foto_base64 = Column(Text, nullable=True)
+    link_evidencia = Column(String, nullable=True)
+
 
 class SolicitacaoEvento(Base):
     """

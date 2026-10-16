@@ -94,6 +94,9 @@ _COLUNAS_ADICIONAIS = {
         "excluido_por": "VARCHAR",
         "excluido_em": "TIMESTAMP",
         "motivo_exclusao": "TEXT",
+        # 16/10: evidência (foto em base64 + link), opcional -- ver app/models.py.
+        "foto_base64": "TEXT",
+        "link_evidencia": "VARCHAR",
     },
     "variaveis_conta": {
         # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,
