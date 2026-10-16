@@ -159,6 +159,45 @@ def _evolucao_3_meses(db: Session, conta_id: int | None) -> list[dict]:
     return resultado
 
 
+def _comparativo_mensal_6m(db: Session, conta_id: int | None) -> list[dict]:
+    """
+    Total vendido por mês, últimos 6 meses (5 fechados + o atual, parcial
+    até hoje) -- alimenta o gráfico de barras horizontais "Comparativo
+    mensal" do dashboard do admin. Mesmo padrão de soma usado em
+    `_evolucao_3_meses` (_somente_vendas_validas), só que somado o mês
+    inteiro de uma vez em vez de dia a dia.
+    """
+    hoje_br = datetime.now(_FUSO_BR).replace(hour=0, minute=0, second=0, microsecond=0)
+    resultado = []
+    for deslocamento in range(5, -1, -1):  # mês mais antigo primeiro, atual por último
+        inicio_mes_br = hoje_br.replace(day=1)
+        for _ in range(deslocamento):
+            inicio_mes_br = (inicio_mes_br - timedelta(days=1)).replace(day=1)
+
+        parcial = deslocamento == 0
+        if parcial:
+            fim_mes_br = hoje_br + timedelta(days=1)  # até o fim do dia de hoje
+        else:
+            fim_mes_br = (inicio_mes_br.replace(day=28) + timedelta(days=4)).replace(day=1)
+
+        inicio = inicio_mes_br.astimezone(timezone.utc).replace(tzinfo=None)
+        fim = fim_mes_br.astimezone(timezone.utc).replace(tzinfo=None)
+        consulta = db.query(Venda).filter(Venda.data_venda >= inicio, Venda.data_venda < fim)
+        if conta_id is not None:
+            consulta = consulta.filter(Venda.conta_id == conta_id)
+        total = _somente_vendas_validas(consulta).with_entities(Venda.venda_bruta).all()
+
+        item = {
+            "mes": _NOMES_MES[inicio_mes_br.month - 1] + "/" + str(inicio_mes_br.year),
+            "valor": round(sum(v[0] for v in total), 2),
+            "parcial": parcial,
+        }
+        if parcial:
+            item["ate_dia"] = hoje_br.day
+        resultado.append(item)
+    return resultado
+
+
 def _periodo(inicio: str, fim: str) -> tuple[datetime, datetime, int]:
     """
     Converte 'YYYY-MM-DD'/'YYYY-MM-DD' em (início do dia, fim do dia,

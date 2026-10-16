@@ -35,7 +35,13 @@ from app.models import (
     Usuario,
     Venda,
 )
-from app.routers.vendas import _evolucao_3_meses, _evolucao_dias_com_anterior, _somente_vendas_validas, _FUSO_BR
+from app.routers.vendas import (
+    _comparativo_mensal_6m,
+    _evolucao_3_meses,
+    _evolucao_dias_com_anterior,
+    _somente_vendas_validas,
+    _FUSO_BR,
+)
 
 _STATUS_PERGUNTA_RESPONDIDA = ("respondida", "respondida_externamente")
 
@@ -360,6 +366,7 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "hoje": _promocoes_aderidas(inicio_dia_utc),
             "mes": _promocoes_aderidas(inicio_mes_utc),
         },
+        "comparativo_mensal_6m": _comparativo_mensal_6m(db, None),
         "evolucao_15_dias": evolucao_15_dias,
         "evolucao_30_dias": evolucao_30_dias,
         "evolucao_3_meses": _evolucao_3_meses(db, None),
