@@ -416,7 +416,7 @@
             ${sku}
           </div>
           <div class="c-motivo">
-            <div class="sl-motivo">${esc(s.motivo)}</div>
+            <div class="sl-motivo">${esc(s.motivo)}${(s.foto_base64 || s.link_evidencia) ? ' <span title="Tem foto ou link anexado" style="font-size:12px;">📎</span>' : ""}</div>
             <div style="margin-top:6px">${htmlOrigem(s)}</div>
             ${s.confirmado_por && s.protocolo === "" ? `<div class="sl-sub"><b>${ehReputacao(s) ? "Resolvido" : "Cancelado"} pelo painel do ML</b> (sem protocolo)</div>`
               : s.confirmado_por && s.protocolo != null ? `<div class="sl-sub">Protocolo: <b>${esc(textoProtocolo(s))}</b></div>` : ""}
@@ -569,6 +569,11 @@
         <div class="sl-campo"><div class="r">Motivo</div>${esc(s.motivo)}</div>
         <div class="sl-campo"><div class="r">Solicitado por</div>${esc(textoOrigem(s))} · ${formatarData(s.criado_em)}</div>
         <div class="sl-campo"><div class="r">Produto (SKU)</div>${s.sku ? esc(s.sku.replace(/,/g, ", ")) + (s.produto_titulo ? " · " + esc(s.produto_titulo) : "") : '<span class="sl-sub">Não identificado</span>'}</div>
+        ${(s.foto_base64 || s.link_evidencia) ? `
+        <div class="sl-campo"><div class="r">Evidência</div>
+          ${s.foto_base64 ? `<a href="${s.foto_base64}" target="_blank" rel="noopener"><img src="${s.foto_base64}" alt="Foto enviada" style="max-width:160px; max-height:120px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; margin-bottom:${s.link_evidencia ? "8px" : "0"};" /></a>` : ""}
+          ${s.link_evidencia ? `<a href="${esc(s.link_evidencia)}" target="_blank" rel="noopener" style="font-size:13px; color:#1f6fb2; word-break:break-all;">${esc(s.link_evidencia)}</a>` : ""}
+        </div>` : ""}
         ${s.confirmado_por ? `
           <div class="sl-campo"><div class="r">${ehReputacao(s) ? "Resolvido" : "Cancelado"}</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
           <div class="sl-campo"><div class="r">Protocolo</div>${s.protocolo != null ? esc(textoProtocolo(s)) : "—"}${s.resultado_impacto ? " · " + esc(ROTULO_IMPACTO[s.resultado_impacto] || s.resultado_impacto) : ""}</div>` : ""}
