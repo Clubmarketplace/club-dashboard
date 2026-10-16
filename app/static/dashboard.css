@@ -204,6 +204,14 @@ body {
   color: var(--cmx-sidebar-ativo-texto);
 }
 
+/* 16/10: faltava hover no "Dashboard" e nos itens de dentro de cada grupo
+   (Nova solicitação, Produtos para cadastro...) -- só os títulos dos grupos
+   (.cmx-grupo-titulo, em _menu.html) tinham. Deixa igual em todo o menu. */
+.cmx-nav-item:hover:not(.cmx-nav-item--em-breve) {
+  background: var(--cmx-sidebar-hover-bg);
+  color: var(--cmx-sidebar-ativo-texto);
+}
+
 .cmx-nav-dot {
   width: 6px;
   height: 6px;
