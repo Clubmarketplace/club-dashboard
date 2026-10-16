@@ -90,6 +90,10 @@ _COLUNAS_ADICIONAIS = {
         "produto_titulo": "VARCHAR",
         # Tipo da solicitação ("cancelamento" | "reputacao"); nulo = cancelamento.
         "tipo": "VARCHAR",
+        # 16/10: exclusão (admin) -- nulo = não excluída.
+        "excluido_por": "VARCHAR",
+        "excluido_em": "TIMESTAMP",
+        "motivo_exclusao": "TEXT",
     },
     "variaveis_conta": {
         # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,
@@ -137,6 +141,10 @@ _COLUNAS_ADICIONAIS = {
         "excluido_por": "VARCHAR",
         "excluido_em": "TIMESTAMP",
         "motivo_exclusao": "TEXT",
+        # 16/10: link do Drive (ou onde estiverem) com as fotos do produto --
+        # opcional, por produto, preenchido na hora de solicitar o cadastro
+        # (equipe ou seller). Linhas antigas ficam NULL.
+        "link_fotos": "VARCHAR",
     },
     "usuarios": {
         # Bloqueio temporário por senha errada repetida (login do painel

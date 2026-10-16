@@ -402,6 +402,15 @@ class SolicitacaoCancelamento(Base):
     # Nulo = registro antigo, tratado como "cancelamento".
     tipo = Column(String, nullable=True, index=True)
 
+    # --- 16/10: exclusão (admin) ------------------------------------------
+    # Excluir NÃO apaga a linha -- só marca excluido_em preenchido e guarda
+    # quem e por quê (motivo obrigatório na tela). Some de todas as listas
+    # (painel, Minhas solicitações, relatórios), mas fica no banco pra
+    # auditoria -- mesma lógica já usada em ProdutoCadastro.excluido_em.
+    excluido_por = Column(String, nullable=True)
+    excluido_em = Column(DateTime, nullable=True)
+    motivo_exclusao = Column(Text, nullable=True)
+
 
 class SolicitacaoEvento(Base):
     """
@@ -1017,3 +1026,8 @@ class ProdutoCadastro(Base):
     excluido_por = Column(String, nullable=True)
     excluido_em = Column(DateTime, nullable=True)
     motivo_exclusao = Column(Text, nullable=True)
+
+    # --- 16/10: link das fotos (Drive do cliente, etc.) -------------------------
+    # Opcional, por produto -- preenchido na hora de solicitar o cadastro (tela da
+    # equipe ou /cadastro-seller), pra quem for cadastrar já abrir a pasta certa.
+    link_fotos = Column(String, nullable=True)
