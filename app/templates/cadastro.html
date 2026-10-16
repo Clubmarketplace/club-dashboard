@@ -48,6 +48,17 @@
     .cd-mp-feito.cd-mp-shopee { background:var(--canal-shopee-bg); color:var(--canal-shopee-tx); border-color:var(--canal-shopee-bg); }
     .cd-mp-na { background:var(--cmx-bg); color:var(--cmx-texto-suave); text-decoration:line-through; border-style:dashed; }
     .cd-mp-escolher { border-color:var(--cmx-rust); color:var(--cmx-rust); border-style:dashed; }
+    /* 16/10: Confirmar (trava de vez, só libera com os pedidos todos marcados) e
+       Definir plataformas (supervisor/gerente escolhe, antes de alguém assumir). */
+    .cd-btn-confirmar { background:var(--cmx-verde); border-color:var(--cmx-verde); color:#fff; margin-top:8px; }
+    .cd-btn-confirmar:disabled { background:var(--cmx-bg); border-color:var(--cmx-borda); color:var(--cmx-texto-suave); opacity:1; cursor:not-allowed; }
+    .cd-plat-bloco { margin-top:8px; padding:10px; border:1px dashed var(--cmx-borda); border-radius:10px; background:var(--cmx-bg); }
+    .cd-plat-bloco p { margin:0 0 8px; font-size:12px; color:var(--cmx-texto-suave); }
+    .cd-plat-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+    .cd-plat-chip { height:30px; padding:0 12px; border-radius:999px; border:1.5px dashed var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); font:700 12px Inter,sans-serif; cursor:pointer; }
+    .cd-plat-chip.ativo.plat-ml { background:var(--canal-ml-bg); color:var(--canal-ml-tx); border-color:var(--canal-ml-bg); border-style:solid; }
+    .cd-plat-chip.ativo.plat-tiktok { background:var(--canal-tiktok-bg); color:var(--canal-tiktok-tx); border-color:var(--canal-tiktok-bg); border-style:solid; }
+    .cd-plat-chip.ativo.plat-shopee { background:var(--canal-shopee-bg); color:var(--canal-shopee-tx); border-color:var(--canal-shopee-bg); border-style:solid; }
     /* 15/10: alguém assumiu mas o canal ainda não foi marcado -- colore o contorno
        com a cor do canal (sem preencher, isso é só quando já está ✔ feito), pra
        destacar visualmente o que falta cadastrar enquanto está com alguém. */
@@ -250,20 +261,20 @@
           <span class="cd-mp cd-mp-feito cd-mp-ml" style="height:26px;cursor:default;">✔ Mercado Livre</span>
           <span class="cd-mp cd-mp-feito cd-mp-tiktok" style="height:26px;cursor:default;">✔ TikTok</span>
           <span class="cd-mp cd-mp-feito cd-mp-shopee" style="height:26px;cursor:default;">✔ Shopee</span>
-          <span>Clicou errado? Clique de novo para desfazer. O produto fica <b>OK</b> quando os 3 estão resolvidos.</span>
+          <span>Clicou errado? Clique de novo para desfazer. Quando todos os canais pedidos estiverem marcados, clique em <b>✓ Confirmar cadastro</b> pra concluir.</span>
         </div>
 
         <div id="cd-lista" data-eu="{{ usuario_logado.nome_exibicao if usuario_logado else '' }}" data-papel="{{ usuario_logado.papel if usuario_logado else '' }}"><div class="cd-vazio">Carregando…</div></div>
 
         <div class="cd-info">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
-          <div>Os produtos chegam sozinhos do Operador Logístico, no momento em que uma nota com produto novo é lançada — é a mesma informação da mensagem de Zap para o time de Cadastro — e você também pode incluir um à mão. Em cada produto, clique no canal em que você cadastrou (Mercado Livre, TikTok ou Shopee): ele ganha a cor do canal e o sistema guarda <b>quem</b> e <b>quando</b>; clicou errado, clique de novo para desfazer. Se o produto não vai para algum canal, use <b>Não se aplica…</b> na linha e clique nesse canal. Quando os 3 estiverem resolvidos, ele fica <b>OK</b> e sai dos pendentes. Se um cadastro precisar ser refeito, inclua-o em <b>+ Incluir produto</b> com a marca <b>↻ REFAZER</b>: entra como solicitação nova e todos veem que é um refazer.</div>
+          <div>Os produtos chegam sozinhos do Operador Logístico, no momento em que uma nota com produto novo é lançada — é a mesma informação da mensagem de Zap para o time de Cadastro — e você também pode incluir um à mão. Se chegou sozinho e ainda não tem plataforma definida, supervisor/gerente usa <b>🏷 Definir plataformas</b> pra marcar quais marketplaces essa solicitação precisa — o que não for marcado já vira "não se aplica" sozinho, sem precisar clicar. Em cada produto, clique no canal em que você cadastrou (Mercado Livre, TikTok ou Shopee): ele ganha a cor do canal e o sistema guarda <b>quem</b> e <b>quando</b>; clicou errado, clique de novo para desfazer. Quando todos os canais pedidos estiverem marcados, clique em <b>✓ Confirmar cadastro</b> — só aí o produto trava e fica <b>Concluído</b>; marcar o último canal sozinho não fecha mais nada. Se um cadastro precisar ser refeito, inclua-o em <b>+ Incluir produto</b> com a marca <b>↻ REFAZER</b>: entra como solicitação nova e todos veem que é um refazer.</div>
         </div>
       </main>
     </div>
   </div>
 
-  <script src="/static/cadastro.js?v=11"></script>
+  <script src="/static/cadastro.js?v=12"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
