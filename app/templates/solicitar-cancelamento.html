@@ -134,20 +134,25 @@
   .aviso { font-size:12.5px; margin-top:10px; text-align:center; }
   .aviso.erro { color:var(--red); }
 
-  /* Evidência (foto e/ou link) -- opcional, pros dois tipos (16/10) */
-  .grupo-evidencia { margin-top:18px; }
-  .evidencia-linha { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:8px; }
+  /* Evidência (foto(s) e/ou link) -- opcional, POR VENDA, pros dois tipos (16/10) */
+  .grupo-evidencia-item { margin-top:12px; padding-top:12px; border-top:1px dashed var(--line); }
+  .evidencia-linha { display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
   .evidencia-linha .btn-colar-foto {
-    flex:0 0 auto; padding:10px 14px; border-radius:9px; border:1.5px dashed var(--amber);
-    background:#fff7e8; color:#8a5a10; font-weight:600; font-size:13px; cursor:pointer;
+    flex:0 0 auto; padding:9px 13px; border-radius:9px; border:1.5px dashed var(--amber);
+    background:#fff7e8; color:#8a5a10; font-weight:600; font-size:12.5px; cursor:pointer;
   }
   .evidencia-linha .btn-colar-foto:hover { background:#ffefd0; }
   .evidencia-linha .evidencia-ou { font-size:12.5px; color:var(--text-dim); }
-  .evidencia-linha .campo-link-evidencia { flex:1 1 220px; min-width:180px; }
-  .evidencia-status { font-size:12px; color:#8a5a10; margin:6px 0 0; }
-  .evidencia-preview { display:flex; align-items:flex-start; gap:12px; margin-top:10px; }
-  .evidencia-preview img { max-width:160px; max-height:120px; border-radius:8px; border:1.5px solid var(--line); display:block; }
-  .btn-remover-foto { border:none; background:none; color:var(--red); font-size:12.5px; font-weight:600; cursor:pointer; padding:0; }
+  .evidencia-linha .campo-link-evidencia { flex:1 1 200px; min-width:160px; }
+  .status-colar { font-size:12px; color:#8a5a10; margin:6px 0 0; }
+  .preview-fotos { display:none; flex-wrap:wrap; gap:8px; margin-top:10px; }
+  .miniatura-foto { position:relative; }
+  .miniatura-foto img { width:72px; height:72px; object-fit:cover; border-radius:8px; border:1.5px solid var(--line); display:block; }
+  .btn-remover-miniatura {
+    position:absolute; top:-6px; right:-6px; width:20px; height:20px; border-radius:50%;
+    border:1.5px solid #fff; background:var(--red); color:#fff; font-size:11px; line-height:1;
+    cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0;
+  }
 
   /* ---------- Estrutura (vale pra todas as larguras) ---------- */
   .topo-form { margin-bottom:18px; }
@@ -202,6 +207,9 @@
     .modo-largo form.com-sku .item-venda .campo-sku { grid-column:3; grid-row:1; height:44px; }
     .modo-largo form.com-sku .item-venda .campo-motivo { grid-column:4; }
     .modo-largo form.com-sku .item-venda .btn-remover-item { grid-column:5; }
+    /* Evidência ocupa a largura toda, numa 2ª linha da grade do item (vale
+       com ou sem SKU -- "1 / -1" cobre quantas colunas a grade tiver). */
+    .modo-largo .item-venda .grupo-evidencia-item { grid-column:1 / -1; grid-row:2; margin-top:4px; padding-top:10px; }
 
     .modo-largo .acoes-form { flex-direction:row; gap:12px; margin-top:14px; }
     .modo-largo .acoes-form .btn-adicionar, .modo-largo .acoes-form button[type="submit"] { flex:1; margin-top:0; height:46px; padding:0 14px; }
@@ -341,22 +349,6 @@
       <div class="cabecalho-vendas"><span></span><span>Nº da venda</span><span class="cab-sku">SKU (opcional)</span><span class="cab-motivo">Motivo do cancelamento</span><span></span></div>
 
       <div class="bloco-itens" id="bloco-itens"></div>
-
-      <div class="grupo-evidencia">
-        <label>Foto ou link (opcional)</label>
-        <p class="dica-tipo">Evidência do problema (print, foto, ou link do anúncio/reclamação) -- ajuda a equipe a analisar mais rápido.</p>
-        <div class="evidencia-linha">
-          <button type="button" class="btn-colar-foto" id="botao-colar-foto">📎 Colar ou escolher foto</button>
-          <span class="evidencia-ou">ou</span>
-          <input type="text" id="campo-link-evidencia" class="campo-link-evidencia" placeholder="cole aqui um link" />
-        </div>
-        <input type="file" id="campo-arquivo-foto" accept="image/*" style="display:none" />
-        <p class="evidencia-status" id="status-colar" style="display:none;"></p>
-        <div class="evidencia-preview" id="preview-foto" style="display:none;">
-          <img id="preview-foto-img" alt="Foto anexada" />
-          <button type="button" class="btn-remover-foto" id="botao-remover-foto">Remover foto ✕</button>
-        </div>
-      </div>
 
       <div class="aviso-caixa" id="aviso-caixa"></div>
 
@@ -585,6 +577,16 @@
       <input type="text" class="campo-sku" placeholder="SKU (opcional)" autocomplete="off" maxlength="60" />
       <label class="rotulo-motivo">${TEXTOS_TIPO[tipoAtual()].rotulo}</label>
       <textarea class="campo-motivo" placeholder="${TEXTOS_TIPO[tipoAtual()].placeholder}" required></textarea>
+      <div class="grupo-evidencia-item">
+        <div class="evidencia-linha">
+          <button type="button" class="btn-colar-foto">📎 Colar ou escolher foto</button>
+          <span class="evidencia-ou">ou</span>
+          <input type="text" class="campo-link-evidencia" placeholder="cole aqui um link (opcional)" />
+        </div>
+        <input type="file" class="campo-arquivo-foto" accept="image/*" style="display:none" />
+        <p class="status-colar" style="display:none;"></p>
+        <div class="preview-fotos"></div>
+      </div>
     `;
     // No layout horizontal o motivo começa com 1 linha e cresce se precisar.
     const motivo = div.querySelector(".campo-motivo");
@@ -597,7 +599,103 @@
       div.remove();
       atualizarNumerosEBotoesRemover();
     });
+
+    // --- Evidência desta venda: 1+ fotos (colar/arquivo) e/ou link ---
+    div.fotosBase64 = [];
+    const botaoColarFoto = div.querySelector(".btn-colar-foto");
+    const campoArquivoFoto = div.querySelector(".campo-arquivo-foto");
+    const statusColar = div.querySelector(".status-colar");
+    botaoColarFoto.addEventListener("click", () => {
+      // Primeiro clique: arma o "modo colar" (nesta venda) por 15s. Clicar
+      // de novo enquanto está esperando abre o seletor de arquivo.
+      if (itemArmadoParaColar === div) { pararDeEsperarColar(); campoArquivoFoto.click(); return; }
+      itemArmadoParaColar = div;
+      statusColar.style.display = "block";
+      statusColar.textContent = "Pressione Ctrl+V pra colar a imagem copiada... (ou clique de novo pra escolher um arquivo)";
+      clearTimeout(timerAguardandoColar);
+      timerAguardandoColar = setTimeout(pararDeEsperarColar, 15000);
+    });
+    campoArquivoFoto.addEventListener("change", () => {
+      const arquivo = campoArquivoFoto.files[0];
+      if (arquivo) processarArquivoFoto(div, arquivo);
+      campoArquivoFoto.value = "";
+    });
+
     return div;
+  }
+
+  // ---------- Evidência: estado compartilhado entre os itens (só uma venda por vez pode estar "esperando colar") ----------
+  let itemArmadoParaColar = null;
+  let timerAguardandoColar = null;
+  const MAX_FOTOS_POR_VENDA = 5;
+
+  function pararDeEsperarColar() {
+    if (itemArmadoParaColar) {
+      const status = itemArmadoParaColar.querySelector(".status-colar");
+      if (status) status.style.display = "none";
+    }
+    itemArmadoParaColar = null;
+    clearTimeout(timerAguardandoColar);
+  }
+
+  document.addEventListener("paste", (evento) => {
+    if (!itemArmadoParaColar) return;
+    const itens = evento.clipboardData && evento.clipboardData.items;
+    if (!itens) return;
+    for (const item of itens) {
+      if (item.type && item.type.startsWith("image/")) {
+        evento.preventDefault();
+        const divAlvo = itemArmadoParaColar;
+        processarArquivoFoto(divAlvo, item.getAsFile());
+        pararDeEsperarColar();
+        return;
+      }
+    }
+  });
+
+  function processarArquivoFoto(div, arquivo) {
+    if (!arquivo || !arquivo.type || !arquivo.type.startsWith("image/")) {
+      return mostrarErro("O arquivo colado/escolhido precisa ser uma imagem.");
+    }
+    if (div.fotosBase64.length >= MAX_FOTOS_POR_VENDA) {
+      return mostrarErro(`Máximo de ${MAX_FOTOS_POR_VENDA} fotos por venda.`);
+    }
+    const leitor = new FileReader();
+    leitor.onload = () => {
+      const imagem = new Image();
+      imagem.onload = () => {
+        // Redimensiona pro maior lado caber em 1280px e comprime em JPEG --
+        // fica pequeno o bastante pra gravar direto no banco (não é arquivo
+        // no disco: o container do Railway é efêmero e perderia tudo no deploy).
+        const maiorLado = Math.max(imagem.width, imagem.height);
+        const escala = maiorLado > 1280 ? 1280 / maiorLado : 1;
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.round(imagem.width * escala);
+        canvas.height = Math.round(imagem.height * escala);
+        canvas.getContext("2d").drawImage(imagem, 0, 0, canvas.width, canvas.height);
+        div.fotosBase64.push(canvas.toDataURL("image/jpeg", 0.75));
+        renderizarMiniaturas(div);
+      };
+      imagem.src = leitor.result;
+    };
+    leitor.readAsDataURL(arquivo);
+  }
+
+  function renderizarMiniaturas(div) {
+    const previewFotos = div.querySelector(".preview-fotos");
+    previewFotos.innerHTML = "";
+    div.fotosBase64.forEach((base64, indice) => {
+      const miniatura = document.createElement("div");
+      miniatura.className = "miniatura-foto";
+      miniatura.innerHTML = `<img src="${base64}" alt="Foto ${indice + 1}" /><button type="button" class="btn-remover-miniatura" aria-label="Remover foto">✕</button>`;
+      miniatura.querySelector(".btn-remover-miniatura").addEventListener("click", () => {
+        div.fotosBase64.splice(indice, 1);
+        renderizarMiniaturas(div);
+      });
+      previewFotos.appendChild(miniatura);
+    });
+    previewFotos.style.display = div.fotosBase64.length ? "flex" : "none";
+    div.querySelector(".btn-colar-foto").textContent = div.fotosBase64.length ? "📎 Adicionar outra foto" : "📎 Colar ou escolher foto";
   }
 
   function atualizarNumerosEBotoesRemover() {
@@ -620,89 +718,6 @@
   const form = document.getElementById("form-cancelamento");
   const botaoEnviar = document.getElementById("botao-enviar");
   const avisoErro = document.getElementById("aviso-erro");
-
-  // ---------- Evidência: foto (colar/arquivo, redimensionada no navegador) ou link ----------
-  const botaoColarFoto = document.getElementById("botao-colar-foto");
-  const campoArquivoFoto = document.getElementById("campo-arquivo-foto");
-  const campoLinkEvidencia = document.getElementById("campo-link-evidencia");
-  const previewFoto = document.getElementById("preview-foto");
-  const previewFotoImg = document.getElementById("preview-foto-img");
-  const botaoRemoverFoto = document.getElementById("botao-remover-foto");
-  const statusColar = document.getElementById("status-colar");
-  let fotoBase64 = null;
-  let aguardandoColar = false;
-  let timerAguardandoColar = null;
-
-  function pararDeEsperarColar() {
-    aguardandoColar = false;
-    statusColar.style.display = "none";
-    clearTimeout(timerAguardandoColar);
-  }
-
-  botaoColarFoto.addEventListener("click", () => {
-    // Primeiro clique: arma o "modo colar" por 15s. Clicar de novo enquanto
-    // está esperando abre o seletor de arquivo como alternativa.
-    if (aguardandoColar) { pararDeEsperarColar(); campoArquivoFoto.click(); return; }
-    aguardandoColar = true;
-    statusColar.style.display = "block";
-    statusColar.textContent = "Pressione Ctrl+V pra colar a imagem copiada... (ou clique de novo pra escolher um arquivo)";
-    clearTimeout(timerAguardandoColar);
-    timerAguardandoColar = setTimeout(pararDeEsperarColar, 15000);
-  });
-
-  document.addEventListener("paste", (evento) => {
-    if (!aguardandoColar) return;
-    const itens = evento.clipboardData && evento.clipboardData.items;
-    if (!itens) return;
-    for (const item of itens) {
-      if (item.type && item.type.startsWith("image/")) {
-        evento.preventDefault();
-        processarArquivoFoto(item.getAsFile());
-        pararDeEsperarColar();
-        return;
-      }
-    }
-  });
-
-  campoArquivoFoto.addEventListener("change", () => {
-    const arquivo = campoArquivoFoto.files[0];
-    if (arquivo) processarArquivoFoto(arquivo);
-  });
-
-  function processarArquivoFoto(arquivo) {
-    if (!arquivo || !arquivo.type || !arquivo.type.startsWith("image/")) {
-      return mostrarErro("O arquivo colado/escolhido precisa ser uma imagem.");
-    }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      const imagem = new Image();
-      imagem.onload = () => {
-        // Redimensiona pro maior lado caber em 1280px e comprime em JPEG --
-        // fica pequeno o bastante pra gravar direto no banco (não é arquivo
-        // no disco: o container do Railway é efêmero e perderia tudo no deploy).
-        const maiorLado = Math.max(imagem.width, imagem.height);
-        const escala = maiorLado > 1280 ? 1280 / maiorLado : 1;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(imagem.width * escala);
-        canvas.height = Math.round(imagem.height * escala);
-        canvas.getContext("2d").drawImage(imagem, 0, 0, canvas.width, canvas.height);
-        fotoBase64 = canvas.toDataURL("image/jpeg", 0.75);
-        previewFotoImg.src = fotoBase64;
-        previewFoto.style.display = "flex";
-        botaoColarFoto.textContent = "📎 Trocar foto";
-      };
-      imagem.src = leitor.result;
-    };
-    leitor.readAsDataURL(arquivo);
-  }
-
-  function removerFoto() {
-    fotoBase64 = null;
-    campoArquivoFoto.value = "";
-    previewFoto.style.display = "none";
-    botaoColarFoto.textContent = "📎 Colar ou escolher foto";
-  }
-  botaoRemoverFoto.addEventListener("click", removerFoto);
 
   function mostrarErro(msg) {
     avisoErro.textContent = msg;
@@ -740,6 +755,8 @@
       numero_venda: div.querySelector(".campo-numero-venda").value.trim(),
       motivo: div.querySelector(".campo-motivo").value.trim(),
       sku: (div.querySelector(".campo-sku").value || "").trim() || null,
+      fotos_base64: div.fotosBase64 && div.fotosBase64.length ? div.fotosBase64 : null,
+      link_evidencia: (div.querySelector(".campo-link-evidencia").value || "").trim() || null,
     }));
     if (itens.some(i => !i.numero_venda || !i.motivo)) return mostrarErro("Preencha o número da venda e o motivo de todas as vendas.");
 
@@ -773,8 +790,6 @@
       itens,
       galpao,
       confirmar_duplicadas: confirmarDuplicadas,
-      foto_base64: fotoBase64,
-      link_evidencia: campoLinkEvidencia.value.trim() || null,
     };
 
     botaoEnviar.disabled = true;
@@ -865,9 +880,7 @@
     contadorItens = 0;
     adicionarItem();
     aplicarTipo();
-    removerFoto();
-    pararDeEsperarColar();
-    campoLinkEvidencia.value = "";
+    pararDeEsperarColar(); // novo item já nasce sem foto/link; só garante que não ficou "esperando colar"
     document.getElementById("tela-sucesso").style.display = "none";
     document.getElementById("tela-formulario").style.display = "block";
   });
