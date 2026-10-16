@@ -20,6 +20,7 @@ cada uma vira uma linha própria (tudo ou nada).
 Nome de conta: tudo que compara/agrupa/filtra usa a conta_chave (ver
 app/contas_util.py), pra "Friaça", "friaca" e "FRIAÇA" serem a mesma.
 """
+import json
 import re
 import io
 from datetime import date, datetime, timedelta, timezone
@@ -119,6 +120,13 @@ class ItemCancelamento(BaseModel):
     # Opcional, pras plataformas ainda não integradas. No Mercado Livre o
     # SKU é lido do próprio pedido (cancelamento_apoio.py) e este campo é ignorado.
     sku: Optional[str] = None
+    # --- 16/10: evidência (opcional, pros dois tipos "cancelamento" e
+    # "reputacao") -- POR VENDA, já que cada item desses vira sua própria
+    # solicitação. Uma ou várias fotos (data URL base64, já comprimidas no
+    # navegador antes de enviar) e/ou um link (Drive, print, o próprio
+    # anúncio). Nada obrigatório; fotos e link são independentes.
+    fotos_base64: Optional[list[str]] = None
+    link_evidencia: Optional[str] = None
 
     @field_validator("sku")
     @classmethod
@@ -134,6 +142,35 @@ class ItemCancelamento(BaseModel):
             raise ValueError("Campo obrigatório não pode ficar em branco.")
         return valor
 
+    @field_validator("fotos_base64")
+    @classmethod
+    def validar_fotos(cls, valor: Optional[list]) -> Optional[list]:
+        if not valor:
+            return None
+        # Limite de segurança (não o tamanho esperado de verdade): no
+        # máximo 5 fotos por venda, cada uma até ~2.5 milhões de
+        # caracteres base64 (~1.8 MB) -- bem acima do que a compressão
+        # no navegador deveria gerar.
+        if len(valor) > 5:
+            raise ValueError("No máximo 5 fotos por venda.")
+        fotos = []
+        for foto in valor:
+            foto = (foto or "").strip()
+            if not foto:
+                continue
+            if not foto.startswith("data:image/"):
+                raise ValueError("Foto inválida.")
+            if len(foto) > 2_500_000:
+                raise ValueError("Foto muito grande. Tente uma imagem menor.")
+            fotos.append(foto)
+        return fotos or None
+
+    @field_validator("link_evidencia")
+    @classmethod
+    def validar_link_evidencia(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:500] or None
+
 
 class NovaSolicitacaoLote(BaseModel):
     plataforma: str
@@ -145,34 +182,6 @@ class NovaSolicitacaoLote(BaseModel):
     # Quando o formulário já avisou "essa venda já foi solicitada" e a
     # pessoa decidiu enviar mesmo assim.
     confirmar_duplicadas: bool = False
-    # --- 16/10: evidência (opcional, pros dois tipos) ---------------------
-    # Foto como data URL base64 (já comprimida no navegador antes de
-    # enviar) e/ou um link (ex.: Drive, print num serviço de imagem, o
-    # próprio anúncio). Nenhum dos dois é obrigatório, e são independentes.
-    # Aplica-se à solicitação inteira (todas as vendas deste envio).
-    foto_base64: Optional[str] = None
-    link_evidencia: Optional[str] = None
-
-    @field_validator("foto_base64")
-    @classmethod
-    def validar_foto(cls, valor: Optional[str]) -> Optional[str]:
-        valor = (valor or "").strip()
-        if not valor:
-            return None
-        if not valor.startswith("data:image/"):
-            raise ValueError("Foto inválida.")
-        # ~2.5 milhões de caracteres base64 ~= 1.8 MB de imagem -- bem acima
-        # do que a compressão no navegador deveria gerar; é só um limite de
-        # segurança contra erro ou abuso, não o tamanho esperado de verdade.
-        if len(valor) > 2_500_000:
-            raise ValueError("Foto muito grande. Tente uma imagem menor.")
-        return valor
-
-    @field_validator("link_evidencia")
-    @classmethod
-    def validar_link_evidencia(cls, valor: Optional[str]) -> Optional[str]:
-        valor = limpar_espacos(valor or "")
-        return valor[:500] or None
 
     @field_validator("plataforma")
     @classmethod
@@ -294,10 +303,22 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "produto_titulo": s.produto_titulo,
         "assumido_primeiro_por": s.assumido_primeiro_por,
         "assumido_primeiro_em": s.assumido_primeiro_em.isoformat() if s.assumido_primeiro_em else None,
-        "foto_base64": s.foto_base64,
+        "fotos_base64": _fotos_de(s),
         "link_evidencia": s.link_evidencia,
         **_dados_atendimento(s),
     }
+
+
+def _fotos_de(s: SolicitacaoCancelamento) -> list:
+    """Decodifica a lista JSON de fotos gravada em fotos_base64; "" ou
+    JSON inválido (não deveria acontecer, mas por segurança) vira lista vazia."""
+    if not s.fotos_base64:
+        return []
+    try:
+        fotos = json.loads(s.fotos_base64)
+        return fotos if isinstance(fotos, list) else []
+    except (ValueError, TypeError):
+        return []
 
 
 
@@ -426,8 +447,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 solicitado_por=usuario.nome_exibicao if usuario else None,
                 galpao=galpao,
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
-                foto_base64=corpo.foto_base64,
-                link_evidencia=corpo.link_evidencia,
+                fotos_base64=(json.dumps(item.fotos_base64) if item.fotos_base64 else None),
+                link_evidencia=item.link_evidencia,
             )
             db.add(solicitacao)
             criadas.append(solicitacao)
