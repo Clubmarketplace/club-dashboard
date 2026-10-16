@@ -276,6 +276,19 @@ def _todos_resolvidos(produto: ProdutoCadastro) -> bool:
     return all(_estado_mp(produto, k) in ("feito", "nao_se_aplica") for k in MARKETPLACES)
 
 
+def _precisa_definir_plataformas(produto: ProdutoCadastro) -> bool:
+    """
+    16/10 (correção): produto automático (nota fiscal) sem NENHUM dos 3
+    marketplaces tocado ainda precisa que supervisor/gerente escolha quais
+    essa solicitação precisa (ver /plataformas) ANTES de qualquer operador
+    poder assumir ou marcar um canal -- senão o operador clicando direto nos
+    botões de canal é quem fica "escolhendo" sozinho, o que não pode.
+    Produto manual/seller já chega com isso resolvido na criação (plataformas
+    escolhidas na hora, o resto já marcado "não se aplica"), então nunca cai aqui.
+    """
+    return produto.origem == "automatico" and all(_estado_mp(produto, k) is None for k in MARKETPLACES)
+
+
 def _recalcular_status(produto: ProdutoCadastro, usuario_nome: str) -> None:
     """
     16/10: NÃO trava mais sozinho quando os 3 marketplaces ficam resolvidos --
@@ -328,6 +341,7 @@ def _produto_json(p: ProdutoCadastro) -> dict:
         "cadastrado_em": _iso_utc(p.cadastrado_em),
         "origem": p.origem or "automatico",
         "criado_por": p.criado_por,
+        "link_fotos": p.link_fotos,
         "marketplaces": _dados_marketplaces(p),
         "refazer": bool(p.refazer),
         "kit": bool(p.kit),
@@ -440,7 +454,7 @@ class ProdutoManualIn(BaseModel):
 
 
 def _incluir_um(db: Session, usuario: Usuario, *, empresa: str, produto: str, sku: str, fornecedor=None, numero_nota=None,
-                gtin=None, quantidade: float = 0, custo_unitario: float = 0, refazer: bool = False):
+                gtin=None, quantidade: float = 0, custo_unitario: float = 0, refazer: bool = False, link_fotos=None):
     """
     Cria UM produto manual (sem commit -- quem chama confirma). Levanta HTTPException
     com o motivo quando não pode (campo faltando, negativo, SKU já pendente nessa
@@ -485,6 +499,7 @@ def _incluir_um(db: Session, usuario: Usuario, *, empresa: str, produto: str, sk
         origem="manual",
         criado_por=usuario.nome_exibicao,
         refazer=bool(refazer),
+        link_fotos=_limpo(link_fotos),
     )
     db.add(registro)
     db.flush()  # já aparece nas próximas conferências (SKU repetido no mesmo lote)
@@ -532,6 +547,9 @@ class ItemLoteIn(BaseModel):
     # planilha com uma coluna "Fornecedor" e outra "Nota").
     fornecedor: Optional[str] = ""
     numero_nota: Optional[str] = ""
+    # 16/10: link do Drive (ou onde estiverem) com as fotos do produto -- opcional,
+    # por item (cada produto pode ter uma pasta/link diferente).
+    link_fotos: Optional[str] = ""
 
 
 class LoteManualIn(BaseModel):
@@ -598,7 +616,7 @@ def incluir_lote_manual(
                     fornecedor=(it.fornecedor or corpo.fornecedor),
                     numero_nota=(it.numero_nota or corpo.numero_nota),
                     gtin=it.gtin, quantidade=it.quantidade, custo_unitario=it.custo_unitario,
-                    refazer=corpo.refazer,
+                    refazer=corpo.refazer, link_fotos=it.link_fotos,
                 )
             except HTTPException as e:
                 ignorados.append({"linha": n, "sku": (it.sku or "").strip(), "motivo": e.detail})
@@ -711,6 +729,8 @@ def assumir_produto(
     if produto is None:
         raise HTTPException(status_code=404, detail="Produto não encontrado.")
     if corpo.assumir:
+        if _precisa_definir_plataformas(produto):
+            raise HTTPException(status_code=409, detail="Aguarde um supervisor/gerente definir quais marketplaces essa solicitação precisa antes de assumir.")
         if produto.assumido_por and produto.assumido_por != usuario.nome_exibicao and not corpo.forcar:
             raise HTTPException(status_code=409, detail=f"{produto.assumido_por} já assumiu este cadastro.")
         if produto.assumido_por != usuario.nome_exibicao:
@@ -858,6 +878,8 @@ def marcar_marketplace(
             status_code=423,
             detail="Este produto já foi cadastrado e confirmado -- está travado. Peça a um supervisor para reabrir, informando o motivo.",
         )
+    if estado != "pendente" and _precisa_definir_plataformas(produto):
+        raise HTTPException(status_code=409, detail="Aguarde um supervisor/gerente definir quais marketplaces essa solicitação precisa antes de marcar.")
 
     if estado == "pendente":
         setattr(produto, f"{chave}_status", None)
@@ -946,6 +968,8 @@ def alterar_status_cadastro(
             status_code=423,
             detail="Este produto já foi cadastrado e confirmado -- está travado. Peça a um supervisor para reabrir, informando o motivo.",
         )
+    if corpo.cadastrado and _precisa_definir_plataformas(produto):
+        raise HTTPException(status_code=409, detail="Aguarde um supervisor/gerente definir quais marketplaces essa solicitação precisa antes de marcar.")
     agora = datetime.utcnow()
     for k in MARKETPLACES:
         if corpo.cadastrado:

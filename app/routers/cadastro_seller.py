@@ -47,6 +47,9 @@ class ItemLoteSellerIn(BaseModel):
     # pode juntar produtos de mais de uma nota).
     fornecedor: Optional[str] = ""
     numero_nota: Optional[str] = ""
+    # 16/10: link do Drive (ou onde estiverem) com as fotos do produto -- opcional,
+    # por item (mesma ideia da tela da equipe).
+    link_fotos: Optional[str] = ""
 
 
 class LoteSellerIn(BaseModel):
@@ -92,7 +95,7 @@ def incluir_lote_seller(
                     db, usuario, empresa=usuario.conta_vinculada, produto=it.produto, sku=it.sku,
                     fornecedor=it.fornecedor, numero_nota=it.numero_nota,
                     gtin=it.gtin, quantidade=it.quantidade, custo_unitario=it.custo_unitario,
-                    refazer=False,
+                    refazer=False, link_fotos=it.link_fotos,
                 )
             except HTTPException as e:
                 ignorados.append({"linha": n, "sku": (it.sku or "").strip(), "motivo": e.detail})
