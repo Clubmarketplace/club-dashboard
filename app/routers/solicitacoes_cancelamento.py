@@ -145,6 +145,34 @@ class NovaSolicitacaoLote(BaseModel):
     # Quando o formulário já avisou "essa venda já foi solicitada" e a
     # pessoa decidiu enviar mesmo assim.
     confirmar_duplicadas: bool = False
+    # --- 16/10: evidência (opcional, pros dois tipos) ---------------------
+    # Foto como data URL base64 (já comprimida no navegador antes de
+    # enviar) e/ou um link (ex.: Drive, print num serviço de imagem, o
+    # próprio anúncio). Nenhum dos dois é obrigatório, e são independentes.
+    # Aplica-se à solicitação inteira (todas as vendas deste envio).
+    foto_base64: Optional[str] = None
+    link_evidencia: Optional[str] = None
+
+    @field_validator("foto_base64")
+    @classmethod
+    def validar_foto(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if not valor.startswith("data:image/"):
+            raise ValueError("Foto inválida.")
+        # ~2.5 milhões de caracteres base64 ~= 1.8 MB de imagem -- bem acima
+        # do que a compressão no navegador deveria gerar; é só um limite de
+        # segurança contra erro ou abuso, não o tamanho esperado de verdade.
+        if len(valor) > 2_500_000:
+            raise ValueError("Foto muito grande. Tente uma imagem menor.")
+        return valor
+
+    @field_validator("link_evidencia")
+    @classmethod
+    def validar_link_evidencia(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:500] or None
 
     @field_validator("plataforma")
     @classmethod
@@ -266,6 +294,8 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "produto_titulo": s.produto_titulo,
         "assumido_primeiro_por": s.assumido_primeiro_por,
         "assumido_primeiro_em": s.assumido_primeiro_em.isoformat() if s.assumido_primeiro_em else None,
+        "foto_base64": s.foto_base64,
+        "link_evidencia": s.link_evidencia,
         **_dados_atendimento(s),
     }
 
@@ -396,6 +426,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 solicitado_por=usuario.nome_exibicao if usuario else None,
                 galpao=galpao,
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
+                foto_base64=corpo.foto_base64,
+                link_evidencia=corpo.link_evidencia,
             )
             db.add(solicitacao)
             criadas.append(solicitacao)
