@@ -673,7 +673,10 @@
     }
 
     const largura = 880;
-    const margemEsq = 54, margemDir = 96, margemTopo = 10, margemBaixo = 22;
+    // 16/10: margemEsq era 54 -- com texto "ago/2026" ancorado em
+    // margemEsq-10 (= 44), a ponta esquerda do texto ficava negativa e o
+    // navegador cortava as primeiras letras do mês. 78 dá folga.
+    const margemEsq = 78, margemDir = 96, margemTopo = 10, margemBaixo = 22;
     const larguraPlot = largura - margemEsq - margemDir;
     const n = meses.length;
     // Altura do SVG acompanha a quantidade de meses (compacto, sem
