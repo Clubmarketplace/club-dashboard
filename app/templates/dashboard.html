@@ -232,26 +232,10 @@
                 <span class="adm-evolucao-badge" id="adm-evolucao-comparacao"></span>
               </div>
               <div class="adm-grafico-wrap" style="margin-top:10px;">
-                <svg id="adm-grafico-evolucao" width="100%" height="228" viewBox="0 0 600 228" preserveAspectRatio="none"></svg>
+                <svg id="adm-grafico-evolucao" width="100%" height="355" viewBox="0 0 600 355" preserveAspectRatio="none"></svg>
               </div>
-              <p class="adm-grafico-dica" id="adm-grafico-dica">Toque ou passe o mouse num ponto pra ver o valor do dia.</p>
+              <p class="adm-grafico-dica" id="adm-grafico-dica">Toque ou passe o mouse num ponto pra ver o valor do dia. Clique em "3 meses" pra comparar os últimos 3 meses lado a lado, dia a dia.</p>
               <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
-
-              <div class="adm-periodo-comparativo">
-                <div class="adm-periodo-comp-titulo">Total vendido por período</div>
-                <div class="adm-periodo-comp-item">
-                  <div class="adm-periodo-comp-cabecalho"><span>15 dias</span><span id="adm-comp-15-valor">R$ 0,00</span></div>
-                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-15-barra" style="width:0%"></div></div>
-                </div>
-                <div class="adm-periodo-comp-item">
-                  <div class="adm-periodo-comp-cabecalho"><span>30 dias</span><span id="adm-comp-30-valor">R$ 0,00</span></div>
-                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-30-barra" style="width:0%"></div></div>
-                </div>
-                <div class="adm-periodo-comp-item">
-                  <div class="adm-periodo-comp-cabecalho"><span>3 meses</span><span id="adm-comp-3m-valor">R$ 0,00</span></div>
-                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-3m-barra" style="width:0%"></div></div>
-                </div>
-              </div>
             </div>
           </div>
 
@@ -526,7 +510,6 @@
         "3meses": { meses: d.evolucao_3_meses || [] },
       };
       desenharEvolucaoAdmin(document.querySelector(".adm-btn-filtro-evolucao.ativo").dataset.periodo);
-      renderizarComparativoPeriodos();
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
@@ -629,7 +612,7 @@
   const _ADM_GRAFICO_MARGEM_ESQ = 46;
   const _ADM_GRAFICO_LARGURA = 554;
   const _ADM_GRAFICO_TOPO = 10;
-  const _ADM_GRAFICO_BASE = 208;
+  const _ADM_GRAFICO_BASE = 335;
   const _ADM_GRAFICO_EIXO_X_Y = _ADM_GRAFICO_BASE + 16;
 
   function formatarEixoReais(v) {
@@ -697,25 +680,6 @@
       d += "C" + cp1x + "," + cp1y + " " + cp2x + "," + cp2y + " " + p2.x + "," + p2.y + " ";
     }
     return d;
-  }
-
-  // Comparativo "Total vendido por período" -- soma os três conjuntos já
-  // carregados (15 dias, 30 dias, 3 meses inteiros) e desenha 3 barras
-  // proporcionais ao maior total, pra dar noção de escala de um olhar só.
-  function renderizarComparativoPeriodos() {
-    const dados = window._admEvolucaoDados || {};
-    const total15 = ((dados["15dias"] || {}).atual || []).reduce((s, p) => s + p.venda_bruta, 0);
-    const total30 = ((dados["30dias"] || {}).atual || []).reduce((s, p) => s + p.venda_bruta, 0);
-    const meses3 = (dados["3meses"] || {}).meses || [];
-    const total3m = meses3.reduce((s, mes) => s + mes.dados.reduce((s2, p) => s2 + p.venda_bruta, 0), 0);
-
-    const maior = Math.max(total15, total30, total3m, 1);
-    document.getElementById("adm-comp-15-valor").textContent = formatarReais(total15);
-    document.getElementById("adm-comp-15-barra").style.width = Math.max((total15 / maior) * 100, total15 > 0 ? 2 : 0) + "%";
-    document.getElementById("adm-comp-30-valor").textContent = formatarReais(total30);
-    document.getElementById("adm-comp-30-barra").style.width = Math.max((total30 / maior) * 100, total30 > 0 ? 2 : 0) + "%";
-    document.getElementById("adm-comp-3m-valor").textContent = formatarReais(total3m);
-    document.getElementById("adm-comp-3m-barra").style.width = Math.max((total3m / maior) * 100, total3m > 0 ? 2 : 0) + "%";
   }
 
   function desenharEvolucaoAdmin(periodo) {
