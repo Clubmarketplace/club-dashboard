@@ -161,15 +161,20 @@ def _evolucao_3_meses(db: Session, conta_id: int | None) -> list[dict]:
 
 def _comparativo_mensal_6m(db: Session, conta_id: int | None) -> list[dict]:
     """
-    Total vendido por mês, últimos 6 meses (5 fechados + o atual, parcial
+    Total vendido por mês, últimos 3 meses (2 fechados + o atual, parcial
     até hoje) -- alimenta o gráfico de barras horizontais "Comparativo
     mensal" do dashboard do admin. Mesmo padrão de soma usado em
     `_evolucao_3_meses` (_somente_vendas_validas), só que somado o mês
     inteiro de uma vez em vez de dia a dia.
+
+    16/10: era 6 meses -- reduzido pra 3 (nome da função ficou
+    desatualizado, mas é só interno) pra o cartão ficar do tamanho do
+    cartão "Vendido hoje" ao lado, já que agora os dois viraram cartões
+    separados no dashboard (antes eram um só, empilhado).
     """
     hoje_br = datetime.now(_FUSO_BR).replace(hour=0, minute=0, second=0, microsecond=0)
     resultado = []
-    for deslocamento in range(5, -1, -1):  # mês mais antigo primeiro, atual por último
+    for deslocamento in range(2, -1, -1):  # mês mais antigo primeiro, atual por último
         inicio_mes_br = hoje_br.replace(day=1)
         for _ in range(deslocamento):
             inicio_mes_br = (inicio_mes_br - timedelta(days=1)).replace(day=1)
