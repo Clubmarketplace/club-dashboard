@@ -91,7 +91,7 @@
     {% endif %}
   {% endcall %}
 
-  {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos", "/produtividade-cancelamento"]) %}
+  {% call grupo("solicitacoes", "Solicitações cancelamentos", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos", "/produtividade-cancelamento"]) %}
     {{ item("/solicitar-cancelamento", "Nova solicitação") }}
     {{ item("/solicitacoes-painel", "Solicitações") }}
     {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
@@ -111,7 +111,7 @@
   {% endif %}
 
   {% if _eh_setor_cancelamento %}
-    {% call grupo("solicitacoes", "Solicitações sellers", ["/solicitar-cancelamento", "/solicitacoes-painel"] + (["/relatorio-cancelamentos", "/produtividade-cancelamento"] if _eh_gerente else [])) %}
+    {% call grupo("solicitacoes", "Solicitações cancelamentos", ["/solicitar-cancelamento", "/solicitacoes-painel"] + (["/relatorio-cancelamentos", "/produtividade-cancelamento"] if _eh_gerente else [])) %}
       {{ item("/solicitar-cancelamento", "Nova solicitação") }}
       {{ item("/solicitacoes-painel", "Solicitações") }}
       {% if _eh_gerente %}
@@ -122,7 +122,13 @@
   {% endif %}
 
   {% if _so_cadastro or _eh_setor_cadastro or not _restrito %}
-    {% call grupo("cadastro", "Cadastro", ["/cadastro"]) %}
+    {% call grupo("cadastro", "Solicitações de cadastro", ["/cadastro"]) %}
+      {#- 16/10: "Nova solicitação" -- igual o botão "+ Incluir produto" que já existe
+         dentro da tela /cadastro, só que alcançável direto pelo menu (igual o seller
+         tem em /cadastro-seller), pra quem precisa lançar um pedido de cadastro pra
+         uma empresa sem precisar primeiro achar o botão lá dentro. Não muda quem pode
+         fazer isso -- é a mesma ação de sempre, só mais fácil de achar. -#}
+      {{ item("/cadastro?novo=1", "Nova solicitação") }}
       {{ item("/cadastro", "Produtos para cadastro") }}
       {% if (not _restrito) or (_eh_setor_cadastro and _eh_gerente) %}{{ item("/cadastro/produtividade", "Produtividade") }}{% endif %}
     {% endcall %}
