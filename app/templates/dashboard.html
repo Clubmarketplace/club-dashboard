@@ -60,6 +60,16 @@
     .adm-evolucao-valor-grande { font-size:28px; font-weight:700; color:var(--cmx-texto); line-height:1; }
     .adm-evolucao-badge { font-size:12.5px; color:var(--cmx-texto-suave); }
     .adm-grafico-dica { margin:8px 0 0; font-size:11px; color:var(--cmx-texto-suave); }
+
+    .adm-periodo-comparativo { margin-top:18px; padding-top:14px; border-top:1px solid var(--cmx-borda); }
+    .adm-periodo-comp-titulo { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--cmx-texto-suave); margin-bottom:12px; }
+    .adm-periodo-comp-item { margin-bottom:12px; }
+    .adm-periodo-comp-item:last-child { margin-bottom:0; }
+    .adm-periodo-comp-cabecalho { display:flex; justify-content:space-between; align-items:baseline; font-size:13px; margin-bottom:5px; }
+    .adm-periodo-comp-cabecalho span:first-child { font-weight:600; color:var(--cmx-texto); }
+    .adm-periodo-comp-cabecalho span:last-child { color:var(--cmx-texto-suave); font-weight:600; }
+    .adm-periodo-comp-barra-fundo { height:9px; border-radius:6px; background:#eef1f4; overflow:hidden; }
+    .adm-periodo-comp-barra { height:100%; background:#2f6fe4; border-radius:6px; transition:width .2s; }
     .adm-grafico-legenda-meses { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--cmx-texto-suave); }
     .adm-legenda-mes-item { display:flex; align-items:center; gap:6px; }
     .adm-legenda-mes-tracinho { display:inline-block; width:16px; height:0; border-top-width:2.5px; border-top-style:solid; }
@@ -93,7 +103,7 @@
     @media (max-width:560px) { .adm-col-totais { flex-direction:column; } }
     .adm-total-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:16px; padding:14px 16px; flex:1; box-shadow:0 2px 10px rgba(0,0,0,.04); }
     .adm-total-card .titulo { font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); display:flex; align-items:center; gap:6px; }
-    .adm-total-card .valor { font-size:20px; font-weight:700; margin-top:2px; }
+    .adm-total-card .valor { font-size:17px; font-weight:700; margin-top:2px; }
     .adm-total-card .nota { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
 
     .adm-grid-setores { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; align-items:start; }
@@ -121,9 +131,9 @@
 
     .adm-top3 { margin-top:10px; padding-top:10px; border-top:1px dashed var(--cmx-borda); }
     .adm-top3-titulo { font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--cmx-texto-suave); margin-bottom:6px; }
-    .adm-top3-item { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:3px 0; font-size:12.5px; }
-    .adm-top3-item .nome { flex:1 1 auto; min-width:0; color:var(--cmx-texto); font-weight:600; white-space:normal; word-break:break-word; }
-    .adm-top3-item .valor { flex-shrink:0; color:var(--cmx-texto-suave); text-align:right; white-space:nowrap; }
+    .adm-top3-item { padding:4px 0; font-size:12.5px; }
+    .adm-top3-item .nome { display:block; color:var(--cmx-texto); font-weight:600; white-space:normal; word-break:break-word; }
+    .adm-top3-item .valor { display:block; color:var(--cmx-texto-suave); margin-top:1px; }
     .adm-top3-link { display:inline-block; margin-top:8px; font-size:11.5px; font-weight:600; color:#2f6fe4; text-decoration:none; }
     .adm-top3-link:hover { text-decoration:underline; }
 
@@ -218,10 +228,26 @@
                 <span class="adm-evolucao-badge" id="adm-evolucao-comparacao"></span>
               </div>
               <div class="adm-grafico-wrap" style="margin-top:10px;">
-                <svg id="adm-grafico-evolucao" width="100%" height="150" viewBox="0 0 600 150" preserveAspectRatio="none"></svg>
+                <svg id="adm-grafico-evolucao" width="100%" height="320" viewBox="0 0 600 320" preserveAspectRatio="none"></svg>
               </div>
               <p class="adm-grafico-dica" id="adm-grafico-dica">Toque ou passe o mouse num ponto pra ver o valor do dia.</p>
               <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
+
+              <div class="adm-periodo-comparativo">
+                <div class="adm-periodo-comp-titulo">Total vendido por período</div>
+                <div class="adm-periodo-comp-item">
+                  <div class="adm-periodo-comp-cabecalho"><span>15 dias</span><span id="adm-comp-15-valor">R$ 0,00</span></div>
+                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-15-barra" style="width:0%"></div></div>
+                </div>
+                <div class="adm-periodo-comp-item">
+                  <div class="adm-periodo-comp-cabecalho"><span>30 dias</span><span id="adm-comp-30-valor">R$ 0,00</span></div>
+                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-30-barra" style="width:0%"></div></div>
+                </div>
+                <div class="adm-periodo-comp-item">
+                  <div class="adm-periodo-comp-cabecalho"><span>3 meses</span><span id="adm-comp-3m-valor">R$ 0,00</span></div>
+                  <div class="adm-periodo-comp-barra-fundo"><div class="adm-periodo-comp-barra" id="adm-comp-3m-barra" style="width:0%"></div></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -496,6 +522,7 @@
         "3meses": { meses: d.evolucao_3_meses || [] },
       };
       desenharEvolucaoAdmin(document.querySelector(".adm-btn-filtro-evolucao.ativo").dataset.periodo);
+      renderizarComparativoPeriodos();
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
@@ -598,7 +625,8 @@
   const _ADM_GRAFICO_MARGEM_ESQ = 46;
   const _ADM_GRAFICO_LARGURA = 554;
   const _ADM_GRAFICO_TOPO = 10;
-  const _ADM_GRAFICO_BASE = 130;
+  const _ADM_GRAFICO_BASE = 295;
+  const _ADM_GRAFICO_EIXO_X_Y = _ADM_GRAFICO_BASE + 16;
 
   function formatarEixoReais(v) {
     if (v >= 1000000) return (v / 1000000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mi";
@@ -644,7 +672,7 @@
       const p = xy[i];
       const label = p.d.split("-").reverse().slice(0, 2).join("/");
       const ancora = i === 0 ? "start" : i === xy.length - 1 ? "end" : "middle";
-      return '<text x="' + p.x + '" y="146" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
+      return '<text x="' + p.x + '" y="' + _ADM_GRAFICO_EIXO_X_Y + '" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
     }).join("");
   }
 
@@ -665,6 +693,25 @@
       d += "C" + cp1x + "," + cp1y + " " + cp2x + "," + cp2y + " " + p2.x + "," + p2.y + " ";
     }
     return d;
+  }
+
+  // Comparativo "Total vendido por período" -- soma os três conjuntos já
+  // carregados (15 dias, 30 dias, 3 meses inteiros) e desenha 3 barras
+  // proporcionais ao maior total, pra dar noção de escala de um olhar só.
+  function renderizarComparativoPeriodos() {
+    const dados = window._admEvolucaoDados || {};
+    const total15 = ((dados["15dias"] || {}).atual || []).reduce((s, p) => s + p.venda_bruta, 0);
+    const total30 = ((dados["30dias"] || {}).atual || []).reduce((s, p) => s + p.venda_bruta, 0);
+    const meses3 = (dados["3meses"] || {}).meses || [];
+    const total3m = meses3.reduce((s, mes) => s + mes.dados.reduce((s2, p) => s2 + p.venda_bruta, 0), 0);
+
+    const maior = Math.max(total15, total30, total3m, 1);
+    document.getElementById("adm-comp-15-valor").textContent = formatarReais(total15);
+    document.getElementById("adm-comp-15-barra").style.width = Math.max((total15 / maior) * 100, total15 > 0 ? 2 : 0) + "%";
+    document.getElementById("adm-comp-30-valor").textContent = formatarReais(total30);
+    document.getElementById("adm-comp-30-barra").style.width = Math.max((total30 / maior) * 100, total30 > 0 ? 2 : 0) + "%";
+    document.getElementById("adm-comp-3m-valor").textContent = formatarReais(total3m);
+    document.getElementById("adm-comp-3m-barra").style.width = Math.max((total3m / maior) * 100, total3m > 0 ? 2 : 0) + "%";
   }
 
   function desenharEvolucaoAdmin(periodo) {
