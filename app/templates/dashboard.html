@@ -524,8 +524,18 @@
       document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
 
       renderizarComparativoMensal(d.comparativo_mensal_6m || []);
-      _evolDados = { d15: d.evolucao_15_dias || {atual:[],anterior:[]}, d3m: d.evolucao_3_meses || [] };
-      renderizarEvolucaoFiltro(_evolFiltroAtual);
+      // 16/10: isolado no seu próprio try/catch -- se o gráfico de
+      // evolução quebrar por causa de algum formato de dado inesperado,
+      // o resto do dashboard continua funcionando normalmente em vez de
+      // cair inteiro na tela de "não consegui carregar".
+      try {
+        _evolDados = { d15: d.evolucao_15_dias || {atual:[],anterior:[]}, d3m: d.evolucao_3_meses || [] };
+        renderizarEvolucaoFiltro(_evolFiltroAtual);
+      } catch (erroEvol) {
+        console.error("Falha ao renderizar o gráfico de evolução:", erroEvol);
+        const tituloEvol = document.getElementById("adm-evol-diaria-titulo");
+        if (tituloEvol) tituloEvol.textContent = "Evolução -- não consegui montar o gráfico (" + erroEvol.message + ")";
+      }
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
@@ -708,40 +718,130 @@
 
   // Gráfico diário compacto (dias do mês atual) -- preenche o espaço que
   // sobra embaixo do comparativo mensal enquanto o histórico de meses
-  // anteriores ainda é curto. Linha reta simples (sem curva suavizada),
-  // é só um complemento, não precisa do mesmo capricho do gráfico grande.
-  function renderizarEvolucaoDiariaMini(pontos) {
-    const svg = document.getElementById("adm-grafico-evolucao-diaria-mini");
+  // anteriores ainda é curto.
+  //
+  // 16/10: agora com 3 filtros (15 dias / este mês / 3 meses), sempre
+  // sobrepondo o período atual (linha sólida azul) com o(s) mesmo(s)
+  // recorte(s) de dias do(s) mês(es) anterior(es) (linha tracejada
+  // cinza) -- a API (_evolucao_dias_com_anterior/_evolucao_3_meses, em
+  // app/routers/vendas.py) já trazia esses dados prontos, só não
+  // estavam sendo usados aqui ainda. Enquanto não houver mês anterior
+  // suficiente pra comparar, a linha tracejada simplesmente não
+  // aparece -- vai se completando sozinho conforme os meses passarem.
+  let _evolDados = null;
+  let _evolFiltroAtual = "15d";
+
+  function _evolPorDiaDoMes(lista) {
+    const arr = [];
+    (lista || []).forEach(function (p) { arr[p.dia - 1] = p.venda_bruta || 0; });
+    return arr;
+  }
+
+  function _evolSomar(dados) {
+    return (dados || []).reduce(function (a, v) { return a + (v || 0); }, 0);
+  }
+
+  function renderizarEvolucaoFiltro(filtro) {
+    if (!_evolDados) return;
+    _evolFiltroAtual = filtro;
+    document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (b) {
+      b.classList.toggle("ativo", b.dataset.filtroEvol === filtro);
+    });
+
     const titulo = document.getElementById("adm-evol-diaria-titulo");
-    if (!svg) return;
-    if (!pontos || !pontos.length) {
-      svg.innerHTML = "";
-      return;
+    const valorEl = document.getElementById("adm-evol-valor");
+    const badgeEl = document.getElementById("adm-evol-badge");
+    const legendaEl = document.getElementById("adm-evol-legenda");
+    let series = [];
+    let somaAtual = 0;
+
+    if (filtro === "15d") {
+      const atual = (_evolDados.d15.atual || []).map(function (p) { return p.venda_bruta || 0; });
+      const anterior = (_evolDados.d15.anterior || []).map(function (p) { return p.venda_bruta || 0; });
+      somaAtual = _evolSomar(atual);
+      const somaAnterior = _evolSomar(anterior);
+      if (titulo) titulo.textContent = "Evolução -- últimos " + atual.length + " dias";
+      series.push({ nome: "período atual", dados: atual, cor: "#2f6fe4", tracejada: false });
+      if (somaAnterior > 0) series.push({ nome: "mesmo período, mês anterior", dados: anterior, cor: "#c7cedb", tracejada: true });
+      if (badgeEl) {
+        badgeEl.innerHTML = somaAnterior > 0
+          ? "vs. " + formatarReais(somaAnterior) + " no período anterior (" + _evolVariacaoHtml(somaAtual, somaAnterior) + ")"
+          : "sem período anterior suficiente pra comparar ainda";
+      }
+    } else {
+      const meses = _evolDados.d3m || [];
+      const mesAtual = meses[meses.length - 1];
+      const arrAtual = _evolPorDiaDoMes(mesAtual ? mesAtual.dados : []);
+      somaAtual = _evolSomar(arrAtual);
+
+      if (filtro === "mes") {
+        const qtdDias = arrAtual.length;
+        if (titulo) titulo.textContent = "Evolução -- " + (mesAtual ? mesAtual.label : "este mês") + " (até dia " + qtdDias + ")";
+        series.push({ nome: mesAtual ? mesAtual.label : "mês atual", dados: arrAtual, cor: "#2f6fe4", tracejada: false });
+        if (meses.length >= 2) {
+          const mesAnterior = meses[meses.length - 2];
+          const arrAnteriorRecorte = _evolPorDiaDoMes(mesAnterior.dados).slice(0, qtdDias);
+          const somaAnteriorRecorte = _evolSomar(arrAnteriorRecorte);
+          series.push({ nome: mesAnterior.label + " (mesmo recorte)", dados: arrAnteriorRecorte, cor: "#c7cedb", tracejada: true });
+          if (badgeEl) {
+            badgeEl.innerHTML = somaAnteriorRecorte > 0
+              ? "vs. " + formatarReais(somaAnteriorRecorte) + " em " + mesAnterior.label + " até o dia " + qtdDias + " (" + _evolVariacaoHtml(somaAtual, somaAnteriorRecorte) + ")"
+              : "sem dado do mês anterior pra comparar ainda";
+          }
+        } else if (badgeEl) {
+          badgeEl.textContent = "sem mês anterior pra comparar ainda";
+        }
+      } else { // "3m"
+        if (titulo) titulo.textContent = "Evolução -- últimos " + meses.length + " meses";
+        const cores = ["#c7cedb", "#8d98ab", "#2f6fe4"];
+        meses.forEach(function (m, i) {
+          const ehAtual = i === meses.length - 1;
+          series.push({
+            nome: m.label + (ehAtual ? " (atual)" : ""),
+            dados: _evolPorDiaDoMes(m.dados),
+            cor: ehAtual ? "#2f6fe4" : (cores[i] || "#8d98ab"),
+            tracejada: !ehAtual,
+          });
+        });
+        if (badgeEl) badgeEl.textContent = "soma de " + meses.length + (meses.length === 1 ? " mês" : " meses") + ": " + formatarReais(series.reduce(function (acc, s) { return acc + _evolSomar(s.dados); }, 0));
+      }
     }
 
-    if (titulo) {
-      const ultimo = pontos[pontos.length - 1];
-      const partes = (ultimo.data || "").split("-");
-      const nomeMes = partes.length === 3 ? _ADM_NOMES_MES[parseInt(partes[1], 10) - 1] : "";
-      titulo.textContent = "Evolução diária -- " + (nomeMes ? nomeMes + " (até dia " + parseInt(partes[2], 10) + ")" : "este mês");
+    if (valorEl) valorEl.textContent = formatarReais(somaAtual);
+
+    if (legendaEl) {
+      legendaEl.innerHTML = series.map(function (s) {
+        const corStyle = "border-top-color:" + s.cor + (s.tracejada ? ";border-top-style:dashed" : ";border-top-style:solid");
+        return '<span class="adm-legenda-mes-item"><i class="adm-legenda-mes-tracinho" style="' + corStyle + '"></i>' + s.nome + " -- <b>" + formatarReais(_evolSomar(s.dados)) + "</b></span>";
+      }).join("");
     }
+
+    _evolDesenharMultiSerie(series);
+  }
+
+  function _evolVariacaoHtml(atual, anterior) {
+    const variacao = ((atual - anterior) / anterior) * 100;
+    const classe = variacao >= 0 ? "adm-comparacao-alta" : "adm-comparacao-baixa";
+    return '<span class="' + classe + '">' + (variacao >= 0 ? "+" : "") + variacao.toFixed(1) + "%</span>";
+  }
+
+  function _evolDesenharMultiSerie(series) {
+    const svg = document.getElementById("adm-grafico-evolucao-diaria-mini");
+    if (!svg) return;
+    const seriesValidas = series.filter(function (s) { return s.dados && s.dados.length; });
+    if (!seriesValidas.length) { svg.innerHTML = ""; return; }
 
     const largura = 880, altura = 220;
     const margemEsq = 50, margemDir = 10, margemTopo = 10, margemBaixo = 26;
     const larguraPlot = largura - margemEsq - margemDir;
     const alturaPlot = altura - margemTopo - margemBaixo;
 
-    const maxDado = Math.max.apply(null, pontos.map(function (p) { return p.venda_bruta || 0; }).concat([1]));
+    const maxN = Math.max.apply(null, seriesValidas.map(function (s) { return s.dados.length; }));
+    const maxDado = Math.max.apply(null, seriesValidas.map(function (s) {
+      return Math.max.apply(null, s.dados.map(function (v) { return v || 0; }).concat([0]));
+    }).concat([1]));
     const { maxEixo, passos } = calcularEixoY(maxDado);
-    const passo = larguraPlot / Math.max(pontos.length - 1, 1);
-
-    const xy = pontos.map(function (p, i) {
-      return {
-        x: margemEsq + i * passo,
-        y: margemTopo + alturaPlot - (p.venda_bruta / maxEixo) * alturaPlot,
-        v: p.venda_bruta, d: p.data,
-      };
-    });
+    const passo = larguraPlot / Math.max(maxN - 1, 1);
 
     const grade = passos.map(function (valor) {
       const y = margemTopo + alturaPlot - (valor / maxEixo) * alturaPlot;
@@ -751,25 +851,44 @@
       );
     }).join("");
 
-    const linha = "M" + xy.map(function (p) { return p.x + "," + p.y; }).join(" L");
-    const pontosSvg = xy.map(function (p) {
-      const label = (p.d || "").split("-").reverse().slice(0, 2).join("/");
-      return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#2f6fe4"><title>' + label + ": " + formatarReais(p.v) + '</title></circle>';
+    function pontosDe(dados) {
+      const pts = [];
+      for (let i = 0; i < dados.length; i++) {
+        if (dados[i] === undefined || dados[i] === null) continue;
+        pts.push({ x: margemEsq + i * passo, y: margemTopo + alturaPlot - (dados[i] / maxEixo) * alturaPlot, v: dados[i] });
+      }
+      return pts;
+    }
+
+    const tracejadas = seriesValidas.filter(function (s) { return s.tracejada; });
+    const solidas = seriesValidas.filter(function (s) { return !s.tracejada; });
+
+    const linhasSvg = tracejadas.concat(solidas).map(function (s) {
+      const pts = pontosDe(s.dados);
+      if (!pts.length) return "";
+      const d = pts.map(function (p, i) { return (i === 0 ? "M" : "L") + p.x + "," + p.y; }).join(" ");
+      const tracoAttr = s.tracejada ? ' stroke-dasharray="5,4"' : "";
+      const larguraTraco = s.tracejada ? 2 : 2.5;
+      const pontosCirc = s.tracejada ? "" : pts.map(function (p) {
+        return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.2" fill="' + s.cor + '"><title>' + s.nome + ": " + formatarReais(p.v) + "</title></circle>";
+      }).join("");
+      return '<path d="' + d + '" fill="none" stroke="' + s.cor + '" stroke-width="' + larguraTraco + '"' + tracoAttr + ' stroke-linecap="round" stroke-linejoin="round" />' + pontosCirc;
     }).join("");
 
-    const indicesEixoX = xy.length <= 2 ? [0, xy.length - 1] : [0, Math.floor((xy.length - 1) / 2), xy.length - 1];
-    const eixoX = Array.from(new Set(indicesEixoX)).map(function (i) {
-      const p = xy[i];
-      const label = (p.d || "").split("-").reverse().slice(0, 2).join("/");
-      const ancora = i === 0 ? "start" : i === xy.length - 1 ? "end" : "middle";
-      return '<text x="' + p.x + '" y="' + (altura - margemBaixo + 16) + '" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
-    }).join("");
-
-    svg.innerHTML =
-      grade +
-      '<path d="' + linha + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' +
-      pontosSvg + eixoX;
+    svg.innerHTML = grade + linhasSvg;
   }
+
+  document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (botao) {
+    botao.addEventListener("click", function () {
+      try {
+        renderizarEvolucaoFiltro(botao.dataset.filtroEvol);
+      } catch (erroEvol) {
+        console.error("Falha ao trocar o filtro de evolução:", erroEvol);
+        const tituloEvol = document.getElementById("adm-evol-diaria-titulo");
+        if (tituloEvol) tituloEvol.textContent = "Evolução -- não consegui montar o gráfico (" + erroEvol.message + ")";
+      }
+    });
+  });
 
   carregarResumoAdmin();
   </script>
