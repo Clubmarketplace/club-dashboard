@@ -397,7 +397,13 @@
   }
   function aplicarTipo() {
     const t = TEXTOS_TIPO[tipoAtual()];
-    document.querySelectorAll(".opcao-tipo").forEach(o => o.classList.toggle("selecionada", o.querySelector("input").checked));
+    // "Cadastro" (15/10) é um <a>, não tem <input> -- nunca fica "selecionada"
+    // e não pode travar aqui, senão o resto do script (inclusive o envio do
+    // formulário) nunca chega a rodar.
+    document.querySelectorAll(".opcao-tipo").forEach(o => {
+      const input = o.querySelector("input");
+      if (input) o.classList.toggle("selecionada", input.checked);
+    });
     document.querySelectorAll(".rotulo-motivo").forEach(el => el.textContent = t.rotulo);
     document.querySelectorAll(".campo-motivo").forEach(el => el.placeholder = t.placeholder);
     const cab = document.querySelector(".cab-motivo");
@@ -406,7 +412,9 @@
     if (dica) dica.textContent = t.dica;
   }
   document.querySelectorAll(".opcao-tipo").forEach(opcao => {
-    opcao.addEventListener("click", () => { opcao.querySelector("input").checked = true; aplicarTipo(); });
+    const input = opcao.querySelector("input");
+    if (!input) return; // "Cadastro" é um link pra /cadastro-seller, não marca nada aqui
+    opcao.addEventListener("click", () => { input.checked = true; aplicarTipo(); });
   });
   // Link direto já escolhendo o tipo: /solicitar-cancelamento?tipo=reputacao
   (function tipoPelaUrl() {
