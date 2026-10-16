@@ -238,11 +238,25 @@
               </div>
 
               <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cmx-borda);">
-                <h2 id="adm-evol-diaria-titulo" style="margin-bottom:0; font-size:13px;">Evolução diária -- este mês</h2>
-                <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas.</p>
+                <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
+                  <div>
+                    <h2 id="adm-evol-diaria-titulo" style="margin-bottom:0; font-size:13px;">Evolução -- últimos 15 dias</h2>
+                    <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas.</p>
+                  </div>
+                  <div class="adm-filtro-evolucao">
+                    <button type="button" class="adm-btn-filtro-evolucao ativo" data-filtro-evol="15d">15 dias</button>
+                    <button type="button" class="adm-btn-filtro-evolucao" data-filtro-evol="mes">Este mês</button>
+                    <button type="button" class="adm-btn-filtro-evolucao" data-filtro-evol="3m">3 meses</button>
+                  </div>
+                </div>
+                <div class="adm-evolucao-headline">
+                  <span class="adm-evolucao-valor-grande" id="adm-evol-valor">R$ 0,00</span>
+                  <span class="adm-evolucao-badge" id="adm-evol-badge"></span>
+                </div>
                 <div class="adm-grafico-wrap" style="margin-top:10px;">
                   <svg id="adm-grafico-evolucao-diaria-mini" width="100%" height="220" viewBox="0 0 880 220" preserveAspectRatio="none"></svg>
                 </div>
+                <div class="adm-grafico-legenda-meses" id="adm-evol-legenda"></div>
               </div>
             </div>
           </div>
@@ -510,7 +524,8 @@
       document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
 
       renderizarComparativoMensal(d.comparativo_mensal_6m || []);
-      renderizarEvolucaoDiariaMini((d.evolucao_15_dias && d.evolucao_15_dias.atual) || []);
+      _evolDados = { d15: d.evolucao_15_dias || {atual:[],anterior:[]}, d3m: d.evolucao_3_meses || [] };
+      renderizarEvolucaoFiltro(_evolFiltroAtual);
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
