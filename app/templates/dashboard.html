@@ -227,14 +227,22 @@
             </div>
 
             <div class="adm-cartao adm-cartao-vendas" style="margin-bottom:0;">
-              <h2 style="margin-bottom:0;">Comparativo mensal -- últimos 6 meses</h2>
-              <p class="sub" style="margin-bottom:0;">Total vendido por mês, consolidado. O mês atual mostra o valor até hoje, pra comparar o ritmo com os meses fechados.</p>
+              <h2 id="adm-comp-mensal-titulo" style="margin-bottom:0;">Comparativo mensal</h2>
+              <p class="sub" style="margin-bottom:0;">Total vendido por mês, consolidado. O mês atual mostra o valor até hoje, pra comparar o ritmo com os meses fechados. Novos meses vão entrando aqui conforme forem fechando.</p>
               <div class="adm-grafico-wrap" style="margin-top:10px;">
-                <svg id="adm-grafico-comparativo-mensal" width="100%" height="374" viewBox="0 0 880 374" preserveAspectRatio="none"></svg>
+                <svg id="adm-grafico-comparativo-mensal" width="100%" height="140" viewBox="0 0 880 140" preserveAspectRatio="none"></svg>
               </div>
               <div class="adm-comp-mensal-legenda">
                 <span><i class="adm-comp-mensal-dot" style="background:#c7cedb;"></i>Mês concluído</span>
                 <span><i class="adm-comp-mensal-dot" style="background:#2f6fe4;"></i>Mês atual (parcial)</span>
+              </div>
+
+              <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cmx-borda);">
+                <h2 id="adm-evol-diaria-titulo" style="margin-bottom:0; font-size:13px;">Evolução diária -- este mês</h2>
+                <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas.</p>
+                <div class="adm-grafico-wrap" style="margin-top:10px;">
+                  <svg id="adm-grafico-evolucao-diaria-mini" width="100%" height="220" viewBox="0 0 880 220" preserveAspectRatio="none"></svg>
+                </div>
               </div>
             </div>
           </div>
@@ -502,6 +510,7 @@
       document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
 
       renderizarComparativoMensal(d.comparativo_mensal_6m || []);
+      renderizarEvolucaoDiariaMini((d.evolucao_15_dias && d.evolucao_15_dias.atual) || []);
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
@@ -626,15 +635,28 @@
   // mês já fechou.
   function renderizarComparativoMensal(meses) {
     const svg = document.getElementById("adm-grafico-comparativo-mensal");
+    const titulo = document.getElementById("adm-comp-mensal-titulo");
     if (!svg || !meses || !meses.length) return;
 
-    const largura = 880, altura = 374;
-    const margemEsq = 54, margemDir = 96, margemTopo = 6, margemBaixo = 24;
+    if (titulo) {
+      titulo.textContent = meses.length === 1
+        ? "Comparativo mensal -- este mês"
+        : "Comparativo mensal -- últimos " + meses.length + " meses";
+    }
+
+    const largura = 880;
+    const margemEsq = 54, margemDir = 96, margemTopo = 10, margemBaixo = 22;
     const larguraPlot = largura - margemEsq - margemDir;
-    const alturaPlot = altura - margemTopo - margemBaixo;
     const n = meses.length;
-    const alturaLinha = alturaPlot / n;
-    const alturaBarra = Math.min(alturaLinha * 0.5, 34);
+    // Altura do SVG acompanha a quantidade de meses (compacto, sem
+    // esticar) -- o espaço que sobrar no card fica pro gráfico de
+    // evolução diária logo abaixo, em vez de ficar em branco.
+    const alturaLinha = 46;
+    const offsetTopo = margemTopo;
+    const alturaBarra = 24;
+    const altura = margemTopo + n * alturaLinha + margemBaixo;
+    svg.setAttribute("height", altura);
+    svg.setAttribute("viewBox", "0 0 " + largura + " " + altura);
 
     const maiorValor = Math.max.apply(null, meses.map(function (m) { return m.valor || 0; }));
     const { maxEixo, passos } = calcularEixoY(maiorValor);
@@ -648,7 +670,7 @@
     }).join("");
 
     const barras = meses.map(function (m, i) {
-      const yCentro = margemTopo + i * alturaLinha + alturaLinha / 2;
+      const yCentro = offsetTopo + i * alturaLinha + alturaLinha / 2;
       const y = yCentro - alturaBarra / 2;
       const w = Math.max((m.valor / maxEixo) * larguraPlot, 2);
       const cor = m.parcial ? "#2f6fe4" : "#c7cedb";
@@ -665,6 +687,73 @@
     }).join("");
 
     svg.innerHTML = grade + barras;
+  }
+
+  const _ADM_NOMES_MES = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+
+  // Gráfico diário compacto (dias do mês atual) -- preenche o espaço que
+  // sobra embaixo do comparativo mensal enquanto o histórico de meses
+  // anteriores ainda é curto. Linha reta simples (sem curva suavizada),
+  // é só um complemento, não precisa do mesmo capricho do gráfico grande.
+  function renderizarEvolucaoDiariaMini(pontos) {
+    const svg = document.getElementById("adm-grafico-evolucao-diaria-mini");
+    const titulo = document.getElementById("adm-evol-diaria-titulo");
+    if (!svg) return;
+    if (!pontos || !pontos.length) {
+      svg.innerHTML = "";
+      return;
+    }
+
+    if (titulo) {
+      const ultimo = pontos[pontos.length - 1];
+      const partes = (ultimo.data || "").split("-");
+      const nomeMes = partes.length === 3 ? _ADM_NOMES_MES[parseInt(partes[1], 10) - 1] : "";
+      titulo.textContent = "Evolução diária -- " + (nomeMes ? nomeMes + " (até dia " + parseInt(partes[2], 10) + ")" : "este mês");
+    }
+
+    const largura = 880, altura = 220;
+    const margemEsq = 50, margemDir = 10, margemTopo = 10, margemBaixo = 26;
+    const larguraPlot = largura - margemEsq - margemDir;
+    const alturaPlot = altura - margemTopo - margemBaixo;
+
+    const maxDado = Math.max.apply(null, pontos.map(function (p) { return p.venda_bruta || 0; }).concat([1]));
+    const { maxEixo, passos } = calcularEixoY(maxDado);
+    const passo = larguraPlot / Math.max(pontos.length - 1, 1);
+
+    const xy = pontos.map(function (p, i) {
+      return {
+        x: margemEsq + i * passo,
+        y: margemTopo + alturaPlot - (p.venda_bruta / maxEixo) * alturaPlot,
+        v: p.venda_bruta, d: p.data,
+      };
+    });
+
+    const grade = passos.map(function (valor) {
+      const y = margemTopo + alturaPlot - (valor / maxEixo) * alturaPlot;
+      return (
+        '<line x1="' + margemEsq + '" y1="' + y + '" x2="' + largura + '" y2="' + y + '" stroke="#e8ecf1" stroke-width="1" stroke-dasharray="3,4" />' +
+        '<text x="' + (margemEsq - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#9aa4b2">' + formatarEixoReais(valor) + '</text>'
+      );
+    }).join("");
+
+    const linha = "M" + xy.map(function (p) { return p.x + "," + p.y; }).join(" L");
+    const pontosSvg = xy.map(function (p) {
+      const label = (p.d || "").split("-").reverse().slice(0, 2).join("/");
+      return '<circle cx="' + p.x + '" cy="' + p.y + '" r="3.5" fill="#2f6fe4"><title>' + label + ": " + formatarReais(p.v) + '</title></circle>';
+    }).join("");
+
+    const indicesEixoX = xy.length <= 2 ? [0, xy.length - 1] : [0, Math.floor((xy.length - 1) / 2), xy.length - 1];
+    const eixoX = Array.from(new Set(indicesEixoX)).map(function (i) {
+      const p = xy[i];
+      const label = (p.d || "").split("-").reverse().slice(0, 2).join("/");
+      const ancora = i === 0 ? "start" : i === xy.length - 1 ? "end" : "middle";
+      return '<text x="' + p.x + '" y="' + (altura - margemBaixo + 16) + '" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
+    }).join("");
+
+    svg.innerHTML =
+      grade +
+      '<path d="' + linha + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' +
+      pontosSvg + eixoX;
   }
 
   carregarResumoAdmin();
