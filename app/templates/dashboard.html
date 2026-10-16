@@ -107,6 +107,11 @@
     .adm-cartao-vendas h2 { font-size:13px; }
     .adm-cartao-vendas .sub { font-size:11px; margin-bottom:0; }
     .adm-cartao-vendas .adm-btn-filtro-evolucao { padding:4px 9px; font-size:10.5px; }
+    /* 16/10: Comparativo mensal e Evolução viraram 2 cartões separados
+       (igual os 2 da esquerda), em vez de um só empilhado -- fica mais
+       fácil de alinhar visualmente par a par com "Vendido hoje"/"Vendido
+       no mês". */
+    .adm-col-graficos { display:flex; flex-direction:column; gap:14px; }
     @media (max-width:860px) { .adm-grid-vendas { grid-template-columns:1fr; } }
     .adm-col-totais { display:flex; flex-direction:column; gap:14px; }
     @media (max-width:860px) { .adm-col-totais { flex-direction:row; } }
@@ -226,26 +231,28 @@
               </div>
             </div>
 
-            <div class="adm-cartao adm-cartao-vendas" style="margin-bottom:0;">
-              <h2 id="adm-comp-mensal-titulo" style="margin-bottom:0;">Comparativo mensal</h2>
-              <p class="sub" style="margin-bottom:0;">Total vendido por mês, consolidado. O mês atual mostra o valor até hoje, pra comparar o ritmo com os meses fechados. Novos meses vão entrando aqui conforme forem fechando.</p>
-              <div class="adm-grafico-wrap" style="margin-top:10px;">
-                <svg id="adm-grafico-comparativo-mensal" width="100%" height="140" viewBox="0 0 880 140" preserveAspectRatio="none"></svg>
-              </div>
-              <div class="adm-comp-mensal-legenda">
-                <span><i class="adm-comp-mensal-dot" style="background:#c7cedb;"></i>Mês concluído</span>
-                <span><i class="adm-comp-mensal-dot" style="background:#2f6fe4;"></i>Mês atual (parcial)</span>
+            <div class="adm-col-graficos">
+              <div class="adm-cartao adm-cartao-vendas" style="margin-bottom:0;">
+                <h2 id="adm-comp-mensal-titulo" style="margin-bottom:0;">Comparativo mensal</h2>
+                <p class="sub" style="margin-bottom:0;">Total vendido por mês, consolidado -- últimos 3 meses. O mês atual mostra o valor até hoje, pra comparar o ritmo com os meses fechados.</p>
+                <div class="adm-grafico-wrap" style="margin-top:10px;">
+                  <svg id="adm-grafico-comparativo-mensal" width="100%" height="140" viewBox="0 0 880 140" preserveAspectRatio="none"></svg>
+                </div>
+                <div class="adm-comp-mensal-legenda">
+                  <span><i class="adm-comp-mensal-dot" style="background:#c7cedb;"></i>Mês concluído</span>
+                  <span><i class="adm-comp-mensal-dot" style="background:#2f6fe4;"></i>Mês atual (parcial)</span>
+                </div>
               </div>
 
-              <div style="margin-top:16px; padding-top:14px; border-top:1px dashed var(--cmx-borda);">
+              <div class="adm-cartao adm-cartao-vendas" style="margin-bottom:0;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                   <div>
-                    <h2 id="adm-evol-diaria-titulo" style="margin-bottom:0; font-size:13px;">Evolução -- últimos 15 dias</h2>
+                    <h2 id="adm-evol-diaria-titulo" style="margin-bottom:0; font-size:13px;">Evolução -- este mês</h2>
                     <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas.</p>
                   </div>
                   <div class="adm-filtro-evolucao">
-                    <button type="button" class="adm-btn-filtro-evolucao ativo" data-filtro-evol="15d">15 dias</button>
-                    <button type="button" class="adm-btn-filtro-evolucao" data-filtro-evol="mes">Este mês</button>
+                    <button type="button" class="adm-btn-filtro-evolucao" data-filtro-evol="15d">15 dias</button>
+                    <button type="button" class="adm-btn-filtro-evolucao ativo" data-filtro-evol="mes">Este mês</button>
                     <button type="button" class="adm-btn-filtro-evolucao" data-filtro-evol="3m">3 meses</button>
                   </div>
                 </div>
@@ -729,7 +736,7 @@
   // suficiente pra comparar, a linha tracejada simplesmente não
   // aparece -- vai se completando sozinho conforme os meses passarem.
   let _evolDados = null;
-  let _evolFiltroAtual = "15d";
+  let _evolFiltroAtual = "mes";
 
   function _evolPorDiaDoMes(lista) {
     const arr = [];
