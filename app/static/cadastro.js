@@ -31,6 +31,10 @@
     itens: [], contagem: { pendente: 0, cadastrado: 0 }, status: "pendente", busca: "", falta: "",
     truncado: false, ocupado: false,
     mpOcupados: new Set(), resp: "", eu: "", papel: "", conta: "",
+    // 16/10: ids em modo "escolhendo plataformas" + o que cada um tem selecionado
+    // nesse momento (antes de salvar). Só existe enquanto o bloco está aberto na tela.
+    escolhendoPlataformas: new Set(), selecaoPlataformas: {},
+    confirmOcupados: new Set(),
   };
 
   function esc(t) {
@@ -150,10 +154,52 @@
 
   // Quem pode destravar um produto já cadastrado (o servidor também confere -- isto é só o espelho visual).
   function souSupervisao() { return estado.papel === "admin" || estado.papel === "supervisor"; }
+  // 16/10: quem pode definir as plataformas de um produto automático (admin/supervisor/
+  // gerente_setor -- igual _supervisao_logado no servidor; "gerente_setor" só enxerga esta
+  // tela se já tiver o setor "cadastro", então não precisa conferir de novo aqui).
+  function souSupervisaoOuGerente() { return souSupervisao() || estado.papel === "gerente_setor"; }
+
+  // 16/10: todos os 3 marketplaces resolvidos (feito ou não se aplica) -- é o sinal
+  // pra liberar o Confirmar. Diferente de "status === cadastrado": resolvido ainda
+  // não travou, só fica pronto esperando o Confirmar.
+  function todosResolvidos(p) { return CHAVES.every((k) => !!mpDe(p, k).estado); }
+  // Nenhum dos 3 foi tocado ainda -- é quando dá pra definir quais foram pedidos.
+  function nenhumTocado(p) { return CHAVES.every((k) => !mpDe(p, k).estado); }
 
   function blocoReabertura(p) {
     if (!p.reaberto_por) return "";
     return `<div class="cd-quem" style="color:var(--cmx-rust)">↻ Reaberto por ${esc(p.reaberto_por)} em ${esc(dataBr(p.reaberto_em))}${p.motivo_reabertura ? ": " + esc(p.motivo_reabertura) : ""}</div>`;
+  }
+
+  // 16/10: supervisor/gerente escolhe quais marketplaces essa solicitação precisa,
+  // ANTES de alguém assumir -- só aparece quando nenhum dos 3 foi tocado ainda, pra
+  // quem tem permissão. O que não for marcado aqui já vira "não se aplica" sozinho.
+  function blocoDefinirPlataformas(p) {
+    if (!souSupervisaoOuGerente() || !nenhumTocado(p)) return "";
+    if (!estado.escolhendoPlataformas.has(p.id)) {
+      return `<button class="cd-btn cd-mini" type="button" data-abrir-plataformas="${p.id}">🏷 Definir plataformas</button>`;
+    }
+    const sel = estado.selecaoPlataformas[p.id] || new Set();
+    const chips = CHAVES.map((k) => {
+      const ativo = sel.has(k) ? " ativo" : "";
+      return `<button type="button" class="cd-plat-chip plat-${k}${ativo}" data-plat-chip="${k}" data-plat-id="${p.id}">${esc(MP[k].longo)}</button>`;
+    }).join("");
+    const salvarDisabled = sel.size ? "" : " disabled";
+    return `<div class="cd-plat-bloco">
+      <p>Marque só os marketplaces que essa solicitação precisa. O que ficar de fora já vira "não se aplica" sozinho.</p>
+      <div class="cd-plat-chips">${chips}</div>
+      <button class="cd-btn cd-btn-ok cd-mini" type="button" data-salvar-plataformas="${p.id}"${salvarDisabled}>Salvar</button>
+      <button class="cd-btn cd-mini" type="button" data-cancelar-plataformas="${p.id}">Cancelar</button>
+    </div>`;
+  }
+
+  // 16/10: só libera quando os 3 estão resolvidos (feito ou não se aplica) -- é a
+  // ÚNICA forma do produto travar/virar "Concluído" (marcar o último marketplace
+  // sozinho não fecha mais nada, ver cadastro_produtos.py).
+  function blocoConfirmar(p) {
+    if (!todosResolvidos(p)) return "";
+    const ocupado = estado.confirmOcupados.has(p.id) ? " disabled" : "";
+    return `<button class="cd-btn cd-btn-confirmar" type="button" data-confirmar="${p.id}"${ocupado}>✓ Confirmar cadastro</button>`;
   }
 
   function blocoMarketplaces(p) {
@@ -169,6 +215,8 @@
     // Travado: ninguém mexe mais nos botões por marketplace (o servidor recusa também, com 423).
     const tags = (feito || ehMarcacaoAntiga(p)) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
     const quem = ehMarcacaoAntiga(p) ? "" : textoQuem(p);
+    const definirPlataformas = feito ? "" : blocoDefinirPlataformas(p);
+    const confirmar = feito ? "" : blocoConfirmar(p);
     // Pendente (15/10): nenhum atalho -- só os botões por canal acima (tags), que já
     // registram quem cadastrou cada marketplace. Travado: só o Reabrir, pra admin/supervisor.
     let atalho = "";
@@ -184,7 +232,7 @@
       ? `<button class="cd-btn cd-mini cd-btn-excluir" type="button" data-excluir="${p.id}" title="Remove da lista; pede o motivo e fica registrado">🗑 Excluir</button>`
       : "";
     const tempo = blocoTempo(p);
-    return `<div class="cd-acao">${topo}${tags}${quem}${tempo}${blocoReabertura(p)}${atalho}${excluir}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${definirPlataformas}${confirmar}${quem}${tempo}${blocoReabertura(p)}${atalho}${excluir}</div>`;
   }
 
   // Quem assumiu, desde quando e quanto tempo está levando / levou.
@@ -316,7 +364,8 @@
       const d = await api(`/produtos/${id}/marketplace`, { method: "POST", body: JSON.stringify({ marketplace: mp, estado: novo }) });
       estado.mpOcupados.delete(chave);
       aplicarItem(d.item);
-      if (d.item.status === "cadastrado") aviso("Produto OK: os 3 canais estão resolvidos.", "ok");
+      // 16/10: marcar o último já não fecha mais sozinho -- só avisa que falta Confirmar.
+      if (todosResolvidos(d.item) && d.item.status !== "cadastrado") aviso("Tudo marcado — clique em Confirmar cadastro para concluir.", "ok");
       else aviso("");
       carregarContagem();
     } catch (e) {
@@ -337,6 +386,58 @@
         return;
       }
       aviso("Não consegui: " + e.message, "erro");
+    }
+  }
+
+  // 16/10: Confirmar -- só funciona se o servidor concordar que os 3 estão
+  // resolvidos (confere de novo lá, não confia só na tela). Trava de vez.
+  async function confirmarProduto(id) {
+    if (estado.confirmOcupados.has(id)) return;
+    estado.confirmOcupados.add(id);
+    desenhar();
+    try {
+      const d = await api(`/produtos/${id}/confirmar`, { method: "POST" });
+      estado.confirmOcupados.delete(id);
+      aplicarItem(d.item);
+      aviso("Cadastro confirmado — produto concluído.", "ok");
+      carregarContagem();
+    } catch (e) {
+      estado.confirmOcupados.delete(id);
+      desenhar();
+      aviso("Não consegui confirmar: " + e.message, "erro");
+    }
+  }
+
+  // 16/10: supervisor/gerente escolhe as plataformas de um produto automático,
+  // antes de alguém assumir. Abre/fecha o bloco de seleção e salva no servidor.
+  function abrirEscolhaPlataformas(id) {
+    estado.escolhendoPlataformas.add(id);
+    if (!estado.selecaoPlataformas[id]) estado.selecaoPlataformas[id] = new Set();
+    desenhar();
+  }
+  function cancelarEscolhaPlataformas(id) {
+    estado.escolhendoPlataformas.delete(id);
+    delete estado.selecaoPlataformas[id];
+    desenhar();
+  }
+  function alternarChipPlataforma(id, chave) {
+    if (!estado.selecaoPlataformas[id]) estado.selecaoPlataformas[id] = new Set();
+    const sel = estado.selecaoPlataformas[id];
+    if (sel.has(chave)) sel.delete(chave); else sel.add(chave);
+    desenhar();
+  }
+  async function salvarEscolhaPlataformas(id) {
+    const sel = estado.selecaoPlataformas[id];
+    if (!sel || !sel.size) return;
+    try {
+      const d = await api(`/produtos/${id}/plataformas`, { method: "POST", body: JSON.stringify({ plataformas: Array.from(sel) }) });
+      estado.escolhendoPlataformas.delete(id);
+      delete estado.selecaoPlataformas[id];
+      aplicarItem(d.item);
+      aviso("Plataformas definidas.", "ok");
+    } catch (e) {
+      aviso("Não consegui salvar as plataformas: " + e.message, "erro");
+      desenhar();
     }
   }
 
@@ -361,6 +462,16 @@
     if (reabrir) return reabrirProduto(Number(reabrir.dataset.reabrir));
     const excl = e.target.closest("[data-excluir]");
     if (excl) return excluirProduto(Number(excl.dataset.excluir));
+    const confirmar = e.target.closest("[data-confirmar]");
+    if (confirmar) return confirmarProduto(Number(confirmar.dataset.confirmar));
+    const abrirPlat = e.target.closest("[data-abrir-plataformas]");
+    if (abrirPlat) return abrirEscolhaPlataformas(Number(abrirPlat.dataset.abrirPlataformas));
+    const cancelarPlat = e.target.closest("[data-cancelar-plataformas]");
+    if (cancelarPlat) return cancelarEscolhaPlataformas(Number(cancelarPlat.dataset.cancelarPlataformas));
+    const chipPlat = e.target.closest("[data-plat-chip]");
+    if (chipPlat) return alternarChipPlataforma(Number(chipPlat.dataset.platId), chipPlat.dataset.platChip);
+    const salvarPlat = e.target.closest("[data-salvar-plataformas]");
+    if (salvarPlat) return salvarEscolhaPlataformas(Number(salvarPlat.dataset.salvarPlataformas));
   });
 
   // Reabrir um produto travado (só aparece o botão pra admin/supervisor -- o servidor confere de novo).
