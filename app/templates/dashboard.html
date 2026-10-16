@@ -54,6 +54,12 @@
       border-radius:20px; padding:6px 14px; font-size:12.5px; font-weight:600; font-family:inherit; cursor:pointer;
     }
     .adm-btn-filtro-evolucao.ativo { background:#1b2430; color:#fff; border-color:#1b2430; }
+    .adm-filtro-estilo { display:flex; gap:6px; margin-top:8px; }
+    .adm-btn-estilo-grafico {
+      border:1px solid var(--cmx-borda); background:#fff; color:var(--cmx-texto-suave);
+      border-radius:20px; padding:3px 10px; font-size:10.5px; font-weight:600; font-family:inherit; cursor:pointer;
+    }
+    .adm-btn-estilo-grafico.ativo { background:#eef3fc; color:#2f6fe4; border-color:#c7d9f5; }
     .adm-comparacao-alta { color:#2f6f4f; font-weight:700; }
     .adm-comparacao-baixa { color:#c1502e; font-weight:700; }
     .adm-evolucao-headline { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; margin-top:6px; }
@@ -124,6 +130,11 @@
     .adm-chip-setor { width:26px; height:26px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:12.5px; flex-shrink:0; }
 
     .adm-grid-fin { display:grid; grid-template-columns:repeat(3, 1fr); gap:16px; align-items:start; }
+    .adm-fin-card-full { grid-column:1 / -1; }
+    .adm-fin-card-full .nota { max-width:900px; }
+    .adm-comp-mensal-legenda { display:flex; gap:18px; margin-top:8px; font-size:11px; color:var(--cmx-texto-suave); }
+    .adm-comp-mensal-legenda span { display:inline-flex; align-items:center; gap:6px; }
+    .adm-comp-mensal-dot { width:9px; height:9px; border-radius:2px; display:inline-block; }
     @media (max-width:1180px) { .adm-grid-fin { grid-template-columns:1fr 1fr; } }
     @media (max-width:640px) { .adm-grid-fin { grid-template-columns:1fr; } }
     .adm-fin-card { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:14px 16px; box-shadow:0 2px 10px rgba(0,0,0,.04); min-width:0; }
@@ -216,26 +227,15 @@
             </div>
 
             <div class="adm-cartao adm-cartao-vendas" style="margin-bottom:0;">
-              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
-                <div>
-                  <h2 id="adm-evolucao-titulo" style="margin-bottom:0;">Evolução -- últimos 15 dias</h2>
-                  <p class="sub" style="margin-bottom:0;">Venda bruta por dia, soma de todas as contas</p>
-                </div>
-                <div class="adm-filtro-evolucao">
-                  <button type="button" class="adm-btn-filtro-evolucao ativo" data-periodo="15dias">15 dias</button>
-                  <button type="button" class="adm-btn-filtro-evolucao" data-periodo="30dias">30 dias</button>
-                  <button type="button" class="adm-btn-filtro-evolucao" data-periodo="3meses">3 meses</button>
-                </div>
-              </div>
-              <div class="adm-evolucao-headline">
-                <span class="adm-evolucao-valor-grande" id="adm-evolucao-total-grande">R$ 0,00</span>
-                <span class="adm-evolucao-badge" id="adm-evolucao-comparacao"></span>
-              </div>
+              <h2 style="margin-bottom:0;">Comparativo mensal -- últimos 6 meses</h2>
+              <p class="sub" style="margin-bottom:0;">Total vendido por mês, consolidado. O mês atual mostra o valor até hoje, pra comparar o ritmo com os meses fechados.</p>
               <div class="adm-grafico-wrap" style="margin-top:10px;">
-                <svg id="adm-grafico-evolucao" width="100%" height="355" viewBox="0 0 600 355" preserveAspectRatio="none"></svg>
+                <svg id="adm-grafico-comparativo-mensal" width="100%" height="374" viewBox="0 0 880 374" preserveAspectRatio="none"></svg>
               </div>
-              <p class="adm-grafico-dica" id="adm-grafico-dica">Toque ou passe o mouse num ponto pra ver o valor do dia. Clique em "3 meses" pra comparar os últimos 3 meses lado a lado, dia a dia.</p>
-              <div class="adm-grafico-legenda-meses" id="adm-legenda-3meses" style="display:none;"></div>
+              <div class="adm-comp-mensal-legenda">
+                <span><i class="adm-comp-mensal-dot" style="background:#c7cedb;"></i>Mês concluído</span>
+                <span><i class="adm-comp-mensal-dot" style="background:#2f6fe4;"></i>Mês atual (parcial)</span>
+              </div>
             </div>
           </div>
 
@@ -343,7 +343,7 @@
               <div class="valor" id="adm-fin-promocoes-mes">R$ 0,00</div>
               <div class="nota" id="adm-fin-promocoes-hoje-nota"></div>
             </div>
-            <div class="adm-fin-card adm-fin-indisponivel">
+            <div class="adm-fin-card adm-fin-indisponivel adm-fin-card-full">
               <div class="titulo">Cancelamento -- valor cancelado</div>
               <div class="valor">Não disponível</div>
               <div class="nota">a solicitação de cancelamento grava o número do pedido, não o valor da venda -- cruzar os dois ainda não é confiável o bastante pra um número financeiro. Precisa de um campo de valor próprio nessa tabela.</div>
@@ -501,15 +501,7 @@
       document.getElementById("adm-anuncios-pausados-num").textContent = an.anuncios_pausados;
       document.getElementById("adm-anuncios-pausados-barra").style.width = (an.anuncios_pausados / anAtivosEAlem * 100) + "%";
 
-      // Evolução: guarda os conjuntos (15/30 dias, cada um com o período
-      // anterior pra comparação, + 3 meses) pra trocar de filtro sem
-      // buscar de novo, igual o dashboard do seller.
-      window._admEvolucaoDados = {
-        "15dias": d.evolucao_15_dias || { atual: [], anterior: [] },
-        "30dias": d.evolucao_30_dias || { atual: [], anterior: [] },
-        "3meses": { meses: d.evolucao_3_meses || [] },
-      };
-      desenharEvolucaoAdmin(document.querySelector(".adm-btn-filtro-evolucao.ativo").dataset.periodo);
+      renderizarComparativoMensal(d.comparativo_mensal_6m || []);
 
       // Chamados (= mensagens pré-venda + pós-venda) -- total/respondidas
       // e, separado, quem mais respondeu + ranking completo do mês.
@@ -605,16 +597,6 @@
     });
   });
 
-  const _ADM_CORES_3_MESES = ["#c7cedb", "#7f93b8", "#2f6fe4"];
-
-  // Mesmo padrão de grade/eixo/curva do dashboard do seller -- ver
-  // comentário lá (app/templates/dashboard_seller.html) pra detalhe.
-  const _ADM_GRAFICO_MARGEM_ESQ = 46;
-  const _ADM_GRAFICO_LARGURA = 554;
-  const _ADM_GRAFICO_TOPO = 10;
-  const _ADM_GRAFICO_BASE = 335;
-  const _ADM_GRAFICO_EIXO_X_Y = _ADM_GRAFICO_BASE + 16;
-
   function formatarEixoReais(v) {
     if (v >= 1000000) return (v / 1000000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mi";
     if (v >= 1000) return (v / 1000).toLocaleString("pt-BR", {maximumFractionDigits: 1}) + " mil";
@@ -637,158 +619,53 @@
     return {maxEixo, passos};
   }
 
-  function desenharGradeY(maxEixo, passos) {
-    return passos.map(function (valor) {
-      const y = _ADM_GRAFICO_BASE - (valor / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO);
+  // Barras HORIZONTAIS do comparativo mensal (últimos 6 meses) -- cada
+  // linha é um mês, a barra cresce da esquerda pra direita proporcional
+  // ao total vendido. O mês atual vem parcial (só até hoje) e marcado
+  // "parcial: true" pela API, pra dar noção de ritmo sem fingir que o
+  // mês já fechou.
+  function renderizarComparativoMensal(meses) {
+    const svg = document.getElementById("adm-grafico-comparativo-mensal");
+    if (!svg || !meses || !meses.length) return;
+
+    const largura = 880, altura = 374;
+    const margemEsq = 54, margemDir = 96, margemTopo = 6, margemBaixo = 24;
+    const larguraPlot = largura - margemEsq - margemDir;
+    const alturaPlot = altura - margemTopo - margemBaixo;
+    const n = meses.length;
+    const alturaLinha = alturaPlot / n;
+    const alturaBarra = Math.min(alturaLinha * 0.5, 34);
+
+    const maiorValor = Math.max.apply(null, meses.map(function (m) { return m.valor || 0; }));
+    const { maxEixo, passos } = calcularEixoY(maiorValor);
+
+    const grade = passos.map(function (valor) {
+      const x = margemEsq + (valor / maxEixo) * larguraPlot;
       return (
-        '<line x1="' + _ADM_GRAFICO_MARGEM_ESQ + '" y1="' + y + '" x2="600" y2="' + y + '" stroke="#e8ecf1" stroke-width="1" stroke-dasharray="3,4" />' +
-        '<text x="' + (_ADM_GRAFICO_MARGEM_ESQ - 8) + '" y="' + (y + 3) + '" text-anchor="end" font-size="10" fill="#9aa4b2">' + formatarEixoReais(valor) + '</text>'
+        '<line x1="' + x + '" y1="' + margemTopo + '" x2="' + x + '" y2="' + (altura - margemBaixo) + '" stroke="#e8ecf1" stroke-width="1" stroke-dasharray="3,4" />' +
+        '<text x="' + x + '" y="' + (altura - margemBaixo + 16) + '" text-anchor="middle" font-size="10" fill="#9aa4b2">' + formatarEixoReais(valor) + '</text>'
       );
     }).join("");
-  }
 
-  function desenharEixoX(xy) {
-    if (!xy.length) return "";
-    const indices = xy.length <= 2 ? [0, xy.length - 1] : [0, Math.floor((xy.length - 1) / 2), xy.length - 1];
-    const vistos = new Set();
-    return indices.filter(function (i) {
-      if (vistos.has(i)) return false;
-      vistos.add(i);
-      return true;
-    }).map(function (i) {
-      const p = xy[i];
-      const label = p.d.split("-").reverse().slice(0, 2).join("/");
-      const ancora = i === 0 ? "start" : i === xy.length - 1 ? "end" : "middle";
-      return '<text x="' + p.x + '" y="' + _ADM_GRAFICO_EIXO_X_Y + '" text-anchor="' + ancora + '" font-size="10" fill="#9aa4b2">' + label + "</text>";
+    const barras = meses.map(function (m, i) {
+      const yCentro = margemTopo + i * alturaLinha + alturaLinha / 2;
+      const y = yCentro - alturaBarra / 2;
+      const w = Math.max((m.valor / maxEixo) * larguraPlot, 2);
+      const cor = m.parcial ? "#2f6fe4" : "#c7cedb";
+      const corTexto = m.parcial ? "#2f6fe4" : "#44505e";
+      const labelMes = m.mes;
+      const valorFmt = "R$ " + formatarEixoReais(m.valor);
+      const subFmt = m.parcial && m.ate_dia ? " (até dia " + m.ate_dia + ")" : "";
+      return (
+        '<text x="' + (margemEsq - 10) + '" y="' + (yCentro + 4) + '" text-anchor="end" font-size="12" font-weight="' + (m.parcial ? "700" : "600") + '" fill="' + corTexto + '">' + labelMes + '</text>' +
+        '<rect x="' + margemEsq + '" y="' + y + '" width="' + w + '" height="' + alturaBarra + '" rx="4" ry="4" fill="' + cor + '"><title>' + labelMes + ": " + formatarReais(m.valor) + '</title></rect>' +
+        '<text x="' + (margemEsq + w + 8) + '" y="' + (yCentro + 4) + '" text-anchor="start" font-size="11" font-weight="700" fill="' + corTexto + '">' + valorFmt + '</text>' +
+        (subFmt ? '<text x="' + (margemEsq + w + 8) + '" y="' + (yCentro + 16) + '" text-anchor="start" font-size="9" fill="' + corTexto + '">até dia ' + m.ate_dia + '</text>' : "")
+      );
     }).join("");
+
+    svg.innerHTML = grade + barras;
   }
-
-  function curvaSuave(pontos) {
-    if (!pontos.length) return "";
-    if (pontos.length === 1) return "M" + pontos[0].x + "," + pontos[0].y;
-    if (pontos.length === 2) return "M" + pontos[0].x + "," + pontos[0].y + " L" + pontos[1].x + "," + pontos[1].y;
-    let d = "M" + pontos[0].x + "," + pontos[0].y + " ";
-    for (let i = 0; i < pontos.length - 1; i++) {
-      const p0 = pontos[i === 0 ? i : i - 1];
-      const p1 = pontos[i];
-      const p2 = pontos[i + 1];
-      const p3 = pontos[i + 2 < pontos.length ? i + 2 : i + 1];
-      const cp1x = p1.x + (p2.x - p0.x) / 6;
-      const cp1y = p1.y + (p2.y - p0.y) / 6;
-      const cp2x = p2.x - (p3.x - p1.x) / 6;
-      const cp2y = p2.y - (p3.y - p1.y) / 6;
-      d += "C" + cp1x + "," + cp1y + " " + cp2x + "," + cp2y + " " + p2.x + "," + p2.y + " ";
-    }
-    return d;
-  }
-
-  function desenharEvolucaoAdmin(periodo) {
-    const svg = document.getElementById("adm-grafico-evolucao");
-    const legendaMeses = document.getElementById("adm-legenda-3meses");
-    const compEl = document.getElementById("adm-evolucao-comparacao");
-
-    if (periodo === "3meses") {
-      const meses = (window._admEvolucaoDados && window._admEvolucaoDados["3meses"] && window._admEvolucaoDados["3meses"].meses) || [];
-      document.getElementById("adm-evolucao-titulo").textContent = "Evolução -- últimos 3 meses";
-      const totalMesAtual = meses.length ? meses[meses.length - 1].dados.reduce((s, p) => s + p.venda_bruta, 0) : 0;
-      document.getElementById("adm-evolucao-total-grande").textContent = formatarReais(totalMesAtual);
-      document.getElementById("adm-grafico-dica").textContent = "Total do mês atual. Toque ou passe o mouse num ponto pra ver o valor do dia.";
-      compEl.textContent = "";
-
-      const maxDado = Math.max(...meses.flatMap(m => m.dados.map(p => p.venda_bruta)), 1);
-      const {maxEixo, passos} = calcularEixoY(maxDado);
-      const maxDias = Math.max(...meses.map(m => m.dados.length), 1);
-      const passo = _ADM_GRAFICO_LARGURA / Math.max(maxDias - 1, 1);
-
-      let svgHtml = desenharGradeY(maxEixo, passos);
-      meses.forEach((mes, idx) => {
-        const cor = _ADM_CORES_3_MESES[idx] || _ADM_CORES_3_MESES[_ADM_CORES_3_MESES.length - 1];
-        const ehAtual = idx === meses.length - 1;
-        const xy = mes.dados.map((p, i) => ({
-          x: _ADM_GRAFICO_MARGEM_ESQ + i * passo,
-          y: _ADM_GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO),
-          v: p.venda_bruta, dia: p.dia,
-        }));
-        const pontosSvg = xy.map(p =>
-          '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="' + (ehAtual ? 3.5 : 2.5) + '" fill="' + cor + '"><title>' +
-          mes.label + " -- dia " + p.dia + ": " + formatarReais(p.v) + '</title></circle>'
-        ).join("");
-        svgHtml +=
-          '<path d="' + curvaSuave(xy) + '" fill="none" stroke="' + cor + '" stroke-width="' + (ehAtual ? 2.5 : 2) + '"' +
-          (ehAtual ? "" : ' stroke-dasharray="5,4"') +
-          ' stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg;
-      });
-      svg.innerHTML = svgHtml;
-
-      legendaMeses.innerHTML = meses.map((mes, idx) => {
-        const cor = _ADM_CORES_3_MESES[idx] || _ADM_CORES_3_MESES[_ADM_CORES_3_MESES.length - 1];
-        return '<span class="adm-legenda-mes-item"><span class="adm-legenda-mes-tracinho" style="border-color:' + cor + ';"></span>' + mes.label + '</span>';
-      }).join("");
-      legendaMeses.style.display = "flex";
-      return;
-    }
-
-    legendaMeses.style.display = "none";
-    const diasJanela = periodo === "30dias" ? 30 : 15;
-    document.getElementById("adm-evolucao-titulo").textContent = "Evolução -- últimos " + diasJanela + " dias";
-
-    const conjunto = (window._admEvolucaoDados && window._admEvolucaoDados[periodo]) || { atual: [], anterior: [] };
-    const pontos = conjunto.atual || [];
-    const pontosAnterior = conjunto.anterior || [];
-    const totalPeriodo = pontos.reduce((s, p) => s + p.venda_bruta, 0);
-    const totalAnterior = pontosAnterior.reduce((s, p) => s + p.venda_bruta, 0);
-    document.getElementById("adm-evolucao-total-grande").textContent = formatarReais(totalPeriodo);
-    document.getElementById("adm-grafico-dica").textContent = "Toque ou passe o mouse num ponto pra ver o valor do dia.";
-
-    if (totalAnterior) {
-      const variacao = Math.round(((totalPeriodo - totalAnterior) / totalAnterior) * 1000) / 10;
-      const subiu = variacao >= 0;
-      compEl.innerHTML =
-        '<span class="' + (subiu ? "adm-comparacao-alta" : "adm-comparacao-baixa") + '">' +
-        (subiu ? "▲ +" : "▼ ") + variacao + "%</span> vs. período anterior (" +
-        formatarReais(totalAnterior) + " nos " + diasJanela + " dias anteriores)";
-    } else {
-      compEl.textContent = "Sem venda no período anterior pra comparar.";
-    }
-
-    // Escala compartilhada pelas duas linhas, pra comparação ficar
-    // correta, com teto redondo pro eixo (igual o gráfico de 3 meses).
-    const maxDado = Math.max(...pontos.map(p => p.venda_bruta), ...pontosAnterior.map(p => p.venda_bruta), 1);
-    const {maxEixo, passos} = calcularEixoY(maxDado);
-    const passo = _ADM_GRAFICO_LARGURA / Math.max(pontos.length - 1, 1);
-    const paraXY = (lista) => lista.map((p, i) => ({
-      x: _ADM_GRAFICO_MARGEM_ESQ + i * passo,
-      y: _ADM_GRAFICO_BASE - (p.venda_bruta / maxEixo) * (_ADM_GRAFICO_BASE - _ADM_GRAFICO_TOPO),
-      v: p.venda_bruta, d: p.data,
-    }));
-    const xy = paraXY(pontos);
-    const xyAnterior = paraXY(pontosAnterior);
-
-    const pontosSvg = xy.map(p =>
-      '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="4" fill="#2f6fe4"><title>' +
-      p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
-    ).join("");
-    const pontosSvgAnterior = xyAnterior.map(p =>
-      '<circle class="grafico-ponto" cx="' + p.x + '" cy="' + p.y + '" r="3" fill="#b9c2cf"><title>' +
-      "período anterior -- " + p.d.split("-").reverse().slice(0, 2).join("/") + ": " + formatarReais(p.v) + '</title></circle>'
-    ).join("");
-
-    svg.innerHTML =
-      desenharGradeY(maxEixo, passos) +
-      (xyAnterior.length
-        ? '<path d="' + curvaSuave(xyAnterior) + '" fill="none" stroke="#b9c2cf" stroke-width="2" stroke-dasharray="5,4" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvgAnterior
-        : "") +
-      '<path d="' + curvaSuave(xy) + '" fill="none" stroke="#2f6fe4" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" />' + pontosSvg +
-      desenharEixoX(xy);
-  }
-
-  document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (botao) {
-    botao.addEventListener("click", function () {
-      document.querySelectorAll(".adm-btn-filtro-evolucao").forEach(function (b) { b.classList.remove("ativo"); });
-      botao.classList.add("ativo");
-      desenharEvolucaoAdmin(botao.dataset.periodo);
-    });
-  });
 
   carregarResumoAdmin();
   </script>
