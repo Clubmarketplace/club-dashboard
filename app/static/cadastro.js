@@ -130,13 +130,15 @@
     } else if (m.estado === "nao_se_aplica") {
       classe += " cd-mp-na";
       dica = `${nome.longo}: não se aplica (marcado por ${m.por || "—"} em ${dataBr(m.em)}). Clique para desfazer.`;
-    } else if (p.assumido_por) {
-      // 15/10: alguém já assumiu o produto -- destaca com a cor do canal
-      // qual plataforma ainda falta, em vez de ficar igual às "não se aplica".
-      classe += " cd-mp-emandamento";
-      dica = `${nome.longo}: falta cadastrar (${p.assumido_por} está com este produto). Clique quando cadastrar.`;
     } else {
-      dica = `${nome.longo}: falta cadastrar. Clique quando cadastrar.`;
+      // 16/10 (correção): pedido e ainda pendente -- fica em evidência em laranja
+      // (cor neutra de "falta fazer"), desde o momento que foi marcado como pedido,
+      // não só depois de alguém assumir. Só troca pra cor da própria plataforma
+      // depois que for de fato marcado "feito" (cd-mp-feito, acima).
+      classe += " cd-mp-pedido";
+      dica = p.assumido_por
+        ? `${nome.longo}: falta cadastrar (${p.assumido_por} está com este produto). Clique quando cadastrar.`
+        : `${nome.longo}: falta cadastrar. Clique quando cadastrar.`;
     }
     const ocupado = estado.mpOcupados.has(p.id + ":" + k) ? " disabled" : "";
     return `<button type="button" class="${classe}" data-mp="${k}" data-id="${p.id}" title="${esc(dica)}"${ocupado}>${esc(rotulo)}</button>`;
@@ -165,6 +167,12 @@
   function todosResolvidos(p) { return CHAVES.every((k) => !!mpDe(p, k).estado); }
   // Nenhum dos 3 foi tocado ainda -- é quando dá pra definir quais foram pedidos.
   function nenhumTocado(p) { return CHAVES.every((k) => !mpDe(p, k).estado); }
+  // 16/10 (correção): produto automático sem nada tocado ainda -- ninguém pode
+  // assumir nem marcar canal até o supervisor/gerente escolher quais marketplaces
+  // essa solicitação precisa (o servidor também recusa, com 409 -- isto é só o
+  // espelho visual). Fecha a brecha de o operador clicar direto nos botões de
+  // canal antes de alguém definir.
+  function aguardandoPlataformas(p) { return p.origem === "automatico" && nenhumTocado(p); }
 
   function blocoReabertura(p) {
     if (!p.reaberto_por) return "";
@@ -213,7 +221,11 @@
         : `<span class="cd-ok">✓ Concluído</span><div class="cd-quem">por <b class="cd-quem-nome">${esc(p.cadastrado_por || "—")}</b><br>${esc(dataBr(p.cadastrado_em))}</div>`;
     }
     // Travado: ninguém mexe mais nos botões por marketplace (o servidor recusa também, com 423).
-    const tags = (feito || ehMarcacaoAntiga(p)) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
+    // 16/10 (correção): esperando o supervisor/gerente definir as plataformas -- ninguém marca
+    // canal ainda, nem quem tem permissão de definir (o servidor recusa também, com 409).
+    const esperandoPlataformas = !feito && aguardandoPlataformas(p);
+    const tags = (feito || ehMarcacaoAntiga(p) || esperandoPlataformas) ? "" : `<div class="cd-mps">${CHAVES.map((k) => botaoMp(p, k)).join("")}</div>`;
+    const avisoEspera = esperandoPlataformas ? `<small class="cd-quem">Aguardando o supervisor/gerente definir quais marketplaces essa solicitação precisa.</small>` : "";
     const quem = ehMarcacaoAntiga(p) ? "" : textoQuem(p);
     const definirPlataformas = feito ? "" : blocoDefinirPlataformas(p);
     const confirmar = feito ? "" : blocoConfirmar(p);
@@ -232,7 +244,7 @@
       ? `<button class="cd-btn cd-mini cd-btn-excluir" type="button" data-excluir="${p.id}" title="Remove da lista; pede o motivo e fica registrado">🗑 Excluir</button>`
       : "";
     const tempo = blocoTempo(p);
-    return `<div class="cd-acao">${topo}${tags}${definirPlataformas}${confirmar}${quem}${tempo}${blocoReabertura(p)}${atalho}${excluir}</div>`;
+    return `<div class="cd-acao">${topo}${tags}${avisoEspera}${definirPlataformas}${confirmar}${quem}${tempo}${blocoReabertura(p)}${atalho}${excluir}</div>`;
   }
 
   // Quem assumiu, desde quando e quanto tempo está levando / levou.
@@ -261,7 +273,9 @@
       if (p.assumido_por && !isNaN(chegou)) linhas.push(`<span class="cd-chegou">📅 Chegou ${esc(dataBr(p.data_nota))}</span> <small>(há ${esc(duracao(agora - chegou))})</small>`);
     }
     let botao = "";
-    if (p.status !== "cadastrado") {
+    // 16/10 (correção): sem plataforma definida ainda, nem o botão Assumir aparece --
+    // só depois do supervisor/gerente escolher (ver blocoDefinirPlataformas/blocoMarketplaces).
+    if (p.status !== "cadastrado" && !aguardandoPlataformas(p)) {
       if (!p.assumido_por) botao = `<button class="cd-btn cd-mini" type="button" data-assumir="${p.id}">🙋 Assumir</button>`;
       else if (p.assumido_por === estado.eu) botao = `<button class="cd-btn cd-mini" type="button" data-soltar="${p.id}" title="Devolve o produto para a fila, sem responsável">Soltar</button>`;
       else botao = `<button class="cd-btn cd-mini" type="button" data-assumir="${p.id}" title="${esc(p.assumido_por)} já assumiu">🙋 Assumir mesmo assim</button>`;
