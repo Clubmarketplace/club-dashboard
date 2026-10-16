@@ -272,19 +272,24 @@ def _estado_mp(produto: ProdutoCadastro, chave: str) -> Optional[str]:
     return getattr(produto, f"{chave}_status")
 
 
+def _todos_resolvidos(produto: ProdutoCadastro) -> bool:
+    return all(_estado_mp(produto, k) in ("feito", "nao_se_aplica") for k in MARKETPLACES)
+
+
 def _recalcular_status(produto: ProdutoCadastro, usuario_nome: str) -> None:
     """
-    O produto fica "cadastrado" (OK) quando os 3 marketplaces estão resolvidos
-    (feito OU não se aplica). Quem resolveu o ÚLTIMO é gravado como quem
-    fechou o produto; ao reabrir algum, volta a "pendente" e limpa isso.
+    16/10: NÃO trava mais sozinho quando os 3 marketplaces ficam resolvidos --
+    isso agora só acontece no Confirmar explícito (ver /confirmar), que é quem
+    carimba cadastrado_por/cadastrado_em. `usuario_nome` fica sem uso aqui
+    (mantido só pra não mudar a assinatura e as chamadas já existentes).
+
+    O que esta função continua fazendo: se algum canal voltar a ficar em
+    aberto (ex: reabertura em app/routers/cadastro_produtos.py:/reabrir, ou
+    alguém desmarcar um canal já resolvido), garante que o produto NUNCA fique
+    com status "cadastrado" sem os 3 resolvidos -- volta pra "pendente" e
+    limpa o carimbo.
     """
-    resolvidos = all(_estado_mp(produto, k) in ("feito", "nao_se_aplica") for k in MARKETPLACES)
-    if resolvidos:
-        if produto.status != "cadastrado":
-            produto.status = "cadastrado"
-            produto.cadastrado_por = usuario_nome
-            produto.cadastrado_em = datetime.utcnow()
-    else:
+    if not _todos_resolvidos(produto) and produto.status == "cadastrado":
         produto.status = "pendente"
         produto.cadastrado_por = None
         produto.cadastrado_em = None
@@ -626,6 +631,59 @@ def _assumir_se_ninguem(produto: ProdutoCadastro, usuario: Usuario, estado: str)
         produto.assumido_em = datetime.utcnow()
 
 
+def _marcar_plataformas_pedidas(produto: ProdutoCadastro, usuario: Usuario, plataformas: List[str]) -> None:
+    """
+    16/10: marca quais marketplaces uma solicitação AUTOMÁTICA (nota fiscal)
+    precisa -- usado tanto no momento de assumir quanto na marcação antecipada
+    do supervisor/gerente (ver /plataformas). Só deve ser chamada quando os 3
+    canais ainda estão em branco (quem chama confere isso antes); o que não
+    foi escolhido aqui já marca sozinho como "não se aplica", igual já
+    acontece na inclusão manual/seller (ver _incluir_um e incluir_lote_*).
+    """
+    escolhidas = {(p or "").strip().lower() for p in plataformas}
+    if not escolhidas:
+        raise HTTPException(status_code=422, detail="Escolha pelo menos um canal para cadastro.")
+    if not escolhidas.issubset(MARKETPLACES):
+        raise HTTPException(status_code=422, detail="Canal inválido -- use ml, tiktok ou shopee.")
+    agora = datetime.utcnow()
+    for chave in MARKETPLACES:
+        if chave not in escolhidas:
+            setattr(produto, f"{chave}_status", "nao_se_aplica")
+            setattr(produto, f"{chave}_por", usuario.nome_exibicao)
+            setattr(produto, f"{chave}_em", agora)
+
+
+class PlataformasIn(BaseModel):
+    plataformas: List[str]
+
+
+@router.post("/api/cadastro/produtos/{produto_id}/plataformas")
+def definir_plataformas_produto(
+    produto_id: int,
+    corpo: PlataformasIn,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_supervisao_logado),
+):
+    """
+    16/10: supervisor/gerente (ou admin) marca ANTES de alguém assumir quais
+    marketplaces uma solicitação automática (nota fiscal) precisa -- pra quando
+    o operador for assumir já estar tudo definido. Só funciona uma vez, enquanto
+    os 3 canais ainda estão em branco -- se já tiver algo marcado (por quem for),
+    recusa; ninguém troca a escolha depois de feita.
+    """
+    produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status == "cadastrado":
+        raise HTTPException(status_code=423, detail="Este produto já foi confirmado -- está travado.")
+    if not all(_estado_mp(produto, k) is None for k in MARKETPLACES):
+        raise HTTPException(status_code=409, detail="Esse produto já tem marketplace marcado -- não dá mais pra escolher de novo.")
+    _marcar_plataformas_pedidas(produto, usuario, corpo.plataformas)
+    db.commit()
+    logger.info("Plataformas definidas por %s (id=%s): %s", usuario.nome_exibicao, produto_id, corpo.plataformas)
+    return {"ok": True, "item": _produto_json(produto)}
+
+
 class AssumirIn(BaseModel):
     assumir: bool = True  # False = soltar (volta a "ninguém assumiu")
     forcar: bool = False  # True = assumir mesmo que outra pessoa já tenha assumido
@@ -643,6 +701,11 @@ def assumir_produto(
     Se outra pessoa já tinha assumido, recusa (409) a menos que `forcar` -- a tela
     pergunta antes ("Ana já assumiu. Assumir mesmo assim?"). Soltar só vale pra
     quem assumiu (ou supervisor/admin).
+
+    16/10: a escolha de QUAIS marketplaces essa solicitação precisa não é feita
+    aqui -- é sempre antes, pelo supervisor/gerente (ver /plataformas). Um
+    produto automático (nota fiscal) sem isso definido continua sendo assumido
+    normalmente, só que com os 3 marketplaces em aberto (comportamento de sempre).
     """
     produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
     if produto is None:
@@ -772,9 +835,13 @@ def marcar_marketplace(
 ):
     """
     Marca um marketplace do produto (feito / não se aplica / volta a pendente),
-    guardando quem fez e quando. Quando os 3 estão resolvidos o produto vira
-    "cadastrado" (OK) sozinho. Cada chamada mexe só no marketplace pedido -- duas
-    pessoas cadastrando marketplaces diferentes do mesmo produto não se atropelam.
+    guardando quem fez e quando. Cada chamada mexe só no marketplace pedido --
+    duas pessoas cadastrando marketplaces diferentes do mesmo produto não se
+    atropelam.
+
+    16/10: marcar o ÚLTIMO marketplace pendente NÃO fecha mais o produto
+    sozinho -- só deixa todos "resolvidos" (feito ou não se aplica), esperando
+    o Confirmar explícito (ver /confirmar) travar de vez.
     """
     chave = (corpo.marketplace or "").strip().lower()
     estado = (corpo.estado or "").strip().lower()
@@ -806,6 +873,51 @@ def marcar_marketplace(
     return {"ok": True, "item": _produto_json(produto)}
 
 
+@router.post("/api/cadastro/produtos/{produto_id}/confirmar")
+def confirmar_produto(
+    produto_id: int,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(_cadastro_logado),
+):
+    """
+    16/10: trava de vez o cadastro -- a ÚNICA forma do produto virar
+    "cadastrado" (marcar o último marketplace sozinho não fecha mais, ver
+    marcar_marketplace/_recalcular_status acima). Só libera quando TODOS os
+    marketplaces estiverem resolvidos (feito ou não se aplica); a tela nem
+    deve deixar clicar antes disso, mas o servidor confere de novo aqui (409
+    se ainda faltar algum) -- nunca confia só na tela.
+
+    Carimba quem confirmou e quando nos MESMOS campos que já existiam
+    (cadastrado_por/cadastrado_em) -- só muda que agora são preenchidos por
+    uma ação explícita da pessoa, não mais sozinho. Dá pra calcular "tempo
+    levado" como cadastrado_em - assumido_em, sem precisar de nenhum campo
+    novo. Reabrir (só admin/supervisor, motivo obrigatório) é a única forma
+    de desfazer isso depois -- ver /reabrir.
+    """
+    produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
+    if produto is None:
+        raise HTTPException(status_code=404, detail="Produto não encontrado.")
+    if produto.status == "cadastrado":
+        raise HTTPException(status_code=423, detail="Este produto já foi confirmado -- está travado.")
+    if not _todos_resolvidos(produto):
+        raise HTTPException(status_code=409, detail="Marque todos os marketplaces pedidos antes de confirmar.")
+
+    produto.status = "cadastrado"
+    produto.cadastrado_por = usuario.nome_exibicao
+    produto.cadastrado_em = datetime.utcnow()
+    _assumir_se_ninguem(produto, usuario, "feito")  # garantia: se ninguém tinha assumido, confirmar também assume
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Falha ao confirmar produto do Cadastro (id=%s)", produto_id)
+        raise HTTPException(status_code=500, detail="Erro ao confirmar no servidor.")
+
+    logger.info("Produto de cadastro confirmado: id=%s por=%s", produto_id, usuario.nome_exibicao)
+    return {"ok": True, "item": _produto_json(produto)}
+
+
 class StatusCadastroIn(BaseModel):
     cadastrado: bool
 
@@ -821,6 +933,10 @@ def alterar_status_cadastro(
     Atalho dos 3 de uma vez. Marcar: o que ainda faltava vira "feito" por quem
     clicou (o que já estava marcado por outra pessoa ou como "não se aplica"
     fica como está). Desmarcar: limpa os 3 e volta a pendente.
+
+    16/10: marcar aqui também NÃO fecha mais o produto sozinho -- deixa tudo
+    resolvido, esperando o Confirmar explícito (ver /confirmar) travar de vez,
+    igual ao marcar_marketplace.
     """
     produto = db.query(ProdutoCadastro).filter(ProdutoCadastro.id == produto_id).first()
     if produto is None:
