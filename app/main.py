@@ -696,9 +696,11 @@ def pagina_extensao(request: Request):
             "conta_logada": conta_logada,
             "seller_logado": seller_logado,
             "papel_logado": usuario.papel if usuario else None,
-            # TODO: trocar pelo link real assim que a extensão for publicada
-            # (unlisted) na Chrome Web Store.
-            "url_extensao": None,
+            # Link direto do item "Sistema de Precificação — ClubMarketplace"
+            # na Chrome Web Store (publicado como "não listado"). O botão só
+            # fica clicável depois que o usuário rola o Termo de Uso até o
+            # fim e marca "Li e aceito" (ver extensao.html).
+            "url_extensao": "https://chromewebstore.google.com/detail/feonnbeecdbchkdbkffghoemjgcklghm",
         },
     )
 
