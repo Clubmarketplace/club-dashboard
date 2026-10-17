@@ -46,6 +46,27 @@
   }
 
   .rodape-nota { margin:22px 0 0; font-size:12px; color:var(--cmx-texto-suave); line-height:1.6; }
+
+  .termo-aviso { font-size:12.5px; color:var(--cmx-texto-suave); margin:0 0 10px; }
+  .termo-caixa {
+    border:1px solid var(--cmx-borda); border-radius:12px; padding:18px 20px;
+    max-height:320px; overflow-y:auto; background:#fafbfc; margin-bottom:14px;
+    font-size:13px; line-height:1.65; color:var(--cmx-texto);
+  }
+  .termo-caixa .termo-titulo { font-size:15px; margin:0 0 14px; }
+  .termo-caixa h3 { font-size:13.5px; margin:18px 0 6px; color:var(--cmx-texto); }
+  .termo-caixa h3:first-of-type { margin-top:0; }
+  .termo-caixa p { margin:0 0 10px; }
+  .termo-check {
+    display:flex; align-items:center; gap:8px; font-size:13px;
+    color:var(--cmx-texto); margin:2px 0 20px;
+  }
+  .termo-check input[disabled] { cursor:not-allowed; }
+  .termo-check.habilitado span { color:var(--cmx-texto); }
+  .termo-check span { color:var(--cmx-texto-suave); }
+  .btn-instalar.desabilitado {
+    background:#c7ccd1; cursor:not-allowed; pointer-events:none;
+  }
 </style>
 </head>
 <body>
@@ -103,6 +124,19 @@
             sua conta.
           </p>
 
+          {% if url_extensao %}
+          <p class="termo-aviso">
+            Antes de instalar, leia o Termo de Uso e Aceite abaixo até o final.
+          </p>
+          <div class="termo-caixa" id="termoCaixa">
+            {% include "_termo_extensao.html" %}
+          </div>
+          <label class="termo-check" id="termoCheckLabel">
+            <input type="checkbox" id="termoCheck" disabled>
+            <span>Li e aceito os Termos de Uso</span>
+          </label>
+          {% endif %}
+
           <div class="bloco-instalar">
             <div class="icone">
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
@@ -115,7 +149,7 @@
               <div class="meta">Extensão para o Google Chrome</div>
             </div>
             {% if url_extensao %}
-            <a class="btn-instalar" href="{{ url_extensao }}" target="_blank" rel="noopener">Instalar</a>
+            <a class="btn-instalar desabilitado" id="btnInstalar" data-href="{{ url_extensao }}" href="#" target="_blank" rel="noopener" aria-disabled="true">Instalar</a>
             {% else %}
             <span class="btn-instalar" style="background:#c7ccd1; cursor:default;">Em breve</span>
             {% endif %}
@@ -136,5 +170,42 @@
     </div>
   </div>
   <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    (function () {
+      var caixa = document.getElementById("termoCaixa");
+      var check = document.getElementById("termoCheck");
+      var checkLabel = document.getElementById("termoCheckLabel");
+      var btn = document.getElementById("btnInstalar");
+      if (!caixa || !check || !btn) return;
+
+      function chegouAoFim() {
+        return caixa.scrollTop + caixa.clientHeight >= caixa.scrollHeight - 4;
+      }
+
+      function liberarCheck() {
+        check.disabled = false;
+      }
+
+      caixa.addEventListener("scroll", function () {
+        if (chegouAoFim()) liberarCheck();
+      });
+      // Termo curto que já aparece inteiro na caixa, sem precisar rolar.
+      if (chegouAoFim()) liberarCheck();
+
+      check.addEventListener("change", function () {
+        if (check.checked) {
+          btn.href = btn.dataset.href;
+          btn.classList.remove("desabilitado");
+          btn.removeAttribute("aria-disabled");
+          checkLabel.classList.add("habilitado");
+        } else {
+          btn.removeAttribute("href");
+          btn.classList.add("desabilitado");
+          btn.setAttribute("aria-disabled", "true");
+          checkLabel.classList.remove("habilitado");
+        }
+      });
+    })();
+  </script>
 </body>
 </html>
