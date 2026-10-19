@@ -40,6 +40,25 @@
     .ci-hist { width:100%; border-collapse:collapse; font-size:13px; }
     .ci-hist th, .ci-hist td { text-align:left; padding:8px 10px; border-top:1px solid #eef1f4; vertical-align:top; }
     .ci-hist th { color:#5b6776; font-size:12px; text-transform:uppercase; letter-spacing:.04em; border-top:none; }
+
+    /* Termômetro de crédito */
+    .ci-termo-topo { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    .ci-termo-titulo { display:flex; align-items:center; gap:8px; }
+    .ci-termo-titulo .emoji { font-size:20px; }
+    .ci-termo-valores { display:flex; gap:22px; flex-wrap:wrap; }
+    .ci-termo-valores div b { display:block; font-size:20px; line-height:1.2; }
+    .ci-termo-valores div span { font-size:12px; color:var(--cmx-texto-suave); }
+    .ci-termo-barra-fundo { width:100%; height:14px; border-radius:7px; background:#eef1f4; overflow:hidden; }
+    .ci-termo-barra-cheia { height:100%; border-radius:7px; transition:width .25s, background-color .25s; background:var(--green); }
+    .ci-termo-barra-cheia.ci-termo-amarelo { background:var(--amber, #f0a93d); }
+    .ci-termo-barra-cheia.ci-termo-vermelho { background:#c0392b; }
+    .ci-termo-aviso-baixo { font-size:13px; color:#8a1f11; font-weight:600; display:none; }
+    .ci-termo-config { display:flex; align-items:center; gap:8px; font-size:13.5px; }
+    .ci-termo-config input { width:110px; height:34px; border:1px solid #d5dbe1; border-radius:8px; padding:0 10px; font:14px Inter,sans-serif; }
+    .ci-termo-sem-chave { font-size:13px; color:#5b6776; background:#f6f8fa; border:1px solid #e2e7ec; border-radius:9px; padding:10px 12px; }
+    .ci-termo-selo { font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; }
+    .ci-termo-selo.ci-selo-exato { background:#e8f6ef; color:#14532d; }
+    .ci-termo-selo.ci-selo-estimado { background:#fff7e8; color:#8a5a0a; }
   </style>
 </head>
 <body>
@@ -82,6 +101,32 @@
       </header>
 
       <main>
+        <section class="ci-card" id="ci-termo-card" style="margin-bottom:16px" aria-labelledby="t-termo">
+          <div class="ci-termo-topo">
+            <div class="ci-termo-titulo">
+              <span class="emoji">🌡️</span>
+              <h2 id="t-termo" style="margin:0">Termômetro de crédito — API da IA</h2>
+              <span class="ci-termo-selo" id="ci-termo-selo"></span>
+            </div>
+            <div class="ci-termo-config">
+              <label for="ci-termo-comprado">Saldo comprado (US$)</label>
+              <input type="number" id="ci-termo-comprado" step="0.01" min="0" data-chave="credito_comprado_usd" />
+            </div>
+          </div>
+          <div id="ci-termo-corpo">
+            <div class="ci-termo-valores">
+              <div><b id="ci-termo-resta">—</b><span>Resta</span></div>
+              <div><b id="ci-termo-gasto">—</b><span>Gasto este mês</span></div>
+              <div><b id="ci-termo-comprado-txt">—</b><span>Comprado</span></div>
+            </div>
+            <div class="ci-termo-barra-fundo"><div class="ci-termo-barra-cheia" id="ci-termo-barra" style="width:0%"></div></div>
+            <p class="ci-termo-aviso-baixo" id="ci-termo-aviso-baixo">⚠ Crédito baixo — considere comprar mais ou confirmar o auto-reload.</p>
+          </div>
+          <p class="ci-termo-sem-chave" id="ci-termo-sem-chave" style="display:none">
+            Para ver o gasto exato, configure a chave Admin da Anthropic (variável <code>ANTHROPIC_ADMIN_API_KEY</code> no servidor).
+          </p>
+        </section>
+
         <p class="ci-saude" id="ci-saude" role="alert"></p>
         <p class="ci-aviso" id="ci-aviso" role="status"></p>
         <div class="ci-grade">
@@ -168,7 +213,7 @@
     </div>
   </div>
 
-  <script src="/static/calibrar-ia.js?v=3"></script>
+  <script src="/static/calibrar-ia.js?v=5"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>
