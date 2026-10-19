@@ -11,7 +11,7 @@ import json
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
-from app import auth, config_ia, saude_ia
+from app import auth, config_ia, saude_ia, uso_ia_custo
 from app.database import get_db
 from app.models import HistoricoConfigIA
 
@@ -50,13 +50,30 @@ def _saude() -> dict | None:
     return {"desde": falha["desde"].isoformat() + "Z", "motivo": falha["motivo"]}
 
 
-def _resposta(db: Session) -> dict:
+def _credito(config: dict) -> dict:
+    """Termômetro: gasto real (Cost API da Anthropic) x saldo comprado (tela)."""
+    gasto = uso_ia_custo.gasto_do_mes_usd()
+    comprado = config.get("credito_comprado_usd") or 0.0
+    resta = round(comprado - gasto["gasto_usd"], 2) if gasto["disponivel"] else None
     return {
-        "config": config_ia.obter(forcar=True),
+        "disponivel": gasto["disponivel"],
+        "exato": gasto["exato"],
+        "erro": gasto["erro"],
+        "gasto_usd": gasto["gasto_usd"],
+        "comprado_usd": comprado,
+        "resta_usd": resta,
+    }
+
+
+def _resposta(db: Session) -> dict:
+    config = config_ia.obter(forcar=True)
+    return {
+        "config": config,
         "padroes": config_ia.padroes(),
         "degraus": [{"chave": k, "nome": n} for k, n in config_ia.DEGRAUS],
         "historico": _historico(db),
         "saude": _saude(),
+        "credito": _credito(config),
     }
 
 
