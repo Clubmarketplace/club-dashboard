@@ -14,6 +14,7 @@
     fonte_dados_anuncio: "Fonte: ficha do anúncio", fonte_manuais: "Fonte: manuais", fonte_internet: "Fonte: pesquisa na internet",
     degraus: "Degraus da pesquisa", duas_fontes: "Exigir duas fontes", buscas_por_degrau: "Buscas por degrau",
     modelo_pesquisa: "Modelo da pesquisa", tom: "Tom", tamanho: "Tamanho",
+    credito_comprado_usd: "Saldo comprado (crédito da IA)",
   };
   const DESCRICOES = {
     fabricante: "Site oficial da marca.",
@@ -38,6 +39,7 @@
     if (chave === "degraus") return degraus.filter((d) => v[d.chave]).map((d) => d.nome.split(" · ")[0]).join(", ") || "nenhum";
     if (chave === "janela_ml_min") return v + " min";
     if (chave === "modelo_pesquisa") return v === "preciso" ? "mais preciso" : "econômico";
+    if (chave === "credito_comprado_usd") return "US$ " + Number(v).toFixed(2);
     return String(v);
   }
 
@@ -58,6 +60,7 @@
     document.querySelectorAll("input[data-degrau]").forEach((c) => { c.checked = !!atual.degraus[c.dataset.degrau]; c.disabled = !atual.fonte_internet; });
     $("ci-duas").disabled = $("ci-buscas").disabled = !atual.fonte_internet;
     $("ci-buscas").value = String(atual.buscas_por_degrau);
+    $("ci-termo-comprado").value = atual.credito_comprado_usd;
     ["modelo", "tom", "tamanho"].forEach((nome) => {
       const chave = nome === "modelo" ? "modelo_pesquisa" : nome;
       document.querySelectorAll(`input[name="${nome}"]`).forEach((r) => { r.checked = r.value === atual[chave]; });
@@ -93,6 +96,46 @@
     el.style.display = "block";
   }
 
+  function pintarCredito(credito) {
+    if (!credito) return;
+    const semChave = $("ci-termo-sem-chave"), corpo = $("ci-termo-corpo");
+    if (!credito.disponivel) {
+      semChave.style.display = "block";
+      corpo.style.display = "none";
+      return;
+    }
+    semChave.style.display = "none";
+    corpo.style.display = "block";
+
+    const selo = $("ci-termo-selo");
+    if (credito.exato) {
+      selo.textContent = "exato";
+      selo.className = "ci-termo-selo ci-selo-exato";
+      selo.title = "Direto da Cost API da Anthropic.";
+    } else {
+      selo.textContent = "estimado";
+      selo.className = "ci-termo-selo ci-selo-estimado";
+      selo.title = "Calculado pelos tokens que a nossa IA registrou em cada resposta (sem chave Admin configurada).";
+    }
+
+    const gasto = credito.gasto_usd ?? 0;
+    const comprado = credito.comprado_usd ?? 0;
+    const resta = credito.resta_usd ?? (comprado - gasto);
+    const pct = comprado > 0 ? Math.max(0, Math.min(100, (resta / comprado) * 100)) : 0;
+
+    $("ci-termo-resta").textContent = "US$ " + resta.toFixed(2);
+    $("ci-termo-gasto").textContent = "US$ " + gasto.toFixed(2);
+    $("ci-termo-comprado-txt").textContent = "US$ " + comprado.toFixed(2);
+
+    const barra = $("ci-termo-barra");
+    barra.style.width = pct + "%";
+    barra.classList.remove("ci-termo-amarelo", "ci-termo-vermelho");
+    if (pct <= 15) barra.classList.add("ci-termo-vermelho");
+    else if (pct <= 40) barra.classList.add("ci-termo-amarelo");
+
+    $("ci-termo-aviso-baixo").style.display = (pct <= 15 && comprado > 0) ? "block" : "none";
+  }
+
   function aplicar(dados) {
     degraus = dados.degraus;
     salvo = JSON.parse(JSON.stringify(dados.config));
@@ -100,6 +143,7 @@
     montarCampos();
     pintarHistorico(dados.historico || []);
     pintarSaude(dados.saude || null);
+    pintarCredito(dados.credito || null);
     pintar();
   }
 
@@ -118,7 +162,7 @@
     try {
       const r = await fetch("/api/calibrar-ia", { cache: "no-store" });
       const d = await r.json().catch(() => ({}));
-      if (r.ok) pintarSaude(d.saude || null);
+      if (r.ok) { pintarSaude(d.saude || null); pintarCredito(d.credito || null); }
     } catch (e) { /* silencioso -- não interrompe quem está editando */ }
   }, 60000);
 
@@ -130,7 +174,8 @@
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (!atual) return;
-    if (t.dataset.chave) atual[t.dataset.chave] = t.checked;
+    if (t.id === "ci-termo-comprado") atual.credito_comprado_usd = Math.max(0, Number(t.value) || 0);
+    else if (t.dataset.chave) atual[t.dataset.chave] = t.checked;
     else if (t.dataset.degrau) atual.degraus = { ...atual.degraus, [t.dataset.degrau]: t.checked };
     else if (t.id === "ci-buscas") atual.buscas_por_degrau = Number(t.value);
     else if (t.name === "modelo") atual.modelo_pesquisa = t.value;
