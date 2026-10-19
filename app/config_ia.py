@@ -60,6 +60,7 @@ def padroes() -> dict:
         "modelo_pesquisa": "preciso",  # preciso (Sonnet) | economico (modelo padrão)
         "tom": "cordial",
         "tamanho": "normal",
+        "credito_comprado_usd": 0.0,  # quanto comprou de crédito da API da Anthropic (termômetro)
     }
 
 
@@ -74,6 +75,11 @@ def normalizar(dados: dict) -> dict:
             saida[chave] = bool(valor)
         elif chave == "janela_ml_min":
             continue  # fixo (ver JANELA_MINIMA_MIN): não se altera pela tela
+        elif chave == "credito_comprado_usd":
+            try:
+                saida[chave] = max(0.0, round(float(valor), 2))
+            except (TypeError, ValueError):
+                raise ValueError("Valor de crédito inválido.")
         elif chave == "buscas_por_degrau":
             try:
                 saida[chave] = max(1, min(5, int(valor)))

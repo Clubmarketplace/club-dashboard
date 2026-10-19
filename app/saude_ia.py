@@ -35,13 +35,45 @@ def registrar_falha(motivo: str | None) -> None:
         logger.exception("Não consegui registrar a falha da IA")
 
 
-def registrar_sucesso() -> None:
+def registrar_sucesso(
+    modelo: str | None = None,
+    tokens_entrada: int | None = None,
+    tokens_saida: int | None = None,
+    buscas_web: int | None = None,
+) -> None:
+    """
+    modelo/tokens_entrada/tokens_saida/buscas_web (opcionais): consumo dessa
+    chamada, usado pelo termômetro de crédito (app/uso_ia_custo.py) pra
+    estimar o gasto quando não tem a chave Admin da Anthropic configurada.
+    Quem chama sem passar nada continua funcionando igual antes.
+    """
     try:
         with SessionLocal() as db:
-            db.add(EventoIA(tipo="sucesso"))
+            db.add(EventoIA(
+                tipo="sucesso",
+                modelo=modelo,
+                tokens_entrada=tokens_entrada,
+                tokens_saida=tokens_saida,
+                buscas_web=buscas_web,
+            ))
             db.commit()
     except Exception:
         logger.exception("Não consegui registrar o sucesso da IA")
+
+
+def registrar_sucesso_de(resposta, modelo: str) -> None:
+    """
+    Igual a registrar_sucesso(), mas tira o consumo (tokens, buscas na
+    internet) direto do objeto de resposta da API do Claude -- usa isso
+    sempre que tiver a resposta em mãos, pro termômetro de crédito
+    conseguir estimar o gasto.
+    """
+    usage = getattr(resposta, "usage", None)
+    tokens_entrada = getattr(usage, "input_tokens", None) if usage else None
+    tokens_saida = getattr(usage, "output_tokens", None) if usage else None
+    uso_ferramentas = getattr(usage, "server_tool_use", None) if usage else None
+    buscas_web = getattr(uso_ferramentas, "web_search_requests", None) if uso_ferramentas else None
+    registrar_sucesso(modelo=modelo, tokens_entrada=tokens_entrada, tokens_saida=tokens_saida, buscas_web=buscas_web)
 
 
 def falha_atual(janela_min: int = JANELA_PADRAO_MIN) -> dict | None:

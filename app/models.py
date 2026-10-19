@@ -854,6 +854,13 @@ class EventoIA(Base):
     tipo = Column(String, nullable=False)  # "falha" | "sucesso"
     motivo = Column(String, nullable=True)  # resumo do erro (só quando tipo="falha")
     ocorrido_em = Column(DateTime, default=datetime.utcnow, index=True)
+    # 18/10: termômetro de crédito -- consumo de cada chamada "sucesso",
+    # pra estimar o custo localmente (ver app/uso_ia_custo.py). NULL em
+    # eventos antigos e em "falha" (a chamada que falhou não gastou tokens).
+    modelo = Column(String, nullable=True)
+    tokens_entrada = Column(Integer, nullable=True)
+    tokens_saida = Column(Integer, nullable=True)
+    buscas_web = Column(Integer, nullable=True)
 
 
 class Venda(Base):

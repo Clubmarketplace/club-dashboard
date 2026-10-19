@@ -198,7 +198,7 @@ def encontrar_indice_resposta_similar(pergunta_texto: str, historico: list[dict]
         saude_ia.registrar_falha(str(exc))
         return None
     from app import saude_ia
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
 
     texto = "".join(
         bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
@@ -244,7 +244,7 @@ def gerar_resposta_com_manual(pergunta_texto: str, manual_titulo: str | None, ma
         saude_ia.registrar_falha(str(exc))
         return None
     from app import saude_ia
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
 
     # Só o texto final (sem o "raciocínio" da busca), limpo e conferido.
     return resposta_segura(_texto_final(resposta))
@@ -295,6 +295,7 @@ def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: 
         messages=[{"role": "user", "content": pergunta_texto}],
     )
     modelo = config_ia.modelo_pesquisa(CLAUDE_MODEL_PRE_VENDA)
+    modelo_usado = modelo
     from app import saude_ia
     try:
         resposta = cliente.messages.create(model=modelo, **parametros)
@@ -307,12 +308,13 @@ def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: 
         # com o modelo padrão, pra pesquisa nunca parar por causa disso.
         logger.warning("Modelo de pesquisa %s falhou (%s) -- tentando com %s", modelo, exc, CLAUDE_MODEL_PRE_VENDA)
         try:
+            modelo_usado = CLAUDE_MODEL_PRE_VENDA
             resposta = cliente.messages.create(model=CLAUDE_MODEL_PRE_VENDA, **parametros)
         except Exception as exc2:
             logger.error("Falha na pesquisa na internet (degrau %s): %s", degrau, exc2)
             saude_ia.registrar_falha(str(exc2))
             return None
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, modelo_usado)
     return resposta_segura(_texto_final(resposta))
 
 
@@ -389,7 +391,7 @@ def escolher_resposta_padrao(pergunta_texto: str, candidatas: list[dict]) -> int
         saude_ia.registrar_falha(str(exc))
         return None
     from app import saude_ia
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
 
     texto = "".join(b.text for b in resposta.content if getattr(b, "type", None) == "text").strip()
     if texto.isdigit() and int(texto) < len(candidatas):
@@ -440,5 +442,5 @@ def responder_com_dados_do_anuncio(pergunta_texto: str, ficha_anuncio: str) -> s
         saude_ia.registrar_falha(str(exc))
         return None
     from app import saude_ia
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
     return resposta_segura(_texto_final(resposta))

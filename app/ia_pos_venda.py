@@ -66,7 +66,7 @@ def gerar_sugestao_pos_venda(texto_mensagem: str, tipo: str) -> str | None:
         logger.error("Falha ao gerar sugestão de pós-venda: %s", exc)
         saude_ia.registrar_falha(str(exc))
         return None
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
 
     texto = "".join(
         bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"
@@ -108,7 +108,7 @@ def gerar_sugestao_cancelamento(texto_pedido: str) -> str | None:
         logger.error("Falha ao gerar sugestão de cancelamento: %s", exc)
         saude_ia.registrar_falha(str(exc))
         return None
-    saude_ia.registrar_sucesso()
+    saude_ia.registrar_sucesso_de(resposta, CLAUDE_MODEL_PRE_VENDA)
 
     texto = "".join(
         bloco.text for bloco in resposta.content if getattr(bloco, "type", None) == "text"

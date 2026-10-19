@@ -160,6 +160,16 @@ _COLUNAS_ADICIONAIS = {
         # Nulo pra todo mundo que já existe -- não muda nada do que já está em uso.
         "setores": "VARCHAR",
     },
+    "eventos_ia": {
+        # 18/10: termômetro de crédito -- registra o que cada chamada à IA
+        # consumiu, pra estimar o custo localmente quando não tem chave Admin
+        # da Anthropic configurada (ver app/uso_ia_custo.py). Linhas antigas
+        # (antes desta mudança) ficam NULL e não entram na estimativa.
+        "modelo": "VARCHAR",
+        "tokens_entrada": "INTEGER",
+        "tokens_saida": "INTEGER",
+        "buscas_web": "INTEGER",
+    },
 }
 
 # Índices pra filtros/busca continuarem rápidos com o volume crescendo.
