@@ -1083,13 +1083,19 @@ def _mesclar_total_hoje(pessoas: list, pessoas_hoje: list) -> list:
 def _agregar_fila(produtos_todos) -> dict:
     """Painel de gestão "Fila agora" (20/10): visão de TODOS os produtos que já
     chegaram (cadastrados + pendentes, exclui "excluida"), não só os
-    pendentes -- pra cada marketplace, feito + falta sempre soma o total
-    geral, sem sobra nenhuma (é exatamente essa conta que confundia antes)."""
+    pendentes. "Total geral" é de TODOS os produtos, não importa a
+    plataforma. Já o total DE CADA plataforma (ml/tiktok/shopee) é só dos
+    produtos que se aplicam a ela -- quem foi marcado "não se aplica" não
+    conta nem no total nem no feito nem no falta daquela plataforma
+    especificamente (ele simplesmente não é candidato ali). Por isso
+    feito[k] + falta[k] == total[k] sempre, mas total[k] pode ser menor que
+    total_geral, e diferente entre plataformas."""
     total_geral = len(produtos_todos)
     fila = {"total_geral": total_geral}
     for k in MARKETPLACES:
-        feito = sum(1 for p in produtos_todos if _estado_mp(p, k) in ("feito", "nao_se_aplica"))
-        fila[k] = {"feito": feito, "falta": total_geral - feito}
+        feito = sum(1 for p in produtos_todos if _estado_mp(p, k) == "feito")
+        falta = sum(1 for p in produtos_todos if _estado_mp(p, k) is None)
+        fila[k] = {"total": feito + falta, "feito": feito, "falta": falta}
     # mantido por compatibilidade com quem ainda usa esse número isolado.
     fila["produtos_pendentes"] = sum(1 for p in produtos_todos if p.status == "pendente")
     return fila
