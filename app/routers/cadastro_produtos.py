@@ -1139,6 +1139,11 @@ def produtividade_cadastro(
         condicoes_hoje.append(and_(em >= inicio_hoje, em < fim_hoje))
     linhas_hoje = db.query(ProdutoCadastro).filter(or_(*condicoes_hoje)).all()
     pessoas_hoje = _agregar_produtividade(linhas_hoje, inicio_hoje, fim_hoje)
+
+    # Totais de HOJE por marketplace (pro card "Fila agora" mostrar, junto do
+    # que falta: quanto já foi feito no período E quanto foi feito hoje).
+    totais_hoje = {k: sum(p[k] for p in pessoas_hoje) for k in MARKETPLACES}
+
     pessoas = _mesclar_total_hoje(pessoas, pessoas_hoje)
 
     totais = {"ml": 0, "tiktok": 0, "shopee": 0, "total": 0, "produtos_fechados": 0, "incluidos_manual": 0, "total_hoje": 0}
@@ -1155,6 +1160,7 @@ def produtividade_cadastro(
         "ate": data_ate.isoformat(),
         "pessoas": pessoas,
         "totais": totais,
+        "totais_hoje": totais_hoje,
         "fila": _agregar_fila(pendentes),
         "marketplaces": MARKETPLACES,
     }
