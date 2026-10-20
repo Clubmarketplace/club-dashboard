@@ -71,19 +71,20 @@
   // 20/10: painel de gestão -- total geral de cadastros que já chegaram, e
   // por marketplace o que já foi feito e o que falta (feito + falta = total
   // geral sempre, sem sobra). Marketplace em dia (falta = 0) não mostra card.
+  // 20/10: número grande do card = TOTAL daquela plataforma especificamente
+  // (quantos produtos realmente vão pra ela -- exclui quem marcou "não se
+  // aplica"). Feito/Falta/Hoje ficam como detalhe menor embaixo.
   function desenharFila(d) {
     const f = d.fila;
     const totaisHoje = d.totais_hoje || {};
-    const card = (titulo, valor, sub) => `<div class="pd-card"><small>${esc(titulo)}</small><b>${esc(valor)}</b><span>${esc(sub)}</span></div>`;
     const linha = (rotulo, valor) => `<div class="pd-fila-linha"><span>${esc(rotulo)}</span><b>${esc(valor)}</b></div>`;
-    let html = card("Total geral", f.total_geral, "cadastros que já chegaram");
+    let html = `<div class="pd-card"><small>Total geral</small><b>${esc(f.total_geral)}</b><span>cadastros que já chegaram</span></div>`;
     for (const k of ["ml", "tiktok", "shopee"]) {
       const { total = 0, feito = 0, falta = 0 } = f[k] || {};
       if (falta <= 0) continue;
       const hoje = totaisHoje[k] || 0;
-      html += `<div class="pd-card"><small>${esc(NOMES[k])}</small><div class="pd-fila-linhas">`
-        + linha("Total", total) + linha("Feito", feito) + linha("Falta", falta) + linha("Hoje", hoje)
-        + `</div></div>`;
+      html += `<div class="pd-card"><small>${esc(NOMES[k])}</small><b>${esc(total)}</b><span>produtos que vão pro ${esc(NOMES[k])}</span>`
+        + `<div class="pd-fila-linhas">` + linha("Feito", feito) + linha("Falta", falta) + linha("Hoje", hoje) + `</div></div>`;
     }
     document.getElementById("pd-fila").innerHTML = html;
   }
