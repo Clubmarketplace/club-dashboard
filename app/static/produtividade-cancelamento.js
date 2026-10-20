@@ -89,7 +89,7 @@
     </tr>`).join("");
     const t = d.totais;
     alvo.innerHTML = `<table>
-      <thead><tr><th>Pessoa</th><th>Cancelamento</th><th>Reputação</th><th>Total</th><th>Assumidas primeiro</th><th>Tempo médio</th></tr></thead>
+      <thead><tr><th>Pessoa</th><th>Cancelamentos concluídos</th><th>Reputações resolvidas</th><th>Total</th><th>Assumidas primeiro</th><th>Tempo médio</th></tr></thead>
       <tbody>${linhas}</tbody>
       <tfoot><tr><td>Todos</td><td>${t.cancelamento}</td><td>${t.reputacao}</td><td>${t.total}</td><td>${t.assumidas_primeiro}</td><td>${esc(tempoMedio(t.tempo_medio_seg))}</td></tr></tfoot>
     </table>`;
