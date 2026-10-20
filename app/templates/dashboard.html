@@ -302,12 +302,15 @@
             </div>
 
             <div class="adm-setor-card">
-              <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas</h3>
+              <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
               <p class="sub">Aderidas automaticamente pelo Precificador</p>
               <div class="adm-setor-destaque" id="adm-promocoes-mes">0</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-promocoes-mes-nota"></div>
               <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="adm-promocoes-lucro-mes">R$ 0,00</span></div>
               <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="adm-promocoes-lucro-hoje">R$ 0,00</span></div>
+              <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r" id="adm-promocoes-contas-usando">0</span></div>
+              <button type="button" class="adm-ver-ranking" data-alvo="promocoes">Ver contas, da que mais pra que menos aderiu ▾</button>
+              <div class="adm-ranking-lista" id="adm-promocoes-ranking" style="display:none;"></div>
             </div>
 
             <div class="adm-setor-card">
@@ -421,6 +424,66 @@
             <div class="nota">esta semana</div>
           </a>
         </div>
+
+        {% if eh_supervisor %}
+        <div class="adm-secao-titulo" style="margin-top:22px;">Precificador</div>
+        <div class="adm-grid-setores">
+          <div class="adm-setor-card">
+            <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
+            <p class="sub">Aderidas automaticamente pelo Precificador</p>
+            <div class="adm-setor-destaque" id="sup-promocoes-mes">0</div>
+            <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="sup-promocoes-mes-nota"></div>
+            <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="sup-promocoes-lucro-mes">R$ 0,00</span></div>
+            <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="sup-promocoes-lucro-hoje">R$ 0,00</span></div>
+            <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r" id="sup-promocoes-contas-usando">0</span></div>
+            <button type="button" class="adm-ver-ranking" data-alvo="sup-promocoes">Ver contas, da que mais pra que menos aderiu ▾</button>
+            <div class="adm-ranking-lista" id="sup-promocoes-ranking" style="display:none;"></div>
+          </div>
+        </div>
+        <script>
+          // Bloco autossuficiente (não depende do script grande que só
+          // carrega pro admin -- supervisor não entra naquele bloco).
+          function formatarReaisSup(v) {
+            return "R$ " + Number(v || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+          }
+          function renderizarRankingSup(idAlvo, ranking, textoVazio) {
+            const el = document.getElementById(idAlvo);
+            if (!ranking || !ranking.length) {
+              el.innerHTML = '<p class="sub" style="margin:0;">' + textoVazio + '</p>';
+              return;
+            }
+            el.innerHTML = "<ol>" + ranking.map(function (r) {
+              return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
+                (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>";
+            }).join("") + "</ol>";
+          }
+          document.querySelectorAll(".adm-ver-ranking[data-alvo='sup-promocoes']").forEach(function (botao) {
+            botao.addEventListener("click", function () {
+              const lista = document.getElementById("sup-promocoes-ranking");
+              const aberto = lista.style.display !== "none";
+              lista.style.display = aberto ? "none" : "block";
+              botao.textContent = aberto
+                ? "Ver contas, da que mais pra que menos aderiu ▾"
+                : "Ocultar ranking de contas ▴";
+            });
+          });
+          (async function () {
+            try {
+              const resp = await fetch("/api/painel/admin/promocoes-aderidas");
+              if (!resp.ok) throw new Error("falha");
+              const d = await resp.json();
+              document.getElementById("sup-promocoes-mes").textContent = d.mes || 0;
+              document.getElementById("sup-promocoes-mes-nota").textContent = (d.hoje || 0) + " hoje";
+              document.getElementById("sup-promocoes-lucro-mes").textContent = formatarReaisSup(d.lucro_mes);
+              document.getElementById("sup-promocoes-lucro-hoje").textContent = formatarReaisSup(d.lucro_hoje);
+              document.getElementById("sup-promocoes-contas-usando").textContent = d.contas_usando || 0;
+              renderizarRankingSup("sup-promocoes-ranking", d.ranking, "Nenhuma conta aderiu nada pela extensão ainda no mês.");
+            } catch (e) {
+              document.getElementById("sup-promocoes-mes-nota").textContent = "Não consegui carregar agora.";
+            }
+          })();
+        </script>
+        {% endif %}
         {% endif %}
 
         <div class="db-atalhos">
@@ -510,6 +573,8 @@
       document.getElementById("adm-promocoes-mes-nota").textContent = (promoAderidas.hoje || 0) + " hoje";
       document.getElementById("adm-promocoes-lucro-mes").textContent = formatarReais((fin.promocoes || {}).lucro_mes);
       document.getElementById("adm-promocoes-lucro-hoje").textContent = formatarReais((fin.promocoes || {}).lucro_hoje);
+      document.getElementById("adm-promocoes-contas-usando").textContent = promoAderidas.contas_usando || 0;
+      renderizarRanking("adm-promocoes-ranking", promoAderidas.ranking, "Nenhuma conta aderiu nada pela extensão ainda no mês.");
 
       // Anúncios cadastrados (soma de todas as contas) -- mesmas barras
       // do dashboard do seller.
@@ -575,14 +640,15 @@
 
   // Lista "nome -- quantidade de atendimentos", do maior pro menor,
   // usada no "Ver ranking completo" de Chamados e Cancelamentos.
-  function renderizarRanking(idAlvo, ranking) {
+  function renderizarRanking(idAlvo, ranking, textoVazio) {
     const el = document.getElementById(idAlvo);
     if (!ranking || !ranking.length) {
-      el.innerHTML = '<p class="sub" style="margin:0;">Sem atendimento identificado por nome ainda no mês.</p>';
+      el.innerHTML = '<p class="sub" style="margin:0;">' + (textoVazio || "Sem atendimento identificado por nome ainda no mês.") + '</p>';
       return;
     }
     el.innerHTML = "<ol>" + ranking.map(r =>
-      "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)</span></li>"
+      "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
+      (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>"
     ).join("") + "</ol>";
   }
 
