@@ -279,7 +279,7 @@ def _promocoes_aderidas(db: Session, inicio_utc: datetime) -> int:
     )
 
 
-def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_utc: datetime) -> dict:
+def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_mes_utc: datetime, inicio_dia_utc: datetime) -> dict:
     linhas = (
         db.query(
             EventoAdesaoCmx.conta_id,
@@ -288,10 +288,27 @@ def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_utc: datetime)
             func.count(EventoAdesaoCmx.id).label("quantidade"),
             func.max(EventoAdesaoCmx.data_adesao).label("ultimo_uso"),
         )
-        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_mes_utc)
         .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
         .all()
     )
+    # a20/10: contagem de HOJE por conta/usuário, pedida à parte do total
+    # do mês -- mesmo agrupamento, mas filtrando só desde o início do dia.
+    linhas_hoje = (
+        db.query(
+            EventoAdesaoCmx.conta_id,
+            EventoAdesaoCmx.usuario,
+            EventoAdesaoCmx.maquina,
+            func.count(EventoAdesaoCmx.id).label("quantidade_hoje"),
+        )
+        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_dia_utc)
+        .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
+        .all()
+    )
+    qtd_hoje_por_chave = {
+        (conta_id, usuario, maquina): quantidade_hoje
+        for conta_id, usuario, maquina, quantidade_hoje in linhas_hoje
+    }
     apelido_por_conta_id = {c.id: c.apelido for c in contas}
     ranking = []
     contas_com_adesao = set()
@@ -307,6 +324,7 @@ def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_utc: datetime)
         ranking.append({
             "nome": f"{apelido} — {quem}",
             "quantidade": quantidade,
+            "quantidade_hoje": qtd_hoje_por_chave.get((conta_id, usuario, maquina), 0),
             "ultimo_uso": ultimo_uso_br.strftime("%d/%m/%Y %H:%M") if ultimo_uso_br else None,
         })
     ranking.sort(key=lambda r: r["quantidade"], reverse=True)
@@ -430,7 +448,7 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "hoje": _promocoes_aderidas(db, inicio_dia_utc),
             "mes": _promocoes_aderidas(db, inicio_mes_utc),
             "contas_usando_ja": _contas_usando_ja_alguma_vez(db),
-            **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
+            **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc, inicio_dia_utc),
         },
         "comparativo_mensal_6m": _comparativo_mensal_6m(db, None),
         "evolucao_15_dias": evolucao_15_dias,
@@ -478,5 +496,5 @@ def promocoes_aderidas(
         "lucro_hoje": _lucro_adesoes(db, inicio_dia_utc),
         "lucro_mes": _lucro_adesoes(db, inicio_mes_utc),
         "contas_usando_ja": _contas_usando_ja_alguma_vez(db),
-        **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
+        **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc, inicio_dia_utc),
     }
