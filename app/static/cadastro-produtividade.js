@@ -28,6 +28,12 @@
     const hoje = hojeBrasilia();
     if (per === "ontem") { const o = somarDias(hoje, -1); return [o, o]; }
     if (per === "7dias") return [somarDias(hoje, -6), hoje];
+    if (per === "semana") {
+      const [a, m, d] = hoje.split("-").map(Number);
+      const diaSemana = new Date(Date.UTC(a, m - 1, d)).getUTCDay(); // 0=dom .. 6=sáb
+      const inicioSemana = diaSemana === 0 ? 6 : diaSemana - 1; // segunda-feira
+      return [somarDias(hoje, -inicioSemana), hoje];
+    }
     if (per === "mes") return [hoje.slice(0, 8) + "01", hoje];
     return [hoje, hoje];
   }
@@ -65,7 +71,7 @@
   function desenharFila(f) {
     const card = (titulo, valor, sub) => `<div class="pd-card"><small>${esc(titulo)}</small><b>${esc(valor)}</b><span>${esc(sub)}</span></div>`;
     document.getElementById("pd-fila").innerHTML =
-      card("Produtos pendentes", f.produtos_pendentes, "esperando cadastro") +
+      card("Cadastros pendentes", f.produtos_pendentes, "esperando cadastro") +
       card("Faltam no Mercado Livre", f.ml, "produtos pendentes") +
       card("Faltam no TikTok", f.tiktok, "produtos pendentes") +
       card("Faltam na Shopee", f.shopee, "produtos pendentes");
@@ -84,15 +90,16 @@
       <td class="pd-nome">${esc(p.nome)}<span class="pd-barra"><i style="width:${Math.round((p.total / maior) * 100)}%"></i></span></td>
       <td>${p.ml}</td><td>${p.tiktok}</td><td>${p.shopee}</td>
       <td class="pd-total">${p.total}</td>
+      <td class="pd-total">${p.total_hoje}</td>
       <td>${p.produtos_fechados}</td>
       <td>${p.incluidos_manual}</td>
       <td>${esc(tempoMedio(p.tempo_medio_seg))}</td>
     </tr>`).join("");
     const t = d.totais;
     alvo.innerHTML = `<table>
-      <thead><tr><th>Pessoa</th><th>${NOMES.ml}</th><th>${NOMES.tiktok}</th><th>${NOMES.shopee}</th><th>Total</th><th>Produtos fechados</th><th>Incluídos à mão</th><th>Tempo médio por produto</th></tr></thead>
+      <thead><tr><th>Pessoa</th><th>${NOMES.ml}</th><th>${NOMES.tiktok}</th><th>${NOMES.shopee}</th><th>Total</th><th>Hoje</th><th>Cadastros concluídos</th><th>Incluídos à mão</th><th>Tempo médio por produto</th></tr></thead>
       <tbody>${linhas}</tbody>
-      <tfoot><tr><td>Todos</td><td>${t.ml}</td><td>${t.tiktok}</td><td>${t.shopee}</td><td>${t.total}</td><td>${t.produtos_fechados}</td><td>${t.incluidos_manual}</td><td>${esc(tempoMedio(t.tempo_medio_seg))}</td></tr></tfoot>
+      <tfoot><tr><td>Todos</td><td>${t.ml}</td><td>${t.tiktok}</td><td>${t.shopee}</td><td>${t.total}</td><td>${t.total_hoje}</td><td>${t.produtos_fechados}</td><td>${t.incluidos_manual}</td><td>${esc(tempoMedio(t.tempo_medio_seg))}</td></tr></tfoot>
     </table>`;
   }
 
