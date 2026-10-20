@@ -248,6 +248,16 @@ def _contas_conectadas_extra(db: Session, contas: list) -> dict:
     return {"sem_venda_7d": sem_venda_recente}
 
 
+def _contas_usando_ja_alguma_vez(db: Session) -> int:
+    """Quantas contas distintas JÁ aderiram pelo menos 1 vez com sucesso,
+    sem recorte de período -- "Contas que já usaram", histórico completo
+    (pedido 20/10: veio no lugar da ideia inicial de "últimos 7 dias",
+    que o usuário decidiu não usar). Diferente de
+    _promocoes_aderidas_detalhe, que é sempre dentro de um período
+    (mês)."""
+    return db.query(EventoAdesaoCmx.conta_id).filter(EventoAdesaoCmx.sucesso.is_(True)).distinct().count()
+
+
 def _lucro_adesoes(db: Session, inicio_utc: datetime) -> float:
     linhas = (
         db.query(EventoAdesaoCmx.lucro_liquido)
@@ -419,6 +429,7 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
         "promocoes_aderidas": {
             "hoje": _promocoes_aderidas(db, inicio_dia_utc),
             "mes": _promocoes_aderidas(db, inicio_mes_utc),
+            "contas_usando_ja": _contas_usando_ja_alguma_vez(db),
             **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
         },
         "comparativo_mensal_6m": _comparativo_mensal_6m(db, None),
@@ -466,5 +477,6 @@ def promocoes_aderidas(
         "mes": _promocoes_aderidas(db, inicio_mes_utc),
         "lucro_hoje": _lucro_adesoes(db, inicio_dia_utc),
         "lucro_mes": _lucro_adesoes(db, inicio_mes_utc),
+        "contas_usando_ja": _contas_usando_ja_alguma_vez(db),
         **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
     }
