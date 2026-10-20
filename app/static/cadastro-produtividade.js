@@ -75,12 +75,15 @@
     const f = d.fila;
     const totaisHoje = d.totais_hoje || {};
     const card = (titulo, valor, sub) => `<div class="pd-card"><small>${esc(titulo)}</small><b>${esc(valor)}</b><span>${esc(sub)}</span></div>`;
+    const linha = (rotulo, valor) => `<div class="pd-fila-linha"><span>${esc(rotulo)}</span><b>${esc(valor)}</b></div>`;
     let html = card("Total geral", f.total_geral, "cadastros que já chegaram");
     for (const k of ["ml", "tiktok", "shopee"]) {
-      const { feito = 0, falta = 0 } = f[k] || {};
+      const { total = 0, feito = 0, falta = 0 } = f[k] || {};
       if (falta <= 0) continue;
       const hoje = totaisHoje[k] || 0;
-      html += card("Faltam no " + NOMES[k], falta, `${feito} já feito de ${f.total_geral} no total · ${hoje} hoje`);
+      html += `<div class="pd-card"><small>${esc(NOMES[k])}</small><div class="pd-fila-linhas">`
+        + linha("Total", total) + linha("Feito", feito) + linha("Falta", falta) + linha("Hoje", hoje)
+        + `</div></div>`;
     }
     document.getElementById("pd-fila").innerHTML = html;
   }
