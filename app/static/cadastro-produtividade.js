@@ -68,13 +68,22 @@
     return d;
   }
 
-  function desenharFila(f) {
+  // 20/10: cada marketplace só aparece se ainda faltar algo nele (em dia =
+  // sem card). Quando aparece, mostra faltam + quanto já foi feito no
+  // período escolhido acima + quanto foi feito hoje.
+  function desenharFila(d) {
+    const f = d.fila;
+    const totais = d.totais || {};
+    const totaisHoje = d.totais_hoje || {};
     const card = (titulo, valor, sub) => `<div class="pd-card"><small>${esc(titulo)}</small><b>${esc(valor)}</b><span>${esc(sub)}</span></div>`;
-    document.getElementById("pd-fila").innerHTML =
-      card("Cadastros pendentes", f.produtos_pendentes, "esperando cadastro") +
-      card("Faltam no Mercado Livre", f.ml, "produtos pendentes") +
-      card("Faltam no TikTok", f.tiktok, "produtos pendentes") +
-      card("Faltam na Shopee", f.shopee, "produtos pendentes");
+    let html = card("Cadastros pendentes", f.produtos_pendentes, "esperando cadastro");
+    for (const k of ["ml", "tiktok", "shopee"]) {
+      const falta = f[k] || 0;
+      if (falta <= 0) continue;
+      const sub = `${totais[k] || 0} cadastrados no período · ${totaisHoje[k] || 0} hoje`;
+      html += card("Faltam no " + NOMES[k], falta, sub);
+    }
+    document.getElementById("pd-fila").innerHTML = html;
   }
 
   function desenharPessoas(d) {
@@ -109,7 +118,7 @@
     try {
       const d = await buscar(de, ate);
       aviso("");
-      desenharFila(d.fila);
+      desenharFila(d);
       desenharPessoas(d);
     } catch (e) {
       if (!silencioso) aviso("Não consegui carregar: " + e.message);
