@@ -115,7 +115,8 @@
     /* Pedido (20/10): destacar mais o total do mês e "contas usando"
        nesse card específico -- só aqui, sem mexer no tamanho padrão de
        .adm-setor-destaque usado pelos outros cards de Setores. */
-    .promo-destaque-grande { font-size:30px; }
+    .promo-destaque-grande { font-size:38px; }
+    .promo-nota-hoje { font-size:14px; font-weight:600; color:var(--cmx-texto); }
     .promo-contas-destaque { font-size:17px; font-weight:700; color:var(--cmx-texto); }
 
     /* --- Redesign 15/10: Vendas (totais + gráfico lado a lado), Setores
@@ -328,7 +329,7 @@
               <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
               <p class="sub">Aderidas automaticamente pelo Precificador</p>
               <div class="adm-setor-destaque promo-destaque-grande" id="adm-promocoes-mes">0</div>
-              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-promocoes-mes-nota"></div>
+              <div class="nota promo-nota-hoje" style="margin:2px 0 10px;" id="adm-promocoes-mes-nota"></div>
               <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="adm-promocoes-lucro-mes">R$ 0,00</span></div>
               <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="adm-promocoes-lucro-hoje">R$ 0,00</span></div>
               <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-usando">0</span></div>
@@ -455,7 +456,7 @@
             <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
             <p class="sub">Aderidas automaticamente pelo Precificador</p>
             <div class="adm-setor-destaque promo-destaque-grande" id="sup-promocoes-mes">0</div>
-            <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="sup-promocoes-mes-nota"></div>
+            <div class="nota promo-nota-hoje" style="margin:2px 0 10px;" id="sup-promocoes-mes-nota"></div>
             <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="sup-promocoes-lucro-mes">R$ 0,00</span></div>
             <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="sup-promocoes-lucro-hoje">R$ 0,00</span></div>
             <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-usando">0</span></div>
@@ -482,7 +483,7 @@
               if (!resp.ok) throw new Error("falha");
               const d = await resp.json();
               document.getElementById("sup-promocoes-mes").textContent = d.mes || 0;
-              document.getElementById("sup-promocoes-mes-nota").textContent = (d.hoje || 0) + " hoje";
+              document.getElementById("sup-promocoes-mes-nota").textContent = (d.hoje || 0) + " adesões hoje";
               document.getElementById("sup-promocoes-lucro-mes").textContent = formatarReaisSup(d.lucro_mes);
               document.getElementById("sup-promocoes-lucro-hoje").textContent = formatarReaisSup(d.lucro_hoje);
               document.getElementById("sup-promocoes-contas-usando").textContent = d.contas_usando || 0;
@@ -540,8 +541,10 @@
           // número grande no topo do card, só que explícito aqui também.
           const soma = ranking.reduce(function (acc, r) { return acc + (r.quantidade || 0); }, 0);
           lista.innerHTML = "<ol>" + ranking.map(function (r) {
-            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + (r.quantidade === 1 ? " adesão" : " adesões") +
-              (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>";
+            const qtdHoje = r.quantidade_hoje || 0;
+            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + (r.quantidade === 1 ? " adesão no mês" : " adesões no mês") +
+              " · " + qtdHoje + (qtdHoje === 1 ? " adesão hoje" : " adesões hoje") +
+              (r.ultimo_uso ? " (última em " + r.ultimo_uso + ")" : "") + "</span></li>";
           }).join("") + "</ol>" +
           "<div class='promo-modal-total'><span>Total (soma de todas as contas)</span><span>" + (totalMes != null ? totalMes : soma) + "</span></div>";
         }
@@ -619,7 +622,7 @@
       // real de eventos no mês (soma de todas as contas), não "quantos
       // têm custo cadastrado agora".
       document.getElementById("adm-promocoes-mes").textContent = promoAderidas.mes || 0;
-      document.getElementById("adm-promocoes-mes-nota").textContent = (promoAderidas.hoje || 0) + " hoje";
+      document.getElementById("adm-promocoes-mes-nota").textContent = (promoAderidas.hoje || 0) + " adesões hoje";
       document.getElementById("adm-promocoes-lucro-mes").textContent = formatarReais((fin.promocoes || {}).lucro_mes);
       document.getElementById("adm-promocoes-lucro-hoje").textContent = formatarReais((fin.promocoes || {}).lucro_hoje);
       document.getElementById("adm-promocoes-contas-usando").textContent = promoAderidas.contas_usando || 0;
