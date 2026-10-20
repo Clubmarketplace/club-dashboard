@@ -68,20 +68,19 @@
     return d;
   }
 
-  // 20/10: cada marketplace só aparece se ainda faltar algo nele (em dia =
-  // sem card). Quando aparece, mostra faltam + quanto já foi feito no
-  // período escolhido acima + quanto foi feito hoje.
+  // 20/10: painel de gestão -- total geral de cadastros que já chegaram, e
+  // por marketplace o que já foi feito e o que falta (feito + falta = total
+  // geral sempre, sem sobra). Marketplace em dia (falta = 0) não mostra card.
   function desenharFila(d) {
     const f = d.fila;
-    const totais = d.totais || {};
     const totaisHoje = d.totais_hoje || {};
     const card = (titulo, valor, sub) => `<div class="pd-card"><small>${esc(titulo)}</small><b>${esc(valor)}</b><span>${esc(sub)}</span></div>`;
-    let html = card("Cadastros pendentes", f.produtos_pendentes, "esperando cadastro");
+    let html = card("Total geral", f.total_geral, "cadastros que já chegaram");
     for (const k of ["ml", "tiktok", "shopee"]) {
-      const falta = f[k] || 0;
+      const { feito = 0, falta = 0 } = f[k] || {};
       if (falta <= 0) continue;
-      const sub = `${totais[k] || 0} cadastrados no período · ${totaisHoje[k] || 0} hoje`;
-      html += card("Faltam no " + NOMES[k], falta, sub);
+      const hoje = totaisHoje[k] || 0;
+      html += card("Faltam no " + NOMES[k], falta, `${feito} já feito de ${f.total_geral} no total · ${hoje} hoje`);
     }
     document.getElementById("pd-fila").innerHTML = html;
   }
