@@ -540,7 +540,7 @@
           // número grande no topo do card, só que explícito aqui também.
           const soma = ranking.reduce(function (acc, r) { return acc + (r.quantidade || 0); }, 0);
           lista.innerHTML = "<ol>" + ranking.map(function (r) {
-            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
+            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + (r.quantidade === 1 ? " adesão" : " adesões") +
               (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>";
           }).join("") + "</ol>" +
           "<div class='promo-modal-total'><span>Total (soma de todas as contas)</span><span>" + (totalMes != null ? totalMes : soma) + "</span></div>";
