@@ -95,6 +95,29 @@
     .adm-ranking-lista li { padding:3px 0; }
     .adm-ranking-lista .adm-ranking-qtd { color:var(--cmx-texto-suave); }
 
+    /* Tela suspensa (20/10) -- ranking de contas do Precificador abre em
+       popup em vez de expandir dentro do card (card ficava alto demais
+       com muita conta na lista). Mesmo padrão visual do modal de
+       app/templates/taxas.html, nome próprio pra não colidir. */
+    .promo-modal-fundo { display:none; position:fixed; inset:0; background:rgba(17,20,26,.5); align-items:center; justify-content:center; z-index:80; padding:20px; }
+    .promo-modal-fundo.aberto { display:flex; }
+    .promo-modal-caixa { background:#fff; border-radius:16px; padding:22px 24px; max-width:480px; width:100%; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 10px 40px rgba(0,0,0,.25); }
+    .promo-modal-caixa h3 { margin:0 0 2px; font-size:15px; }
+    .promo-modal-caixa .sub { margin:0 0 14px; font-size:12px; color:var(--cmx-texto-suave); }
+    .promo-modal-lista { overflow-y:auto; font-size:13px; }
+    .promo-modal-lista ol { margin:0; padding-left:20px; }
+    .promo-modal-lista li { padding:6px 0; border-bottom:1px solid #eef0f3; }
+    .promo-modal-lista li:last-child { border-bottom:none; }
+    .promo-modal-lista .adm-ranking-qtd { color:var(--cmx-texto-suave); }
+    .promo-modal-fechar { align-self:flex-end; background:none; border:none; font-size:13px; font-weight:600; color:#2f6fe4; cursor:pointer; padding:14px 0 0; font-family:inherit; }
+    .promo-modal-total { display:flex; justify-content:space-between; font-size:13px; font-weight:700; padding-top:10px; margin-top:4px; border-top:2px solid var(--cmx-borda); }
+
+    /* Pedido (20/10): destacar mais o total do mês e "contas usando"
+       nesse card específico -- só aqui, sem mexer no tamanho padrão de
+       .adm-setor-destaque usado pelos outros cards de Setores. */
+    .promo-destaque-grande { font-size:30px; }
+    .promo-contas-destaque { font-size:17px; font-weight:700; color:var(--cmx-texto); }
+
     /* --- Redesign 15/10: Vendas (totais + gráfico lado a lado), Setores
        em grade e Financeiro por setor. Mobile-first porque o diretor
        também abre isso no celular -- cada seção empilha em 1 coluna
@@ -304,13 +327,13 @@
             <div class="adm-setor-card">
               <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
               <p class="sub">Aderidas automaticamente pelo Precificador</p>
-              <div class="adm-setor-destaque" id="adm-promocoes-mes">0</div>
+              <div class="adm-setor-destaque promo-destaque-grande" id="adm-promocoes-mes">0</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-promocoes-mes-nota"></div>
               <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="adm-promocoes-lucro-mes">R$ 0,00</span></div>
               <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="adm-promocoes-lucro-hoje">R$ 0,00</span></div>
-              <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r" id="adm-promocoes-contas-usando">0</span></div>
-              <button type="button" class="adm-ver-ranking" data-alvo="promocoes">Ver contas, da que mais pra que menos aderiu ▾</button>
-              <div class="adm-ranking-lista" id="adm-promocoes-ranking" style="display:none;"></div>
+              <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-usando">0</span></div>
+              <div class="adm-setor-linha"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-ja">0</span></div>
+              <button type="button" class="adm-ver-ranking" id="adm-promocoes-ver-ranking">Ver contas, da que mais pra que menos aderiu ▾</button>
             </div>
 
             <div class="adm-setor-card">
@@ -431,41 +454,27 @@
           <div class="adm-setor-card">
             <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
             <p class="sub">Aderidas automaticamente pelo Precificador</p>
-            <div class="adm-setor-destaque" id="sup-promocoes-mes">0</div>
+            <div class="adm-setor-destaque promo-destaque-grande" id="sup-promocoes-mes">0</div>
             <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="sup-promocoes-mes-nota"></div>
             <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="sup-promocoes-lucro-mes">R$ 0,00</span></div>
             <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="sup-promocoes-lucro-hoje">R$ 0,00</span></div>
-            <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r" id="sup-promocoes-contas-usando">0</span></div>
-            <button type="button" class="adm-ver-ranking" data-alvo="sup-promocoes">Ver contas, da que mais pra que menos aderiu ▾</button>
-            <div class="adm-ranking-lista" id="sup-promocoes-ranking" style="display:none;"></div>
+            <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-usando">0</span></div>
+            <div class="adm-setor-linha"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-ja">0</span></div>
+            <button type="button" class="adm-ver-ranking" id="sup-promocoes-ver-ranking">Ver contas, da que mais pra que menos aderiu ▾</button>
           </div>
         </div>
         <script>
           // Bloco autossuficiente (não depende do script grande que só
-          // carrega pro admin -- supervisor não entra naquele bloco).
+          // carrega pro admin -- supervisor não entra naquele bloco). O
+          // modal em si (abrirModalRankingPromocoes) é compartilhado --
+          // ver script logo depois de </main>, fora de qualquer bloco condicional.
           function formatarReaisSup(v) {
             return "R$ " + Number(v || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
           }
-          function renderizarRankingSup(idAlvo, ranking, textoVazio) {
-            const el = document.getElementById(idAlvo);
-            if (!ranking || !ranking.length) {
-              el.innerHTML = '<p class="sub" style="margin:0;">' + textoVazio + '</p>';
-              return;
-            }
-            el.innerHTML = "<ol>" + ranking.map(function (r) {
-              return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
-                (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>";
-            }).join("") + "</ol>";
-          }
-          document.querySelectorAll(".adm-ver-ranking[data-alvo='sup-promocoes']").forEach(function (botao) {
-            botao.addEventListener("click", function () {
-              const lista = document.getElementById("sup-promocoes-ranking");
-              const aberto = lista.style.display !== "none";
-              lista.style.display = aberto ? "none" : "block";
-              botao.textContent = aberto
-                ? "Ver contas, da que mais pra que menos aderiu ▾"
-                : "Ocultar ranking de contas ▴";
-            });
+          let _supPromocoesRanking = [];
+          let _supPromocoesMes = 0;
+          document.getElementById("sup-promocoes-ver-ranking").addEventListener("click", function () {
+            abrirModalRankingPromocoes(_supPromocoesRanking, "Nenhuma conta aderiu nada pela extensão ainda no mês.", _supPromocoesMes);
           });
           (async function () {
             try {
@@ -477,7 +486,9 @@
               document.getElementById("sup-promocoes-lucro-mes").textContent = formatarReaisSup(d.lucro_mes);
               document.getElementById("sup-promocoes-lucro-hoje").textContent = formatarReaisSup(d.lucro_hoje);
               document.getElementById("sup-promocoes-contas-usando").textContent = d.contas_usando || 0;
-              renderizarRankingSup("sup-promocoes-ranking", d.ranking, "Nenhuma conta aderiu nada pela extensão ainda no mês.");
+              document.getElementById("sup-promocoes-contas-ja").textContent = d.contas_usando_ja || 0;
+              _supPromocoesRanking = d.ranking || [];
+              _supPromocoesMes = d.mes || 0;
             } catch (e) {
               document.getElementById("sup-promocoes-mes-nota").textContent = "Não consegui carregar agora.";
             }
@@ -500,6 +511,44 @@
       </main>
     </div>
   </div>
+
+  <div class="promo-modal-fundo" id="promo-modal-fundo">
+    <div class="promo-modal-caixa">
+      <h3>Promoções aderidas pelo sistema de precificação</h3>
+      <p class="sub">Contas usando, da que mais pra que menos aderiu no mês</p>
+      <div class="promo-modal-lista" id="promo-modal-lista"></div>
+      <button type="button" class="promo-modal-fechar" id="promo-modal-fechar">Fechar</button>
+    </div>
+  </div>
+  <script>
+    // Compartilhado entre o card do admin e o do supervisor -- por isso
+    // fica fora de qualquer bloco condicional, os dois precisam dele.
+    (function () {
+      const fundo = document.getElementById("promo-modal-fundo");
+      const lista = document.getElementById("promo-modal-lista");
+      document.getElementById("promo-modal-fechar").addEventListener("click", function () {
+        fundo.classList.remove("aberto");
+      });
+      fundo.addEventListener("click", function (e) {
+        if (e.target === fundo) fundo.classList.remove("aberto");
+      });
+      window.abrirModalRankingPromocoes = function (ranking, textoVazio, totalMes) {
+        if (!ranking || !ranking.length) {
+          lista.innerHTML = '<p class="sub" style="margin:0;">' + (textoVazio || "Nenhuma conta aderiu nada pela extensão ainda no mês.") + "</p>";
+        } else {
+          // Rodapé com o total (soma de todas as contas) -- confere com o
+          // número grande no topo do card, só que explícito aqui também.
+          const soma = ranking.reduce(function (acc, r) { return acc + (r.quantidade || 0); }, 0);
+          lista.innerHTML = "<ol>" + ranking.map(function (r) {
+            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
+              (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>";
+          }).join("") + "</ol>" +
+          "<div class='promo-modal-total'><span>Total (soma de todas as contas)</span><span>" + (totalMes != null ? totalMes : soma) + "</span></div>";
+        }
+        fundo.classList.add("aberto");
+      };
+    })();
+  </script>
   <script src="/static/menu-celular.js?v=1"></script>
   {% if eh_admin %}
   <script>
@@ -574,7 +623,9 @@
       document.getElementById("adm-promocoes-lucro-mes").textContent = formatarReais((fin.promocoes || {}).lucro_mes);
       document.getElementById("adm-promocoes-lucro-hoje").textContent = formatarReais((fin.promocoes || {}).lucro_hoje);
       document.getElementById("adm-promocoes-contas-usando").textContent = promoAderidas.contas_usando || 0;
-      renderizarRanking("adm-promocoes-ranking", promoAderidas.ranking, "Nenhuma conta aderiu nada pela extensão ainda no mês.");
+      document.getElementById("adm-promocoes-contas-ja").textContent = promoAderidas.contas_usando_ja || 0;
+      window._admPromocoesRanking = promoAderidas.ranking || [];
+      window._admPromocoesMes = promoAderidas.mes || 0;
 
       // Anúncios cadastrados (soma de todas as contas) -- mesmas barras
       // do dashboard do seller.
@@ -690,7 +741,7 @@
     });
   });
 
-  document.querySelectorAll(".adm-ver-ranking").forEach(function (botao) {
+  document.querySelectorAll(".adm-ver-ranking[data-alvo]").forEach(function (botao) {
     botao.addEventListener("click", function () {
       const idAlvo = "adm-" + botao.dataset.alvo + "-ranking";
       const el = document.getElementById(idAlvo);
@@ -698,6 +749,12 @@
       el.style.display = aberto ? "none" : "block";
       botao.textContent = aberto ? "Ver ranking completo do mês ▾" : "Ocultar ranking ▴";
     });
+  });
+
+  // Promoções aderidas -- tela suspensa (modal) em vez de expandir no
+  // card, que ficava alto demais com muita conta na lista (20/10).
+  document.getElementById("adm-promocoes-ver-ranking").addEventListener("click", function () {
+    abrirModalRankingPromocoes(window._admPromocoesRanking, "Nenhuma conta aderiu nada pela extensão ainda no mês.", window._admPromocoesMes);
   });
 
   function formatarEixoReais(v) {
