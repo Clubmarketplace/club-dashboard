@@ -20,6 +20,7 @@ todas as contas de uma vez, sem depender de vínculo.
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app import auth
@@ -57,6 +58,20 @@ def _admin_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
     usuario = auth.usuario_atual(request, db)
     if not usuario or usuario.papel != "admin":
         raise HTTPException(status_code=403, detail="Acesso restrito ao admin.")
+    return usuario
+
+
+def _admin_ou_supervisor_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
+    """
+    Dependency pro endpoint /promocoes-aderidas (20/10): diferente de
+    _admin_logado acima, aqui supervisor TAMBÉM pode ver -- porque esse
+    endpoint só expõe contagem/lucro/ranking de adesões do Precificador,
+    nunca o valor vendido por conta (que é o dado que _admin_logado
+    protege de propósito, ver docstring do módulo).
+    """
+    usuario = auth.usuario_atual(request, db)
+    if not usuario or usuario.papel not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Acesso restrito ao admin/supervisor.")
     return usuario
 
 
@@ -233,6 +248,61 @@ def _contas_conectadas_extra(db: Session, contas: list) -> dict:
     return {"sem_venda_7d": sem_venda_recente}
 
 
+def _lucro_adesoes(db: Session, inicio_utc: datetime) -> float:
+    linhas = (
+        db.query(EventoAdesaoCmx.lucro_liquido)
+        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+        .all()
+    )
+    return round(sum(l[0] or 0 for l in linhas), 2)
+
+
+# a20/10: extraídas pra módulo (antes eram closures dentro de
+# resumo_contas) pra poderem ser chamadas também pelo endpoint
+# /promocoes-aderidas, que o supervisor acessa além do admin -- ver
+# docstring de _admin_ou_supervisor_logado logo abaixo.
+def _promocoes_aderidas(db: Session, inicio_utc: datetime) -> int:
+    return (
+        db.query(EventoAdesaoCmx)
+        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+        .count()
+    )
+
+
+def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_utc: datetime) -> dict:
+    linhas = (
+        db.query(
+            EventoAdesaoCmx.conta_id,
+            EventoAdesaoCmx.usuario,
+            EventoAdesaoCmx.maquina,
+            func.count(EventoAdesaoCmx.id).label("quantidade"),
+            func.max(EventoAdesaoCmx.data_adesao).label("ultimo_uso"),
+        )
+        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
+        .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
+        .all()
+    )
+    apelido_por_conta_id = {c.id: c.apelido for c in contas}
+    ranking = []
+    contas_com_adesao = set()
+    for conta_id, usuario, maquina, quantidade, ultimo_uso in linhas:
+        contas_com_adesao.add(conta_id)
+        apelido = apelido_por_conta_id.get(conta_id, f"conta #{conta_id}")
+        quem = usuario or maquina or "sem identificação"
+        if usuario and maquina and maquina != usuario:
+            quem = f"{usuario} / {maquina}"
+        ultimo_uso_br = (
+            ultimo_uso.replace(tzinfo=timezone.utc).astimezone(_FUSO_BR) if ultimo_uso else None
+        )
+        ranking.append({
+            "nome": f"{apelido} — {quem}",
+            "quantidade": quantidade,
+            "ultimo_uso": ultimo_uso_br.strftime("%d/%m/%Y %H:%M") if ultimo_uso_br else None,
+        })
+    ranking.sort(key=lambda r: r["quantidade"], reverse=True)
+    return {"contas_usando": len(contas_com_adesao), "ranking": ranking}
+
+
 def _financeiro_por_setor(db: Session, inicio_dia_utc: datetime, inicio_mes_utc: datetime) -> dict:
     """Só os números que dá pra calcular com dado real hoje -- nada
     estimado ou inventado num relatório que vai pro financeiro/diretor.
@@ -253,18 +323,13 @@ def _financeiro_por_setor(db: Session, inicio_dia_utc: datetime, inicio_mes_utc:
     )
     valor_notas_mes = sum((p.custo_unitario or 0) * (p.quantidade or 0) for p in produtos_notas_mes)
 
-    def _lucro_adesoes(inicio_utc: datetime) -> float:
-        linhas = (
-            db.query(EventoAdesaoCmx.lucro_liquido)
-            .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
-            .all()
-        )
-        return round(sum(l[0] or 0 for l in linhas), 2)
-
     return {
         "cadastro": {"custo_parado_pendente": backlog["valor_parado"]},
         "subida_notas": {"valor_notas_mes": round(valor_notas_mes, 2)},
-        "promocoes": {"lucro_hoje": _lucro_adesoes(inicio_dia_utc), "lucro_mes": _lucro_adesoes(inicio_mes_utc)},
+        "promocoes": {
+            "lucro_hoje": _lucro_adesoes(db, inicio_dia_utc),
+            "lucro_mes": _lucro_adesoes(db, inicio_mes_utc),
+        },
         "cancelamento_disponivel": False,
     }
 
@@ -335,17 +400,6 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
     anuncios_sem_estoque_total = sum(1 for a in todos_anuncios if a.ativo and a.quantidade <= 0)
     anuncios_pausados_total = sum(1 for a in todos_anuncios if not a.ativo)
 
-    # Promoções aderidas AUTOMATICAMENTE pelo Precificador -- soma de
-    # TODAS as contas, mesma contagem real de eventos (EventoAdesaoCmx)
-    # usada no dashboard do seller, não um retrato de "quantos têm custo
-    # cadastrado agora".
-    def _promocoes_aderidas(inicio_utc: datetime) -> int:
-        return (
-            db.query(EventoAdesaoCmx)
-            .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
-            .count()
-        )
-
     # Evolução: venda bruta por dia (TODAS as contas somadas) -- 15 e 30
     # dias (cada um com o período anterior pra comparação) + 3 meses,
     # pro filtro da tela trocar sem precisar buscar de novo.
@@ -363,8 +417,9 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
             "anuncios_pausados": anuncios_pausados_total,
         },
         "promocoes_aderidas": {
-            "hoje": _promocoes_aderidas(inicio_dia_utc),
-            "mes": _promocoes_aderidas(inicio_mes_utc),
+            "hoje": _promocoes_aderidas(db, inicio_dia_utc),
+            "mes": _promocoes_aderidas(db, inicio_mes_utc),
+            **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
         },
         "comparativo_mensal_6m": _comparativo_mensal_6m(db, None),
         "evolucao_15_dias": evolucao_15_dias,
@@ -386,4 +441,30 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
         },
         "contas_conectadas_extra": _contas_conectadas_extra(db, contas),
         "financeiro_por_setor": _financeiro_por_setor(db, inicio_dia_utc, inicio_mes_utc),
+    }
+
+
+@router.get("/promocoes-aderidas")
+def promocoes_aderidas(
+    usuario: Usuario = Depends(_admin_ou_supervisor_logado), db: Session = Depends(get_db)
+):
+    """
+    Card "Promoções aderidas pelo sistema de precificação" pro painel do
+    supervisor (20/10) -- separado de /resumo-contas de propósito: só
+    expõe contagem, lucro e ranking de uso do Precificador/CMX, nunca o
+    valor vendido por conta (esse continua só pro admin, ver
+    _admin_logado acima e a docstring do módulo).
+    """
+    inicio_dia_utc, inicio_mes_utc = _inicio_do_dia_e_do_mes_em_utc()
+    contas = (
+        db.query(Conta)
+        .filter(Conta.ativa.is_(True), Conta.inativa_em.is_(None))
+        .all()
+    )
+    return {
+        "hoje": _promocoes_aderidas(db, inicio_dia_utc),
+        "mes": _promocoes_aderidas(db, inicio_mes_utc),
+        "lucro_hoje": _lucro_adesoes(db, inicio_dia_utc),
+        "lucro_mes": _lucro_adesoes(db, inicio_mes_utc),
+        **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc),
     }
