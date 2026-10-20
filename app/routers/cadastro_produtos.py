@@ -1061,6 +1061,25 @@ def _agregar_produtividade(linhas, inicio: datetime, fim: datetime) -> list:
     return sorted(pessoas.values(), key=lambda x: (-x["total"], -x["produtos_fechados"], x["nome"].lower()))
 
 
+def _mesclar_total_hoje(pessoas: list, pessoas_hoje: list) -> list:
+    """Acrescenta "total_hoje" em cada pessoa, pra mostrar o total do período
+    escolhido (que pode ser hoje, ontem, a semana, o mês, o que for) lado a
+    lado com o quanto ela já fez HOJE, sem precisar trocar de filtro pra ver
+    os dois ao mesmo tempo. Quem só apareceu hoje mas não tem nada no período
+    selecionado também entra (com os outros campos zerados)."""
+    hoje_por_nome = {p["nome"]: p["total"] for p in pessoas_hoje}
+    for pessoa in pessoas:
+        pessoa["total_hoje"] = hoje_por_nome.pop(pessoa["nome"], 0)
+    for nome, total_hoje in hoje_por_nome.items():
+        pessoas.append({
+            "nome": nome, "ml": 0, "tiktok": 0, "shopee": 0, "total": 0,
+            "produtos_fechados": 0, "incluidos_manual": 0, "tempo_medio_seg": None,
+            "tempo_soma_seg": 0, "tempo_n": 0, "total_hoje": total_hoje,
+        })
+    pessoas.sort(key=lambda x: (-x["total"], -x["total_hoje"], -x["produtos_fechados"], x["nome"].lower()))
+    return pessoas
+
+
 def _agregar_fila(pendentes) -> dict:
     """Fila de agora: dos produtos pendentes, em quantos ainda falta cada marketplace."""
     fila = {k: 0 for k in MARKETPLACES}
@@ -1107,7 +1126,22 @@ def produtividade_cadastro(
     linhas = db.query(ProdutoCadastro).filter(or_(*condicoes)).all()
     pessoas = _agregar_produtividade(linhas, inicio, fim)
 
-    totais = {"ml": 0, "tiktok": 0, "shopee": 0, "total": 0, "produtos_fechados": 0, "incluidos_manual": 0}
+    # Total de HOJE por pessoa, pra mostrar junto do total do período escolhido
+    # (20/10: se o período já for hoje, dá o mesmo número nas duas colunas).
+    data_hoje = _hoje_brasilia()
+    inicio_hoje, fim_hoje = _limites_utc(data_hoje, data_hoje)
+    condicoes_hoje = [
+        and_(ProdutoCadastro.cadastrado_em >= inicio_hoje, ProdutoCadastro.cadastrado_em < fim_hoje),
+        and_(ProdutoCadastro.origem == "manual", ProdutoCadastro.recebido_em >= inicio_hoje, ProdutoCadastro.recebido_em < fim_hoje),
+    ]
+    for k in MARKETPLACES:
+        em = getattr(ProdutoCadastro, f"{k}_em")
+        condicoes_hoje.append(and_(em >= inicio_hoje, em < fim_hoje))
+    linhas_hoje = db.query(ProdutoCadastro).filter(or_(*condicoes_hoje)).all()
+    pessoas_hoje = _agregar_produtividade(linhas_hoje, inicio_hoje, fim_hoje)
+    pessoas = _mesclar_total_hoje(pessoas, pessoas_hoje)
+
+    totais = {"ml": 0, "tiktok": 0, "shopee": 0, "total": 0, "produtos_fechados": 0, "incluidos_manual": 0, "total_hoje": 0}
     for pessoa in pessoas:
         for campo in totais:
             totais[campo] += pessoa[campo]
