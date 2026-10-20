@@ -1080,14 +1080,18 @@ def _mesclar_total_hoje(pessoas: list, pessoas_hoje: list) -> list:
     return pessoas
 
 
-def _agregar_fila(pendentes) -> dict:
-    """Fila de agora: dos produtos pendentes, em quantos ainda falta cada marketplace."""
-    fila = {k: 0 for k in MARKETPLACES}
-    for p in pendentes:
-        for k in MARKETPLACES:
-            if _estado_mp(p, k) is None:
-                fila[k] += 1
-    fila["produtos_pendentes"] = len(pendentes)
+def _agregar_fila(produtos_todos) -> dict:
+    """Painel de gestão "Fila agora" (20/10): visão de TODOS os produtos que já
+    chegaram (cadastrados + pendentes, exclui "excluida"), não só os
+    pendentes -- pra cada marketplace, feito + falta sempre soma o total
+    geral, sem sobra nenhuma (é exatamente essa conta que confundia antes)."""
+    total_geral = len(produtos_todos)
+    fila = {"total_geral": total_geral}
+    for k in MARKETPLACES:
+        feito = sum(1 for p in produtos_todos if _estado_mp(p, k) in ("feito", "nao_se_aplica"))
+        fila[k] = {"feito": feito, "falta": total_geral - feito}
+    # mantido por compatibilidade com quem ainda usa esse número isolado.
+    fila["produtos_pendentes"] = sum(1 for p in produtos_todos if p.status == "pendente")
     return fila
 
 
@@ -1154,13 +1158,16 @@ def produtividade_cadastro(
     n_t = sum(x["tempo_n"] for x in pessoas)
     totais["tempo_medio_seg"] = (soma_t // n_t) if n_t else None
 
-    pendentes = db.query(ProdutoCadastro).filter(ProdutoCadastro.status == "pendente").all()
+    # Fila de gestão (20/10): TODOS os produtos que já chegaram, não só os
+    # pendentes -- é o que deixa feito+falta por marketplace sempre batendo
+    # com o total geral.
+    produtos_todos = db.query(ProdutoCadastro).filter(ProdutoCadastro.status != "excluida").all()
     return {
         "de": data_de.isoformat(),
         "ate": data_ate.isoformat(),
         "pessoas": pessoas,
         "totais": totais,
         "totais_hoje": totais_hoje,
-        "fila": _agregar_fila(pendentes),
+        "fila": _agregar_fila(produtos_todos),
         "marketplaces": MARKETPLACES,
     }
