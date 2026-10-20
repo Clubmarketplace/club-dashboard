@@ -549,6 +549,10 @@ def pagina_dashboard(request: Request):
             # supervisor e os demais continuam com os cards de sempre
             # (eles não podem ver valor de venda, ver app/routers/admin_painel.py).
             "eh_admin": bool(usuario_logado and usuario_logado.papel == "admin"),
+            # a20/10: supervisor ganha o card de "Promoções aderidas pelo
+            # sistema de precificação" nos cards operacionais (abaixo) --
+            # só esse card, não o resto da visão geral de vendas do admin.
+            "eh_supervisor": bool(usuario_logado and usuario_logado.papel == "supervisor"),
         }
 
     return templates.TemplateResponse(request=request, name="dashboard.html", context=contexto)
