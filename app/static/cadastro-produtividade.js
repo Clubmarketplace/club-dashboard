@@ -68,25 +68,38 @@
     return d;
   }
 
-  // 20/10: painel de gestão -- total geral de cadastros que já chegaram, e
-  // por marketplace o que já foi feito e o que falta (feito + falta = total
-  // geral sempre, sem sobra). Marketplace em dia (falta = 0) não mostra card.
-  // 20/10: número grande do card = TOTAL daquela plataforma especificamente
-  // (quantos produtos realmente vão pra ela -- exclui quem marcou "não se
-  // aplica"). Feito/Falta/Hoje ficam como detalhe menor embaixo.
+  // 20/10: painel de gestão. Total geral = tudo que chegou (concluídas +
+  // pendentes + aguardando definição). "Aguardando definição" = ainda sem
+  // canal escolhido: conta no total geral, mas não entra em nenhum canal.
+  // Cada canal mostra: chegaram / feito / falta (chegaram = feito + falta) e,
+  // embaixo, o que cada pessoa fez ali Hoje / Semana / Mês. "Falta" é do
+  // canal (fila compartilhada), não de uma pessoa.
   function desenharFila(d) {
     const f = d.fila;
-    const totaisHoje = d.totais_hoje || {};
+    const porCanal = d.pessoas_canais || {};
     const linha = (rotulo, valor) => `<div class="pd-fila-linha"><span>${esc(rotulo)}</span><b>${esc(valor)}</b></div>`;
-    let html = `<div class="pd-card"><small>Total geral</small><b>${esc(f.total_geral)}</b><span>cadastros que já chegaram</span></div>`;
-    for (const k of ["ml", "tiktok", "shopee"]) {
-      const { total = 0, feito = 0, falta = 0 } = f[k] || {};
-      if (falta <= 0) continue;
-      const hoje = totaisHoje[k] || 0;
-      html += `<div class="pd-card"><small>${esc(NOMES[k])}</small><b>${esc(total)}</b><span>produtos que vão pro ${esc(NOMES[k])}</span>`
-        + `<div class="pd-fila-linhas">` + linha("Feito", feito) + linha("Falta", falta) + linha("Hoje", hoje) + `</div></div>`;
-    }
+    let html = `<div class="pd-card"><small>Total geral</small><b>${esc(f.total_geral)}</b>`
+      + `<span>${esc(f.concluidas ?? 0)} concluídas · ${esc(f.pendentes ?? 0)} pendentes</span></div>`;
+    html += `<div class="pd-card"><small>Aguardando definição</small><b>${esc(f.aguardando_definicao ?? 0)}</b>`
+      + `<span>sem canal definido — já contam no total geral, mas ainda não entram em nenhuma plataforma</span></div>`;
     document.getElementById("pd-fila").innerHTML = html;
+
+    let canais = "";
+    for (const k of ["ml", "shopee", "tiktok"]) {
+      const { total = 0, feito = 0, falta = 0 } = f[k] || {};
+      const pessoas = porCanal[k] || [];
+      const linhasPessoas = pessoas.length
+        ? pessoas.map((p) => `<tr><td class="pd-nome">${esc(p.nome)}</td><td>${p.hoje}</td><td>${p.semana}</td><td>${p.mes}</td></tr>`).join("")
+        : '<tr><td colspan="4" class="pd-vazio">Ninguém cadastrou neste canal este mês.</td></tr>';
+      canais += `<div class="pd-canal"><div class="pd-canal-topo"><h3>${esc(NOMES[k])}</h3>`
+        + `<div class="pd-canal-nums">`
+        + `<div><small>Chegaram</small><b>${esc(total)}</b></div>`
+        + `<div><small>Feito</small><b>${esc(feito)}</b></div>`
+        + `<div><small>Falta</small><b>${esc(falta)}</b></div></div></div>`
+        + `<div class="pd-tabela pd-canal-tab"><table><thead><tr><th>Quem fez</th><th>Hoje</th><th>Semana</th><th>Mês</th></tr></thead>`
+        + `<tbody>${linhasPessoas}</tbody></table></div></div>`;
+    }
+    document.getElementById("pd-canais").innerHTML = canais;
   }
 
   function desenharPessoas(d) {
