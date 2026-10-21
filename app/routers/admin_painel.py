@@ -36,6 +36,7 @@ from app.models import (
     Usuario,
     Venda,
 )
+from app.routers.cadastro_produtos import _precisa_definir_plataformas
 from app.routers.vendas import (
     _comparativo_mensal_6m,
     _evolucao_3_meses,
@@ -90,6 +91,20 @@ def _inicio_do_dia_e_do_mes_em_utc() -> tuple[datetime, datetime]:
     )
 
 
+def _inicio_da_semana_em_utc() -> datetime:
+    """
+    20/10: início da SEMANA (segunda-feira 00:00, calendário de Brasília),
+    em UTC "cru" como o banco guarda. Usado nos cards de Setores
+    (Cadastro e Cancelamento) pra mostrar Hoje / Semana / Mês dos
+    primeiros colocados. Função separada de propósito: não muda a
+    assinatura de _inicio_do_dia_e_do_mes_em_utc, que outras telas usam.
+    """
+    agora_br = datetime.now(_FUSO_BR)
+    inicio_dia_br = agora_br.replace(hour=0, minute=0, second=0, microsecond=0)
+    inicio_semana_br = inicio_dia_br - timedelta(days=inicio_dia_br.weekday())
+    return inicio_semana_br.astimezone(timezone.utc).replace(tzinfo=None)
+
+
 def _ranking_atendimento(linhas: list, campo_autor: str) -> list[dict]:
     """Agrupa uma lista de linhas (perguntas/mensagens/solicitações já
     filtradas) pelo autor e devolve TODO MUNDO que atendeu, do maior pro
@@ -141,46 +156,66 @@ def _setor_chamados(db: Session, inicio_utc: datetime) -> dict:
 
 
 def _setor_cancelamentos(db: Session, inicio_utc: datetime) -> dict:
-    """Solicitações de cancelamento (SolicitacaoCancelamento) de TODAS
-    as contas -- total, confirmadas, pendentes, e quem confirmou mais."""
+    """Solicitações de cancelamento E de reputação (SolicitacaoCancelamento)
+    de TODAS as contas -- total, confirmadas, pendentes, e quem confirmou
+    mais.
+
+    20/10: passou a incluir o tipo "reputacao" (antes só entrava
+    cancelamento). "cancelamentos" e "reputacoes" devolvem a separação do
+    total, pro card poder mostrar de onde vem cada parte."""
     solicitacoes = (
         db.query(SolicitacaoCancelamento)
         .filter(SolicitacaoCancelamento.criado_em >= inicio_utc)
-        .filter((SolicitacaoCancelamento.tipo.is_(None)) | (SolicitacaoCancelamento.tipo == "cancelamento"))
+        .filter(
+            (SolicitacaoCancelamento.tipo.is_(None))
+            | (SolicitacaoCancelamento.tipo.in_(("cancelamento", "reputacao")))
+        )
         .all()
     )
     confirmadas = [s for s in solicitacoes if s.confirmado_por]
     ranking = _ranking_atendimento(confirmadas, "confirmado_por")
     top = ranking[0] if ranking else None
+    reputacoes = [s for s in solicitacoes if s.tipo == "reputacao"]
     return {
         "total": len(solicitacoes),
         "confirmadas": len(confirmadas),
         "pendentes": len(solicitacoes) - len(confirmadas),
+        "cancelamentos": len(solicitacoes) - len(reputacoes),
+        "reputacoes": len(reputacoes),
         "top": top,
         "ranking": ranking,
     }
 
 
 def _setor_cadastro(db: Session, inicio_utc: datetime) -> dict:
-    """Produtos novos (ProdutoCadastro) que chegaram no período -- total,
-    quantos já têm cadastro completo ("feitos" -- os 3 marketplaces
-    resolvidos) e quem mais cadastrou. Mesmo padrão de
-    _setor_cancelamentos, usando `cadastrado_por` como o "confirmado_por"
-    de lá."""
-    produtos = (
+    """Produtos novos (ProdutoCadastro) -- "chegaram" no período (pela data
+    de chegada), quantos foram FEITOS no período e quem mais cadastrou.
+
+    20/10 (correção): "feitos" e o ranking passaram a ser contados pelo
+    dia em que o produto foi CADASTRADO (cadastrado_em), não pelo dia em
+    que chegou (recebido_em). Antes, um produto que chegou ontem e foi
+    cadastrado hoje não aparecia em "Feito hoje" (o card mostrava 0 mesmo
+    com o time trabalhando o dia todo). "total", "empresas" e "pendentes"
+    continuam sendo dos que CHEGARAM no período."""
+    chegaram = (
         db.query(ProdutoCadastro)
         .filter(ProdutoCadastro.recebido_em >= inicio_utc)
         .filter(ProdutoCadastro.status != "excluida")
         .all()
     )
-    feitos = [p for p in produtos if p.status == "cadastrado"]
+    feitos = (
+        db.query(ProdutoCadastro)
+        .filter(ProdutoCadastro.status == "cadastrado")
+        .filter(ProdutoCadastro.cadastrado_em >= inicio_utc)
+        .all()
+    )
     ranking = _ranking_atendimento(feitos, "cadastrado_por")
     top = ranking[0] if ranking else None
-    empresas = {p.empresa_chave for p in produtos if p.empresa_chave}
+    empresas = {p.empresa_chave for p in chegaram if p.empresa_chave}
     return {
-        "total": len(produtos),
+        "total": len(chegaram),
         "feitos": len(feitos),
-        "pendentes": len(produtos) - len(feitos),
+        "pendentes": len([p for p in chegaram if p.status == "pendente"]),
         "empresas": len(empresas),
         "top": top,
         "ranking": ranking,
@@ -194,7 +229,16 @@ def _cadastro_backlog_geral(db: Session) -> dict:
     estão à venda em lugar nenhum)."""
     pendentes = db.query(ProdutoCadastro).filter(ProdutoCadastro.status == "pendente").all()
     valor_parado = sum((p.custo_unitario or 0) * (p.quantidade or 0) for p in pendentes)
-    return {"pendentes": len(pendentes), "valor_parado": round(valor_parado, 2)}
+    # 20/10: quantas dessas pendentes ainda estão SEM CANAL definido (esperando
+    # supervisor/gerente marcar em quais marketplaces cadastrar). Usa a mesma
+    # regra da tela de Cadastro (_precisa_definir_plataformas), pra os dois
+    # lugares nunca discordarem.
+    sem_canal = len([p for p in pendentes if _precisa_definir_plataformas(p)])
+    return {
+        "pendentes": len(pendentes),
+        "aguardando_definicao": sem_canal,
+        "valor_parado": round(valor_parado, 2),
+    }
 
 
 def _setor_subida_notas(db: Session, inicio_utc: datetime) -> dict:
@@ -457,10 +501,12 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
         "setor_chamados": {"hoje": _setor_chamados(db, inicio_dia_utc), "mes": _setor_chamados(db, inicio_mes_utc)},
         "setor_cancelamentos": {
             "hoje": _setor_cancelamentos(db, inicio_dia_utc),
+            "semana": _setor_cancelamentos(db, _inicio_da_semana_em_utc()),
             "mes": _setor_cancelamentos(db, inicio_mes_utc),
         },
         "setor_cadastro": {
             "hoje": _setor_cadastro(db, inicio_dia_utc),
+            "semana": _setor_cadastro(db, _inicio_da_semana_em_utc()),
             "mes": _setor_cadastro(db, inicio_mes_utc),
             "backlog": _cadastro_backlog_geral(db),
         },

@@ -1081,24 +1081,65 @@ def _mesclar_total_hoje(pessoas: list, pessoas_hoje: list) -> list:
 
 
 def _agregar_fila(produtos_todos) -> dict:
-    """Painel de gestão "Fila agora" (20/10): visão de TODOS os produtos que já
-    chegaram (cadastrados + pendentes, exclui "excluida"), não só os
-    pendentes. "Total geral" é de TODOS os produtos, não importa a
-    plataforma. Já o total DE CADA plataforma (ml/tiktok/shopee) é só dos
-    produtos que se aplicam a ela -- quem foi marcado "não se aplica" não
-    conta nem no total nem no feito nem no falta daquela plataforma
-    especificamente (ele simplesmente não é candidato ali). Por isso
-    feito[k] + falta[k] == total[k] sempre, mas total[k] pode ser menor que
-    total_geral, e diferente entre plataformas."""
-    total_geral = len(produtos_todos)
-    fila = {"total_geral": total_geral}
+    """Painel de gestão "Fila agora" (20/10, revisado).
+
+    - total_geral: TUDO que chegou (concluídas + pendentes + aguardando
+      definição; só "excluida" fica de fora).
+    - aguardando_definicao: automáticos que ainda não tiveram NENHUM canal
+      escolhido por supervisor/gerente. Entram no total geral, mas NÃO
+      entram em nenhum canal até alguém definir onde cadastrar.
+    - por canal (ml/tiktok/shopee): total = feito + falta, só com produtos
+      que já têm canal definido. "Não se aplica" fica de fora do canal.
+    """
+    ativos = [p for p in produtos_todos if p.status != "excluida"]
+    sem_canal = [p for p in ativos if _precisa_definir_plataformas(p)]
+    com_canal = [p for p in ativos if not _precisa_definir_plataformas(p)]
+    fila = {
+        "total_geral": len(ativos),
+        "aguardando_definicao": len(sem_canal),
+        "concluidas": sum(1 for p in ativos if p.status == "cadastrado"),
+        "pendentes": sum(1 for p in ativos if p.status == "pendente"),
+    }
     for k in MARKETPLACES:
-        feito = sum(1 for p in produtos_todos if _estado_mp(p, k) == "feito")
-        falta = sum(1 for p in produtos_todos if _estado_mp(p, k) is None)
+        feito = sum(1 for p in com_canal if _estado_mp(p, k) == "feito")
+        falta = sum(1 for p in com_canal if _estado_mp(p, k) is None)
         fila[k] = {"total": feito + falta, "feito": feito, "falta": falta}
     # mantido por compatibilidade com quem ainda usa esse número isolado.
-    fila["produtos_pendentes"] = sum(1 for p in produtos_todos if p.status == "pendente")
+    fila["produtos_pendentes"] = fila["pendentes"]
     return fila
+
+
+def _inicio_semana_br(hoje: date) -> date:
+    """Segunda-feira da semana de `hoje` (semana começa na segunda)."""
+    return hoje - timedelta(days=hoje.weekday())
+
+
+def _linhas_do_periodo(db: Session, inicio: datetime, fim: datetime):
+    """Linhas que podem contar em [inicio, fim) (o resto não muda nenhum número)."""
+    condicoes = [
+        and_(ProdutoCadastro.cadastrado_em >= inicio, ProdutoCadastro.cadastrado_em < fim),
+        and_(ProdutoCadastro.origem == "manual", ProdutoCadastro.recebido_em >= inicio, ProdutoCadastro.recebido_em < fim),
+    ]
+    for k in MARKETPLACES:
+        em = getattr(ProdutoCadastro, f"{k}_em")
+        condicoes.append(and_(em >= inicio, em < fim))
+    return db.query(ProdutoCadastro).filter(or_(*condicoes)).all()
+
+
+def _pessoas_por_canal(pessoas_por_janela: dict) -> dict:
+    """Para cada canal, o que cada pessoa fez Hoje / Semana / Mês.
+    `pessoas_por_janela` = {"hoje": [...], "semana": [...], "mes": [...]}
+    (saída de _agregar_produtividade). Função pura, testável sem banco.
+    Quem não fez nada no mês naquele canal não aparece."""
+    saida = {}
+    for k in MARKETPLACES:
+        por_nome = {}
+        for janela, pessoas in pessoas_por_janela.items():
+            for pe in pessoas:
+                if pe[k] > 0:
+                    por_nome.setdefault(pe["nome"], {"nome": pe["nome"], "hoje": 0, "semana": 0, "mes": 0})[janela] = pe[k]
+        saida[k] = sorted(por_nome.values(), key=lambda x: (-x["mes"], -x["semana"], -x["hoje"], x["nome"].lower()))
+    return saida
 
 
 @router.get("/api/cadastro/produtividade")
@@ -1168,12 +1209,20 @@ def produtividade_cadastro(
     # pendentes -- é o que deixa feito+falta por marketplace sempre batendo
     # com o total geral.
     produtos_todos = db.query(ProdutoCadastro).filter(ProdutoCadastro.status != "excluida").all()
+    # Por canal: o que cada pessoa fez Hoje / Semana / Mês (fixos, não dependem
+    # do período escolhido nos filtros).
+    inicio_sem, _ = _limites_utc(_inicio_semana_br(data_hoje), data_hoje)
+    inicio_mes, _ = _limites_utc(data_hoje.replace(day=1), data_hoje)
+    janelas = {"hoje": pessoas_hoje}
+    for nome, ini in (("semana", inicio_sem), ("mes", inicio_mes)):
+        janelas[nome] = _agregar_produtividade(_linhas_do_periodo(db, ini, fim_hoje), ini, fim_hoje)
     return {
         "de": data_de.isoformat(),
         "ate": data_ate.isoformat(),
         "pessoas": pessoas,
         "totais": totais,
         "totais_hoje": totais_hoje,
+        "pessoas_canais": _pessoas_por_canal(janelas),
         "fila": _agregar_fila(produtos_todos),
         "marketplaces": MARKETPLACES,
     }
