@@ -40,6 +40,16 @@
     .pd-tabela tfoot td { font-weight:700; background:var(--cmx-bg); }
     .pd-vazio { padding:30px; text-align:center; color:var(--cmx-texto-suave); }
     .pd-info { display:flex; gap:10px; align-items:flex-start; background:var(--cmx-bg); border:1px solid var(--cmx-borda); border-radius:12px; padding:12px 14px; font-size:13.5px; color:var(--cmx-texto-suave); }
+    .pd-cards.pd-cards-topo { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    .pd-canais { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; margin:0 0 18px; }
+    .pd-canal { background:var(--cmx-papel); border:1px solid var(--cmx-borda); border-radius:14px; padding:14px 16px; }
+    .pd-canal h3 { margin:0 0 10px; font-size:15px; }
+    .pd-canal-nums { display:grid; grid-template-columns:repeat(3, 1fr); gap:8px; margin-bottom:12px; }
+    .pd-canal-nums small { display:block; font-size:11.5px; font-weight:700; color:var(--cmx-texto-suave); text-transform:uppercase; letter-spacing:.04em; }
+    .pd-canal-nums b { font-size:22px; font-variant-numeric:tabular-nums; }
+    .pd-canal-tab { margin:0; border-radius:10px; }
+    .pd-canal-tab th, .pd-canal-tab td { padding:8px 10px; }
+    @media (max-width: 1100px) { .pd-canais { grid-template-columns:1fr; } }
     @media (max-width: 900px) { .pd-cards { grid-template-columns:repeat(2, minmax(0,1fr)); } }
   </style>
 </head>
@@ -98,7 +108,8 @@
         </div>
 
         <h2 class="pd-tit">Fila agora</h2>
-        <div class="pd-cards" id="pd-fila"></div>
+        <div class="pd-cards pd-cards-topo" id="pd-fila"></div>
+        <div class="pd-canais" id="pd-canais"></div>
 
         <h2 class="pd-tit" id="pd-titulo-periodo">No período</h2>
         <div class="pd-tabela" id="pd-pessoas"><div class="pd-vazio">Carregando…</div></div>
@@ -111,7 +122,7 @@
     </div>
   </div>
 
-  <script src="/static/cadastro-produtividade.js?v=1"></script>
+  <script src="/static/cadastro-produtividade.js?v=2"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>
 </html>

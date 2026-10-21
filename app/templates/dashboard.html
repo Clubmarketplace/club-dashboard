@@ -95,6 +95,16 @@
     .adm-ranking-lista li { padding:3px 0; }
     .adm-ranking-lista .adm-ranking-qtd { color:var(--cmx-texto-suave); }
 
+    /* 20/10: resumo dos 2 primeiros (Hoje / Semana / Mês) dentro dos cards
+       de Cadastro e de Cancelamento e Reputação. */
+    .adm-top2 { margin-top:8px; padding-top:8px; border-top:1px solid var(--cmx-borda); font-size:11.5px; }
+    .adm-top2-linha { display:grid; grid-template-columns:1fr 38px 52px 38px; gap:6px; padding:4px 0; align-items:baseline; }
+    .adm-top2-linha .n { text-align:right; font-weight:700; }
+    .adm-top2-cab { color:var(--cmx-texto-suave); font-size:10.5px; font-weight:700; letter-spacing:.04em; }
+    .adm-top2-cab .n { font-weight:700; }
+    .adm-top2-nome { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .adm-sem-canal { background:#fef3c7; color:#92400e; border-radius:999px; padding:1px 8px; font-weight:700; }
+
     /* Tela suspensa (20/10) -- ranking de contas do Precificador abre em
        popup em vez de expandir dentro do card (card ficava alto demais
        com muita conta na lista). Mesmo padrão visual do modal de
@@ -299,17 +309,20 @@
               <div class="adm-setor-linha"><span>Feito hoje</span><span class="r" id="adm-cad-hoje">0 feito(s)</span></div>
               <div class="adm-setor-linha"><span>Quem fez mais (mês)</span><span class="r" id="adm-cad-top">--</span></div>
               <div class="adm-setor-linha"><span>O que falta (fila agora)</span><span class="r" id="adm-cad-falta">0 pendente(s)</span></div>
+              <div class="adm-setor-linha"><span>Sem canal definido</span><span class="r" id="adm-cad-sem-canal">0 aguardando</span></div>
+              <div class="adm-top2" id="adm-cad-top2"></div>
               <button type="button" class="adm-ver-ranking" data-alvo="cadastro">Ver ranking completo do mês ▾</button>
               <div class="adm-ranking-lista" id="adm-cadastro-ranking" style="display:none;"></div>
             </div>
 
             <div class="adm-setor-card">
-              <h3><span class="adm-chip-setor db-icone vermelho">✓</span>Cancelamento</h3>
+              <h3><span class="adm-chip-setor db-icone vermelho">✓</span>Cancelamento e Reputação</h3>
               <p class="sub">Solicitações feitas pelas contas</p>
               <div class="adm-setor-destaque" id="adm-cancel-mes">0</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;" id="adm-cancel-mes-nota"></div>
               <div class="adm-setor-linha"><span>Quem mais confirmou (mês)</span><span class="r" id="adm-cancel-mes-setor-top">--</span></div>
               <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-cancel-hoje">0/0</span></div>
+              <div class="adm-top2" id="adm-cancel-top2"></div>
               <button type="button" class="adm-ver-ranking" data-alvo="cancelamentos">Ver ranking completo do mês ▾</button>
               <div class="adm-ranking-lista" id="adm-cancelamentos-ranking" style="display:none;"></div>
             </div>
@@ -577,6 +590,7 @@
       const setorCadastro = d.setor_cadastro || {};
       const cadMes = setorCadastro.mes || {};
       const cadHoje = setorCadastro.hoje || {};
+      const cadSemana = setorCadastro.semana || {};
       const cadBacklog = setorCadastro.backlog || {};
       const setorNotas = d.setor_subida_notas || {};
       const notasMes = setorNotas.mes || {};
@@ -589,7 +603,8 @@
       document.getElementById("adm-qtd-contas").textContent = totalGeral.quantidade_contas || 0;
       document.getElementById("adm-qtd-contas-nota").textContent = (totalGeral.quantidade_contas || 0) + " contas ativas";
       document.getElementById("adm-cancel-mes").textContent = setorCancelMes.total || 0;
-      document.getElementById("adm-cancel-mes-nota").textContent = (setorCancelMes.confirmadas || 0) + " confirmado(s) no mês";
+      document.getElementById("adm-cancel-mes-nota").textContent = (setorCancelMes.confirmadas || 0) + " confirmado(s) no mês · "
+        + (setorCancelMes.cancelamentos || 0) + " cancelamento(s) + " + (setorCancelMes.reputacoes || 0) + " reputação";
       document.getElementById("adm-mensagens-mes").textContent = setorChamadosMes.respondidas || 0;
       document.getElementById("adm-mensagens-mes-nota").textContent = "de " + (setorChamadosMes.total || 0) + " recebidas (pré + pós-venda)";
 
@@ -600,6 +615,13 @@
       document.getElementById("adm-cad-chegou-hoje").textContent = (cadHoje.total || 0) + " item(ns) de " + (cadHoje.empresas || 0) + " empresa(s)";
       document.getElementById("adm-cad-hoje").textContent = (cadHoje.feitos || 0) + " feito(s)";
       document.getElementById("adm-cad-falta").textContent = (cadBacklog.pendentes || 0) + " pendente(s)";
+      // 20/10: quantas das pendentes ainda não têm canal (supervisor/gerente
+      // ainda não definiu) -- contam no total, mas não em nenhum canal.
+      const cadSemCanal = cadBacklog.aguardando_definicao || 0;
+      const elSemCanal = document.getElementById("adm-cad-sem-canal");
+      elSemCanal.innerHTML = cadSemCanal ? '<span class="adm-sem-canal">' + cadSemCanal + " aguardando</span>" : "nenhuma";
+      // 20/10: os 2 primeiros do mês com Hoje / Semana / Mês lado a lado.
+      renderizarTop2("adm-cad-top2", cadHoje.ranking, cadSemana.ranking, cadMes.ranking);
       renderizarRanking("adm-cadastro-ranking", cadMes.ranking);
 
       // Subida de notas (setor) -- real, a partir do ProdutoCadastro.
@@ -676,6 +698,10 @@
       document.getElementById("adm-cancel-hoje").textContent = (caHoje.confirmadas || 0) + "/" + (caHoje.total || 0) + " confirmadas (" + (caHoje.pendentes || 0) + " pendente(s))";
       document.getElementById("adm-cancel-mes-setor-top").textContent = caMes.top ? caMes.top.nome + " (" + caMes.top.quantidade + ")" : "ninguém ainda";
       renderizarRanking("adm-cancelamentos-ranking", caMes.ranking);
+      // 20/10: os 2 primeiros com Hoje / Semana / Mês (mesmo critério do
+      // card: solicitações de cancelamento + reputação criadas no período e
+      // já confirmadas).
+      renderizarTop2("adm-cancel-top2", caHoje.ranking, (ca.semana || {}).ranking, caMes.ranking);
 
       // Ranking + Top 3 -- guarda a lista completa (já vem com hoje/mês por
       // conta) pra poder montar os dois sem buscar de novo: Top 3 hoje no
@@ -704,6 +730,34 @@
       "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + " atendimento(s)" +
       (r.ultimo_uso ? " · último uso " + r.ultimo_uso : "") + "</span></li>"
     ).join("") + "</ol>";
+  }
+
+  // 20/10: os 2 primeiros do MÊS com o que cada um fez Hoje, na Semana e no
+  // Mês. Recebe os 3 rankings já prontos da API ([{nome, quantidade}]) e
+  // procura cada nome nos de hoje e da semana; quem não aparece lá fez 0.
+  // O nome vem do banco, então é escapado antes de ir pro HTML.
+  function renderizarTop2(idAlvo, rankHoje, rankSemana, rankMes) {
+    const el = document.getElementById(idAlvo);
+    if (!el) return;
+    if (!rankMes || !rankMes.length) {
+      el.innerHTML = '<p class="sub" style="margin:0;">Sem atendimento identificado por nome ainda no mês.</p>';
+      return;
+    }
+    const esc = function (t) {
+      return String(t).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    };
+    const qtd = function (lista, nome) {
+      const achado = (lista || []).find(function (r) { return r.nome === nome; });
+      return achado ? achado.quantidade : 0;
+    };
+    let html = '<div class="adm-top2-linha adm-top2-cab"><span>RANKING</span><span class="n">Hoje</span><span class="n">Semana</span><span class="n">Mês</span></div>';
+    rankMes.slice(0, 2).forEach(function (r, i) {
+      html += '<div class="adm-top2-linha"><span class="adm-top2-nome" title="' + esc(r.nome) + '">' + (i + 1) + ". " + esc(r.nome) + "</span>"
+        + '<span class="n">' + qtd(rankHoje, r.nome) + '</span>'
+        + '<span class="n">' + qtd(rankSemana, r.nome) + '</span>'
+        + '<span class="n">' + r.quantidade + "</span></div>";
+    });
+    el.innerHTML = html;
   }
 
   // Top 3 contas -- aparece dentro dos cards "Vendido hoje"/"Vendido no
