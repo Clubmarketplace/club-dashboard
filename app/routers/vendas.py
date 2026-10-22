@@ -438,10 +438,6 @@ def listar_vendas(
 
     itens = []
     for l in linhas:
-        classificacao = _classificar_margem(conta, l.margem_percentual)
-        if margem.strip() and classificacao != margem.strip():
-            continue
-
         if l.custo_total is not None and l.lucro is not None:
             taxas_aplicadas, lucro_liquido = _cascata_taxas(taxas, l.venda_bruta, l.repasse, l.lucro)
             lucro_liquido = round(lucro_liquido, 2)
@@ -449,6 +445,14 @@ def listar_vendas(
             # Sem custo cadastrado não dá pra calcular lucro nenhum
             # (bruto ou líquido) -- mesma regra já usada pra "sem custo".
             taxas_aplicadas, lucro_liquido = [], None
+
+        # Margem s/ venda = lucro LÍQUIDO (já sem taxas Club/imposto) / venda bruta.
+        # Antes usava o lucro bruto gravado na venda (sem as taxas percentuais),
+        # o que dava um % maior que o Lucro exibido ao lado.
+        margem_venda = (lucro_liquido / l.venda_bruta * 100) if (lucro_liquido is not None and l.venda_bruta) else None
+        classificacao = _classificar_margem(conta, margem_venda)
+        if margem.strip() and classificacao != margem.strip():
+            continue
 
         itens.append(
             {
@@ -467,7 +471,7 @@ def listar_vendas(
                 "lucro": l.lucro,
                 "taxas_aplicadas": taxas_aplicadas,
                 "lucro_liquido": lucro_liquido,
-                "margem_percentual": l.margem_percentual,
+                "margem_percentual": round(margem_venda, 2) if margem_venda is not None else None,
                 "margem_classificacao": classificacao,
                 "status_pedido": l.status_pedido,
                 "data_venda": l.data_venda.isoformat() if l.data_venda else None,
