@@ -366,10 +366,10 @@
   // --- Lista venda a venda, em cartões ---
 
   function markupPercentual(item) {
-    // lucro líquido / custo total -- só dá pra calcular com custo cadastrado.
+    // Markup simples (igual ao Arpex): (venda bruta - custo) / custo -- não desconta tarifa,
+    // frete nem taxas. Só dá pra calcular com custo cadastrado.
     if (item.custo_total === null || item.custo_total === undefined || !item.custo_total) return null;
-    if (item.lucro_liquido === null || item.lucro_liquido === undefined) return null;
-    return (item.lucro_liquido / item.custo_total) * 100;
+    return ((item.venda_bruta - item.custo_total) / item.custo_total) * 100;
   }
 
   function seloClasse(valor) {
@@ -439,7 +439,7 @@
 
     const seloMarkup = document.createElement("span");
     seloMarkup.className = "selo-venda " + seloClasse(markup);
-    seloMarkup.textContent = "Margem s/ custo: " + formatarPercentual(markup);
+    seloMarkup.textContent = "Markup: " + formatarPercentual(markup);
     badges.appendChild(seloMarkup);
 
     const seloMargem = document.createElement("span");
