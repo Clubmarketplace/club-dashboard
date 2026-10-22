@@ -329,13 +329,11 @@
 
             <div class="adm-setor-card">
               <h3><span class="adm-chip-setor db-icone azul">🧾</span>Subida de notas</h3>
-              <p class="sub">Notas lançadas pelo Operador Logístico</p>
+              <p class="sub">Notas do Operador Logístico com itens para cadastrar</p>
               <div class="adm-setor-destaque" id="adm-notas-qtd-mes">0</div>
-              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">notas lançadas no mês</div>
-              <div class="adm-setor-linha"><span>Produtos extraídos (mês)</span><span class="r" id="adm-notas-produtos-mes">0</span></div>
-              <div class="adm-setor-linha"><span>Valor total das notas (mês)</span><span class="r" id="adm-notas-valor-mes">R$ 0,00</span></div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">notas com itens a cadastrar no mês</div>
               <div class="adm-setor-linha"><span>Hoje</span><span class="r" id="adm-notas-hoje">0 nota(s)</span></div>
-              <div class="adm-setor-aviso">"Notas com erro/pendência" ainda não tem rastreamento próprio no sistema -- não entra aqui.</div>
+              <div class="adm-setor-aviso">Conta só as notas que tiveram itens para cadastrar. Nota sem item novo não chega ao sistema e não entra aqui.</div>
             </div>
 
             <div class="adm-setor-card">
@@ -397,11 +395,6 @@
               <div class="titulo">Cadastro -- custo parado</div>
               <div class="valor" id="adm-fin-cadastro-parado">R$ 0,00</div>
               <div class="nota">em produtos que chegaram e ainda não foram cadastrados em nenhum marketplace</div>
-            </div>
-            <div class="adm-fin-card">
-              <div class="titulo">Subida de notas -- valor no mês</div>
-              <div class="valor" id="adm-fin-notas-mes">R$ 0,00</div>
-              <div class="nota">total das notas lançadas pelo Operador Logístico este mês</div>
             </div>
             <div class="adm-fin-card">
               <div class="titulo">Promoções -- lucro líquido (mês)</div>
@@ -626,8 +619,6 @@
 
       // Subida de notas (setor) -- real, a partir do ProdutoCadastro.
       document.getElementById("adm-notas-qtd-mes").textContent = notasMes.notas || 0;
-      document.getElementById("adm-notas-produtos-mes").textContent = notasMes.produtos || 0;
-      document.getElementById("adm-notas-valor-mes").textContent = formatarReais(notasMes.valor_total);
       document.getElementById("adm-notas-hoje").textContent = (notasHoje.notas || 0) + " nota(s)";
 
       // Contas conectadas -- extras (sem venda há 7+ dias).
@@ -636,7 +627,6 @@
       // Financeiro por setor -- só número real (ver nota do card de
       // Cancelamento, que fica marcado como indisponível de propósito).
       document.getElementById("adm-fin-cadastro-parado").textContent = formatarReais((fin.cadastro || {}).custo_parado_pendente);
-      document.getElementById("adm-fin-notas-mes").textContent = formatarReais((fin.subida_notas || {}).valor_notas_mes);
       document.getElementById("adm-fin-promocoes-mes").textContent = formatarReais((fin.promocoes || {}).lucro_mes);
       document.getElementById("adm-fin-promocoes-hoje-nota").textContent = formatarReais((fin.promocoes || {}).lucro_hoje) + " hoje";
 
