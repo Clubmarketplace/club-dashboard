@@ -337,7 +337,10 @@ def _montar_resumo(conta: Conta, db: Session, inicio_dt: datetime, fim_dt: datet
     taxas = db.query(VariavelConta).filter(VariavelConta.conta_id == conta.id).all()
     despesas_taxas, lucro_liquido = _cascata_taxas(taxas, venda_bruta, repasse, lucro_bruto)
 
-    margem_markup = (lucro_liquido / cmv * 100) if cmv else None
+    # Markup simples (igual ao Arpex): (venda bruta - custo) / custo, só sobre as vendas COM custo
+    # cadastrado -- não desconta tarifa, frete nem taxas. A margem real fica em margem_contribuicao.
+    venda_bruta_com_custo = sum(l.venda_bruta for l in linhas if l.custo_total is not None)
+    margem_markup = ((venda_bruta_com_custo - cmv) / cmv * 100) if cmv else None
     margem_contribuicao = (lucro_liquido / venda_bruta * 100) if venda_bruta else None
 
     return {
