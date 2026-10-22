@@ -439,12 +439,12 @@
 
     const seloMarkup = document.createElement("span");
     seloMarkup.className = "selo-venda " + seloClasse(markup);
-    seloMarkup.textContent = "Markup: " + formatarPercentual(markup);
+    seloMarkup.textContent = "Margem s/ custo: " + formatarPercentual(markup);
     badges.appendChild(seloMarkup);
 
     const seloMargem = document.createElement("span");
     seloMargem.className = "selo-venda " + seloClasse(item.margem_percentual);
-    seloMargem.textContent = "Margem: " + formatarPercentual(item.margem_percentual);
+    seloMargem.textContent = "Margem s/ venda: " + formatarPercentual(item.margem_percentual);
     badges.appendChild(seloMargem);
 
     linha.appendChild(badges);
