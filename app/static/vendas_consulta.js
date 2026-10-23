@@ -444,7 +444,7 @@
 
     const seloMargem = document.createElement("span");
     seloMargem.className = "selo-venda " + seloClasse(item.margem_percentual);
-    seloMargem.textContent = "Margem s/ venda: " + formatarPercentual(item.margem_percentual);
+    seloMargem.textContent = "Contribuição: " + formatarPercentual(item.margem_percentual);
     badges.appendChild(seloMargem);
 
     linha.appendChild(badges);
