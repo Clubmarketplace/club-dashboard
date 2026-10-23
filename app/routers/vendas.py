@@ -449,7 +449,7 @@ def listar_vendas(
             # (bruto ou líquido) -- mesma regra já usada pra "sem custo".
             taxas_aplicadas, lucro_liquido = [], None
 
-        # Margem s/ venda = lucro LÍQUIDO (já sem taxas Club/imposto) / venda bruta.
+        # Contribuição (margem s/ venda) = lucro LÍQUIDO (já sem taxas Club/imposto) / venda bruta.
         # Antes usava o lucro bruto gravado na venda (sem as taxas percentuais),
         # o que dava um % maior que o Lucro exibido ao lado.
         margem_venda = (lucro_liquido / l.venda_bruta * 100) if (lucro_liquido is not None and l.venda_bruta) else None
