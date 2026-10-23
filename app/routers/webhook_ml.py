@@ -29,7 +29,7 @@ import logging
 from datetime import datetime
 
 import httpx
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -61,7 +61,7 @@ TOPICOS_REPASSAR_PARA_APPS_SCRIPT = ["orders_v2"]
 
 
 @router.post("/mercado-livre")
-async def receber_notificacao(payload: dict, db: Session = Depends(get_db)):
+async def receber_notificacao(payload: dict, tarefas: BackgroundTasks, db: Session = Depends(get_db)):
     """
     Ponto de entrada único pra todas as notificações do Mercado Livre.
     Sempre responde 200 rapidamente (mesmo quando ignora ou falha
@@ -81,11 +81,14 @@ async def receber_notificacao(payload: dict, db: Session = Depends(get_db)):
         elif topic == "claims":
             resultado = await _processar_claim(payload, db)
         elif topic in TOPICOS_REPASSAR_PARA_APPS_SCRIPT:
-            resultado = await _repassar_para_apps_script(payload, topic)
-            # Além de repassar pra Central Financeira (como sempre fez),
-            # agora também alimenta a nossa própria tela "Vendas" -- as
-            # duas coisas são independentes, uma não afeta a outra.
+            # a101: a venda da nossa tela "Vendas" é gravada PRIMEIRO e o repasse pra
+            # Central Financeira (Apps Script, lento, até 10 s) roda DEPOIS da resposta
+            # ao Mercado Livre, em segundo plano -- assim a venda não espera o Google
+            # e o ML recebe o "200" rápido (sem reenviar o aviso mais tarde).
+            # O conteúdo repassado e o destino continuam exatamente os mesmos.
+            resultado = {"status": "repasse_em_segundo_plano", "topico": topic}
             resultado["vendas"] = await _processar_venda(payload, db)
+            tarefas.add_task(_repassar_em_segundo_plano, payload, topic)
         else:
             logger.info("Tópico '%s' recebido, ainda sem tratamento.", topic)
             resultado = {"status": "ignorado", "motivo": f"tópico '{topic}' ainda não tem módulo próprio"}
@@ -103,6 +106,16 @@ async def receber_notificacao(payload: dict, db: Session = Depends(get_db)):
         logger.error("Falha ao registrar EventoWebhook: %s", exc)
 
     return resultado
+
+
+async def _repassar_em_segundo_plano(payload: dict, topic: str | None) -> None:
+    """Roda depois da resposta ao ML: repassa pro Apps Script e só registra o resultado em log.
+    Nunca levanta exceção (uma falha aqui não pode afetar nada)."""
+    try:
+        resultado = await _repassar_para_apps_script(payload, topic)
+        logger.info("Repasse em segundo plano (tópico '%s'): %s", topic, resultado)
+    except Exception as exc:  # pragma: no cover
+        logger.error("Falha no repasse em segundo plano (tópico '%s'): %s", topic, exc)
 
 
 async def _repassar_para_apps_script(payload: dict, topic: str | None) -> dict:
