@@ -1,11 +1,12 @@
 :root {
-  --cmx-marinho: #12181f;
-  --cmx-marinho-suave: #1c2530;
-  --cmx-bg: #f6f7f9;
+  /* Paleta Arpex (Tailwind): fundo gray-100, cartões brancos, texto slate-900. */
+  --cmx-marinho: #0f172b;
+  --cmx-marinho-suave: #1d293d;
+  --cmx-bg: #f3f4f6;
   --cmx-papel: #ffffff;
-  --cmx-texto: #1b2430;
-  --cmx-texto-suave: #6b7684;
-  --cmx-borda: #e4e7eb;
+  --cmx-texto: #0f172b;
+  --cmx-texto-suave: #64748b;
+  --cmx-borda: #e2e8f0;
   --cmx-ambar: #d98e2f;
   --cmx-ambar-fundo: #fdf3e3;
   --cmx-rust: #c1502e;
@@ -17,17 +18,17 @@
   /* Barra lateral -- por padrão (modo dia) clara, pra combinar com o
      resto da tela; no modo noite (ver bloco [data-tema="escuro"] abaixo)
      volta a ser o navy escuro original. */
-  --cmx-sidebar-bg: #ffffff;
-  --cmx-sidebar-borda: #e4e7eb;
-  --cmx-sidebar-texto: #44505e;
-  --cmx-sidebar-texto-fraco: #8a94a1;
-  --cmx-sidebar-marca-texto: #1b2430;
-  --cmx-sidebar-hover-bg: #eef1f4;
-  --cmx-sidebar-ativo-bg: #eef1f4;
-  --cmx-sidebar-ativo-texto: #1b2430;
-  --cmx-sidebar-submenu-borda: #e4e7eb;
-  --cmx-sidebar-selo-bg: #eef1f4;
-  --cmx-sidebar-selo-texto: #8a94a1;
+  --cmx-sidebar-bg: #f9fafb;
+  --cmx-sidebar-borda: #e5e7eb;
+  --cmx-sidebar-texto: #475569;
+  --cmx-sidebar-texto-fraco: #94a3b8;
+  --cmx-sidebar-marca-texto: #0f172b;
+  --cmx-sidebar-hover-bg: #f1f5f9;
+  --cmx-sidebar-ativo-bg: #eff6ff;
+  --cmx-sidebar-ativo-texto: #1d4ed8;
+  --cmx-sidebar-submenu-borda: #e2e8f0;
+  --cmx-sidebar-selo-bg: #f1f5f9;
+  --cmx-sidebar-selo-texto: #64748b;
 }
 
 /* ---------- Modo noite (tema escuro) ----------
@@ -40,28 +41,29 @@
    brancos "#fff" declarados direto no <style> de cada página) são
    cobertas pelas regras genéricas logo abaixo, por nome de classe. */
 :root[data-tema="escuro"] {
-  --cmx-bg: #10151f;
-  --cmx-papel: #1a2131;
-  --cmx-texto: #e4e8ee;
-  --cmx-texto-suave: #8d97a8;
-  --cmx-borda: #2b3448;
+  /* Paleta Arpex (Tailwind slate): fundo slate-950, cartões slate-900, linhas slate-800. */
+  --cmx-bg: #020618;
+  --cmx-papel: #0f172b;
+  --cmx-texto: #f1f5f9;
+  --cmx-texto-suave: #94a3b8;
+  --cmx-borda: #1e293b;
   --cmx-ambar-fundo: #3a2e18;
   --cmx-rust-fundo: #3a2019;
   --cmx-verde-fundo: #163227;
   --cmx-sombra: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
 
   /* Modo noite: barra lateral volta pro navy escuro original. */
-  --cmx-sidebar-bg: var(--cmx-marinho);
-  --cmx-sidebar-borda: transparent;
-  --cmx-sidebar-texto: #b7c0cb;
-  --cmx-sidebar-texto-fraco: #6c7784;
+  --cmx-sidebar-bg: #0f172b;
+  --cmx-sidebar-borda: #1e293b;
+  --cmx-sidebar-texto: #cbd5e1;
+  --cmx-sidebar-texto-fraco: #64748b;
   --cmx-sidebar-marca-texto: #ffffff;
-  --cmx-sidebar-hover-bg: var(--cmx-marinho-suave);
-  --cmx-sidebar-ativo-bg: var(--cmx-marinho-suave);
-  --cmx-sidebar-ativo-texto: #ffffff;
-  --cmx-sidebar-submenu-borda: #26303c;
-  --cmx-sidebar-selo-bg: #26303c;
-  --cmx-sidebar-selo-texto: #8b96a3;
+  --cmx-sidebar-hover-bg: #1d293d;
+  --cmx-sidebar-ativo-bg: #172554;
+  --cmx-sidebar-ativo-texto: #93c5fd;
+  --cmx-sidebar-submenu-borda: #1e293b;
+  --cmx-sidebar-selo-bg: #1d293d;
+  --cmx-sidebar-selo-texto: #94a3b8;
 }
 
 /* Cartões/cards/modais de cada tela declaram fundo branco fixo
@@ -80,12 +82,12 @@
 :root[data-tema="escuro"] input,
 :root[data-tema="escuro"] select,
 :root[data-tema="escuro"] textarea {
-  background: #232c40 !important;
+  background: var(--cmx-superficie2) !important;
   color: var(--cmx-texto) !important;
   border-color: var(--cmx-borda) !important;
 }
 :root[data-tema="escuro"] .btn-secundario {
-  background: #232c40 !important;
+  background: var(--cmx-superficie2) !important;
   color: var(--cmx-texto) !important;
 }
 :root[data-tema="escuro"] .btn-atalho {
@@ -94,7 +96,7 @@
 }
 :root[data-tema="escuro"] table tbody tr:hover,
 :root[data-tema="escuro"] tr:hover {
-  background: #202940 !important;
+  background: #263349 !important;
 }
 :root[data-tema="escuro"] .modal-fundo {
   background: rgba(0, 0, 0, 0.65) !important;
@@ -880,4 +882,96 @@ main {
 
 @media (prefers-reduced-motion: reduce) {
   .cmx-sidebar, .cmx-veu-menu { transition: none; }
+}
+
+/* a101 tema-noite-v2 -- correções do modo noite.
+   Várias telas (Vendas, Consulta de Vendas, Instalar Sistema, Minhas
+   solicitações, Custos, Taxas, Produtos, Histórico) declaram fundo claro fixo
+   no próprio <style>, mas o texto usa var(--cmx-texto), que no modo noite é
+   claro: resultado = texto claro sobre cartão branco (ilegível). Aqui todos
+   esses blocos passam a usar as superfícies do tema escuro. Só visual. */
+:root[data-tema="escuro"] {
+  --cmx-superficie2: #1d293d;   /* um tom acima do cartão: abas, botões, linhas */
+  --cmx-superficie3: #0b1224;   /* área recuada: detalhe da venda, caixas */
+}
+/* superfícies principais (cartões, faixas, listas) */
+:root[data-tema="escuro"] .cartao-venda,
+:root[data-tema="escuro"] .faixa-filt,
+:root[data-tema="escuro"] .faixa-filtro-vendas,
+:root[data-tema="escuro"] .vazio,
+:root[data-tema="escuro"] .resumo .item,
+:root[data-tema="escuro"] .lista-cartao,
+:root[data-tema="escuro"] .cmx-menu-usuario-botao,
+:root[data-tema="escuro"] .cmx-menu-usuario-dropdown,
+:root[data-tema="escuro"] .cmx-barra-topo-avatar-area .cmx-menu-usuario-dropdown {
+  background: var(--cmx-papel) !important;
+  color: var(--cmx-texto) !important;
+  border-color: var(--cmx-borda) !important;
+}
+/* áreas recuadas (detalhe da venda, termo, blocos tracejados) */
+:root[data-tema="escuro"] .cartao-venda-detalhe,
+:root[data-tema="escuro"] .termo-caixa,
+:root[data-tema="escuro"] .bloco-instalar,
+:root[data-tema="escuro"] .bloco-importar {
+  background: var(--cmx-superficie3) !important;
+  color: var(--cmx-texto) !important;
+  border-color: var(--cmx-borda) !important;
+}
+/* botões, pílulas e abas */
+:root[data-tema="escuro"] .pill-base,
+:root[data-tema="escuro"] .btn-atualizar-compacto,
+:root[data-tema="escuro"] .btn-nav-ano,
+:root[data-tema="escuro"] .abas-escolher-data,
+:root[data-tema="escuro"] .filtro-tipo button,
+:root[data-tema="escuro"] .btn-filtro-evolucao,
+:root[data-tema="escuro"] .cmx-botao-secundario,
+:root[data-tema="escuro"] .celula-mes,
+:root[data-tema="escuro"] .celula-ano,
+:root[data-tema="escuro"] .btn-perigo {
+  background: var(--cmx-superficie2) !important;
+  color: var(--cmx-texto) !important;
+  border-color: var(--cmx-borda) !important;
+}
+:root[data-tema="escuro"] .celula-mes:disabled,
+:root[data-tema="escuro"] .celula-mes:disabled:hover { color: #566078 !important; background: var(--cmx-superficie3) !important; }
+:root[data-tema="escuro"] .aba-escolher-data.ativa { background: var(--cmx-papel) !important; color: var(--cmx-texto) !important; }
+:root[data-tema="escuro"] .btn-perigo { color: #ff9b86 !important; }
+/* estados de passar o mouse */
+:root[data-tema="escuro"] .btn-atalho:hover,
+:root[data-tema="escuro"] .btn-atualizar-compacto:hover,
+:root[data-tema="escuro"] .link-adicionar-taxa:hover,
+:root[data-tema="escuro"] .celula-mes:hover,
+:root[data-tema="escuro"] .celula-ano:hover,
+:root[data-tema="escuro"] tbody tr:hover { background: #263349 !important; }
+/* campos somente leitura */
+:root[data-tema="escuro"] .form-custo input[readonly] { background: var(--cmx-superficie3) !important; color: var(--cmx-texto-suave) !important; }
+/* avisos e selos em tons escuros (texto continua legível) */
+:root[data-tema="escuro"] .aviso-vendas,
+:root[data-tema="escuro"] .aviso-estoque,
+:root[data-tema="escuro"] .logado-como { background: var(--cmx-ambar-fundo) !important; border-color: #5a4521 !important; color: #f0c674 !important; }
+:root[data-tema="escuro"] .selo-venda.ruim,
+:root[data-tema="escuro"] .selo-margem.ruim,
+:root[data-tema="escuro"] .tag-sem-estoque,
+:root[data-tema="escuro"] .tag-falhou { background: var(--cmx-rust-fundo) !important; color: #ff9b86 !important; }
+:root[data-tema="escuro"] .tag-sem-custo { background: var(--cmx-ambar-fundo) !important; color: #f0c674 !important; }
+:root[data-tema="escuro"] .filtro-ativo-barra.tudo-ok { background: var(--cmx-verde-fundo) !important; color: #7fd4a8 !important; }
+:root[data-tema="escuro"] .badge.tipo-cancelamento,
+:root[data-tema="escuro"] .cartao-taxa .base-selo,
+:root[data-tema="escuro"] .historico-linha .origem-tag { background: var(--cmx-superficie2) !important; color: var(--cmx-texto) !important; }
+:root[data-tema="escuro"] .status-confirmado { color: #7fd4a8 !important; }
+/* modais e cabeçalho do modal */
+:root[data-tema="escuro"] .modal-topo { border-color: var(--cmx-borda) !important; }
+/* links que ficavam roxo escuro sobre fundo escuro */
+:root[data-tema="escuro"] .cartao a:not([class]),
+:root[data-tema="escuro"] .bloco-importar a { color: #93b4ff !important; }
+/* cabeçalhos de tabela */
+:root[data-tema="escuro"] thead th { color: var(--cmx-texto-suave) !important; border-color: var(--cmx-borda) !important; }
+:root[data-tema="escuro"] td { border-color: var(--cmx-borda) !important; }
+
+/* a101 tema-noite-v3 -- dashboard do seller: trilho das barras de anúncios e botão ativo do período.
+   (.barra-dupla tinha fundo claro fixo; .btn-filtro-evolucao.ativo perdia o destaque com a regra
+   genérica de botões acima.) */
+:root[data-tema="escuro"] .barra-dupla { background: var(--cmx-superficie2) !important; }
+:root[data-tema="escuro"] .btn-filtro-evolucao.ativo {
+  background: #2563eb !important; color: #ffffff !important; border-color: #2563eb !important;
 }
