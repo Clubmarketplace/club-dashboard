@@ -883,3 +883,73 @@ def sincronizar_vendas_recentes(conta, db, dias: int = 30) -> int:
         offset += limite
 
     return total_pedidos
+
+
+def sincronizar_pedidos_novos_recentes(conta, db, horas: int = 6) -> int:
+    """
+    Verificação RÁPIDA de uma conta só (usada quando chega um aviso de
+    'payments' no webhook, ver app/routers/webhook_ml.py): lista os pedidos
+    das últimas `horas` horas -- UMA consulta ao ML na maioria das vezes --
+    e só processa (2+ consultas por pedido) os que o Club ainda não tem, ou
+    cuja situação (status do pedido / do pagamento) mudou desde que gravamos.
+    Diferente de `sincronizar_vendas_recentes`, que reprocessa TODOS os
+    pedidos da janela, esta quase nunca gasta mais que 1 consulta.
+
+    Devolve quantos pedidos foram (re)processados. Erro numa página ou num
+    pedido só é registrado em log; o que já deu certo fica gravado.
+    """
+    from app.models import Venda
+
+    access_token = garantir_token_valido(conta, db)
+    desde = (datetime.utcnow() - timedelta(hours=horas)).strftime("%Y-%m-%dT%H:%M:%S.000-00:00")
+
+    pedidos_ml: dict[str, tuple] = {}  # order_id -> (status, situação do pagamento)
+    offset, limite, paginas_max = 0, 50, 3
+    for _ in range(paginas_max):
+        try:
+            pagina = _get(
+                f"/orders/search?seller={conta.ml_user_id}&order.date_created.from={desde}"
+                f"&sort=date_desc&offset={offset}&limit={limite}",
+                access_token,
+                "listar pedidos recentes (verificação rápida)",
+            )
+        except MLApiError as exc:
+            logger.warning("Verificação rápida: falha ao listar pedidos da conta %s: %s", conta.apelido, exc)
+            break
+        resultados = pagina.get("results") or []
+        for r in resultados:
+            if r.get("id"):
+                pedidos_ml[str(r["id"])] = (r.get("status"), _situacao_pagamento_do_pedido(r))
+        total = (pagina.get("paging") or {}).get("total", 0)
+        offset += limite
+        if not resultados or offset >= total:
+            break
+
+    if not pedidos_ml:
+        return 0
+
+    ja_gravado: dict[str, list[tuple]] = {}
+    linhas = (
+        db.query(Venda.ml_order_id, Venda.status_pedido, Venda.pagamento_status)
+        .filter(Venda.conta_id == conta.id, Venda.ml_order_id.in_(list(pedidos_ml)))
+        .all()
+    )
+    for order_id, st, pg in linhas:
+        ja_gravado.setdefault(order_id, []).append((st, pg))
+
+    processados = 0
+    for order_id, (status_ml, pagto_ml) in pedidos_ml.items():
+        gravadas = ja_gravado.get(order_id)
+        if gravadas is not None:
+            mudou = any(
+                (status_ml is not None and st != status_ml) or (pagto_ml is not None and pg != pagto_ml)
+                for st, pg in gravadas
+            )
+            if not mudou:
+                continue
+        try:
+            processar_pedido_em_vendas(conta, db, order_id)
+            processados += 1
+        except (MLAuthError, MLApiError) as exc:
+            logger.warning("Verificação rápida: não consegui processar o pedido %s: %s", order_id, exc)
+    return processados
