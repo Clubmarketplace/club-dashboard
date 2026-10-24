@@ -24,15 +24,18 @@ Essa URL de notificações é cadastrada separadamente do Redirect URI,
 na aba de notificações/webhooks do app no Mercado Livre Devs -- as
 duas coisas não são a mesma configuração.
 """
+import asyncio
 import json
 import logging
+import os
+import time
 from datetime import datetime
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Depends
 from sqlalchemy.orm import Session
 
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models import Conta, Pergunta, MensagemPosVenda, AcaoRegistrada, EventoWebhook
 from app.config import GOOGLE_APPS_SCRIPT_WEBHOOK_URL
 from app.ml_client import (
@@ -45,6 +48,7 @@ from app.ml_client import (
     buscar_claim,
     enviar_resposta,
     processar_pedido_em_vendas,
+    sincronizar_pedidos_novos_recentes,
 )
 from app.pre_venda_logica import decidir_resposta
 from app.pos_venda_logica import processar_mensagem_pos_venda
@@ -58,6 +62,22 @@ router = APIRouter(prefix="/webhook", tags=["webhook"])
 # E fora de 'questions'/'messages'/'claims' fica só registrada aqui,
 # sem repassar.
 TOPICOS_REPASSAR_PARA_APPS_SCRIPT = ["orders_v2"]
+
+# a101 -- 'payments' como GATILHO pra venda aparecer na hora.
+# O aviso 'orders_v2' do ML não vinha chegando; já o 'payments' chega em
+# segundos. Quando ele chega, olhamos SÓ aquela conta (em segundo plano, depois
+# de responder 200 ao ML) e gravamos os pedidos recentes que ainda não temos.
+# Desliga sem mexer em código: PAGAMENTOS_GATILHO_ATIVO=0 na env (volta a só
+# registrar o evento, como era antes).
+PAGAMENTOS_GATILHO_ATIVO = os.getenv("PAGAMENTOS_GATILHO_ATIVO", "1") != "0"
+PAGAMENTOS_INTERVALO_MIN_SEG = 30.0   # no máximo 1 verificação por conta a cada 30 s
+PAGAMENTOS_JANELA_HORAS = 6           # só pedidos criados nas últimas 6 h
+PAGAMENTOS_MAX_SIMULTANEAS = 3        # nunca mais que 3 contas consultando o ML ao mesmo tempo
+
+# Estado por conta (ml_user_id): {"rodando", "pendente", "ultimo"}. Só é mexido
+# dentro do loop de eventos (sem threads), então não precisa de trava.
+_estado_pagamentos: dict[str, dict] = {}
+_semaforo_pagamentos: asyncio.Semaphore | None = None
 
 
 @router.post("/mercado-livre")
@@ -89,6 +109,11 @@ async def receber_notificacao(payload: dict, tarefas: BackgroundTasks, db: Sessi
             resultado = {"status": "repasse_em_segundo_plano", "topico": topic}
             resultado["vendas"] = await _processar_venda(payload, db)
             tarefas.add_task(_repassar_em_segundo_plano, payload, topic)
+        elif topic == "payments" and PAGAMENTOS_GATILHO_ATIVO:
+            # Só agenda a verificação (roda depois da resposta); o evento é
+            # registrado igual. Não faz nenhuma chamada ao ML aqui.
+            resultado = {"status": "verificando_pedidos_em_segundo_plano", "topico": topic}
+            tarefas.add_task(_verificar_pedidos_por_pagamento, str(payload.get("user_id", "")))
         else:
             logger.info("Tópico '%s' recebido, ainda sem tratamento.", topic)
             resultado = {"status": "ignorado", "motivo": f"tópico '{topic}' ainda não tem módulo próprio"}
@@ -106,6 +131,53 @@ async def receber_notificacao(payload: dict, tarefas: BackgroundTasks, db: Sessi
         logger.error("Falha ao registrar EventoWebhook: %s", exc)
 
     return resultado
+
+
+def _sincronizar_pedidos_da_conta(ml_user_id: str) -> int:
+    """Roda numa thread: abre a própria sessão do banco e confere os pedidos recentes da conta."""
+    with SessionLocal() as db:
+        conta = db.query(Conta).filter(Conta.ml_user_id == ml_user_id).first()
+        if conta is None or not conta.access_token:
+            return 0
+        return sincronizar_pedidos_novos_recentes(conta, db, horas=PAGAMENTOS_JANELA_HORAS)
+
+
+async def _verificar_pedidos_por_pagamento(ml_user_id: str) -> None:
+    """
+    Gatilho 'payments': confere os pedidos recentes de UMA conta. Nunca levanta exceção.
+    - 1ª vez (ou conta parada há mais de 30 s): roda na hora.
+    - Aviso novo durante a verificação ou dentro dos 30 s seguintes: não dispara
+      outra em paralelo -- marca "pendente" e roda UMA vez a mais quando o
+      intervalo fecha (assim uma venda que caiu logo depois da checagem não fica de fora).
+    """
+    global _semaforo_pagamentos
+    if not ml_user_id.isdigit():
+        return
+    estado = _estado_pagamentos.setdefault(ml_user_id, {"rodando": False, "pendente": False, "ultimo": -1e9})
+    if estado["rodando"]:
+        estado["pendente"] = True
+        return
+    if _semaforo_pagamentos is None:
+        _semaforo_pagamentos = asyncio.Semaphore(PAGAMENTOS_MAX_SIMULTANEAS)
+    estado["rodando"] = True
+    try:
+        while True:
+            espera = PAGAMENTOS_INTERVALO_MIN_SEG - (time.monotonic() - estado["ultimo"])
+            if espera > 0:
+                await asyncio.sleep(espera)
+            estado["pendente"] = False
+            try:
+                async with _semaforo_pagamentos:
+                    novos = await asyncio.to_thread(_sincronizar_pedidos_da_conta, ml_user_id)
+                if novos:
+                    logger.info("Gatilho payments: %s pedido(s) gravado(s) para a conta %s.", novos, ml_user_id)
+            except Exception as exc:  # token vencido, ML fora do ar... só registra
+                logger.warning("Gatilho payments: conta %s não verificada (%s).", ml_user_id, exc)
+            estado["ultimo"] = time.monotonic()
+            if not estado["pendente"]:
+                break
+    finally:
+        estado["rodando"] = False
 
 
 async def _repassar_em_segundo_plano(payload: dict, topic: str | None) -> None:
