@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Painel do galpão</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --canc:#5b6773; --rev:#0f766e; --voltou:#2f9e63; --nao:#c24141; --aguarda:#d98e2f;
+    }
+    main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
+    .barra { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+    .periodos { display:inline-flex; border:1.5px solid var(--cmx-borda); border-radius:10px; overflow:hidden; background:#fff; }
+    .periodos button { border:none; background:#fff; padding:9px 16px; font:inherit; font-size:13.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; border-right:1px solid var(--cmx-borda); }
+    .periodos button:last-child { border-right:none; }
+    .periodos button[aria-pressed=true] { background:var(--cmx-texto, #17202a); color:#fff; }
+    select.filtro { font:inherit; font-size:13.5px; padding:9px 12px; border:1.5px solid var(--cmx-borda); border-radius:10px; background:#fff; }
+    .espaco { flex:1; }
+    .btn { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:10px; padding:9px 14px; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; color:var(--cmx-texto); text-decoration:none; display:inline-block; }
+    .btn.pri { background:var(--rev); border-color:var(--rev); color:#fff; }
+    .periodo-txt { font-size:13px; color:var(--cmx-texto-suave); margin:-6px 0 16px; }
+
+    .grupo-titulo { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--cmx-texto-suave); margin:6px 0 8px; display:flex; align-items:center; gap:8px; }
+    .grupo-titulo i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+    .cartoes { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+    .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 16px; border-top:4px solid var(--cor, var(--cmx-borda)); }
+    .cartao .valor { font-size:28px; font-weight:700; line-height:1.1; }
+    .cartao .rotulo { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .cartao .sub { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+
+    .grade2 { display:grid; grid-template-columns:3fr 2fr; gap:14px; margin-bottom:18px; }
+    @media (max-width:860px) { .grade2 { grid-template-columns:1fr; } }
+    .painel { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+    .grade2 .painel { margin-bottom:0; }
+    .painel h2 { font-size:15px; margin:0 0 12px; }
+    .caixa-grafico { position:relative; height:260px; }
+    .legenda { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-size:12.5px; color:var(--cmx-texto-suave); }
+    .legenda i { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:5px; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--cmx-borda); }
+    td { padding:9px 10px; border-bottom:1px solid var(--cmx-borda); }
+    td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+    tbody tr:last-child td { border-bottom:none; }
+    .vazio { text-align:center; color:var(--cmx-texto-suave); padding:22px; font-size:13.5px; }
+    .erro { color:var(--cmx-critico); background:var(--cmx-critico-fundo); padding:10px 12px; border-radius:9px; margin-bottom:14px; display:none; font-size:13.5px; }
+    .tabela-rolagem { overflow-x:auto; }
+
+    /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
+    .so-impressao { display:none; }
+    @media print {
+      .cmx-sidebar, .cmx-menu-usuario, .barra, .cmx-topbar { display:none !important; }
+      .cmx-shell { display:block !important; } .cmx-conteudo { margin:0 !important; padding:0 !important; }
+      main { padding:0; max-width:none; }
+      .so-impressao { display:block; margin-bottom:10px; }
+      .painel, .cartao { break-inside:avoid; }
+      body { background:#fff !important; }
+    }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_logistica.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ "Logística" if modo_logistica else usuario.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario"><a href="/logout">🚪 Sair</a></div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Painel do galpão</h1>
+          <p class="cmx-subtitulo">Cancelamentos e reversos registrados pelos galpões, com gráficos e relatório por período</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="barra">
+          <div class="periodos" id="periodos" role="group" aria-label="Período">
+            <button type="button" data-d="1" aria-pressed="false">Hoje</button>
+            <button type="button" data-d="7" aria-pressed="true">7 dias</button>
+            <button type="button" data-d="15" aria-pressed="false">15 dias</button>
+            <button type="button" data-d="30" aria-pressed="false">30 dias</button>
+          </div>
+          <select class="filtro" id="galpao" aria-label="Galpão">
+            <option value="">Todos os galpões</option>
+            {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
+          </select>
+          <span class="espaco"></span>
+          <a class="btn pri" id="baixar" href="#">⬇ Baixar relatório (Excel)</a>
+          <button type="button" class="btn" id="imprimir">🖨 Imprimir / PDF</button>
+        </div>
+        <div class="erro" id="erro"></div>
+        <div class="periodo-txt" id="periodo-txt">Carregando…</div>
+        <div class="so-impressao"><b>Painel do galpão</b> — <span id="print-titulo"></span></div>
+
+        <div class="grupo-titulo"><i style="background:var(--canc)"></i> Cancelamentos</div>
+        <div class="cartoes">
+          <div class="cartao" style="--cor:var(--canc)"><div class="valor" id="c-total">—</div><div class="rotulo">Registrados</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="c-res">—</div><div class="rotulo">Resolvidos</div></div>
+          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="c-pen">—</div><div class="rotulo">Pendentes</div></div>
+        </div>
+
+        <div class="grupo-titulo"><i style="background:var(--rev)"></i> Reversos</div>
+        <div class="cartoes">
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-total">—</div><div class="rotulo">Recebidos</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-volt">—</div><div class="rotulo">Voltaram para o estoque</div><div class="sub" id="r-pct"></div></div>
+          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="r-nao">—</div><div class="rotulo">Não voltaram</div></div>
+          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="r-ag">—</div><div class="rotulo">Aguardando a equipe</div></div>
+        </div>
+
+        <div class="grade2">
+          <div class="painel">
+            <h2>Registros por dia</h2>
+            <div class="caixa-grafico"><canvas id="g-dia" role="img" aria-label="Gráfico de cancelamentos e reversos por dia"></canvas></div>
+          </div>
+          <div class="painel">
+            <h2>O que aconteceu com os reversos</h2>
+            <div class="caixa-grafico" style="height:200px"><canvas id="g-res" role="img" aria-label="Gráfico do resultado dos reversos"></canvas></div>
+            <div class="legenda" id="leg-res"></div>
+          </div>
+        </div>
+
+        <div class="painel">
+          <h2>Comparação entre os galpões</h2>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Galpão</th><th class="n">Cancelamentos</th><th class="n">Resolvidos</th><th class="n">Reversos</th><th class="n">Voltaram</th><th class="n">Não voltaram</th><th class="n">Aguardando</th></tr></thead>
+            <tbody id="t-galpoes"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+        </div>
+
+        <div class="painel">
+          <h2>Contas com mais ocorrências <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)" id="t-contas-info"></span></h2>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Conta</th><th class="n">Cancelamentos</th><th class="n">Reversos</th><th class="n">Total</th></tr></thead>
+            <tbody id="t-contas"><tr><td colspan="4" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+        </div>
+      </main>
+    </div>
+  </div>
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    const COR = { canc:"#5b6773", rev:"#0f766e", voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f" };
+    // cor de cada resultado do reverso (voltou = verde, não voltou = tons de vermelho, aguardando = âmbar)
+    const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    let dias = 7, graficoDia = null, graficoRes = null;
+    const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+
+    function params() { return new URLSearchParams({ dias, ...($("galpao").value ? { galpao: $("galpao").value } : {}) }); }
+    function atualizarLinkExcel() { $("baixar").href = "/api/painel-galpao/relatorio?" + params().toString(); }
+
+    function desenharGraficos(d) {
+      if (graficoDia) graficoDia.destroy();
+      if (graficoRes) graficoRes.destroy();
+      graficoDia = new Chart($("g-dia"), {
+        type: "bar",
+        data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
+          { label: "Cancelamentos", data: d.por_dia.map(x => x.cancelamentos), backgroundColor: COR.canc, borderRadius: 4 },
+          { label: "Reversos", data: d.por_dia.map(x => x.reversos), backgroundColor: COR.rev, borderRadius: 4 },
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false,
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } },
+          plugins: { legend: { position: "bottom" } } },
+      });
+      const res = d.resultado_reversos;
+      if (res.length) {
+        graficoRes = new Chart($("g-res"), {
+          type: "doughnut",
+          data: { labels: res.map(x => x.nome), datasets: [{ data: res.map(x => x.quantidade), backgroundColor: res.map(x => COR_RESULTADO[x.chave] || "#9aa5b1"), borderWidth: 2, borderColor: "#fff" }] },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } } },
+        });
+        $("leg-res").innerHTML = res.map(x => `<span><i style="background:${COR_RESULTADO[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}: <b>${x.quantidade}</b></span>`).join("");
+      } else {
+        $("leg-res").innerHTML = '<div class="vazio" style="padding:60px 0 20px">Nenhum reverso neste período.</div>';
+      }
+    }
+
+    function desenhar(d) {
+      const fmt = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
+      const rot = d.periodo.dias === 1 ? "Hoje" : "Últimos " + d.periodo.dias + " dias";
+      const gTxt = $("galpao").value ? $("galpao").selectedOptions[0].textContent : "todos os galpões";
+      $("periodo-txt").textContent = `${rot} (${fmt(d.periodo.de)} a ${fmt(d.periodo.ate)}) · ${gTxt}`;
+      $("print-titulo").textContent = $("periodo-txt").textContent;
+      $("c-total").textContent = d.cancelamentos.total; $("c-res").textContent = d.cancelamentos.resolvidos; $("c-pen").textContent = d.cancelamentos.pendentes;
+      $("r-total").textContent = d.reversos.total; $("r-volt").textContent = d.reversos.voltaram; $("r-nao").textContent = d.reversos.nao_voltaram; $("r-ag").textContent = d.reversos.aguardando;
+      const concl = d.reversos.voltaram + d.reversos.nao_voltaram;
+      $("r-pct").textContent = concl ? `${d.reversos.pct_voltaram}% dos já conferidos` : "";
+      $("t-galpoes").innerHTML = d.por_galpao.map(g => `<tr><td><b>${esc(g.nome)}</b></td><td class="n">${g.cancelamentos}</td><td class="n">${g.cancelamentos_resolvidos}</td><td class="n">${g.reversos}</td><td class="n">${g.voltaram}</td><td class="n">${g.nao_voltaram}</td><td class="n">${g.aguardando}</td></tr>`).join("");
+      $("t-contas").innerHTML = d.contas.length
+        ? d.contas.map(c => `<tr><td>${esc(c.conta)}</td><td class="n">${c.cancelamentos}</td><td class="n">${c.reversos}</td><td class="n"><b>${c.total}</b></td></tr>`).join("")
+        : '<tr><td colspan="4" class="vazio">Nenhum registro neste período.</td></tr>';
+      $("t-contas-info").textContent = d.total_contas > d.contas.length ? `(as ${d.contas.length} primeiras de ${d.total_contas}; o Excel traz todas)` : "";
+      desenharGraficos(d);
+    }
+
+    let vez = 0;
+    async function carregar() {
+      const minha = ++vez; atualizarLinkExcel();
+      try {
+        const r = await fetch("/api/painel-galpao/resumo?" + params().toString(), { cache: "no-store" });
+        if (r.status === 401) { location.href = "/login"; return; }
+        if (!r.ok) throw new Error("status " + r.status);
+        const d = await r.json();
+        if (minha !== vez) return;
+        $("erro").style.display = "none"; desenhar(d);
+      } catch (e) {
+        console.error(e); $("erro").style.display = "block"; $("erro").textContent = "Não consegui carregar os números agora. Tente de novo em instantes.";
+      }
+    }
+    $("periodos").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      dias = +b.dataset.d;
+      document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      carregar();
+    });
+    $("galpao").addEventListener("change", carregar);
+    $("imprimir").addEventListener("click", () => window.print());
+    carregar();
+    setInterval(carregar, 60000);   // atualiza sozinho a cada minuto
+  </script>
+</body>
+</html>
