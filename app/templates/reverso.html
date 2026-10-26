@@ -103,7 +103,7 @@
                 {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
               </select></div>
             {% endif %}
-            <div class="campo"><label class="rot">Plataforma</label>
+            <div class="campo" style="grid-column:1/-1"><label class="rot">Plataforma</label>
               <div class="plats" id="plats">
                 <button type="button" class="plat" data-v="mercado_livre" aria-pressed="true">Mercado Livre</button>
                 <button type="button" class="plat" data-v="shopee" aria-pressed="false">Shopee</button>
@@ -123,8 +123,8 @@
             <div class="campo"><label class="rot" for="produto">Produto (opcional)</label>
               <input type="text" id="produto" maxlength="200" placeholder="SKU ou nome do produto" /></div>
             {% endif %}
-            <div class="campo"><label class="rot" for="venda">Nº da venda{{ " (se souber)" if modo_galpao else "" }}</label>
-              <input type="text" id="venda" inputmode="numeric" placeholder="{{ 'Opcional' if modo_galpao else 'Número do pedido' }}" autocomplete="off" /></div>
+            <div class="campo"><label class="rot" for="venda">Nº da venda{{ " (se souber)" if modo_galpao else " (obrigatório)" }}</label>
+              <input type="text" id="venda" inputmode="numeric" placeholder="{{ 'Opcional' if modo_galpao else 'Número do pedido' }}" autocomplete="off"{% if not modo_galpao %} required{% endif %} /></div>
             {% if modo_galpao %}
             <div class="campo"><label class="rot" for="estado">Aspecto ao chegar</label>
               <select id="estado">
