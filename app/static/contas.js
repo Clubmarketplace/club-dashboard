@@ -109,13 +109,17 @@ function renderizarTabela(todas) {
     const botaoInativar = EH_ADMIN
       ? `<button class="cmx-botao-link-perigo" data-inativar="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}" style="margin-left: 10px;">Inativar</button>`
       : "";
+    // Renomear: só admin (o servidor também confere). Troca só o nome, mantém tudo.
+    const botaoRenomear = EH_ADMIN
+      ? `<button class="cmx-botao-link-perigo" data-renomear="${conta.id}" data-apelido="${escaparHtml(conta.apelido)}" style="margin-left: 10px;">Renomear</button>`
+      : "";
     linha.innerHTML = `
       <td>${conta.apelido}</td>
       <td>${montarSeloStatus(conta)}</td>
       <td>${conta.ml_user_id || "—"}</td>
       <td>${formatarData(conta.conectada_em)}</td>
       <td>${formatarData(conta.token_expira_em)}</td>
-      <td>${botaoDesconectar}${botaoInativar}${botaoExcluir}</td>
+      <td>${botaoDesconectar}${botaoRenomear}${botaoInativar}${botaoExcluir}</td>
     `;
     corpo.appendChild(linha);
   }
@@ -128,6 +132,9 @@ function renderizarTabela(todas) {
   });
   corpo.querySelectorAll("[data-inativar]").forEach((botao) => {
     botao.addEventListener("click", () => inativarConta(botao));
+  });
+  corpo.querySelectorAll("[data-renomear]").forEach((botao) => {
+    botao.addEventListener("click", () => renomearConta(botao));
   });
 }
 
@@ -304,6 +311,42 @@ async function recarregarContas() {
   const contas = await carregarContas();
   renderizarTabela(contas);
   renderizarCmxTabela(contas);
+}
+
+async function renomearConta(botao) {
+  const contaId = botao.getAttribute("data-renomear");
+  const apelido = botao.getAttribute("data-apelido");
+  const novoNome = window.prompt(
+    `Renomear a conta "${apelido}"?\n\n` +
+    `Muda só o nome. O número do Mercado Livre, as vendas e o histórico continuam os mesmos.\n\n` +
+    `Novo nome:`,
+    apelido
+  );
+  if (novoNome === null) return; // cancelou
+  if (!novoNome.trim()) {
+    mostrarAviso("Digite o novo nome da conta.");
+    return;
+  }
+
+  botao.disabled = true;
+  botao.textContent = "Renomeando...";
+  try {
+    const resposta = await fetch(`/auth/contas/${contaId}/renomear`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ apelido: novoNome }),
+    });
+    if (!resposta.ok) {
+      const dados = await resposta.json().catch(() => null);
+      throw new Error(dados && dados.detail ? dados.detail : `status ${resposta.status}`);
+    }
+    await recarregarContas();
+  } catch (erro) {
+    mostrarAviso(`Não foi possível renomear: ${erro.message}`);
+    console.error(erro);
+    botao.disabled = false;
+    botao.textContent = "Renomear";
+  }
 }
 
 async function inativarConta(botao) {
