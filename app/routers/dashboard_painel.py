@@ -242,6 +242,30 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
         confirmados = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None)).count()
         return {"total": total, "confirmados": confirmados, "pendentes": total - confirmados}
 
+    def _reversos(inicio_utc: datetime) -> dict:
+        """Reversos (produto que voltou) dessa conta no período, por situação:
+        chegaram / em andamento (galpão ainda conferindo ou equipe tratando) /
+        liberados pra venda / resolvidos com o ML / descartados."""
+        linhas = (
+            db.query(SolicitacaoCancelamento)
+            .filter(SolicitacaoCancelamento.conta_chave == chave)
+            .filter(SolicitacaoCancelamento.tipo == "reverso")
+            .filter(SolicitacaoCancelamento.criado_em >= inicio_utc)
+            .all()
+        )
+        r = {"chegaram": len(linhas), "em_andamento": 0, "liberados_venda": 0, "negociacao_ml": 0, "descartados": 0}
+        for x in linhas:
+            res = x.resultado_reverso or ""
+            if not x.confirmado_por:
+                r["em_andamento"] += 1
+            elif res == "liberado_venda":
+                r["liberados_venda"] += 1
+            elif res.startswith("negociacao"):
+                r["negociacao_ml"] += 1
+            else:
+                r["descartados"] += 1
+        return r
+
     return {
         "conta": conta.apelido,
         "hoje": resumo_hoje,
@@ -271,4 +295,8 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
             "mes": _cancelamentos(inicio_mes_utc),
         },
         "atendimento_mes": _atendimento(inicio_mes_utc),
+        "reversos": {
+            "hoje": _reversos(inicio_dia_utc),
+            "mes": _reversos(inicio_mes_utc),
+        },
     }

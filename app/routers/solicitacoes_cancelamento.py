@@ -40,6 +40,10 @@ from app.database import get_db
 from app.models import Conta, EmpresaPlanejada, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
+# Rota própria do galpão pra liberar o reverso pra venda: fica FORA do prefixo
+# acima de propósito -- o galpão tem acesso só a endereços exatos de
+# /api/solicitacoes-cancelamento (o /confirmar fica de fora: quem pede não confirma).
+router_reverso = APIRouter(prefix="/api/reverso", tags=["reverso"])
 
 # --- Opções (fonte ÚNICA: formulário, filtros e telas leem daqui) ---
 # Pra incluir/renomear: é só mexer nestes dicionários. A chave é o que
@@ -67,8 +71,36 @@ TIPO_PADRAO = "cancelamento"
 TIPOS = {
     "cancelamento": "Cancelamento",
     "reputacao": "Reputação",
+    "reverso": "Reverso",
 }
 TIPOS_VALIDOS = set(TIPOS)
+
+# --- Reverso (26/10): produto que voltou (devolução, recusa, chegou quebrado).
+# Mesmo painel e mesmo fluxo (assumir -> concluir); a chave é o que fica no banco.
+TIPO_REVERSO = "reverso"
+SEM_NUMERO_REVERSO = "sem número"  # reverso registrado sem nº de venda (numero_venda é NOT NULL)
+ESTADOS_CHEGADA = {
+    "bom": "Aparentemente em bom estado",
+    "avariado": "Avariado",
+    "faltando_peca": "Faltando peça ou acessório",
+    "diferente": "Produto diferente do esperado",
+}
+RESULTADOS_REVERSO = {
+    "liberado_venda": "Liberado para venda",
+    "negociacao_ml": "Em negociação com o ML",
+    "negociacao_ressarcido": "Negociação com o ML: ressarcido",
+    "negociacao_sem_ressarcimento": "Negociação com o ML: sem ressarcimento",
+    "descartado": "Descartado (não vendável)",
+}
+# Checklist que o galpão marca pra liberar o produto pra venda (todos obrigatórios).
+CHECKLIST_REVERSO = {
+    "caixa": "Caixa original em boas condições",
+    "sem_avarias": "Produto sem avarias",
+    "acessorios_manuais": "Todos os acessórios e manuais",
+    "testado": "Testado e funcionando",
+}
+MAX_FOTOS_REVERSO = 20
+MAX_FOTOS_OUTROS = 5
 
 
 def filtro_tipo(tipo: str):
@@ -115,8 +147,10 @@ LABEL_RESULTADO_IMPACTO = {
 # Modelos de entrada
 # ---------------------------------------------------------------------------
 class ItemCancelamento(BaseModel):
-    numero_venda: str
-    motivo: str
+    # Obrigatório em cancelamento/reputação (conferido em criar_solicitacoes);
+    # no REVERSO pode ficar vazio (o galpão nem sempre sabe o nº da venda).
+    numero_venda: str = ""
+    motivo: str = ""
     # Opcional, pras plataformas ainda não integradas. No Mercado Livre o
     # SKU é lido do próprio pedido (cancelamento_apoio.py) e este campo é ignorado.
     sku: Optional[str] = None
@@ -127,6 +161,25 @@ class ItemCancelamento(BaseModel):
     # anúncio). Nada obrigatório; fotos e link são independentes.
     fotos_base64: Optional[list[str]] = None
     link_evidencia: Optional[str] = None
+    # Só Reverso: produto (SKU ou nome) e aspecto ao chegar (ESTADOS_CHEGADA).
+    produto: Optional[str] = None
+    estado_chegada: Optional[str] = None
+
+    @field_validator("produto")
+    @classmethod
+    def limpar_produto(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:200] or None
+
+    @field_validator("estado_chegada")
+    @classmethod
+    def validar_estado_chegada(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in ESTADOS_CHEGADA:
+            raise ValueError(f"estado_chegada inválido. Use um de: {', '.join(ESTADOS_CHEGADA)}")
+        return valor
 
     @field_validator("sku")
     @classmethod
@@ -137,10 +190,10 @@ class ItemCancelamento(BaseModel):
     @field_validator("numero_venda", "motivo")
     @classmethod
     def validar_nao_vazio(cls, valor: str) -> str:
-        valor = valor.strip()
-        if not valor:
-            raise ValueError("Campo obrigatório não pode ficar em branco.")
-        return valor
+        # Em branco é aceito AQUI porque o Reverso pode vir sem nº de venda e sem
+        # motivo; cancelamento/reputação continuam exigindo os dois (conferido em
+        # criar_solicitacoes, que sabe o tipo).
+        return valor.strip()
 
     @field_validator("fotos_base64")
     @classmethod
@@ -151,8 +204,10 @@ class ItemCancelamento(BaseModel):
         # máximo 5 fotos por venda, cada uma até ~2.5 milhões de
         # caracteres base64 (~1.8 MB) -- bem acima do que a compressão
         # no navegador deveria gerar.
-        if len(valor) > 5:
-            raise ValueError("No máximo 5 fotos por venda.")
+        # (o limite de 5 vale só pra cancelamento/reputação e é conferido em
+        # criar_solicitacoes, que sabe o tipo; o reverso aceita até 20.)
+        if len(valor) > MAX_FOTOS_REVERSO:
+            raise ValueError(f"No máximo {MAX_FOTOS_REVERSO} fotos.")
         fotos = []
         for foto in valor:
             foto = (foto or "").strip()
@@ -305,6 +360,16 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "assumido_primeiro_em": s.assumido_primeiro_em.isoformat() if s.assumido_primeiro_em else None,
         "fotos_base64": _fotos_de(s),
         "link_evidencia": s.link_evidencia,
+        # Reverso (nulos nos outros tipos)
+        "estado_chegada": s.estado_chegada,
+        "estado_chegada_nome": ESTADOS_CHEGADA.get(s.estado_chegada) if s.estado_chegada else None,
+        "resultado_reverso": s.resultado_reverso,
+        "resultado_reverso_nome": RESULTADOS_REVERSO.get(s.resultado_reverso) if s.resultado_reverso else None,
+        "liberado_por": s.liberado_por,
+        "liberado_em": s.liberado_em.isoformat() if s.liberado_em else None,
+        "checklist": _checklist_de(s),
+        "checklist_itens": itens_do_checklist(s.checklist_json),
+        "observacao_resultado": s.observacao_resultado,
         **_dados_atendimento(s),
     }
 
@@ -321,6 +386,32 @@ def _fotos_de(s: SolicitacaoCancelamento) -> list:
         return []
 
 
+
+
+def _checklist_de(s: SolicitacaoCancelamento) -> Optional[dict]:
+    if not s.checklist_json:
+        return None
+    try:
+        dados = json.loads(s.checklist_json)
+        return dados if isinstance(dados, dict) else None
+    except (ValueError, TypeError):
+        return None
+
+
+def itens_do_checklist(checklist_json: Optional[str]) -> list:
+    """Itens do checklist gravado na liberação, já com o nome de cada um:
+    [{"chave", "nome", "ok"}]. Lê só as chaves que existem hoje em
+    CHECKLIST_REVERSO -- quando entrarem opções novas, reversos antigos
+    simplesmente não mostram o que não existia na época."""
+    if not checklist_json:
+        return []
+    try:
+        dados = json.loads(checklist_json)
+    except (ValueError, TypeError):
+        return []
+    if not isinstance(dados, dict):
+        return []
+    return [{"chave": k, "nome": nome, "ok": bool(dados.get(k))} for k, nome in CHECKLIST_REVERSO.items() if k in dados]
 
 
 def _dados_atendimento(s: SolicitacaoCancelamento) -> dict:
@@ -365,9 +456,9 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     elif papel == "logistica":
         origem = "logistica"
         conta_digitada = corpo.conta
-        # Galpão só lida com cancelamento (reputação é assunto do seller/equipe).
-        if corpo.tipo != TIPO_PADRAO:
-            raise HTTPException(status_code=400, detail="O galpão só pode registrar solicitações de cancelamento.")
+        # Galpão lida com cancelamento e reverso (reputação é assunto do seller/equipe).
+        if corpo.tipo not in (TIPO_PADRAO, TIPO_REVERSO):
+            raise HTTPException(status_code=400, detail="O galpão só pode registrar solicitações de cancelamento e reverso.")
         if corpo.galpao not in GALPOES_VALIDOS:
             raise HTTPException(status_code=400, detail="Escolha o galpão.")
         galpao = corpo.galpao
@@ -400,11 +491,28 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     nome_conta = mapa_contas.get(chave) or nome_exibicao_novo(conta_digitada)
 
     estrito = origem in ("logistica", "equipe")
-    numeros = [_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito) for i in corpo.itens]
+    eh_reverso = corpo.tipo == TIPO_REVERSO
+    numeros = []
+    for i in corpo.itens:
+        if not (i.numero_venda or "").strip():
+            if not eh_reverso:
+                raise HTTPException(status_code=400, detail="Informe o número da venda.")
+            if not (i.produto or i.fotos_base64):
+                raise HTTPException(status_code=400, detail="Reverso: informe o produto (SKU ou nome) ou o número da venda.")
+            numeros.append(SEM_NUMERO_REVERSO)
+            continue
+        numeros.append(_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito))
+    if eh_reverso and origem == "logistica" and not all(i.produto or (n != SEM_NUMERO_REVERSO) for i, n in zip(corpo.itens, numeros)):
+        raise HTTPException(status_code=400, detail="Reverso: informe o produto (SKU ou nome).")
+    for i in corpo.itens:
+        if not eh_reverso and len(i.fotos_base64 or []) > MAX_FOTOS_OUTROS:
+            raise HTTPException(status_code=400, detail=f"No máximo {MAX_FOTOS_OUTROS} fotos por venda.")
+        if not eh_reverso and not (i.motivo or "").strip():
+            raise HTTPException(status_code=400, detail="Informe o motivo.")
 
     # --- Aviso de duplicidade (mesma venda + mesma plataforma + mesmo tipo) ---
     # Pedir cancelamento e depois reputação da MESMA venda é normal: não avisa.
-    if not corpo.confirmar_duplicadas:
+    if not corpo.confirmar_duplicadas and any(n != SEM_NUMERO_REVERSO for n in numeros):
         existentes = (
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.plataforma == corpo.plataforma)
@@ -442,11 +550,13 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 conta=nome_conta,
                 conta_chave=chave,
                 numero_venda=numero,
-                motivo=item.motivo,
+                motivo=(item.motivo or "").strip() or ("Retorno recebido no galpão" if eh_reverso else ""),
                 origem=origem,
                 solicitado_por=usuario.nome_exibicao if usuario else None,
                 galpao=galpao,
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
+                produto_titulo=(item.produto if eh_reverso else None),
+                estado_chegada=(item.estado_chegada if eh_reverso else None),
                 fotos_base64=(json.dumps(item.fotos_base64) if item.fotos_base64 else None),
                 link_evidencia=item.link_evidencia,
             )
@@ -457,7 +567,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                          "publico": "Link público"}.get(origem, origem)
         for s in criadas:
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
-                             detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}")
+                             detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}"
+                                     + (f" · aspecto: {ESTADOS_CHEGADA[s.estado_chegada]}" if s.estado_chegada else ""))
         db.commit()
         for s in criadas:
             db.refresh(s)
@@ -467,7 +578,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 
     # Mercado Livre: lê o SKU/produto no pedido DEPOIS de responder, pra o
     # formulário não ficar esperando o ML.
-    ids_ml = [s.id for s in criadas if s.plataforma == "mercado_livre"]
+    ids_ml = [s.id for s in criadas if s.plataforma == "mercado_livre" and s.numero_venda != SEM_NUMERO_REVERSO]
     if ids_ml:
         tarefas.add_task(preencher_produtos_em_segundo_plano, ids_ml)
 
@@ -505,6 +616,9 @@ def listar_opcoes():
     """Plataformas e galpões disponíveis (pro formulário e pros filtros)."""
     return {
         "tipos": [{"valor": k, "nome": v} for k, v in TIPOS.items()],
+        "estados_chegada": [{"valor": k, "nome": v} for k, v in ESTADOS_CHEGADA.items()],
+        "resultados_reverso": [{"valor": k, "nome": v} for k, v in RESULTADOS_REVERSO.items()],
+        "checklist_reverso": [{"valor": k, "nome": v} for k, v in CHECKLIST_REVERSO.items()],
         "plataformas": [{"valor": k, "nome": v} for k, v in PLATAFORMAS.items()],
         "galpoes": [{"valor": k, "nome": v} for k, v in GALPOES.items()],
     }
@@ -552,10 +666,14 @@ def buscar_solicitacoes(
         raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
     if usuario.papel == "logistica":
         origem = "logistica"
-        tipo = TIPO_PADRAO  # galpão só enxerga cancelamentos
+        # galpão só enxerga cancelamentos e reversos (nunca reputação)
+        if tipo not in (TIPO_PADRAO, TIPO_REVERSO):
+            tipo = None
 
     consulta = db.query(SolicitacaoCancelamento)
 
+    if usuario.papel == "logistica" and not tipo:
+        consulta = consulta.filter(or_(filtro_tipo(TIPO_PADRAO), filtro_tipo(TIPO_REVERSO)))
     if tipo in TIPOS_VALIDOS:
         consulta = consulta.filter(filtro_tipo(tipo))
 
@@ -711,6 +829,8 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
+    if (solicitacao.tipo or TIPO_PADRAO) == TIPO_REVERSO:
+        raise HTTPException(status_code=400, detail="Reverso é concluído com o resultado do tratamento (botão Concluir reverso).")
     if not corpo.sem_protocolo and not corpo.protocolo:
         raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi resolvido sem protocolo).")
 
@@ -747,6 +867,112 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         "resultado_impacto": solicitacao.resultado_impacto,
         "protocolo": solicitacao.protocolo,
     }
+
+
+# ---------------------------------------------------------------------------
+# Reverso: liberar pra venda (galpão, com checklist) e concluir (equipe)
+# ---------------------------------------------------------------------------
+class LiberarVendaBody(BaseModel):
+    # {"caixa": true, "sem_avarias": true, "acessorios_manuais": true, "testado": true}
+    # -- TODOS obrigatórios: sem o checklist completo não libera (vai pra equipe).
+    checklist: dict[str, bool]
+
+
+class ConcluirReversoBody(BaseModel):
+    resultado: str
+    observacao: Optional[str] = None
+
+    @field_validator("resultado")
+    @classmethod
+    def validar_resultado_reverso(cls, valor: str) -> str:
+        if valor not in RESULTADOS_REVERSO:
+            raise ValueError(f"resultado inválido. Use um de: {', '.join(RESULTADOS_REVERSO)}")
+        return valor
+
+    @field_validator("observacao")
+    @classmethod
+    def limpar_observacao(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:500] or None
+
+
+def _reverso_aberto_ou_erro(solicitacao_id: int, db: Session) -> SolicitacaoCancelamento:
+    s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if s is None or s.excluido_em is not None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if (s.tipo or TIPO_PADRAO) != TIPO_REVERSO:
+        raise HTTPException(status_code=400, detail="Essa solicitação não é um reverso.")
+    if s.confirmado_por:
+        raise HTTPException(status_code=400, detail=f"Esse reverso já foi concluído por {s.confirmado_por}.")
+    return s
+
+
+def _fechar_reverso(s: SolicitacaoCancelamento, usuario, resultado: str, observacao: Optional[str]) -> None:
+    """Grava a conclusão (mesmos campos que as outras solicitações usam pra
+    "concluída": confirmado_por/em), pra filtros, contadores e produtividade
+    funcionarem sem nenhuma regra especial."""
+    agora = datetime.utcnow()
+    if not s.assumido_primeiro_por:
+        s.assumido_primeiro_por = usuario.nome_exibicao
+        s.assumido_primeiro_em = agora
+    s.confirmado_por = usuario.nome_exibicao
+    s.confirmado_em = agora
+    s.resultado_reverso = resultado
+    s.observacao_resultado = observacao
+    s.em_atendimento_por = None
+    s.em_atendimento_por_id = None
+    s.em_atendimento_desde = None
+
+
+@router_reverso.post("/{solicitacao_id}/liberar-venda")
+def liberar_reverso_para_venda(solicitacao_id: int, corpo: LiberarVendaBody, request: Request, db: Session = Depends(get_db)):
+    """
+    O GALPÃO (ou a equipe) conferiu o produto que voltou e o devolve pra
+    venda. Exige o checklist COMPLETO. Quem liberou, dia e hora ficam
+    gravados; o reverso passa a "concluído / liberado para venda" e o seller
+    vê isso no painel dele. Não mexe em estoque (só informa).
+    """
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel != "logistica" and not _pode_tratar_solicitacao(usuario):
+        raise HTTPException(status_code=403, detail="Seu perfil não pode liberar produtos para venda.")
+    s = _reverso_aberto_ou_erro(solicitacao_id, db)
+    faltando = [nome for chave, nome in CHECKLIST_REVERSO.items() if corpo.checklist.get(chave) is not True]
+    if faltando:
+        raise HTTPException(status_code=400, detail="Para liberar, marque todo o checklist. Falta: " + ", ".join(faltando) + ".")
+
+    _fechar_reverso(s, usuario, "liberado_venda", None)
+    s.liberado_por = usuario.nome_exibicao
+    s.liberado_em = s.confirmado_em
+    s.checklist_json = json.dumps({chave: True for chave in CHECKLIST_REVERSO})
+    registrar_evento(db, s.id, "liberou_venda", usuario=usuario, detalhe="Checklist completo: " + ", ".join(CHECKLIST_REVERSO.values()))
+    db.commit()
+    db.refresh(s)
+    return {"status": "liberado_venda", "id": s.id, "liberado_por": s.liberado_por, "liberado_em": s.liberado_em.isoformat()}
+
+
+@router.post("/{solicitacao_id}/reverso/concluir")
+def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: Request, db: Session = Depends(get_db)):
+    """A equipe do painel conclui o reverso informando o resultado do tratamento
+    (liberado, negociação com o ML e seu desfecho, ou descartado). Quem concluiu
+    é sempre o usuário logado."""
+    usuario = _operador_que_confirma(request, db)
+    s = _reverso_aberto_ou_erro(solicitacao_id, db)
+    atual = _dados_atendimento(s)
+    if atual["em_atendimento_por_id"] != usuario.id:
+        registrar_evento(db, s.id, "assumiu", usuario=usuario,
+                         detalhe=(f"no lugar de {atual['em_atendimento_por']}" if atual["em_atendimento_por"] else "ao concluir"))
+    _fechar_reverso(s, usuario, corpo.resultado, corpo.observacao)
+    if corpo.resultado == "liberado_venda":
+        s.liberado_por = usuario.nome_exibicao
+        s.liberado_em = s.confirmado_em
+    registrar_evento(db, s.id, "concluiu_reverso", usuario=usuario,
+                     detalhe=RESULTADOS_REVERSO[corpo.resultado] + (f" · {corpo.observacao}" if corpo.observacao else ""))
+    db.commit()
+    db.refresh(s)
+    return {"status": "concluido", "id": s.id, "resultado_reverso": s.resultado_reverso,
+            "confirmado_por": s.confirmado_por, "confirmado_em": s.confirmado_em.isoformat()}
 
 
 # ---------------------------------------------------------------------------
@@ -855,6 +1081,8 @@ ROTULO_EVENTO = {
     "liberou": "Liberou o atendimento",
     "confirmou": "Confirmou o cancelamento",
     "confirmou_automatico": "Cancelamento confirmado automaticamente",
+    "liberou_venda": "Conferiu e liberou o produto para venda (galpão)",
+    "concluiu_reverso": "Concluiu o reverso",
 }
 
 
@@ -871,7 +1099,7 @@ def _tempo_por_operador(solicitacao: SolicitacaoCancelamento, eventos: list) -> 
     atual, desde = None, None
     primeiro_assumiu = None
     for e in sorted(eventos, key=lambda x: (x.quando, x.id)):
-        if e.tipo in ("assumiu", "assumiu_no_lugar", "liberou", "confirmou", "confirmou_automatico") and atual and desde:
+        if e.tipo in ("assumiu", "assumiu_no_lugar", "liberou", "confirmou", "confirmou_automatico", "liberou_venda", "concluiu_reverso") and atual and desde:
             trechos[atual] = trechos.get(atual, 0) + max(0, (e.quando - desde).total_seconds())
             atual, desde = None, None
         if e.tipo in ("assumiu", "assumiu_no_lugar"):
@@ -1452,7 +1680,7 @@ def _agregar_produtividade_cancelamento(linhas, inicio: datetime, fim: datetime)
     def _pessoa(nome):
         nome = nome or "—"
         return pessoas.setdefault(
-            nome, {"nome": nome, "cancelamento": 0, "reputacao": 0, "total": 0, "assumidas_primeiro": 0,
+            nome, {"nome": nome, "cancelamento": 0, "reputacao": 0, "reverso": 0, "total": 0, "assumidas_primeiro": 0,
                    "tempo_soma_seg": 0, "tempo_n": 0}
         )
 
@@ -1519,7 +1747,7 @@ def produtividade_cancelamento(
     linhas = db.query(SolicitacaoCancelamento).filter(or_(*condicoes)).all()
     pessoas = _agregar_produtividade_cancelamento(linhas, inicio, fim)
 
-    totais = {"cancelamento": 0, "reputacao": 0, "total": 0, "assumidas_primeiro": 0}
+    totais = {"cancelamento": 0, "reputacao": 0, "reverso": 0, "total": 0, "assumidas_primeiro": 0}
     for pessoa in pessoas:
         for campo in totais:
             totais[campo] += pessoa[campo]
@@ -1535,3 +1763,86 @@ def produtividade_cancelamento(
         "totais": totais,
         "fila": _agregar_fila_cancelamento(pendentes),
     }
+
+
+def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
+    """
+    Números do Reverso no período [inicio, fim) (UTC). Função pura.
+      - chegaram: reversos registrados no período (por data de chegada);
+      - dos que chegaram: liberados pra venda (boas condições), em negociação
+        com o ML / resolvidos com o ML, descartados e ainda em andamento;
+      - agrupado por conta e por galpão, mais o total.
+    "% voltou pra venda" = liberados / chegaram.
+    """
+    def novo():
+        return {"chegaram": 0, "liberados_venda": 0, "negociacao_ml": 0, "descartados": 0, "em_andamento": 0}
+
+    por_conta, por_galpao, total = {}, {}, novo()
+    for s in linhas:
+        if (s.tipo or TIPO_PADRAO) != TIPO_REVERSO or not _no_periodo(s.criado_em, inicio, fim):
+            continue
+        r = s.resultado_reverso or ""
+        if not s.confirmado_por:
+            campo = "em_andamento"
+        elif r == "liberado_venda":
+            campo = "liberados_venda"
+        elif r.startswith("negociacao"):
+            campo = "negociacao_ml"
+        else:
+            campo = "descartados"
+        chave = s.conta_chave or chave_conta(s.conta)
+        alvos = [total, por_conta.setdefault(chave, {"conta": s.conta, **novo()})]
+        if s.galpao:
+            alvos.append(por_galpao.setdefault(s.galpao, {"galpao": s.galpao, "galpao_nome": GALPOES.get(s.galpao, f"Galpão {s.galpao}"), **novo()}))
+        for alvo in alvos:
+            alvo["chegaram"] += 1
+            alvo[campo] += 1
+
+    def com_taxa(d):
+        d["pct_venda"] = round(d["liberados_venda"] * 100 / d["chegaram"]) if d["chegaram"] else 0
+        return d
+
+    return {
+        "total": com_taxa(total),
+        "por_conta": sorted((com_taxa(v) for v in por_conta.values()), key=lambda x: (-x["chegaram"], x["conta"].lower())),
+        "por_galpao": sorted((com_taxa(v) for v in por_galpao.values()), key=lambda x: x["galpao"]),
+    }
+
+
+@router.get("/reversos-resumo")
+def reversos_resumo(
+    de: Optional[str] = None,
+    ate: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _usuario: Usuario = Depends(_supervisao_cancelamento_logado),
+):
+    """Reversos do período (padrão: hoje): quantos chegaram no total, por conta e
+    por galpão, e quantos voltaram pra venda em boas condições. Também devolve
+    quantos chegaram hoje e na semana (últimos 7 dias), que não dependem do período."""
+    try:
+        data_de = date.fromisoformat(de) if de else datetime.now(FUSO_BR).date()
+        data_ate = date.fromisoformat(ate) if ate else data_de
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Datas no formato AAAA-MM-DD.")
+    if data_ate < data_de:
+        raise HTTPException(status_code=422, detail="A data final não pode ser antes da inicial.")
+    if (data_ate - data_de).days > 366:
+        raise HTTPException(status_code=422, detail="Escolha no máximo 1 ano de intervalo.")
+    inicio, fim = _limites_utc_produtividade(data_de, data_ate)
+    hoje_br = datetime.now(FUSO_BR).date()
+    sem_ini, sem_fim = _limites_utc_produtividade(hoje_br - timedelta(days=6), hoje_br)
+    hoje_ini, hoje_fim = _limites_utc_produtividade(hoje_br, hoje_br)
+    menor = min(inicio, sem_ini)
+    maior = max(fim, sem_fim)
+    linhas = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.tipo == TIPO_REVERSO, SolicitacaoCancelamento.excluido_em.is_(None),
+                SolicitacaoCancelamento.criado_em >= menor, SolicitacaoCancelamento.criado_em < maior)
+        .all()
+    )
+    resumo = _agregar_reversos(linhas, inicio, fim)
+    resumo["de"] = data_de.isoformat()
+    resumo["ate"] = data_ate.isoformat()
+    resumo["chegaram_hoje"] = _agregar_reversos(linhas, hoje_ini, hoje_fim)["total"]["chegaram"]
+    resumo["chegaram_semana"] = _agregar_reversos(linhas, sem_ini, sem_fim)["total"]["chegaram"]
+    return resumo
