@@ -23,10 +23,11 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Boolean,
+    LargeBinary,
     UniqueConstraint,
     Index,
 )
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, deferred
 from app.database import Base
 
 
@@ -420,7 +421,11 @@ class SolicitacaoCancelamento(Base):
     # ver app/manuais_storage.py pro mesmo problema resolvido com S3 pros
     # manuais. Foto(s) e link são opcionais e independentes; nulo = não
     # anexado. fotos_base64 nulo ou "[]" = nenhuma foto.
-    fotos_base64 = Column(Text, nullable=True)
+    # deferred=True: as fotos (base64, dezenas de KB cada) só são lidas do banco
+    # quando alguém acessa este campo de propósito (ver GET /{id}/fotos). Sem isso
+    # QUALQUER consulta que traga solicitações também trazia todas as fotos --
+    # em 26/10 isso travou o sistema (memória/banco) depois da entrega das fotos.
+    fotos_base64 = deferred(Column(Text, nullable=True))
     link_evidencia = Column(String, nullable=True)
 
     # --- 26/10: REVERSO (tipo "reverso") -- produto que voltou (devolução,
@@ -459,6 +464,35 @@ class SolicitacaoEvento(Base):
     usuario_nome = Column(String, nullable=True)
     detalhe = Column(Text, nullable=True)
     quando = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class SolicitacaoFoto(Base):
+    """
+    Uma FOTO de uma solicitação (26/10). Antes as fotos ficavam como texto base64
+    dentro da própria solicitação (coluna fotos_base64) e travavam o sistema ao
+    carregar listas. Agora cada foto é uma linha aqui:
+      - miniatura (~5 KB, JPEG): sempre no banco -- o painel mostra só ela;
+      - foto grande: começa no banco (destino="db", coluna dados, binário) e, com o
+        Cloudflare R2 configurado, é movida em segundo plano para o R2
+        (destino="r2", chave_r2) e some da coluna dados. Se o R2 falhar, a foto
+        continua no banco e o sistema tenta de novo -- nunca se perde.
+    Sem FOREIGN KEY de propósito: apagar/limpar nunca é barrado por esta tabela.
+    Fotos antigas (coluna fotos_base64) continuam sendo lidas e são convertidas aos poucos.
+    """
+
+    __tablename__ = "solicitacao_fotos"
+
+    id = Column(Integer, primary_key=True, index=True)
+    solicitacao_id = Column(Integer, nullable=False, index=True)
+    ordem = Column(Integer, nullable=False, default=0)
+    mime = Column(String, nullable=False, default="image/jpeg")
+    tamanho = Column(Integer, nullable=False, default=0)          # bytes da foto grande
+    destino = Column(String, nullable=False, default="db", index=True)  # db | r2
+    chave_r2 = Column(String, nullable=True)
+    # Binários "adiados": só são lidos quando alguém pede a foto (nunca em listas).
+    dados = deferred(Column(LargeBinary, nullable=True))
+    miniatura = deferred(Column(LargeBinary, nullable=True))
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
 
 
 class AtendimentoReputacao(Base):

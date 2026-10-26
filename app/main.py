@@ -1,5 +1,5 @@
 from fastapi import FastAPI, Request, Form
-from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from app.database import Base, engine, SessionLocal, garantir_estrutura_atualizada
@@ -8,7 +8,9 @@ from sqlalchemy import func, or_
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta, ProdutoCadastro
 from app import auth, config
 from app.contas_util import chave_conta
-from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
+from sqlalchemy.orm import defer
+from app.fotos_armazenamento import listar_fotos, obter_bytes, solicitacao_da_foto
+from app.routers.solicitacoes_cancelamento import n_fotos_sql, ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
@@ -138,6 +140,23 @@ async def _iniciar_reforco_vendas() -> None:
     app.state.tarefa_reforco_vendas = asyncio.create_task(loop_reforco_vendas())
     logging.getLogger(__name__).info("Reforço silencioso de vendas iniciado (ciclo contínuo, últimos 2 dias por conta).")
 
+# --- Tarefa em segundo plano: fotos (ver app/fotos_armazenamento.py). A cada ~90 s move
+# as fotos do banco para o Cloudflare R2 (se as variáveis R2_* existirem), converte as
+# fotos antigas e aplica o prazo de guarda (FOTOS_DIAS_GUARDA; 0 = nunca apaga).
+# Desliga com FOTOS_TAREFA_ATIVA=0.
+@app.on_event("startup")
+async def _iniciar_tarefa_fotos() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("FOTOS_TAREFA_ATIVA", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Tarefa de fotos DESLIGADA pela variável de ambiente.")
+        return
+    from app.fotos_armazenamento import loop_fotos, r2_configurado
+    app.state.tarefa_fotos = asyncio.create_task(loop_fotos())
+    logging.getLogger(__name__).info("Tarefa de fotos iniciada (R2 %s).", "LIGADO" if r2_configurado() else "não configurado: fotos ficam no banco")
+
 # --- Middleware de autenticação ---
 # Tudo exige login por padrão, INCLUSIVE os painéis de TV (a TV entra com
 # um usuário do perfil "tv": só visualiza e fica logada 30 dias). As
@@ -217,6 +236,8 @@ _AREAS = {
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
             "/api/solicitacoes-cancelamento/opcoes",
+            "/api/solicitacoes-cancelamento/fotos",   # endereços das fotos de um pedido (sob demanda)
+            "/api/solicitacoes-cancelamento/foto",    # os bytes de uma foto/miniatura
         },
         # (26/10) O galpão só REGISTRA o reverso e acompanha; quem conclui
         # ("voltou para o estoque") é o operador, em /api/solicitacoes-cancelamento/{id}/reverso/concluir.
@@ -393,7 +414,7 @@ async def exigir_login(request: Request, call_next):
     # Qualquer outra rota é bloqueada, mesmo sabendo a URL.
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/dashboard",
-        "/meus-cancelamentos", "/logout",
+        "/meus-cancelamentos", "/meus-cancelamentos/fotos", "/meus-cancelamentos/foto", "/logout",
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
         # "Cadastro", dentro de "Minhas solicitações" -- pedir cadastro de produto novo (15/10).
@@ -960,12 +981,20 @@ def pagina_meus_cancelamentos(request: Request):
         if not _eh_painel_seller(usuario):
             return RedirectResponse("/", status_code=303)
 
-        solicitacoes = (
-            db.query(SolicitacaoCancelamento)
+        # Fotos NÃO são carregadas aqui (a página trazia as fotos de TODAS as
+        # solicitações do seller de uma vez e travava o sistema): só a quantidade;
+        # as fotos vêm ao clicar em "Ver fotos" (GET /meus-cancelamentos/fotos).
+        linhas = (
+            db.query(SolicitacaoCancelamento, n_fotos_sql())
+            .options(defer(SolicitacaoCancelamento.fotos_base64))
             .filter(SolicitacaoCancelamento.conta_chave == chave_conta(usuario.conta_vinculada))
             .order_by(SolicitacaoCancelamento.confirmado_por.is_(None).desc(), SolicitacaoCancelamento.criado_em.desc())
             .all()
         )
+        solicitacoes = []
+        for sol, n in linhas:
+            sol.n_fotos_tmp = int(n or 0)   # atributo só de tela (não é coluna)
+            solicitacoes.append(sol)
         # Cadastro (15/10): mesma conta, sem contar as excluídas -- igual às outras
         # listas da tela "Cadastro", nunca aparece o que foi excluído (ver _admin_supervisor_logado).
         cadastros = (
@@ -980,6 +1009,52 @@ def pagina_meus_cancelamentos(request: Request):
             name="meus-cancelamentos.html",
             context={"usuario": usuario, "solicitacoes": solicitacoes, "cadastros": cadastros, "papel_logado": usuario.papel},
         )
+
+
+def _solicitacao_do_seller(db, request, solicitacao_id):
+    """Solicitação pedida pelo seller logado, SÓ se for da conta vinculada a ele; senão None."""
+    usuario = auth.usuario_atual(request, db)
+    if not _eh_painel_seller(usuario):
+        return False, None
+    sol = (
+        db.query(SolicitacaoCancelamento)
+        .filter(SolicitacaoCancelamento.id == solicitacao_id)
+        .filter(SolicitacaoCancelamento.conta_chave == chave_conta(usuario.conta_vinculada))  # só as dele
+        .first()
+    )
+    return True, sol
+
+
+@app.get("/meus-cancelamentos/fotos")
+def fotos_meus_cancelamentos(request: Request, id: int):
+    """Endereços das fotos de UMA solicitação do próprio seller (carregado ao clicar em "Ver fotos")."""
+    with SessionLocal() as db:
+        eh_seller, sol = _solicitacao_do_seller(db, request, id)
+        if not eh_seller:
+            return JSONResponse({"detail": "Sem permissão."}, status_code=403)
+        if sol is None:
+            return JSONResponse({"detail": "Não encontrada."}, status_code=404)
+        return listar_fotos(db, sol, "/meus-cancelamentos/foto")
+
+
+@app.get("/meus-cancelamentos/foto")
+def foto_meus_cancelamentos(request: Request, id: int, mini: int = 0):
+    """Bytes de UMA foto (ou miniatura) de uma solicitação do próprio seller."""
+    with SessionLocal() as db:
+        sid = solicitacao_da_foto(db, id)
+        eh_seller, sol = _solicitacao_do_seller(db, request, sid if sid is not None else -1)
+        if not eh_seller:
+            return JSONResponse({"detail": "Sem permissão."}, status_code=403)
+        if sol is None:
+            return JSONResponse({"detail": "Não encontrada."}, status_code=404)
+        try:
+            achada = obter_bytes(db, id, miniatura=bool(mini))
+        except RuntimeError as exc:
+            return JSONResponse({"detail": str(exc)}, status_code=502)
+        if achada is None:
+            return JSONResponse({"detail": "Não encontrada."}, status_code=404)
+        mime, dados, _ = achada
+        return Response(content=dados, media_type=mime, headers={"Cache-Control": "private, max-age=31536000, immutable"})
 
 
 def _listar_usuarios_visiveis(db, usuario_logado):
