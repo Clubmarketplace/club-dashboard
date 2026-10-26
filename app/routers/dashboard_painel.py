@@ -253,17 +253,15 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
             .filter(SolicitacaoCancelamento.criado_em >= inicio_utc)
             .all()
         )
-        r = {"chegaram": len(linhas), "em_andamento": 0, "liberados_venda": 0, "negociacao_ml": 0, "descartados": 0}
+        r = {"chegaram": len(linhas), "em_andamento": 0, "liberados_venda": 0, "nao_voltaram": 0}
         for x in linhas:
             res = x.resultado_reverso or ""
             if not x.confirmado_por:
                 r["em_andamento"] += 1
-            elif res == "liberado_venda":
+            elif res == "liberado_venda":      # = voltou para o estoque
                 r["liberados_venda"] += 1
-            elif res.startswith("negociacao"):
-                r["negociacao_ml"] += 1
             else:
-                r["descartados"] += 1
+                r["nao_voltaram"] += 1
         return r
 
     return {

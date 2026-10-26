@@ -40,10 +40,8 @@ from app.database import get_db
 from app.models import Conta, EmpresaPlanejada, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
-# Rota própria do galpão pra liberar o reverso pra venda: fica FORA do prefixo
-# acima de propósito -- o galpão tem acesso só a endereços exatos de
-# /api/solicitacoes-cancelamento (o /confirmar fica de fora: quem pede não confirma).
-router_reverso = APIRouter(prefix="/api/reverso", tags=["reverso"])
+# Galpão tem acesso só a endereços exatos de /api/solicitacoes-cancelamento
+# (o /confirmar e o /reverso/concluir ficam de fora: quem registra não conclui).
 
 # --- Opções (fonte ÚNICA: formulário, filtros e telas leem daqui) ---
 # Pra incluir/renomear: é só mexer nestes dicionários. A chave é o que
@@ -78,21 +76,36 @@ TIPOS_VALIDOS = set(TIPOS)
 # --- Reverso (26/10): produto que voltou (devolução, recusa, chegou quebrado).
 # Mesmo painel e mesmo fluxo (assumir -> concluir); a chave é o que fica no banco.
 TIPO_REVERSO = "reverso"
-SEM_NUMERO_REVERSO = "sem número"  # reverso registrado sem nº de venda (numero_venda é NOT NULL)
+SEM_NUMERO_REVERSO = "sem número"  # só reversos ANTIGOS (hoje o nº da venda é obrigatório)
 ESTADOS_CHEGADA = {
     "bom": "Aparentemente em bom estado",
     "avariado": "Avariado",
     "faltando_peca": "Faltando peça ou acessório",
     "diferente": "Produto diferente do esperado",
 }
+# Como o operador conclui o reverso (decisão de 26/10): o GALPÃO só registra e
+# informa as condições; quem decide se o produto volta ao estoque é o operador
+# do painel (notas fiscais e outras situações).
+# ATENÇÃO: a chave "liberado_venda" é a que já existe no banco (reversos
+# antigos) e passa a significar "Voltou para o estoque" -- só o nome mudou.
+RESULTADO_VOLTOU = "liberado_venda"
 RESULTADOS_REVERSO = {
-    "liberado_venda": "Liberado para venda",
-    "negociacao_ml": "Em negociação com o ML",
+    RESULTADO_VOLTOU: "Voltou para o estoque",
+    # --- Não voltou (motivo obrigatório) ---
+    "avariado": "Não voltou: avariado",
+    "faltando_peca": "Não voltou: faltando peça ou acessório",
+    "diferente": "Não voltou: produto diferente do enviado",
+    "negociacao_ml": "Não voltou: em negociação com o ML",
+    "descartado": "Não voltou: descartado (não vendável)",
+    "outro": "Não voltou: outro motivo",
+    # --- Legados (reversos concluídos antes de 26/10): só leitura ---
     "negociacao_ressarcido": "Negociação com o ML: ressarcido",
     "negociacao_sem_ressarcimento": "Negociação com o ML: sem ressarcimento",
-    "descartado": "Descartado (não vendável)",
 }
-# Checklist que o galpão marca pra liberar o produto pra venda (todos obrigatórios).
+# Motivos que o operador pode escolher quando o produto NÃO volta.
+MOTIVOS_NAO_VOLTOU = ("avariado", "faltando_peca", "diferente", "negociacao_ml", "descartado", "outro")
+# Condições que o GALPÃO informa ao registrar (só informativo -- não libera nada).
+# Dá pra acrescentar itens aqui; reversos antigos só mostram os que existiam.
 CHECKLIST_REVERSO = {
     "caixa": "Caixa original em boas condições",
     "sem_avarias": "Produto sem avarias",
@@ -164,6 +177,8 @@ class ItemCancelamento(BaseModel):
     # Só Reverso: produto (SKU ou nome) e aspecto ao chegar (ESTADOS_CHEGADA).
     produto: Optional[str] = None
     estado_chegada: Optional[str] = None
+    # Só Reverso: condições que o galpão marcou {"caixa": true, ...} -- informativo.
+    checklist: Optional[dict[str, bool]] = None
 
     @field_validator("produto")
     @classmethod
@@ -365,6 +380,7 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "estado_chegada_nome": ESTADOS_CHEGADA.get(s.estado_chegada) if s.estado_chegada else None,
         "resultado_reverso": s.resultado_reverso,
         "resultado_reverso_nome": RESULTADOS_REVERSO.get(s.resultado_reverso) if s.resultado_reverso else None,
+        "voltou_estoque": (s.resultado_reverso == RESULTADO_VOLTOU) if s.resultado_reverso else None,
         "liberado_por": s.liberado_por,
         "liberado_em": s.liberado_em.isoformat() if s.liberado_em else None,
         "checklist": _checklist_de(s),
@@ -398,8 +414,16 @@ def _checklist_de(s: SolicitacaoCancelamento) -> Optional[dict]:
         return None
 
 
+def _checklist_para_gravar(marcados: Optional[dict]) -> Optional[str]:
+    """Condições informadas pelo galpão no registro: guarda TODAS as chaves
+    conhecidas (marcada = true, as outras = false) pra tela mostrar ✓/✗."""
+    if not marcados:
+        return None
+    return json.dumps({k: marcados.get(k) is True for k in CHECKLIST_REVERSO})
+
+
 def itens_do_checklist(checklist_json: Optional[str]) -> list:
-    """Itens do checklist gravado na liberação, já com o nome de cada um:
+    """Condições informadas pelo galpão no registro, já com o nome de cada uma:
     [{"chave", "nome", "ok"}]. Lê só as chaves que existem hoje em
     CHECKLIST_REVERSO -- quando entrarem opções novas, reversos antigos
     simplesmente não mostram o que não existia na época."""
@@ -494,18 +518,11 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     eh_reverso = corpo.tipo == TIPO_REVERSO
     numeros = []
     for i in corpo.itens:
+        # Número da venda é obrigatório em TODOS os tipos (reverso inclusive): sem ele
+        # e sem a conta não dá pra conferir o retorno.
         if not (i.numero_venda or "").strip():
-            # Só o galpão/equipe podem registrar reverso sem nº de venda (nem sempre
-            # sabem); seller e link público informam sempre.
-            if not eh_reverso or origem in ("seller", "publico"):
-                raise HTTPException(status_code=400, detail="Informe o número da venda.")
-            if not (i.produto or i.fotos_base64):
-                raise HTTPException(status_code=400, detail="Reverso: informe o produto (SKU ou nome) ou o número da venda.")
-            numeros.append(SEM_NUMERO_REVERSO)
-            continue
+            raise HTTPException(status_code=400, detail="Informe o número da venda.")
         numeros.append(_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito))
-    if eh_reverso and origem == "logistica" and not all(i.produto or (n != SEM_NUMERO_REVERSO) for i, n in zip(corpo.itens, numeros)):
-        raise HTTPException(status_code=400, detail="Reverso: informe o produto (SKU ou nome).")
     for i in corpo.itens:
         if not eh_reverso and len(i.fotos_base64 or []) > MAX_FOTOS_OUTROS:
             raise HTTPException(status_code=400, detail=f"No máximo {MAX_FOTOS_OUTROS} fotos por venda.")
@@ -514,7 +531,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 
     # --- Aviso de duplicidade (mesma venda + mesma plataforma + mesmo tipo) ---
     # Pedir cancelamento e depois reputação da MESMA venda é normal: não avisa.
-    if not corpo.confirmar_duplicadas and any(n != SEM_NUMERO_REVERSO for n in numeros):
+    if not corpo.confirmar_duplicadas:
         existentes = (
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.plataforma == corpo.plataforma)
@@ -559,6 +576,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
                 produto_titulo=(item.produto if eh_reverso else None),
                 estado_chegada=(item.estado_chegada if eh_reverso else None),
+                checklist_json=_checklist_para_gravar(item.checklist) if eh_reverso else None,
                 fotos_base64=(json.dumps(item.fotos_base64) if item.fotos_base64 else None),
                 link_evidencia=item.link_evidencia,
             )
@@ -580,7 +598,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 
     # Mercado Livre: lê o SKU/produto no pedido DEPOIS de responder, pra o
     # formulário não ficar esperando o ML.
-    ids_ml = [s.id for s in criadas if s.plataforma == "mercado_livre" and s.numero_venda != SEM_NUMERO_REVERSO]
+    ids_ml = [s.id for s in criadas if s.plataforma == "mercado_livre"]
     if ids_ml:
         tarefas.add_task(preencher_produtos_em_segundo_plano, ids_ml)
 
@@ -619,7 +637,8 @@ def listar_opcoes():
     return {
         "tipos": [{"valor": k, "nome": v} for k, v in TIPOS.items()],
         "estados_chegada": [{"valor": k, "nome": v} for k, v in ESTADOS_CHEGADA.items()],
-        "resultados_reverso": [{"valor": k, "nome": v} for k, v in RESULTADOS_REVERSO.items()],
+        "resultados_reverso": [{"valor": k, "nome": RESULTADOS_REVERSO[k]} for k in (RESULTADO_VOLTOU, *MOTIVOS_NAO_VOLTOU)],
+        "motivos_nao_voltou": [{"valor": k, "nome": RESULTADOS_REVERSO[k]} for k in MOTIVOS_NAO_VOLTOU],
         "checklist_reverso": [{"valor": k, "nome": v} for k, v in CHECKLIST_REVERSO.items()],
         "plataformas": [{"valor": k, "nome": v} for k, v in PLATAFORMAS.items()],
         "galpoes": [{"valor": k, "nome": v} for k, v in GALPOES.items()],
@@ -872,23 +891,33 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
 
 
 # ---------------------------------------------------------------------------
-# Reverso: liberar pra venda (galpão, com checklist) e concluir (equipe)
+# Reverso: concluir (SÓ a equipe do painel). O galpão apenas registra.
 # ---------------------------------------------------------------------------
-class LiberarVendaBody(BaseModel):
-    # {"caixa": true, "sem_avarias": true, "acessorios_manuais": true, "testado": true}
-    # -- TODOS obrigatórios: sem o checklist completo não libera (vai pra equipe).
-    checklist: dict[str, bool]
-
-
 class ConcluirReversoBody(BaseModel):
-    resultado: str
+    # True = voltou para o estoque; False = NÃO voltou (aí "motivo" é obrigatório,
+    # e a observação também). Escolha explícita: sem ela o servidor recusa.
+    voltou_estoque: bool
+    motivo: Optional[str] = None
     observacao: Optional[str] = None
+    # Protocolo do ML, SE houver (opcional; vazio = não havia protocolo).
+    protocolo: Optional[str] = None
 
-    @field_validator("resultado")
+    @field_validator("protocolo")
     @classmethod
-    def validar_resultado_reverso(cls, valor: str) -> str:
-        if valor not in RESULTADOS_REVERSO:
-            raise ValueError(f"resultado inválido. Use um de: {', '.join(RESULTADOS_REVERSO)}")
+    def limpar_protocolo_reverso(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        if len(valor) > TAMANHO_MAX_PROTOCOLO:
+            raise ValueError(f"Protocolo muito longo (máx. {TAMANHO_MAX_PROTOCOLO} caracteres).")
+        return valor or None
+
+    @field_validator("motivo")
+    @classmethod
+    def validar_motivo(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in MOTIVOS_NAO_VOLTOU:
+            raise ValueError(f"motivo inválido. Use um de: {', '.join(MOTIVOS_NAO_VOLTOU)}")
         return valor
 
     @field_validator("observacao")
@@ -926,54 +955,36 @@ def _fechar_reverso(s: SolicitacaoCancelamento, usuario, resultado: str, observa
     s.em_atendimento_desde = None
 
 
-@router_reverso.post("/{solicitacao_id}/liberar-venda")
-def liberar_reverso_para_venda(solicitacao_id: int, corpo: LiberarVendaBody, request: Request, db: Session = Depends(get_db)):
-    """
-    O GALPÃO (ou a equipe) conferiu o produto que voltou e o devolve pra
-    venda. Exige o checklist COMPLETO. Quem liberou, dia e hora ficam
-    gravados; o reverso passa a "concluído / liberado para venda" e o seller
-    vê isso no painel dele. Não mexe em estoque (só informa).
-    """
-    usuario = auth.usuario_atual(request, db)
-    if usuario is None:
-        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
-    if usuario.papel != "logistica" and not _pode_tratar_solicitacao(usuario):
-        raise HTTPException(status_code=403, detail="Seu perfil não pode liberar produtos para venda.")
-    s = _reverso_aberto_ou_erro(solicitacao_id, db)
-    faltando = [nome for chave, nome in CHECKLIST_REVERSO.items() if corpo.checklist.get(chave) is not True]
-    if faltando:
-        raise HTTPException(status_code=400, detail="Para liberar, marque todo o checklist. Falta: " + ", ".join(faltando) + ".")
-
-    _fechar_reverso(s, usuario, "liberado_venda", None)
-    s.liberado_por = usuario.nome_exibicao
-    s.liberado_em = s.confirmado_em
-    s.checklist_json = json.dumps({chave: True for chave in CHECKLIST_REVERSO})
-    registrar_evento(db, s.id, "liberou_venda", usuario=usuario, detalhe="Checklist completo: " + ", ".join(CHECKLIST_REVERSO.values()))
-    db.commit()
-    db.refresh(s)
-    return {"status": "liberado_venda", "id": s.id, "liberado_por": s.liberado_por, "liberado_em": s.liberado_em.isoformat()}
-
-
 @router.post("/{solicitacao_id}/reverso/concluir")
 def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: Request, db: Session = Depends(get_db)):
-    """A equipe do painel conclui o reverso informando o resultado do tratamento
-    (liberado, negociação com o ML e seu desfecho, ou descartado). Quem concluiu
-    é sempre o usuário logado."""
+    """A equipe do painel conclui o reverso dizendo se o produto VOLTOU ou NÃO
+    para o estoque (e por quê). Quem concluiu é sempre o usuário logado.
+    O galpão não tem acesso a esta rota."""
     usuario = _operador_que_confirma(request, db)
     s = _reverso_aberto_ou_erro(solicitacao_id, db)
+    if corpo.voltou_estoque:
+        resultado = RESULTADO_VOLTOU
+    else:
+        if not corpo.motivo:
+            raise HTTPException(status_code=400, detail="Escolha o motivo de o produto não ter voltado para o estoque.")
+        if not corpo.observacao:
+            raise HTTPException(status_code=400, detail="Explique na observação por que o produto não voltou para o estoque.")
+        resultado = corpo.motivo
     atual = _dados_atendimento(s)
     if atual["em_atendimento_por_id"] != usuario.id:
         registrar_evento(db, s.id, "assumiu", usuario=usuario,
                          detalhe=(f"no lugar de {atual['em_atendimento_por']}" if atual["em_atendimento_por"] else "ao concluir"))
-    _fechar_reverso(s, usuario, corpo.resultado, corpo.observacao)
-    if corpo.resultado == "liberado_venda":
+    _fechar_reverso(s, usuario, resultado, corpo.observacao)
+    s.protocolo = corpo.protocolo   # None = sem protocolo informado (não usar "" aqui: "" significa "sem protocolo" nos outros tipos)
+    if corpo.voltou_estoque:
         s.liberado_por = usuario.nome_exibicao
         s.liberado_em = s.confirmado_em
     registrar_evento(db, s.id, "concluiu_reverso", usuario=usuario,
-                     detalhe=RESULTADOS_REVERSO[corpo.resultado] + (f" · {corpo.observacao}" if corpo.observacao else ""))
+                     detalhe=RESULTADOS_REVERSO[resultado] + (f" · Protocolo {corpo.protocolo}" if corpo.protocolo else "") + (f" · {corpo.observacao}" if corpo.observacao else ""))
     db.commit()
     db.refresh(s)
     return {"status": "concluido", "id": s.id, "resultado_reverso": s.resultado_reverso,
+            "voltou_estoque": corpo.voltou_estoque,
             "confirmado_por": s.confirmado_por, "confirmado_em": s.confirmado_em.isoformat()}
 
 
@@ -1083,7 +1094,7 @@ ROTULO_EVENTO = {
     "liberou": "Liberou o atendimento",
     "confirmou": "Confirmou o cancelamento",
     "confirmou_automatico": "Cancelamento confirmado automaticamente",
-    "liberou_venda": "Conferiu e liberou o produto para venda (galpão)",
+    "liberou_venda": "Liberou o produto para venda (registro antigo)",
     "concluiu_reverso": "Concluiu o reverso",
 }
 
@@ -1771,13 +1782,14 @@ def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
     """
     Números do Reverso no período [inicio, fim) (UTC). Função pura.
       - chegaram: reversos registrados no período (por data de chegada);
-      - dos que chegaram: liberados pra venda (boas condições), em negociação
+      - dos que chegaram: voltaram pro estoque, não voltaram (com motivo)
         com o ML / resolvidos com o ML, descartados e ainda em andamento;
       - agrupado por conta e por galpão, mais o total.
     "% voltou pra venda" = liberados / chegaram.
     """
     def novo():
-        return {"chegaram": 0, "liberados_venda": 0, "negociacao_ml": 0, "descartados": 0, "em_andamento": 0}
+        return {"chegaram": 0, "liberados_venda": 0, "nao_voltaram": 0, "avariados": 0,
+                "negociacao_ml": 0, "descartados": 0, "em_andamento": 0}
 
     por_conta, por_galpao, total = {}, {}, novo()
     for s in linhas:
@@ -1786,12 +1798,10 @@ def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
         r = s.resultado_reverso or ""
         if not s.confirmado_por:
             campo = "em_andamento"
-        elif r == "liberado_venda":
-            campo = "liberados_venda"
-        elif r.startswith("negociacao"):
-            campo = "negociacao_ml"
+        elif r == RESULTADO_VOLTOU:
+            campo = "liberados_venda"   # = voltou para o estoque
         else:
-            campo = "descartados"
+            campo = "nao_voltaram"
         chave = s.conta_chave or chave_conta(s.conta)
         alvos = [total, por_conta.setdefault(chave, {"conta": s.conta, **novo()})]
         if s.galpao:
@@ -1799,6 +1809,14 @@ def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
         for alvo in alvos:
             alvo["chegaram"] += 1
             alvo[campo] += 1
+            # Detalhe dos que NÃO voltaram (os motivos mais comuns)
+            if campo == "nao_voltaram":
+                if r == "avariado":
+                    alvo["avariados"] += 1
+                elif r.startswith("negociacao"):
+                    alvo["negociacao_ml"] += 1
+                elif r == "descartado":
+                    alvo["descartados"] += 1
 
     def com_taxa(d):
         d["pct_venda"] = round(d["liberados_venda"] * 100 / d["chegaram"]) if d["chegaram"] else 0
@@ -1819,7 +1837,7 @@ def reversos_resumo(
     _usuario: Usuario = Depends(_supervisao_cancelamento_logado),
 ):
     """Reversos do período (padrão: hoje): quantos chegaram no total, por conta e
-    por galpão, e quantos voltaram pra venda em boas condições. Também devolve
+    por galpão, e quantos voltaram pro estoque e quantos não. Também devolve
     quantos chegaram hoje e na semana (últimos 7 dias), que não dependem do período."""
     try:
         data_de = date.fromisoformat(de) if de else datetime.now(FUSO_BR).date()
