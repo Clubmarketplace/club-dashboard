@@ -128,7 +128,7 @@
     fundo.style.cssText = "position:fixed;inset:0;z-index:2000;background:rgba(10,14,18,.92);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;gap:12px;";
     const video = document.createElement("video");
     video.autoplay = true; video.playsInline = true; video.muted = true; video.srcObject = stream;
-    video.style.cssText = "max-width:100%;max-height:calc(100% - 130px);border-radius:10px;background:#000;";
+    video.style.cssText = "max-width:100%;min-height:0;max-height:calc(100% - 130px);border-radius:10px;background:#000;";
     const aviso = document.createElement("div");
     aviso.style.cssText = "color:#fff;font:600 14px system-ui,sans-serif;min-height:20px;";
     aviso.textContent = "Aponte para o produto e clique em Capturar";
@@ -137,8 +137,14 @@
     const estilo = "border:none;border-radius:10px;padding:12px 22px;font:600 15px system-ui,sans-serif;cursor:pointer;";
     const cap = document.createElement("button");
     cap.type = "button"; cap.textContent = "📷 Capturar"; cap.style.cssText = estilo + "background:#0f766e;color:#fff;";
+    // "Cancelar" enquanto nenhuma foto foi tirada; vira "Concluir" depois da primeira
+    // (as fotos já tiradas ficam na solicitação, então só fecha a câmera).
     const fim = document.createElement("button");
-    fim.type = "button"; fim.textContent = "Concluir"; fim.style.cssText = estilo + "background:#fff;color:#17202a;";
+    fim.type = "button"; fim.textContent = "✕ Cancelar"; fim.style.cssText = estilo + "background:#fff;color:#17202a;";
+    // X fixo no canto: sempre à vista, mesmo em tela pequena ou se o vídeo não carregar.
+    const x = document.createElement("button");
+    x.type = "button"; x.textContent = "✕"; x.setAttribute("aria-label", "Fechar câmera");
+    x.style.cssText = "position:absolute;top:12px;right:12px;width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.92);color:#17202a;font:700 20px system-ui,sans-serif;cursor:pointer;";
     let n = 0;
     const fechar = () => { document.removeEventListener("keydown", aoTeclar); stream.getTracks().forEach((tr) => tr.stop()); fundo.remove(); };
     const aoTeclar = (e) => { if (e.key === "Escape") fechar(); };
@@ -151,14 +157,19 @@
       cap.disabled = true;
       c.toBlob(async (blob) => {
         try {
-          if (blob && opcoes.aoCapturar) { await opcoes.aoCapturar(new File([blob], "camera.jpg", { type: "image/jpeg" })); n++; aviso.textContent = `✓ ${n} foto(s) adicionada(s). Capture outra ou clique em Concluir.`; }
+          if (blob && opcoes.aoCapturar) { await opcoes.aoCapturar(new File([blob], "camera.jpg", { type: "image/jpeg" })); n++; fim.textContent = "✓ Concluir"; aviso.textContent = `✓ ${n} foto(s) adicionada(s). Capture outra ou clique em Concluir.`; }
         } finally { cap.disabled = false; }
       }, "image/jpeg", 0.92);
     });
     fim.addEventListener("click", fechar);
+    x.addEventListener("click", fechar);
+    // Clicar no fundo escuro (fora do vídeo e dos botões) também fecha.
+    fundo.addEventListener("click", (e) => { if (e.target === fundo) fechar(); });
+    // Se a câmera for desligada/desconectada por fora, não deixa a tela presa.
+    stream.getTracks().forEach((tr) => tr.addEventListener("ended", () => { if (fundo.isConnected) fechar(); }));
     document.addEventListener("keydown", aoTeclar);
     barra.append(cap, fim);
-    fundo.append(video, aviso, barra);
+    fundo.append(x, video, aviso, barra);
     document.body.appendChild(fundo);
     return true;
   };
