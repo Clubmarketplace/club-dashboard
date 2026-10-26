@@ -24,7 +24,8 @@
  *     container, onChange,              // onChange: recarrega a lista
  *     mostrarAtendimento: true,         // abas Todos / Em atendimento / Meus
  *     mostrarOrigem: true,              // "origem" dentro de Mais filtros
- *     mostrarTipo: true,                // "Tipo" (Cancelamento / Reputação) -- só na tela interna
+ *     mostrarTipo: true,                // "Tipo" (Cancelamento / Reputação / Reverso)
+ *     tiposPermitidos: ["cancelamento", "reverso"], // opcional: limita as opções do "Tipo" (tela do galpão)
  *     ordem: "espera",                  // "espera" (pendentes primeiro) | "recentes"
  *     acaoDireita: elemento,            // ex.: botão "Gerar relatório"
  *   });
@@ -117,7 +118,7 @@
   const opcoes = (lista, atual) => lista.map(([v, n]) => `<option value="${escapar(v)}"${String(atual) === String(v) ? " selected" : ""}>${escapar(n)}</option>`).join("");
   const dataCurta = (iso) => { if (!iso) return ""; const [a, m, d] = iso.split("-"); return `${d}/${m}/${a.slice(2)}`; };
 
-  window.criarBarraFiltros = function ({ container, onChange, mostrarAtendimento = false, mostrarOrigem = false, mostrarTipo = false, ordem = "recentes", acaoDireita = null, titulo = "Filtros" }) {
+  window.criarBarraFiltros = function ({ container, onChange, mostrarAtendimento = false, mostrarOrigem = false, mostrarTipo = false, tiposPermitidos = null, ordem = "recentes", acaoDireita = null, titulo = "Filtros" }) {
     injetarEstilo();
     const ABAS = [["todos", "Todos"], ["atendimento", "Em atendimento"], ["meus", "Meus"]];
 
@@ -169,6 +170,8 @@
         </div>
         <div class="bf2-chips" data-el="chips"></div>
       </div>`;
+    // tiposPermitidos: a tela do galpão só mostra Cancelamento e Reverso (nunca Reputação).
+    const tiposVisiveis = () => (Array.isArray(tiposPermitidos) ? TIPOS.filter(([v]) => tiposPermitidos.includes(v)) : TIPOS);
     const el = (n) => container.querySelector(`[data-el="${n}"]`);
     const campo = (n) => container.querySelector(`[data-f="${n}"]`);
     if (acaoDireita) el("acoes").appendChild(acaoDireita);
@@ -185,7 +188,7 @@
       campo("conta").innerHTML = opcoes([["", "Todas as contas"]].concat(lista.map((c) => [c, c])), contaAtual);
       campo("galpao").innerHTML = opcoes([["", "Todos"]].concat(GALPOES), rascunho.galpao);
       campo("plataforma").innerHTML = opcoes([["", "Todas"]].concat(PLATAFORMAS), rascunho.plataforma);
-      if (mostrarTipo) campo("tipo").innerHTML = opcoes([["", "Todos"]].concat(TIPOS), rascunho.tipo);
+      if (mostrarTipo) campo("tipo").innerHTML = opcoes([["", "Todos"]].concat(tiposVisiveis()), rascunho.tipo);
     }
 
     function pendentes() { return CAMPOS_FORM.filter((k) => String(rascunho[k] || "") !== String(aplicado[k] || "")).length; }
