@@ -282,7 +282,7 @@ _PAGINA_INICIAL_POR_PAPEL = {
     "seller": "/meus-cancelamentos",
     "suporte": "/vendas",
     "atendente": "/pre-venda",
-    "logistica": "/solicitar-cancelamento",
+    "logistica": "/painel-galpao",
     "tv": "/painel-tv/fila",
     "cadastro": "/cadastro",
 }
