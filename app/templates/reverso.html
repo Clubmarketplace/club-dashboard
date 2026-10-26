@@ -26,7 +26,12 @@
     .campo textarea { min-height:70px; resize:vertical; }
     .plats { display:flex; gap:8px; flex-wrap:wrap; }
     .plat { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:999px; padding:8px 14px; font:inherit; font-size:13px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; }
+    /* Cada plataforma selecionada usa a cor dela (mesmas cores da tela Nova solicitação) */
     .plat[aria-pressed=true] { border-color:var(--rev); background:var(--rev); color:#fff; }
+    .plat[data-v=mercado_livre][aria-pressed=true] { border-color:#ffe600; background:#ffe600; color:#1a1206; }
+    .plat[data-v=shopee][aria-pressed=true] { border-color:#ee4d2d; background:#ee4d2d; color:#fff; }
+    .plat[data-v=magalu][aria-pressed=true] { border-color:#0086ff; background:#0086ff; color:#fff; }
+    .plat[data-v=tiktok_shop][aria-pressed=true] { border-color:#000; background:#000; color:#fe2c55; }
     .fotos { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; margin:6px 0 14px; }
     .slot { position:relative; aspect-ratio:1; border:2px dashed var(--cmx-borda); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; color:var(--cmx-texto-suave); font-size:12px; overflow:hidden; }
     .slot .mais { font-size:26px; line-height:1; color:var(--rev); }
