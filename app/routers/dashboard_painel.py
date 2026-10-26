@@ -11,7 +11,7 @@ Mesmo padrão de autenticação/isolamento do resto do painel do seller
 from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app.contas_util import chave_conta
 from app.database import get_db
@@ -248,6 +248,7 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
         liberados pra venda / resolvidos com o ML / descartados."""
         linhas = (
             db.query(SolicitacaoCancelamento)
+            .options(defer(SolicitacaoCancelamento.fotos_base64))  # só conta: não carrega as fotos
             .filter(SolicitacaoCancelamento.conta_chave == chave)
             .filter(SolicitacaoCancelamento.tipo == "reverso")
             .filter(SolicitacaoCancelamento.criado_em >= inicio_utc)

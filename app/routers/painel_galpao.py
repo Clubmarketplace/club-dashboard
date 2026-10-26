@@ -22,7 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, defer
 
 from app import auth
 from app.database import get_db
@@ -67,6 +67,9 @@ def _registros(db: Session, de: date, ate: date, galpao: Optional[int]):
     inicio, fim = _limites_utc_produtividade(de, ate)
     consulta = (
         db.query(SolicitacaoCancelamento)
+        # Fotos (base64, até ~800 KB cada) NÃO são lidas: o Dashboard só conta e lista
+        # textos. Carregá-las pesava a memória/banco e derrubava o sistema (26/10).
+        .options(defer(SolicitacaoCancelamento.fotos_base64))
         .filter(SolicitacaoCancelamento.origem == "logistica")
         .filter(SolicitacaoCancelamento.excluido_em.is_(None))
         .filter(or_(SolicitacaoCancelamento.tipo == TIPO_PADRAO, SolicitacaoCancelamento.tipo == TIPO_REVERSO,

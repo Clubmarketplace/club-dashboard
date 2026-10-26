@@ -27,16 +27,17 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from pydantic import BaseModel, field_validator
-from sqlalchemy import and_, case, or_, update
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, case, func, or_, select, update
+from sqlalchemy.orm import Session, defer
 
 from app import auth
 from app.cancelamento_apoio import preencher_produtos_em_segundo_plano, registrar_evento
 from app.contas_util import chave_conta, limpar_espacos, nome_exibicao_novo, sufixo_de_plataforma
 from app.database import get_db
+from app.fotos_armazenamento import TETO_TOTAL_CHARS, contar_fotos, listar_fotos, obter_bytes, salvar_fotos, solicitacao_da_foto
 from app.models import Conta, EmpresaPlanejada, SolicitacaoCancelamento, SolicitacaoEvento, Usuario
 
 router = APIRouter(prefix="/api/solicitacoes-cancelamento", tags=["solicitacoes-cancelamento"])
@@ -117,6 +118,7 @@ MAX_FOTOS_REVERSO = 10
 # static/fotos.js); isto só impede que algo fora do padrão encha o banco.
 # 800 mil caracteres de base64 = ~600 KB de imagem.
 MAX_CHARS_FOTO = 800_000
+_RE_BASE64 = re.compile(r"[A-Za-z0-9+/=\s]*")
 MAX_FOTOS_OUTROS = 5
 
 
@@ -230,11 +232,17 @@ class ItemCancelamento(BaseModel):
             foto = (foto or "").strip()
             if not foto:
                 continue
-            if not foto.startswith("data:image/"):
+            if not foto.startswith("data:image/") or ";base64," not in foto[:80]:
+                raise ValueError("Foto inválida.")
+            # só caracteres de base64 (barra foto corrompida ANTES de gravar; erro 4xx, não 500)
+            carga = foto.split(";base64,", 1)[1]
+            if not _RE_BASE64.fullmatch(carga) or len(carga.strip()) % 4 == 1:   # 1 sobrando = base64 impossível
                 raise ValueError("Foto inválida.")
             if len(foto) > MAX_CHARS_FOTO:
                 raise ValueError("Foto muito grande. Tente de novo (a foto é reduzida automaticamente).")
             fotos.append(foto)
+        if sum(len(f) for f in fotos) > TETO_TOTAL_CHARS:
+            raise ValueError("Fotos demais de uma vez. Envie menos fotos ou tente de novo.")
         return fotos or None
 
     @field_validator("link_evidencia")
@@ -346,7 +354,29 @@ def _mapa_contas_conhecidas(db: Session) -> dict[str, str]:
     return mapa
 
 
-def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) -> dict:
+def n_fotos_sql():
+    """
+    Quantidade de fotos calculada NO BANCO, sem ler nenhuma foto:
+      (linhas em solicitacao_fotos desta solicitação)  +  (fotos antigas, coluna fotos_base64).
+    Legado: a coluna guarda um JSON ["data:...", "data:..."]; o base64 nunca contém aspas,
+    então cada foto tem exatamente 2 aspas: n = (total de aspas) / 2. Funciona igual no
+    Postgres e no SQLite. Usado nas LISTAS (que não carregam fotos -- ver GET /fotos).
+    """
+    from app.models import SolicitacaoFoto  # import local: evita ciclo na carga
+    col = SolicitacaoCancelamento.fotos_base64
+    aspas = func.length(col) - func.length(func.replace(col, '"', ""))
+    legado = case((or_(col.is_(None), col == "", col == "[]"), 0), else_=aspas / 2)
+    novas = (select(func.count(SolicitacaoFoto.id))
+             .where(SolicitacaoFoto.solicitacao_id == SolicitacaoCancelamento.id)
+             .correlate(SolicitacaoCancelamento).scalar_subquery())
+    return novas + legado
+
+
+def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None,
+                com_fotos: bool = False, n_fotos: Optional[int] = None) -> dict:
+    """com_fotos=False: usado nas listas -- NÃO toca em fotos_base64 (a coluna fica
+    "adiada" na consulta) e devolve só n_fotos; as fotos vêm sob demanda por
+    GET /api/solicitacoes-cancelamento/{id}/fotos."""
     chave = s.conta_chave or chave_conta(s.conta)
     tipo = s.tipo or TIPO_PADRAO
     return {
@@ -375,7 +405,8 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None) 
         "produto_titulo": s.produto_titulo,
         "assumido_primeiro_por": s.assumido_primeiro_por,
         "assumido_primeiro_em": s.assumido_primeiro_em.isoformat() if s.assumido_primeiro_em else None,
-        "fotos_base64": _fotos_de(s),
+        "fotos_base64": _fotos_de(s) if com_fotos else [],   # só fotos ANTIGAS; as novas vêm por GET /fotos
+        "n_fotos": (len(_fotos_de(s)) if com_fotos else int(n_fotos or 0)),
         "link_evidencia": s.link_evidencia,
         # Reverso (nulos nos outros tipos)
         "estado_chegada": s.estado_chegada,
@@ -579,12 +610,16 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 produto_titulo=(item.produto if eh_reverso else None),
                 estado_chegada=(item.estado_chegada if eh_reverso else None),
                 checklist_json=_checklist_para_gravar(item.checklist) if eh_reverso else None,
-                fotos_base64=(json.dumps(item.fotos_base64) if item.fotos_base64 else None),
                 link_evidencia=item.link_evidencia,
             )
             db.add(solicitacao)
             criadas.append(solicitacao)
         db.flush()  # gera os ids, pra registrar o histórico na mesma transação
+        # Fotos: uma linha por foto na tabela solicitacao_fotos (miniatura + foto grande).
+        # Nascem no banco; o envio ao R2 é feito depois, em segundo plano.
+        for s_, item_ in zip(criadas, corpo.itens):
+            if item_.fotos_base64:
+                salvar_fotos(db, s_.id, item_.fotos_base64)
         rotulo_origem = {"seller": "Seller", "logistica": GALPOES.get(galpao, "Galpão"), "equipe": "Equipe",
                          "publico": "Link público"}.get(origem, origem)
         for s in criadas:
@@ -594,6 +629,9 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         db.commit()
         for s in criadas:
             db.refresh(s)
+    except ValueError as exc:   # foto que não decodifica: erro do envio, não do sistema
+        db.rollback()
+        raise HTTPException(status_code=400, detail="Uma das fotos está inválida. Tire a foto de novo.") from exc
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail="Não foi possível registrar a solicitação. Tente de novo.") from exc
@@ -624,13 +662,14 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 @router.get("")
 def listar_solicitacoes(db: Session = Depends(get_db), limite: int = 500):
     """Lista simples dos pedidos mais recentes (mantida por compatibilidade)."""
-    solicitacoes = (
-        db.query(SolicitacaoCancelamento)
+    linhas = (
+        db.query(SolicitacaoCancelamento, n_fotos_sql())
+        .options(defer(SolicitacaoCancelamento.fotos_base64))  # lista não carrega fotos
         .order_by(SolicitacaoCancelamento.criado_em.desc())
         .limit(min(max(limite, 1), 2000))
         .all()
     )
-    return [_serializar(s) for s in solicitacoes]
+    return [_serializar(s, com_fotos=False, n_fotos=n) for s, n in linhas]
 
 
 @router.get("/opcoes")
@@ -779,8 +818,13 @@ def buscar_solicitacoes(
         )
     else:
         ordenacao = (SolicitacaoCancelamento.criado_em.desc(),)
-    itens = (
-        consulta.order_by(*ordenacao)
+    # As fotos NÃO vêm na lista (26/10: carregar até 500 linhas com 10 fotos cada,
+    # a cada atualização do painel, travava o sistema). Vem só a quantidade;
+    # as fotos são buscadas ao clicar em "📎 Fotos" (GET /{id}/fotos).
+    linhas = (
+        consulta.options(defer(SolicitacaoCancelamento.fotos_base64))
+        .add_columns(n_fotos_sql())
+        .order_by(*ordenacao)
         .offset((pagina - 1) * por_pagina)
         .limit(por_pagina)
         .all()
@@ -788,7 +832,7 @@ def buscar_solicitacoes(
 
     mapa_contas = _mapa_contas_conhecidas(db)
     return {
-        "itens": [_serializar(s, mapa_contas) for s in itens],
+        "itens": [_serializar(s, mapa_contas, com_fotos=False, n_fotos=n) for s, n in linhas],
         "contadores": {"total": total, "confirmados": confirmados, "pendentes": total - confirmados},
         "total_filtrado": total_filtrado,
         "pagina": pagina,
@@ -1144,6 +1188,55 @@ def tempos_solicitacao(solicitacao_id: int, request: Request, db: Session = Depe
     return _tempo_por_operador(solicitacao, eventos)
 
 
+def _solicitacao_visivel(db: Session, request: Request, solicitacao_id: int) -> SolicitacaoCancelamento:
+    """Controle de acesso das fotos (igual ao das listas): precisa estar logado; a logística
+    só vê cancelamento e reverso. 401/404/403 conforme o caso."""
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if s is None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada.")
+    if usuario.papel == "logistica" and (s.tipo or TIPO_PADRAO) not in (TIPO_PADRAO, TIPO_REVERSO):
+        raise HTTPException(status_code=403, detail="Sem permissão para esta solicitação.")
+    return s
+
+
+@router.get("/fotos")
+def fotos_da_solicitacao(id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    GET /api/solicitacoes-cancelamento/fotos?id=N  (endereço exato: o perfil
+    logística só acessa endereços exatos, ver _AREAS em app/main.py)
+    Endereços das fotos de UMA solicitação: {"fotos": [...grandes], "minis": [...miniaturas]}.
+    Buscado quando alguém abre um pedido/clica em "📎 Fotos". As listas não carregam fotos
+    (só a quantidade, n_fotos) -- carregar tudo travava o sistema. Não lê os binários.
+    """
+    s = _solicitacao_visivel(db, request, id)
+    return listar_fotos(db, s, "/api/solicitacoes-cancelamento/foto")
+
+
+@router.get("/foto")
+def foto_da_solicitacao(id: int, request: Request, mini: int = 0, db: Session = Depends(get_db)):
+    """
+    GET /api/solicitacoes-cancelamento/foto?id=<id da foto>[&mini=1]  -- os bytes de UMA foto
+    (ou da miniatura). Mesmo controle de acesso das listas. O navegador guarda em cache
+    (a foto nunca muda), então abrir de novo o mesmo reverso não baixa nada.
+    """
+    sid = solicitacao_da_foto(db, id)
+    if sid is None:
+        raise HTTPException(status_code=404, detail="Foto não encontrada.")
+    _solicitacao_visivel(db, request, sid)
+    try:
+        achada = obter_bytes(db, id, miniatura=bool(mini))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    if achada is None:
+        raise HTTPException(status_code=404, detail="Foto não encontrada.")
+    mime, dados, _ = achada
+    return Response(content=dados, media_type=mime,
+                    headers={"Cache-Control": "private, max-age=31536000, immutable"})
+
+
 @router.get("/{solicitacao_id}/historico")
 def historico_solicitacao(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
     """Linha do tempo da solicitação (quem fez o quê e quando), da mais antiga pra mais nova."""
@@ -1207,7 +1300,7 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         "confirmou": confirmou,
         "situacao": situacao,
         "mensagem": mensagem,
-        "solicitacao": _serializar(solicitacao),
+        "solicitacao": _serializar(solicitacao, n_fotos=contar_fotos(db, solicitacao.id)),
     }
 
 
@@ -1286,7 +1379,7 @@ def relatorio_diario(data: Optional[str] = None, db: Session = Depends(get_db)):
         "Confirmado em", "Resultado (reputação)", "Protocolo",
     ])
     for s in tratadas_no_dia:
-        info = _serializar(s, mapa_contas)
+        info = _serializar(s, mapa_contas, com_fotos=False)  # relatório não usa fotos
         detalhe.append([
             info["conta_nome"],
             info["plataforma_nome"],
@@ -1858,6 +1951,7 @@ def reversos_resumo(
     maior = max(fim, sem_fim)
     linhas = (
         db.query(SolicitacaoCancelamento)
+        .options(defer(SolicitacaoCancelamento.fotos_base64))  # só agrega números: não carrega as fotos
         .filter(SolicitacaoCancelamento.tipo == TIPO_REVERSO, SolicitacaoCancelamento.excluido_em.is_(None),
                 SolicitacaoCancelamento.criado_em >= menor, SolicitacaoCancelamento.criado_em < maior)
         .all()
