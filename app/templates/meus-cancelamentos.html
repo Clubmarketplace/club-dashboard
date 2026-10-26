@@ -159,20 +159,23 @@
               {% if reverso %}
                 {% if s.confirmado_por %}
                   {% if s.resultado_reverso == "liberado_venda" %}
-                  <span class="status-confirmado">✓ Liberado para venda por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
-                  {% set itens_ck = s.checklist_json | checklist_itens %}
-                  {% if itens_ck %}<div class="rev-detalhe">Conferido pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
+                  <span class="status-confirmado">✓ Voltou para o estoque · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% else %}
-                  <span class="status-confirmado">✓ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Concluído") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  <span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Não voltou para o estoque") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% endif %}
+
+                  {% if s.protocolo %}<div class="rev-detalhe">Protocolo: <b>{{ s.protocolo }}</b></div>{% endif %}
                   {% if s.observacao_resultado %}<div class="rev-detalhe">{{ s.observacao_resultado }}</div>{% endif %}
                 {% elif s.em_atendimento_por_id %}
                 <span class="status-pendente">Em tratamento por {{ s.em_atendimento_por }}</span>
                 {% elif s.origem == "logistica" %}
-                <span class="status-pendente">Recebido no galpão, em conferência</span>
+                <span class="status-pendente">Recebido no galpão, aguardando a equipe conferir</span>
                 {% else %}
                 <span class="status-pendente">Aguardando a equipe</span>
                 {% endif %}
+                {# condições que o galpão marcou ao registrar (aparecem em qualquer fase) #}
+                {% set itens_ck = s.checklist_json | checklist_itens %}
+                {% if itens_ck %}<div class="rev-detalhe">Condições informadas pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
               {% elif s.confirmado_por %}
               <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
               {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>

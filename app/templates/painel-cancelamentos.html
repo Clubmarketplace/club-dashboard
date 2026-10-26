@@ -32,8 +32,13 @@
     .tp-reverso { background:#d1f0eb; color:#0b5d56; }
     .sl-row.rev { box-shadow:inset 5px 0 0 #0f766e; background:#f0faf8 !important; }
     .sl-row.rev:hover { background:#e3f5f2 !important; }
-    .sl-pill.res-ok { background:#dff5e9; color:#0c6b44; } .sl-pill.res-ml { background:#fff0d6; color:#8a4f00; } .sl-pill.res-nao { background:#eceff2; color:#46525e; }
-    .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; }
+    .sl-pill.res-ok { background:#dff5e9; color:#0c6b44; } .sl-pill.res-ml { background:#fff0d6; color:#8a4f00; } .sl-pill.res-nao { background:#fde8e8; color:#9b1c1c; }
+    .rev-opcao { display:flex; align-items:flex-start; gap:10px; padding:12px 14px; border:1.5px solid var(--cmx-borda); border-radius:10px; margin:8px 0; cursor:pointer; font-size:15px; }
+    .rev-opcao input { margin-top:3px; width:18px; height:18px; flex:none; }
+    .rev-opcao:has(input:checked) { border-color:#0f766e; background:#f0faf8; }
+    .rev-opcao.nao:has(input:checked) { border-color:#c24141; background:#fff5f5; }
+    .rev-info { background:#f0faf8; border:1px solid #bfe6df; border-radius:10px; padding:10px 12px; font-size:13.5px; margin:8px 0 12px; }
+    .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; } .st-nao { background:#fde8e8; color:#9b1c1c; }
 
     /* Aqui a barra de filtros "cola" na lista, formando um cartão só */
     #barra-filtros .bf2 { border-radius:14px 14px 0 0; border-bottom:none; margin-bottom:0; }
@@ -246,17 +251,21 @@
     <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="rev-titulo">
       <h3 id="rev-titulo">Concluir reverso</h3>
       <p class="desc" id="rev-detalhe"></p>
-      <label class="t" for="rev-resultado">Resultado do tratamento</label>
-      <select id="rev-resultado">
-        <option value="">Selecione…</option>
-        <option value="liberado_venda">Liberado para venda</option>
-        <option value="negociacao_ml">Em negociação com o ML</option>
-        <option value="negociacao_ressarcido">Negociação com o ML: ressarcido</option>
-        <option value="negociacao_sem_ressarcimento">Negociação com o ML: sem ressarcimento</option>
-        <option value="descartado">Descartado (não vendável)</option>
-      </select>
-      <label class="t" for="rev-obs">Observação (opcional, o seller vê)</label>
-      <input type="text" id="rev-obs" maxlength="500" placeholder="Ex.: ML ressarciu em 3 dias" autocomplete="off" />
+      <div class="rev-info" id="rev-info"></div>
+      <label class="t">O produto voltou para o estoque?</label>
+      <label class="rev-opcao"><input type="radio" name="rev-voltou" value="sim" /><span><b>Sim, voltou para o estoque</b><br /><span class="sl-sub">Conferi e está como o galpão informou.</span></span></label>
+      <label class="rev-opcao nao"><input type="radio" name="rev-voltou" value="nao" /><span><b>Não voltou</b><br /><span class="sl-sub">Avariado, faltando peça, em negociação etc.</span></span></label>
+      <div id="rev-nao-bloco" style="display:none">
+        <label class="t" for="rev-motivo">Motivo de não ter voltado</label>
+        <select id="rev-motivo">
+          <option value="">Selecione…</option>
+          {% for chave in MOTIVOS_NAO_VOLTOU %}<option value="{{ chave }}">{{ RESULTADOS_REVERSO[chave].replace("Não voltou: ", "").capitalize() }}</option>{% endfor %}
+        </select>
+      </div>
+      <label class="t" for="rev-protocolo">Protocolo do ML (se houver)</label>
+      <input type="text" id="rev-protocolo" maxlength="80" placeholder="Opcional" autocomplete="off" />
+      <label class="t" for="rev-obs" id="rev-obs-rotulo">Observação (opcional, o seller vê)</label>
+      <input type="text" id="rev-obs" maxlength="500" placeholder="Ex.: conferido, tudo certo" autocomplete="off" />
       <div class="erro" id="rev-erro"></div>
       <div class="botoes">
         <button class="sl-btn grande" id="rev-cancelar">Cancelar</button>
@@ -337,6 +346,7 @@
     const ehReputacao = (s) => tipoDe(s) === "reputacao";
     const ehReverso = (s) => tipoDe(s) === "reverso";
     const CLASSE_RESULTADO = (r) => (r === "liberado_venda" ? "res-ok" : (r || "").startsWith("negociacao") ? "res-ml" : "res-nao");
+    const VOLTOU = "liberado_venda"; // chave gravada = "Voltou para o estoque"
     const htmlTipo = (s) => `<span class="sl-pill tp-${tipoDe(s)}">${NOMES_TIPO[tipoDe(s)]}</span>`;
     // "Confirmar cancelamento" / "Confirmar reputação" (botões e título da janela)
     const textoConfirmar = (s) => (ehReverso(s) ? "Concluir reverso" : ehReputacao(s) ? "Confirmar reputação" : "Confirmar cancelamento");
@@ -395,7 +405,7 @@
       return min < 1 ? "agora" : textoEspera(min);
     }
     function situacao(s) {
-      if (s.confirmado_por && ehReverso(s)) return ["✓ " + (s.resultado_reverso_nome || "Concluído"), "st-ok"];
+      if (s.confirmado_por && ehReverso(s)) return s.voltou_estoque === false ? ["✗ " + (s.resultado_reverso_nome || "Não voltou"), "st-nao"] : ["✓ " + (s.resultado_reverso_nome || "Concluído"), "st-ok"];
       if (s.confirmado_por) return [ehReputacao(s) ? "✓ Resolvido" : "✓ Cancelado", "st-ok"];
       if (ehMeu(s)) return ["Com você · " + tempoComOperador(s), "st-meu"];
       if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por + " · " + tempoComOperador(s), "st-outro"];
@@ -442,7 +452,7 @@
         </div>`;
       const detalheReverso = ehReverso(s) ? `
             <div class="sl-sub">${s.produto_titulo ? "Produto: <b>" + esc(s.produto_titulo) + "</b>" : ""}${s.estado_chegada_nome ? (s.produto_titulo ? " · " : "") + esc(s.estado_chegada_nome) : ""}</div>
-            ${s.confirmado_por && s.resultado_reverso === "liberado_venda" && s.liberado_em && s.checklist ? `<div class="sl-sub"><b>Liberado pela logística</b> (checklist completo) · ${esc(s.liberado_por)}</div>` : ""}
+            ${s.checklist_itens && s.checklist_itens.length && !s.confirmado_por ? `<div class="sl-sub">Galpão informou: ${s.checklist_itens.filter((i) => i.ok).map((i) => esc(i.nome)).join(" · ") || "nenhuma condição marcada"}</div>` : ""}
             ${s.observacao_resultado ? `<div class="sl-sub">${esc(s.observacao_resultado)}</div>` : ""}` : "";
       return `
         <div class="sl-row${ehReverso(s) ? " rev" : ""}">
@@ -615,10 +625,11 @@
         </div>` : ""}
         ${ehReverso(s) ? `
           ${s.estado_chegada_nome ? `<div class="sl-campo"><div class="r">Aspecto ao chegar</div>${esc(s.estado_chegada_nome)}</div>` : ""}
-          ${(s.checklist_itens && s.checklist_itens.length) ? `<div class="sl-campo"><div class="r">Checklist do galpão</div>${s.checklist_itens.map((i) => `<div>${i.ok ? "✓" : "✗"} ${esc(i.nome)}</div>`).join("")}</div>` : ""}
+          ${(s.checklist_itens && s.checklist_itens.length) ? `<div class="sl-campo"><div class="r">Condições informadas pelo galpão</div>${s.checklist_itens.map((i) => `<div>${i.ok ? "✓" : "✗"} ${esc(i.nome)}</div>`).join("")}</div>` : ""}
           ${s.confirmado_por ? `
             <div class="sl-campo"><div class="r">Resultado</div><span class="sl-pill ${CLASSE_RESULTADO(s.resultado_reverso)}">${esc(s.resultado_reverso_nome || "Concluído")}</span>
-              ${s.liberado_por && s.resultado_reverso === "liberado_venda" && s.checklist ? `<div class="sl-sub">Liberado pela logística: <b>${esc(s.liberado_por)}</b> · ${formatarData(s.liberado_em)}</div>` : ""}</div>
+              ${s.liberado_por && s.resultado_reverso === VOLTOU ? `<div class="sl-sub">Devolvido ao estoque por <b>${esc(s.liberado_por)}</b> · ${formatarData(s.liberado_em)}</div>` : ""}</div>
+            ${s.protocolo ? `<div class="sl-campo"><div class="r">Protocolo</div>${esc(s.protocolo)}</div>` : ""}
             <div class="sl-campo"><div class="r">Concluído</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}${s.observacao_resultado ? `<div class="sl-sub">${esc(s.observacao_resultado)}</div>` : ""}</div>` : ""}`
         : s.confirmado_por ? `
           <div class="sl-campo"><div class="r">${ehReputacao(s) ? "Resolvido" : "Cancelado"}</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
@@ -660,28 +671,44 @@
 
     // ---------- Concluir reverso (resultado do tratamento) ----------
     let concluindoId = null;
+    const voltouEscolha = () => (document.querySelector('input[name="rev-voltou"]:checked') || {}).value || "";
+    function atualizarBlocoNao() {
+      const nao = voltouEscolha() === "nao";
+      $("rev-nao-bloco").style.display = nao ? "block" : "none";
+      $("rev-obs-rotulo").textContent = nao ? "Observação (obrigatória: explique por que não voltou; o seller vê)" : "Observação (opcional, o seller vê)";
+    }
+    document.querySelectorAll('input[name="rev-voltou"]').forEach((el) => el.addEventListener("change", atualizarBlocoNao));
     function abrirConclusaoReverso(s) {
       concluindoId = s.id;
-      $("rev-detalhe").textContent = `Conta ${s.conta}${s.produto_titulo ? " · " + s.produto_titulo : ""}${s.numero_venda && s.numero_venda !== "sem número" ? " · venda " + s.numero_venda : ""}. Informe como o reverso terminou; o seller vê o resultado no painel dele.`;
-      $("rev-resultado").value = ""; $("rev-obs").value = ""; $("rev-erro").style.display = "none";
+      $("rev-detalhe").textContent = `Conta ${s.conta}${s.produto_titulo ? " · " + s.produto_titulo : ""}${s.numero_venda && s.numero_venda !== "sem número" ? " · venda " + s.numero_venda : ""}. O galpão só registrou o retorno: a decisão de voltar (ou não) ao estoque é sua.`;
+      const itens = (s.checklist_itens || []).map((i) => `<div>${i.ok ? "✓" : "✗"} ${esc(i.nome)}</div>`).join("");
+      const nFotos = (s.fotos_base64 || []).length;
+      $("rev-info").innerHTML = `<b>O galpão informou:</b>${s.estado_chegada_nome ? "<div>Aspecto ao chegar: " + esc(s.estado_chegada_nome) + "</div>" : ""}${itens || '<div class="sl-sub">Nenhuma condição marcada.</div>'}${nFotos ? `<div class="sl-sub">${nFotos} foto(s) — veja em "Ver detalhes e histórico".</div>` : ""}`;
+      document.querySelectorAll('input[name="rev-voltou"]').forEach((el) => { el.checked = false; });
+      $("rev-motivo").value = ""; $("rev-obs").value = ""; $("rev-protocolo").value = ""; $("rev-erro").style.display = "none";
+      atualizarBlocoNao();
       $("modal-reverso").classList.add("aberto");
     }
     $("rev-cancelar").addEventListener("click", () => fecharModal("modal-reverso"));
     $("modal-reverso").addEventListener("click", (e) => { if (e.target.id === "modal-reverso") fecharModal("modal-reverso"); });
     $("rev-ok").addEventListener("click", async () => {
-      const resultado = $("rev-resultado").value;
+      const escolha = voltouEscolha();
+      const motivo = $("rev-motivo").value;
+      const obs = $("rev-obs").value.trim();
       const erro = (t) => { $("rev-erro").textContent = t; $("rev-erro").style.display = "block"; };
-      if (!resultado) return erro("Selecione o resultado do tratamento.");
+      if (!escolha) return erro("Marque se o produto voltou ou não para o estoque.");
+      if (escolha === "nao" && !motivo) return erro("Escolha o motivo de o produto não ter voltado.");
+      if (escolha === "nao" && !obs) return erro("Explique na observação por que o produto não voltou.");
       const botao = $("rev-ok"); botao.disabled = true;
       try {
         const r = await fetch(`/api/solicitacoes-cancelamento/${concluindoId}/reverso/concluir`, {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ resultado, observacao: $("rev-obs").value.trim() || null }),
+          body: JSON.stringify({ voltou_estoque: escolha === "sim", motivo: escolha === "nao" ? motivo : null, observacao: obs || null, protocolo: $("rev-protocolo").value.trim() || null }),
         });
         const d = await r.json().catch(() => ({}));
         if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível concluir.");
         fecharModal("modal-reverso");
-        avisar('Reverso concluído. Está no status "Confirmados".');
+        avisar(escolha === "sim" ? "Reverso concluído: voltou para o estoque." : "Reverso concluído: não voltou para o estoque.");
         await atualizar();
         if (painelDe) { desenharPainel(); carregarHistorico(painelDe); }
       } catch (e) { erro(e.message); }

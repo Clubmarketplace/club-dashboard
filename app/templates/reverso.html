@@ -44,7 +44,11 @@
     .item-ag { padding:14px 0; border-top:1px solid var(--cmx-borda); }
     .item-ag:first-child { border-top:none; }
     .item-ag .topo { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
-    .item-ag .peq { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .peq { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .condicoes { display:grid; grid-template-columns:1fr 1fr; gap:8px 16px; }
+    .condicoes label { display:flex; gap:10px; align-items:center; font-size:14px; cursor:pointer; padding:8px 10px; border:1.5px solid var(--cmx-borda); border-radius:9px; }
+    .condicoes label:has(input:checked) { border-color:var(--rev); background:var(--rev-fundo); }
+    @media (max-width:700px) { .condicoes { grid-template-columns:1fr; } }
     .check-box { margin-top:12px; padding:14px; border:1.5px solid var(--rev); border-radius:12px; background:var(--rev-fundo); }
     .check-box label { display:flex; gap:10px; align-items:center; padding:5px 0; font-size:14px; cursor:pointer; }
     .check-box .acoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
@@ -86,14 +90,14 @@
       <header class="cmx-topbar">
         <div>
           <h1>{{ "Receber reverso" if modo_galpao else "Avisar um reverso" }}</h1>
-          <p class="cmx-subtitulo">{% if modo_galpao %}Produto que voltou para o galpão: registre a chegada com fotos e, depois de testar e conferir, libere para venda{% else %}Produto que voltou ou está voltando (devolução, recusa na entrega, chegou quebrado) da conta {{ conta_seller }}{% endif %}</p>
+          <p class="cmx-subtitulo">{% if modo_galpao %}Produto que voltou para o galpão: registre a chegada com conta, nº da venda, condições e fotos. A equipe do Club decide se volta ao estoque{% else %}Produto que voltou ou está voltando (devolução, recusa na entrega, chegou quebrado) da conta {{ conta_seller }}{% endif %}</p>
         </div>
       </header>
 
       <main>
         <div class="cartao-rev">
           <h2>{{ "Registrar chegada do reverso" if modo_galpao else "Novo aviso de reverso" }}</h2>
-          <p class="sub">{% if modo_galpao %}A conta é escolhida por você; o reverso já aparece no painel da equipe e no painel do seller dela.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
+          <p class="sub">{% if modo_galpao %}Conta e nº da venda são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
 
           <div class="grade">
             {% if modo_galpao %}
@@ -117,14 +121,14 @@
             <div class="campo"><label class="rot" for="conta">Conta</label>
               <input type="text" id="conta" list="lista-contas" placeholder="Digite e escolha a conta" autocomplete="off" />
               <datalist id="lista-contas"></datalist></div>
-            <div class="campo"><label class="rot" for="produto">Produto (SKU ou nome)</label>
+            <div class="campo"><label class="rot" for="produto">Produto (SKU ou nome, opcional)</label>
               <input type="text" id="produto" maxlength="200" placeholder="Ex.: Miniprocessador Cadence · MPR530" /></div>
             {% else %}
             <div class="campo"><label class="rot" for="produto">Produto (opcional)</label>
               <input type="text" id="produto" maxlength="200" placeholder="SKU ou nome do produto" /></div>
             {% endif %}
-            <div class="campo"><label class="rot" for="venda">Nº da venda{{ " (se souber)" if modo_galpao else " (obrigatório)" }}</label>
-              <input type="text" id="venda" inputmode="numeric" placeholder="{{ 'Opcional' if modo_galpao else 'Número do pedido' }}" autocomplete="off"{% if not modo_galpao %} required{% endif %} /></div>
+            <div class="campo"><label class="rot" for="venda">Nº da venda (obrigatório)</label>
+              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido" autocomplete="off" required /></div>
             {% if modo_galpao %}
             <div class="campo"><label class="rot" for="estado">Aspecto ao chegar</label>
               <select id="estado">
@@ -142,6 +146,15 @@
             {% endif %}
           </div>
 
+          {% if modo_galpao %}
+          <div class="campo" style="margin-bottom:14px">
+            <label class="rot">Condições do produto (marque o que for verdade)</label>
+            <div class="condicoes">
+              {% for chave, nome in CHECKLIST_REVERSO.items() %}<label><input type="checkbox" data-cond="{{ chave }}" /> {{ nome }}</label>{% endfor %}
+            </div>
+            <div class="peq" style="margin-top:6px">Só informativo: o galpão não libera para venda. A equipe confere no painel e decide.</div>
+          </div>
+          {% endif %}
           <div class="campo" style="margin-bottom:14px">
             <label class="rot" for="obs">Observação (opcional)</label>
             <textarea id="obs" placeholder="{{ 'Ex.: embalagem violada, acessórios completos' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
@@ -154,18 +167,6 @@
           <div class="msg" id="msg"></div>
         </div>
 
-        {% if modo_galpao %}
-        <div class="cartao-rev">
-          <h2>Recebidos aguardando conferência</h2>
-          <p class="sub">Depois de testar e conferir, clique em <b>Liberar para venda</b>. Abre o checklist; com tudo marcado, você confirma e o produto volta para venda. Fica registrado quem liberou, o dia e a hora, e o seller é informado.</p>
-          <div id="aguardando"><div class="vazio">Carregando...</div></div>
-        </div>
-        <div class="cartao-rev">
-          <h2>Liberados recentemente</h2>
-          <p class="sub">Reversos concluídos nos últimos 7 dias.</p>
-          <div id="liberados"><div class="vazio">Carregando...</div></div>
-        </div>
-        {% endif %}
       </main>
     </div>
   </div>
@@ -174,12 +175,6 @@
     const MODO_GALPAO = {{ 'true' if modo_galpao else 'false' }};
     const CONTA_SELLER = {{ (conta_seller or '') | tojson }};
     const MAX_FOTOS = 20;
-    const CHECKLIST = [
-      ["caixa", "Caixa original em boas condições"],
-      ["sem_avarias", "Produto sem avarias"],
-      ["acessorios_manuais", "Todos os acessórios e manuais"],
-      ["testado", "Testado e funcionando"],
-    ];
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
     const chaveConta = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -277,9 +272,12 @@
         if (!$("galpao").value) return mensagem("Escolha o galpão.", true);
         const conta = contas.find(c => chaveConta(c.nome) === chaveConta($("conta").value));
         if (!conta) return mensagem("Escolha a conta na lista (digite o nome e selecione).", true);
-        if (!produto) return mensagem("Informe o produto (SKU ou nome).", true);
+        if (!venda) return mensagem("Informe o número da venda.", true);
         corpo.galpao = +$("galpao").value; corpo.conta = conta.nome;
-        item.estado_chegada = $("estado").value; item.motivo = obs || "Retorno recebido no galpão";
+        item.estado_chegada = $("estado").value;
+        // condições que o galpão marcou (todas as chaves: marcada = true)
+        item.checklist = {}; document.querySelectorAll("[data-cond]").forEach(c => { item.checklist[c.dataset.cond] = c.checked; });
+        item.motivo = obs || "Retorno recebido no galpão";
       } else {
         if (!venda) return mensagem("Informe o número da venda.", true);
         corpo.conta = CONTA_SELLER;
@@ -301,12 +299,11 @@
           return mensagem(detalhe, true);
         }
         mensagem(MODO_GALPAO
-          ? `Recebimento registrado para ${corpo.conta} (${lista.length} foto(s)). Já aparece para a equipe e no painel do seller; confira e libere abaixo quando estiver testado.`
+          ? `Recebimento registrado para ${corpo.conta} (${lista.length} foto(s)). Já aparece para a equipe e no painel do seller. A equipe confere e decide se volta ao estoque; acompanhe em Acompanhar solicitações.`
           : `Reverso enviado com ${lista.length} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
         ["venda", "produto", "obs"].forEach(id => $(id).value = "");
-        if (MODO_GALPAO) $("conta").value = "";
+        if (MODO_GALPAO) { $("conta").value = ""; document.querySelectorAll("[data-cond]").forEach(c => { c.checked = false; }); }
         fotos = []; slots = MODO_GALPAO ? 3 : 1; desenharFotos();
-        if (MODO_GALPAO) { carregarListas(); }
       } catch (e) {
         mensagem("Sem conexão. Tente de novo.", true);
       } finally {
@@ -314,75 +311,6 @@
       }
     });
 
-    // ---------- Galpão: aguardando conferência / liberados ----------
-    const abertos = {};   // id -> {ck: {chave: bool}}
-    let pendentes = [];
-    async function buscar(qs) {
-      const r = await fetch("/api/solicitacoes-cancelamento/busca?" + new URLSearchParams({ tipo: "reverso", por_pagina: 100, ...qs }), { cache: "no-store" });
-      if (r.status === 401) { location.href = "/login"; return null; }
-      if (!r.ok) throw new Error("status " + r.status);
-      return r.json();
-    }
-    function desenharAguardando() {
-      const box = $("aguardando");
-      if (!pendentes.length) { box.innerHTML = '<div class="vazio">Nenhum produto aguardando conferência.</div>'; return; }
-      box.innerHTML = pendentes.map(s => {
-        const aberto = abertos[s.id];
-        const fotos = (s.fotos_base64 || []);
-        const estado = s.estado_chegada_nome ? ` · ${esc(s.estado_chegada_nome)}` : "";
-        let ck = "";
-        if (aberto) {
-          const tudo = CHECKLIST.every(([k]) => aberto.ck[k]);
-          ck = `<div class="check-box"><b>Checklist para liberar</b>
-            ${CHECKLIST.map(([k, t]) => `<label><input type="checkbox" data-ck="${s.id}:${k}" ${aberto.ck[k] ? "checked" : ""}> ${esc(t)}</label>`).join("")}
-            <div class="acoes"><button type="button" class="botao-rev" data-conf="${s.id}" ${tudo ? "" : "disabled"}>Confirmar liberação para venda</button>
-            <button type="button" class="botao-sec" data-canc="${s.id}">Voltar</button></div>
-            ${tudo ? "" : '<div class="peq" style="margin-top:8px">Marque os 4 itens para liberar. Se algo não estiver ok, deixe o item aqui: a equipe trata no painel.</div>'}
-            <div class="msg erro" id="erro-${s.id}" style="display:none"></div></div>`;
-        }
-        return `<div class="item-ag"><div class="topo"><div><b>${esc(s.produto_titulo || s.sku || "Produto")}</b>
-          <div class="peq">${esc(s.conta_nome || s.conta)} · ${esc(s.galpao_nome || "")} · recebido ${quando(s.criado_em)}${s.solicitado_por ? " por " + esc(s.solicitado_por) : ""}${estado}${s.numero_venda && s.numero_venda !== "sem número" ? " · venda " + esc(s.numero_venda) : ""}</div>
-          ${s.motivo && s.motivo !== "Retorno recebido no galpão" ? `<div class="peq">${esc(s.motivo)}</div>` : ""}
-          ${s.em_atendimento_por ? `<div class="peq">Em tratamento pela equipe: ${esc(s.em_atendimento_por)}</div>` : ""}
-          ${fotos.length ? `<div class="ver-fotos">${fotos.slice(0, 6).map(f => `<a href="${f}" target="_blank" rel="noopener"><img src="${f}" alt="Foto"></a>`).join("")}${fotos.length > 6 ? `<span class="peq"> +${fotos.length - 6}</span>` : ""}</div>` : ""}
-          </div>${aberto ? "" : `<button type="button" class="botao-rev" data-lib="${s.id}">Liberar para venda</button>`}</div>${ck}</div>`;
-      }).join("");
-    }
-    $("aguardando") && $("aguardando").addEventListener("click", async (e) => {
-      const b = e.target.closest("button"); if (!b) return;
-      if (b.dataset.lib) { abertos[b.dataset.lib] = { ck: {} }; desenharAguardando(); }
-      else if (b.dataset.canc) { delete abertos[b.dataset.canc]; desenharAguardando(); }
-      else if (b.dataset.conf) {
-        const id = b.dataset.conf; b.disabled = true;
-        try {
-          const r = await fetch(`/api/reverso/${id}/liberar-venda`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checklist: abertos[id].ck }) });
-          if (!r.ok) {
-            let d = "Não foi possível liberar."; try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch (x) {}
-            const er = $("erro-" + id); er.style.display = "block"; er.textContent = d; b.disabled = false; return;
-          }
-          delete abertos[id]; await carregarListas();
-        } catch (x) { b.disabled = false; }
-      }
-    });
-    $("aguardando") && $("aguardando").addEventListener("change", (e) => {
-      const d = e.target.dataset.ck; if (!d) return;
-      const [id, k] = d.split(":"); if (abertos[id]) { abertos[id].ck[k] = e.target.checked; desenharAguardando(); }
-    });
-    async function carregarListas() {
-      try {
-        const p = await buscar({ status: "pendente", dias: 90 });
-        if (p) { pendentes = p.itens.filter(s => !s.confirmado_por); desenharAguardando(); }
-        const c = await buscar({ status: "confirmado", dias: 7 });
-        if (c) {
-          $("liberados").innerHTML = c.itens.length ? c.itens.map(s => `<div class="item-ag"><div class="topo"><div><b>${esc(s.produto_titulo || s.sku || "Produto")}</b>
-            <div class="peq">${esc(s.conta_nome || s.conta)} · ${esc(s.galpao_nome || "")} · recebido ${quando(s.criado_em)}</div></div>
-            <div><span class="pill ${s.resultado_reverso === "liberado_venda" ? "ok" : ""}">${esc(s.resultado_reverso_nome || "Concluído")}</span>
-            <div class="peq">por ${esc(s.confirmado_por)} · ${quando(s.confirmado_em)}</div></div></div></div>`).join("")
-            : '<div class="vazio">Nenhum reverso concluído nos últimos 7 dias.</div>';
-        }
-      } catch (e) { console.error(e); }
-    }
-    if (MODO_GALPAO) { carregarListas(); setInterval(() => { if (!Object.keys(abertos).length) carregarListas(); }, 30000); }
   </script>
 </body>
 </html>
