@@ -9,7 +9,7 @@ from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Co
 from app import auth, config
 from app.contas_util import chave_conta
 from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -211,7 +211,8 @@ _AREAS = {
     # fica de fora (quem pede não confirma).
     "logistica": {
         "paginas": {
-            "/solicitacoes-galpao",
+            "/solicitacoes-galpao", "/painel-galpao",
+            "/api/painel-galpao/resumo", "/api/painel-galpao/relatorio",
             "/solicitar-cancelamento", "/reverso", "/api/solicitacoes-cancelamento",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
@@ -457,6 +458,7 @@ app.include_router(historico_adesoes_painel_rotas.router)  # tela "Histórico de
 app.include_router(admin_painel_rotas.router)  # resumo de vendas de todas as contas -- só admin (12/10)
 app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel do seller (12/10)
 app.include_router(cadastro_produtos_rotas.router)  # produtos novos das notas do Operador Logístico, pra tela "Cadastro" (13/10)
+app.include_router(painel_galpao_rotas.router)  # números e relatório do galpão (26/10)
 app.include_router(cadastro_seller_rotas.router)  # "Solicitar cadastro" dentro de "Minhas solicitações" do seller (15/10)
 
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -935,6 +937,18 @@ def pagina_solicitacoes_galpao(request: Request):
             return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(
             request=request, name="solicitacoes-galpao.html", context={"usuario": usuario},
+        )
+
+
+@app.get("/painel-galpao", response_class=HTMLResponse)
+def pagina_painel_galpao(request: Request):
+    """Dashboard do galpão (26/10): números de cancelamento e reverso, gráficos e relatório por período."""
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        if not auth.papel_permite(usuario, ("logistica", "admin", "supervisor")):
+            return RedirectResponse("/", status_code=303)
+        return templates.TemplateResponse(
+            request=request, name="painel-galpao.html", context={"usuario": usuario, "modo_logistica": usuario.papel == "logistica"},
         )
 
 
