@@ -459,7 +459,7 @@
 
     // ---------- Fotos: botão 📷 N na linha ----------
     const nFotos = (s) => (Array.isArray(s.fotos_base64) ? s.fotos_base64.length : 0);
-    const botaoFotos = (s) => (nFotos(s) ? `<button class="sl-btn" data-acao="fotos" data-id="${s.id}" data-i="0" title="Ver e baixar as fotos">📷 ${nFotos(s)}</button>` : "");
+    const botaoFotos = (s) => (nFotos(s) ? `<button class="sl-btn" data-acao="fotos" data-id="${s.id}" data-i="0" title="Ver e baixar as fotos">📎 Fotos (${nFotos(s)})</button>` : "");
 
     // ---------- Lista ----------
     function linha(s) {
@@ -483,7 +483,7 @@
               <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
               ${!ehReputacao(s) && !ehReverso(s) ? `<button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
             ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
-          ${nFotos(s) ? `<button data-acao="fotos" data-id="${s.id}" data-i="0">📷 Ver fotos (${nFotos(s)})</button>` : ""}
+          ${nFotos(s) ? `<button data-acao="fotos" data-id="${s.id}" data-i="0">📎 Ver fotos (${nFotos(s)})</button>` : ""}
           <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
         </div>`;
       const detalheReverso = ehReverso(s) ? `

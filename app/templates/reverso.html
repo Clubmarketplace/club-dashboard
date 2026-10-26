@@ -32,14 +32,15 @@
     .plat[data-v=shopee][aria-pressed=true] { border-color:#ee4d2d; background:#ee4d2d; color:#fff; }
     .plat[data-v=magalu][aria-pressed=true] { border-color:#0086ff; background:#0086ff; color:#fff; }
     .plat[data-v=tiktok_shop][aria-pressed=true] { border-color:#000; background:#000; color:#fe2c55; }
-    .fotos { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; margin:6px 0 14px; }
-    .slot { position:relative; aspect-ratio:1; border:2px dashed var(--cmx-borda); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; color:var(--cmx-texto-suave); font-size:12px; overflow:hidden; }
-    .slot .mais { font-size:26px; line-height:1; color:var(--rev); }
-    .slot input { display:none; }
-    .slot.cheio { border-style:solid; border-color:var(--rev); }
-    .slot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
-    .slot .rm { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; border:none; background:rgba(0,0,0,.65); color:#fff; cursor:pointer; font-size:14px; line-height:1; }
-    .mais-foto { border:1.5px dashed var(--rev); background:var(--rev-fundo); color:var(--rev); border-radius:12px; font:inherit; font-weight:600; font-size:13px; cursor:pointer; min-height:60px; }
+    .foto-botoes { display:flex; gap:10px; flex-wrap:wrap; margin:6px 0 10px; }
+    .botao-foto { border:1.5px solid var(--rev); background:var(--rev-fundo); color:var(--rev); border-radius:10px; font:inherit; font-weight:600; font-size:14px; padding:12px 18px; cursor:pointer; }
+    .botao-foto.principal { background:var(--rev); color:#fff; }
+    .botao-foto:disabled { opacity:.5; cursor:not-allowed; }
+    .fotos { display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:10px; margin:0 0 6px; }
+    .miniatura { position:relative; aspect-ratio:1; border:2px solid var(--rev); border-radius:12px; overflow:hidden; }
+    .miniatura img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; cursor:zoom-in; }
+    .miniatura .rm { position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:none; background:rgba(0,0,0,.65); color:#fff; cursor:pointer; font-size:14px; line-height:1; }
+    .contagem-fotos { font-size:12.5px; color:var(--cmx-texto-suave); margin-bottom:14px; }
     .botao-rev { background:var(--rev); color:#fff; border:none; border-radius:9px; padding:11px 20px; font:inherit; font-weight:600; font-size:14px; cursor:pointer; }
     .botao-rev:disabled { opacity:.5; cursor:not-allowed; }
     .botao-sec { background:#fff; color:var(--cmx-texto); border:1.5px solid var(--cmx-borda); border-radius:9px; padding:10px 16px; font:inherit; font-weight:600; font-size:13.5px; cursor:pointer; }
@@ -166,7 +167,14 @@
           </div>
 
           <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
+          <div class="foto-botoes">
+            <button type="button" class="botao-foto principal" id="btn-camera" style="display:none">📷 Tirar foto agora</button>
+            <button type="button" class="botao-foto" id="btn-galeria">🖼 <span id="txt-galeria">Escolher fotos da pasta</span></button>
+          </div>
+          <input type="file" id="in-camera" accept="image/*" capture="environment" style="display:none" />
+          <input type="file" id="in-galeria" accept="image/*" multiple style="display:none" />
           <div class="fotos" id="fotos"></div>
+          <div class="contagem-fotos" id="contagem-fotos"></div>
 
           <button type="button" class="botao-rev" id="enviar">{{ "Registrar recebimento" if modo_galpao else "Enviar reverso" }}</button>
           <div class="msg" id="msg"></div>
@@ -176,10 +184,11 @@
     </div>
   </div>
   <script src="/static/menu-celular.js?v=1"></script>
+  <script src="/static/fotos.js?v=1"></script>
   <script>
     const MODO_GALPAO = {{ 'true' if modo_galpao else 'false' }};
     const CONTA_SELLER = {{ (conta_seller or '') | tojson }};
-    const MAX_FOTOS = 20;
+    const MAX_FOTOS = {{ MAX_FOTOS_REVERSO }};   // mesmo limite do servidor
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
     const chaveConta = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
@@ -200,48 +209,42 @@
       document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
     });
 
-    // ---------- Fotos (cada uma é reduzida a 1280px e comprimida antes de enviar) ----------
-    let slots = MODO_GALPAO ? 3 : 1;
-    let fotos = [];   // dataURL por posição (null = vazio)
-    function lerFoto(arquivo, posicao) {
-      if (!arquivo || !arquivo.type.startsWith("image/")) return mensagem("O arquivo precisa ser uma imagem.", true);
-      const leitor = new FileReader();
-      leitor.onload = () => {
-        const img = new Image();
-        img.onload = () => {
-          const maior = Math.max(img.width, img.height), escala = maior > 1280 ? 1280 / maior : 1;
-          const c = document.createElement("canvas");
-          c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
-          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-          fotos[posicao] = c.toDataURL("image/jpeg", 0.75);
-          desenharFotos();
-        };
-        img.src = leitor.result;
-      };
-      leitor.readAsDataURL(arquivo);
-    }
+    // ---------- Fotos: câmera (celular) ou galeria/pasta; cada foto é reduzida no aparelho (fotos.js) ----------
+    let fotos = [];   // dataURL já reduzida
+    let processando = false;
     function desenharFotos() {
       const box = $("fotos"); box.innerHTML = "";
-      for (let i = 0; i < slots; i++) {
-        const l = document.createElement("label");
-        l.className = "slot" + (fotos[i] ? " cheio" : "");
-        l.innerHTML = fotos[i]
-          ? `<img src="${fotos[i]}" alt="Foto ${i + 1}"><button type="button" class="rm" aria-label="Remover foto">×</button>`
-          : `<span class="mais">+</span><span>Foto ${i + 1}</span><input type="file" accept="image/*" aria-label="Foto ${i + 1}">`;
-        if (fotos[i]) {
-          l.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); fotos[i] = null; desenharFotos(); });
-        } else {
-          l.querySelector("input").addEventListener("change", (e) => { if (e.target.files[0]) lerFoto(e.target.files[0], i); });
-        }
-        box.appendChild(l);
-      }
-      if (slots < MAX_FOTOS) {
-        const m = document.createElement("button");
-        m.type = "button"; m.className = "mais-foto"; m.textContent = "+ Incluir outra foto";
-        m.addEventListener("click", () => { slots++; desenharFotos(); });
-        box.appendChild(m);
-      }
+      fotos.forEach((f, i) => {
+        const d = document.createElement("div"); d.className = "miniatura";
+        d.innerHTML = `<img src="${f}" alt="Foto ${i + 1}" title="Toque para ampliar"><button type="button" class="rm" aria-label="Remover foto ${i + 1}">×</button>`;
+        d.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); fotos.splice(i, 1); desenharFotos(); });
+        // Toque na miniatura: abre ampliada pra conferir a nitidez (e remover, se não ficou boa)
+        d.querySelector("img").addEventListener("click", () => window.abrirPreviaFoto(f, { rotulo: `Foto ${i + 1} de ${fotos.length}`, onRemover: () => { fotos.splice(i, 1); desenharFotos(); } }));
+        box.appendChild(d);
+      });
+      const cheio = fotos.length >= MAX_FOTOS;
+      $("btn-camera").disabled = $("btn-galeria").disabled = cheio || processando;
+      $("btn-camera").textContent = fotos.length ? "📷 Tirar outra foto" : "📷 Tirar foto agora";
+      $("contagem-fotos").textContent = processando ? "Processando as fotos..." : `${fotos.length} de ${MAX_FOTOS} fotos` + (cheio ? " (limite atingido)" : "");
     }
+    async function adicionarArquivos(lista) {
+      const arquivos = Array.from(lista || []);
+      if (!arquivos.length) return;
+      const vagas = MAX_FOTOS - fotos.length;
+      if (arquivos.length > vagas) mensagem(`Só cabem mais ${vagas} foto(s); as demais foram ignoradas.`, true);
+      processando = true; desenharFotos();
+      try {
+        for (const a of arquivos.slice(0, Math.max(vagas, 0))) {
+          try { fotos.push(await window.comprimirFoto(a)); desenharFotos(); }
+          catch (e) { mensagem(e.message || "Não consegui processar essa foto.", true); }
+        }
+      } finally { processando = false; desenharFotos(); }
+    }
+    if (window.temCamera()) { $("btn-camera").style.display = ""; $("txt-galeria").textContent = "Escolher da galeria"; }
+    $("btn-camera").addEventListener("click", () => $("in-camera").click());
+    $("btn-galeria").addEventListener("click", () => $("in-galeria").click());
+    $("in-camera").addEventListener("change", (e) => { const l = e.target.files; adicionarArquivos(l).then(() => { e.target.value = ""; }); });
+    $("in-galeria").addEventListener("change", (e) => { const l = e.target.files; adicionarArquivos(l).then(() => { e.target.value = ""; }); });
     desenharFotos();
 
     // ---------- Contas (galpão escolhe; seller tem só a dele) ----------
@@ -308,7 +311,7 @@
           : `Reverso enviado com ${lista.length} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
         ["venda", "produto", "obs"].forEach(id => $(id).value = "");
         if (MODO_GALPAO) { $("conta").value = ""; document.querySelectorAll("[data-cond]").forEach(c => { c.checked = false; }); }
-        fotos = []; slots = MODO_GALPAO ? 3 : 1; desenharFotos();
+        fotos = []; desenharFotos();
       } catch (e) {
         mensagem("Sem conexão. Tente de novo.", true);
       } finally {

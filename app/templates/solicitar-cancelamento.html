@@ -142,7 +142,11 @@
     flex:0 0 auto; padding:9px 13px; border-radius:9px; border:1.5px dashed var(--amber);
     background:#fff7e8; color:#8a5a10; font-weight:600; font-size:12.5px; cursor:pointer;
   }
-  .evidencia-linha .btn-colar-foto:hover { background:#ffefd0; }
+  .evidencia-linha .btn-colar-foto:hover, .evidencia-linha .btn-camera-foto:hover { background:#ffefd0; }
+  .evidencia-linha .btn-camera-foto {
+    flex:0 0 auto; padding:9px 13px; border-radius:9px; border:1.5px solid var(--amber);
+    background:#fff7e8; color:#8a5a10; font-weight:600; font-size:12.5px; cursor:pointer; display:none;
+  }
   .evidencia-linha .evidencia-ou { font-size:12.5px; color:var(--text-dim); }
   .evidencia-linha .campo-link-evidencia { flex:1 1 200px; min-width:160px; }
   .status-colar { font-size:12px; color:#8a5a10; margin:6px 0 0; }
@@ -376,6 +380,7 @@
   </div></div>
 </div>
 <script src="/static/menu-celular.js?v=1"></script>
+<script src="/static/fotos.js?v=1"></script>
 {% endif %}
 <script>
   const opcoesPlataforma = document.querySelectorAll(".opcao-plataforma");
@@ -583,11 +588,13 @@
       <textarea class="campo-motivo" placeholder="${TEXTOS_TIPO[tipoAtual()].placeholder}" required></textarea>
       <div class="grupo-evidencia-item">
         <div class="evidencia-linha">
+          <button type="button" class="btn-camera-foto">📷 Tirar foto agora</button>
           <button type="button" class="btn-colar-foto">📎 Colar ou escolher foto</button>
           <span class="evidencia-ou">ou</span>
           <input type="text" class="campo-link-evidencia" placeholder="cole aqui um link (opcional)" />
         </div>
-        <input type="file" class="campo-arquivo-foto" accept="image/*" style="display:none" />
+        <input type="file" class="campo-arquivo-foto" accept="image/*" multiple style="display:none" />
+        <input type="file" class="campo-camera-foto" accept="image/*" capture="environment" style="display:none" />
         <p class="status-colar" style="display:none;"></p>
         <div class="preview-fotos"></div>
       </div>
@@ -619,10 +626,21 @@
       clearTimeout(timerAguardandoColar);
       timerAguardandoColar = setTimeout(pararDeEsperarColar, 15000);
     });
-    campoArquivoFoto.addEventListener("change", () => {
-      const arquivo = campoArquivoFoto.files[0];
-      if (arquivo) processarArquivoFoto(div, arquivo);
+    campoArquivoFoto.addEventListener("change", async () => {
+      // Pode escolher várias de uma vez; processa uma por vez (a compressão é pesada).
+      const arquivos = Array.from(campoArquivoFoto.files || []);
       campoArquivoFoto.value = "";
+      for (const arquivo of arquivos) await processarArquivoFoto(div, arquivo);
+    });
+    // Câmera (só aparece em celular/tablet): abre direto a câmera traseira.
+    const botaoCamera = div.querySelector(".btn-camera-foto");
+    const campoCamera = div.querySelector(".campo-camera-foto");
+    if (window.temCamera && window.temCamera()) botaoCamera.style.display = "inline-block";
+    botaoCamera.addEventListener("click", () => campoCamera.click());
+    campoCamera.addEventListener("change", async () => {
+      const arquivo = campoCamera.files[0];
+      campoCamera.value = "";
+      if (arquivo) await processarArquivoFoto(div, arquivo);
     });
 
     return div;
@@ -657,32 +675,17 @@
     }
   });
 
-  function processarArquivoFoto(div, arquivo) {
-    if (!arquivo || !arquivo.type || !arquivo.type.startsWith("image/")) {
-      return mostrarErro("O arquivo colado/escolhido precisa ser uma imagem.");
-    }
+  // Reduz a foto no próprio navegador (ver /static/fotos.js) antes de guardar na venda.
+  async function processarArquivoFoto(div, arquivo) {
     if (div.fotosBase64.length >= MAX_FOTOS_POR_VENDA) {
       return mostrarErro(`Máximo de ${MAX_FOTOS_POR_VENDA} fotos por venda.`);
     }
-    const leitor = new FileReader();
-    leitor.onload = () => {
-      const imagem = new Image();
-      imagem.onload = () => {
-        // Redimensiona pro maior lado caber em 1280px e comprime em JPEG --
-        // fica pequeno o bastante pra gravar direto no banco (não é arquivo
-        // no disco: o container do Railway é efêmero e perderia tudo no deploy).
-        const maiorLado = Math.max(imagem.width, imagem.height);
-        const escala = maiorLado > 1280 ? 1280 / maiorLado : 1;
-        const canvas = document.createElement("canvas");
-        canvas.width = Math.round(imagem.width * escala);
-        canvas.height = Math.round(imagem.height * escala);
-        canvas.getContext("2d").drawImage(imagem, 0, 0, canvas.width, canvas.height);
-        div.fotosBase64.push(canvas.toDataURL("image/jpeg", 0.75));
-        renderizarMiniaturas(div);
-      };
-      imagem.src = leitor.result;
-    };
-    leitor.readAsDataURL(arquivo);
+    try {
+      div.fotosBase64.push(await window.comprimirFoto(arquivo));
+      renderizarMiniaturas(div);
+    } catch (e) {
+      mostrarErro(e.message || "Não consegui processar essa foto.");
+    }
   }
 
   function renderizarMiniaturas(div) {
@@ -696,6 +699,13 @@
         div.fotosBase64.splice(indice, 1);
         renderizarMiniaturas(div);
       });
+      // Toque na miniatura: abre ampliada pra conferir a nitidez (e remover, se não ficou boa)
+      const imgMini = miniatura.querySelector("img");
+      imgMini.style.cursor = "zoom-in";
+      imgMini.addEventListener("click", () => window.abrirPreviaFoto(base64, {
+        rotulo: `Foto ${indice + 1} de ${div.fotosBase64.length}`,
+        onRemover: () => { div.fotosBase64.splice(indice, 1); renderizarMiniaturas(div); },
+      }));
       previewFotos.appendChild(miniatura);
     });
     previewFotos.style.display = div.fotosBase64.length ? "flex" : "none";
