@@ -37,6 +37,19 @@
     .rev-opcao input { margin-top:3px; width:18px; height:18px; flex:none; }
     .rev-opcao:has(input:checked) { border-color:#0f766e; background:#f0faf8; }
     .rev-opcao.nao:has(input:checked) { border-color:#c24141; background:#fff5f5; }
+    /* Visor de fotos (26/10): ver em tela cheia, navegar e baixar */
+    #visor { position:fixed; inset:0; background:rgba(10,14,18,.88); z-index:90; display:none; flex-direction:column; align-items:center; justify-content:center; padding:16px; }
+    #visor.aberto { display:flex; }
+    #visor .v-topo { width:100%; max-width:960px; display:flex; justify-content:space-between; align-items:center; gap:10px; color:#fff; font-size:14px; margin-bottom:10px; flex-wrap:wrap; }
+    #visor .v-topo .v-botoes { display:flex; gap:8px; flex-wrap:wrap; }
+    #visor .v-topo button, #visor .v-topo a { background:#fff; color:#17202a; border:none; border-radius:8px; padding:8px 14px; font:inherit; font-weight:600; font-size:13.5px; cursor:pointer; text-decoration:none; }
+    #visor .v-palco { position:relative; width:100%; max-width:960px; flex:1; min-height:0; display:flex; align-items:center; justify-content:center; }
+    #visor .v-palco img { max-width:100%; max-height:100%; object-fit:contain; border-radius:8px; background:#000; }
+    #visor .v-seta { position:absolute; top:50%; transform:translateY(-50%); width:44px; height:44px; border-radius:50%; border:none; background:rgba(255,255,255,.9); font-size:22px; cursor:pointer; }
+    #visor .v-seta.esq { left:6px; } #visor .v-seta.dir { right:6px; }
+    #visor .v-miniaturas { display:flex; gap:6px; margin-top:10px; max-width:960px; overflow-x:auto; padding-bottom:4px; }
+    #visor .v-miniaturas img { width:56px; height:56px; object-fit:cover; border-radius:6px; border:2px solid transparent; cursor:pointer; opacity:.7; }
+    #visor .v-miniaturas img.atual { border-color:#fff; opacity:1; }
     .rev-info { background:#f0faf8; border:1px solid #bfe6df; border-radius:10px; padding:10px 12px; font-size:13.5px; margin:8px 0 12px; }
     .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; } .st-nao { background:#fde8e8; color:#9b1c1c; }
 
@@ -246,6 +259,24 @@
     </div>
   </div>
 
+  <!-- Visor de fotos (26/10) -->
+  <div id="visor" role="dialog" aria-modal="true" aria-label="Fotos do pedido">
+    <div class="v-topo">
+      <div id="v-titulo"></div>
+      <div class="v-botoes">
+        <a id="v-baixar" href="#" download>⬇ Baixar esta foto</a>
+        <button type="button" id="v-baixar-todas">⬇ Baixar todas</button>
+        <button type="button" id="v-fechar">Fechar ✕</button>
+      </div>
+    </div>
+    <div class="v-palco">
+      <button type="button" class="v-seta esq" id="v-ant" aria-label="Foto anterior">‹</button>
+      <img id="v-img" alt="Foto" />
+      <button type="button" class="v-seta dir" id="v-prox" aria-label="Próxima foto">›</button>
+    </div>
+    <div class="v-miniaturas" id="v-mini"></div>
+  </div>
+
   <!-- Concluir reverso (26/10) -->
   <div class="sl-modal-fundo" id="modal-reverso">
     <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="rev-titulo">
@@ -426,6 +457,10 @@
         `<span class="sl-pill ${CLASSE_PLATAFORMA[p]}">${NOMES_PLATAFORMA[p]}: ${itens.filter((s) => s.plataforma === p).length}</span>`).join("");
     }
 
+    // ---------- Fotos: botão 📷 N na linha ----------
+    const nFotos = (s) => (Array.isArray(s.fotos_base64) ? s.fotos_base64.length : 0);
+    const botaoFotos = (s) => (nFotos(s) ? `<button class="sl-btn" data-acao="fotos" data-id="${s.id}" data-i="0" title="Ver e baixar as fotos">📷 ${nFotos(s)}</button>` : "");
+
     // ---------- Lista ----------
     function linha(s) {
       const [sitTxt, sitCls] = situacao(s);
@@ -448,6 +483,7 @@
               <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
               ${!ehReputacao(s) && !ehReverso(s) ? `<button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
             ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
+          ${nFotos(s) ? `<button data-acao="fotos" data-id="${s.id}" data-i="0">📷 Ver fotos (${nFotos(s)})</button>` : ""}
           <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
         </div>`;
       const detalheReverso = ehReverso(s) ? `
@@ -473,7 +509,7 @@
             <span class="sl-pill ${sitCls}">${esc(sitTxt)}</span>
             ${s.confirmado_por ? `<div class="sl-sub" style="margin-top:5px">por <b>${esc(s.confirmado_por)}</b><br>${formatarData(s.confirmado_em)}</div>` : ""}
           </div>
-          <div class="c-acoes sl-acoes">${principal}<button class="sl-btn icone" data-acao="menu" data-id="${s.id}" aria-label="Mais ações">${ICONE.pontos}</button>${menu}</div>
+          <div class="c-acoes sl-acoes">${botaoFotos(s)}${principal}<button class="sl-btn icone" data-acao="menu" data-id="${s.id}" aria-label="Mais ações">${ICONE.pontos}</button>${menu}</div>
         </div>`;
     }
 
@@ -503,6 +539,7 @@
       if (acao === "menu") { e.stopPropagation(); menuAberto = menuAberto === s.id ? null : s.id; renderizarLista(); return; }
       if (menuAberto !== null) { menuAberto = null; if (acao !== "atendimento") renderizarLista(); } // escolheu algo: o "⋯" fecha
       if (acao === "abrir") return abrirPainel(s.id);
+      if (acao === "fotos") return abrirVisor(s, parseInt(alvo.dataset.i || "0", 10) || 0);
       if (acao === "assumir") return assumir(s, false);
       if (acao === "assumir-lugar") {
         if (!confirm(`${s.em_atendimento_por} está com esse pedido. Assumir?`)) return renderizarLista();
@@ -522,6 +559,10 @@
       if (acao === "verificar") return verificar(s, alvo);
     });
     document.addEventListener("keydown", (e) => {
+      if ($("visor").classList.contains("aberto")) {   // o visor tem prioridade: Esc fecha só ele; setas navegam
+        if (e.key === "Escape") fecharVisor(); else if (e.key === "ArrowLeft") moverVisor(-1); else if (e.key === "ArrowRight") moverVisor(1);
+        return;
+      }
       if (e.key !== "Escape") return;
       if (menuAberto !== null) { menuAberto = null; renderizarLista(); }
       fecharPainel(); fecharModal("modal-confirmar"); fecharModal("modal-relatorio"); $("previa").classList.remove("aberto");
@@ -619,7 +660,7 @@
         ${((s.fotos_base64 && s.fotos_base64.length) || s.link_evidencia) ? `
         <div class="sl-campo"><div class="r">Evidência</div>
           ${(s.fotos_base64 && s.fotos_base64.length) ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:${s.link_evidencia ? "8px" : "0"};">
-            ${s.fotos_base64.map(f => `<a href="${f}" target="_blank" rel="noopener"><img src="${f}" alt="Foto enviada" style="width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); display:block;" /></a>`).join("")}
+            ${s.fotos_base64.map((f, i) => `<img src="${f}" alt="Foto ${i + 1}" data-acao="fotos" data-id="${s.id}" data-i="${i}" title="Clique para ampliar e baixar" style="width:72px; height:72px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); display:block; cursor:zoom-in;" />`).join("")}
           </div>` : ""}
           ${s.link_evidencia ? `<a href="${esc(s.link_evidencia)}" target="_blank" rel="noopener" style="font-size:13px; color:#1f6fb2; word-break:break-all;">${esc(s.link_evidencia)}</a>` : ""}
         </div>` : ""}
@@ -668,6 +709,47 @@
     }
     $("p-fechar").addEventListener("click", fecharPainel);
     $("veu").addEventListener("click", fecharPainel);
+
+    // ---------- Visor de fotos: ampliar, navegar (setas/Esc) e baixar ----------
+    let visorDe = null, visorI = 0;
+    // Nome do arquivo baixado: reverso-11112222-foto1.jpg (sem caracteres estranhos)
+    function nomeFoto(s, i) {
+      const num = String(s.numero_venda || "").replace(/[^0-9A-Za-z]+/g, "") || ("pedido" + s.id);
+      return `${tipoDe(s)}-${num}-foto${i + 1}.jpg`;
+    }
+    function desenharVisor() {
+      const s = visorDe, fotos = s.fotos_base64 || [];
+      $("v-img").src = fotos[visorI];
+      $("v-titulo").textContent = `${NOMES_TIPO[tipoDe(s)] || "Pedido"} · ${s.numero_venda} · ${s.conta} — foto ${visorI + 1} de ${fotos.length}`;
+      const a = $("v-baixar"); a.href = fotos[visorI]; a.download = nomeFoto(s, visorI);
+      $("v-ant").style.display = $("v-prox").style.display = fotos.length > 1 ? "" : "none";
+      $("v-baixar-todas").style.display = fotos.length > 1 ? "" : "none";
+      $("v-mini").innerHTML = fotos.length > 1 ? fotos.map((f, i) => `<img src="${f}" data-i="${i}" class="${i === visorI ? "atual" : ""}" alt="Foto ${i + 1}" />`).join("") : "";
+    }
+    function abrirVisor(s, i) {
+      if (!nFotos(s)) return;
+      visorDe = s; visorI = Math.min(Math.max(i, 0), nFotos(s) - 1);
+      desenharVisor(); $("visor").classList.add("aberto");
+    }
+    function fecharVisor() { $("visor").classList.remove("aberto"); visorDe = null; }
+    function moverVisor(d) {
+      const n = nFotos(visorDe); if (n < 2) return;
+      visorI = (visorI + d + n) % n; desenharVisor();
+    }
+    $("v-fechar").addEventListener("click", fecharVisor);
+    $("v-ant").addEventListener("click", () => moverVisor(-1));
+    $("v-prox").addEventListener("click", () => moverVisor(1));
+    $("visor").addEventListener("click", (e) => { if (e.target.id === "visor") fecharVisor(); });
+    $("v-mini").addEventListener("click", (e) => { const i = e.target.dataset && e.target.dataset.i; if (i !== undefined) { visorI = +i; desenharVisor(); } });
+    $("v-baixar-todas").addEventListener("click", async () => {
+      // Um download por foto, com uma pausa curta pra o navegador não bloquear a sequência.
+      const s = visorDe; if (!s) return;
+      for (let i = 0; i < nFotos(s); i++) {
+        const a = document.createElement("a"); a.href = s.fotos_base64[i]; a.download = nomeFoto(s, i);
+        document.body.appendChild(a); a.click(); a.remove();
+        await new Promise((r) => setTimeout(r, 350));
+      }
+    });
 
     // ---------- Concluir reverso (resultado do tratamento) ----------
     let concluindoId = null;
