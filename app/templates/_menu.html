@@ -98,16 +98,6 @@
     {{ item("/produtividade-cancelamento", "Produtividade") }}
   {% endcall %}
 
-  {% call grupo("contas", "Contas", ["/contas", "/reputacao"]) %}
-    {% if not _restrito %}{{ item("/contas", "Contas conectadas") }}{% endif %}
-    {{ item("/reputacao", "Reputação das contas") }}
-  {% endcall %}
-
-  {% call grupo("paineis", "Painéis de TV", []) %}
-    {{ item("/painel-tv/geral", "Painel Geral", nova_aba=true) }}
-    {{ item("/painel-tv/fila", "Painel da Fila", nova_aba=true) }}
-  {% endcall %}
-
   {% endif %}
 
   {% if _eh_setor_cancelamento %}
@@ -121,6 +111,7 @@
     {% endcall %}
   {% endif %}
 
+  {#- 26/10: Solicitações de cadastro logo abaixo de Solicitações cancelamentos (pedido do Washington) -#}
   {% if _so_cadastro or _eh_setor_cadastro or not _restrito %}
     {% call grupo("cadastro", "Solicitações de cadastro", ["/cadastro"]) %}
       {#- 16/10: "Nova solicitação" -- igual o botão "+ Incluir produto" que já existe
@@ -132,6 +123,19 @@
       {{ item("/cadastro", "Produtos para cadastro") }}
       {% if (not _restrito) or (_eh_setor_cadastro and _eh_gerente) %}{{ item("/cadastro/produtividade", "Produtividade") }}{% endif %}
     {% endcall %}
+  {% endif %}
+
+  {% if not _so_cadastro %}
+  {% call grupo("contas", "Contas", ["/contas", "/reputacao"]) %}
+    {% if not _restrito %}{{ item("/contas", "Contas conectadas") }}{% endif %}
+    {{ item("/reputacao", "Reputação das contas") }}
+  {% endcall %}
+
+  {% call grupo("paineis", "Painéis de TV", []) %}
+    {{ item("/painel-tv/geral", "Painel Geral", nova_aba=true) }}
+    {{ item("/painel-tv/fila", "Painel da Fila", nova_aba=true) }}
+  {% endcall %}
+
   {% endif %}
 
   {% if not _restrito %}
