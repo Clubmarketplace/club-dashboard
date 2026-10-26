@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta, ProdutoCadastro
 from app import auth, config
 from app.contas_util import chave_conta
-from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
+from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
@@ -491,6 +491,7 @@ templates.env.globals["PLATAFORMAS"] = PLATAFORMAS
 templates.env.globals["RESULTADOS_REVERSO"] = RESULTADOS_REVERSO
 templates.env.globals["MOTIVOS_NAO_VOLTOU"] = MOTIVOS_NAO_VOLTOU
 templates.env.globals["CHECKLIST_REVERSO"] = CHECKLIST_REVERSO
+templates.env.globals["MAX_FOTOS_REVERSO"] = MAX_FOTOS_REVERSO
 templates.env.globals["ESTADOS_CHEGADA"] = ESTADOS_CHEGADA
 
 
