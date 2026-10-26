@@ -48,6 +48,7 @@
     .rev-detalhe { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; line-height:1.5; }
     .rev-fotos summary { cursor:pointer; font-size:12px; color:#0f766e; font-weight:600; margin-top:6px; }
     .rev-fotos div { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .rev-fotos img.grande { width:100%; max-width:420px; height:auto; }
     .rev-fotos img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); }
     .badge.tipo-cadastro { background:var(--cmx-leve); color:var(--cmx-atencao); }
     .filtro-tipo { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
@@ -151,8 +152,7 @@
                 {% if s.origem == "logistica" %}Retorno recebido no {{ GALPOES.get(s.galpao, "galpão") }}{% if s.solicitado_por %} por {{ s.solicitado_por }}{% endif %}, {{ s.criado_em | hora_br }}.{% else %}Você avisou este reverso.{% endif %}
                 {% if s.estado_chegada %}<br>Aspecto ao chegar: {{ ESTADOS_CHEGADA.get(s.estado_chegada, s.estado_chegada) }}.{% endif %}
               </div>
-              {% set fotos = s.fotos_base64 | fotos_lista %}
-              {% if fotos %}<details class="rev-fotos"><summary>Ver fotos ({{ fotos|length }})</summary><div>{% for f in fotos %}<a href="{{ f }}" target="_blank" rel="noopener"><img src="{{ f }}" alt="Foto do reverso"></a>{% endfor %}</div></details>{% endif %}
+              {% if s.n_fotos_tmp %}<details class="rev-fotos" data-id="{{ s.id }}"><summary>Ver fotos ({{ s.n_fotos_tmp }})</summary><div class="rev-fotos-corpo"></div></details>{% endif %}
               {% endif %}
             </td>
             <td data-rotulo="Status"><div>
@@ -225,6 +225,33 @@
     </div>
   </div>
   <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    // Fotos do reverso: buscadas só quando o seller abre "Ver fotos" (a lista não as carrega).
+    document.addEventListener("toggle", function (e) {
+      var d = e.target;
+      if (!d.classList || !d.classList.contains("rev-fotos") || !d.open || d.dataset.carregado) return;
+      var corpo = d.querySelector(".rev-fotos-corpo");
+      corpo.textContent = "Carregando…";
+      fetch("/meus-cancelamentos/fotos?id=" + encodeURIComponent(d.dataset.id), { cache: "no-store" })
+        .then(function (r) { if (!r.ok) throw new Error(); return r.json(); })
+        .then(function (j) {
+          corpo.textContent = "";
+          // Miniatura primeiro (leve); ao clicar, troca pela foto grande (baixada só nessa hora).
+          (j.fotos || []).forEach(function (grande, i) {
+            var mini = (j.minis || [])[i] || grande;
+            var img = document.createElement("img"); img.src = mini; img.loading = "lazy"; img.alt = "Foto do reverso"; img.title = "Clique para ampliar";
+            img.addEventListener("click", function () {
+              var ampliar = !img.classList.contains("grande");
+              if (ampliar) img.src = grande; else img.src = mini;
+              img.classList.toggle("grande", ampliar);
+            });
+            corpo.appendChild(img);
+          });
+          d.dataset.carregado = "1";
+        })
+        .catch(function () { corpo.textContent = "Não consegui carregar as fotos. Feche e abra de novo."; });
+    }, true);
+  </script>
   <script>
     // Filtro por tipo: esconde/mostra as linhas e recalcula o resumo.
     (function () {
