@@ -40,6 +40,10 @@
     .miniatura { position:relative; aspect-ratio:1; border:2px solid var(--rev); border-radius:12px; overflow:hidden; }
     .miniatura img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; cursor:zoom-in; }
     .miniatura .rm { position:absolute; top:4px; right:4px; width:26px; height:26px; border-radius:50%; border:none; background:rgba(0,0,0,.65); color:#fff; cursor:pointer; font-size:14px; line-height:1; }
+    .slot { aspect-ratio:1; border:2px dashed var(--cmx-borda); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; color:var(--cmx-texto-suave); font-size:12px; background:#fff; font-family:inherit; }
+    .slot .mais { font-size:26px; line-height:1; color:var(--rev); }
+    .slot:disabled { opacity:.5; cursor:not-allowed; }
+    .mais-foto { border:1.5px dashed var(--rev); background:var(--rev-fundo); color:var(--rev); border-radius:12px; font:inherit; font-weight:600; font-size:13px; cursor:pointer; min-height:60px; }
     .contagem-fotos { font-size:12.5px; color:var(--cmx-texto-suave); margin-bottom:14px; }
     .botao-rev { background:var(--rev); color:#fff; border:none; border-radius:9px; padding:11px 20px; font:inherit; font-weight:600; font-size:14px; cursor:pointer; }
     .botao-rev:disabled { opacity:.5; cursor:not-allowed; }
@@ -168,11 +172,12 @@
 
           <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
           <div class="foto-botoes">
-            <button type="button" class="botao-foto principal" id="btn-camera" style="display:none">📷 Tirar foto agora</button>
-            <button type="button" class="botao-foto" id="btn-galeria">🖼 <span id="txt-galeria">Escolher fotos da pasta</span></button>
+            <button type="button" class="botao-foto principal" id="btn-camera">📷 Tirar foto agora</button>
+            <button type="button" class="botao-foto" id="btn-galeria">🖼 <span id="txt-galeria">Escolher várias da pasta</span></button>
           </div>
           <input type="file" id="in-camera" accept="image/*" capture="environment" style="display:none" />
           <input type="file" id="in-galeria" accept="image/*" multiple style="display:none" />
+          <input type="file" id="in-slot" accept="image/*" style="display:none" />
           <div class="fotos" id="fotos"></div>
           <div class="contagem-fotos" id="contagem-fotos"></div>
 
@@ -209,23 +214,43 @@
       document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
     });
 
-    // ---------- Fotos: câmera (celular) ou galeria/pasta; cada foto é reduzida no aparelho (fotos.js) ----------
-    let fotos = [];   // dataURL já reduzida
+    // ---------- Fotos: quadradinhos (como antes) + câmera + várias da pasta ----------
+    // Cada foto é reduzida no próprio aparelho (fotos.js) antes de entrar aqui.
+    let fotos = [];       // dataURL já reduzida (sem buracos)
+    let nSlots = 3;       // quadradinhos visíveis (começa com 3; "+ Incluir outra foto" aumenta)
     let processando = false;
+    const cheio = () => fotos.length >= MAX_FOTOS;
     function desenharFotos() {
+      nSlots = Math.min(Math.max(nSlots, fotos.length, 3), MAX_FOTOS);
       const box = $("fotos"); box.innerHTML = "";
-      fotos.forEach((f, i) => {
-        const d = document.createElement("div"); d.className = "miniatura";
-        d.innerHTML = `<img src="${f}" alt="Foto ${i + 1}" title="Toque para ampliar"><button type="button" class="rm" aria-label="Remover foto ${i + 1}">×</button>`;
-        d.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); fotos.splice(i, 1); desenharFotos(); });
-        // Toque na miniatura: abre ampliada pra conferir a nitidez (e remover, se não ficou boa)
-        d.querySelector("img").addEventListener("click", () => window.abrirPreviaFoto(f, { rotulo: `Foto ${i + 1} de ${fotos.length}`, onRemover: () => { fotos.splice(i, 1); desenharFotos(); } }));
-        box.appendChild(d);
-      });
-      const cheio = fotos.length >= MAX_FOTOS;
-      $("btn-camera").disabled = $("btn-galeria").disabled = cheio || processando;
+      for (let i = 0; i < nSlots; i++) {
+        if (i < fotos.length) {
+          const d = document.createElement("div"); d.className = "miniatura";
+          d.innerHTML = `<img src="${fotos[i]}" alt="Foto ${i + 1}" title="Toque para ampliar"><button type="button" class="rm" aria-label="Remover foto ${i + 1}">×</button>`;
+          d.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); fotos.splice(i, 1); desenharFotos(); });
+          // Toque na miniatura: abre ampliada pra conferir a nitidez (e remover, se não ficou boa)
+          d.querySelector("img").addEventListener("click", () => window.abrirPreviaFoto(fotos[i], { rotulo: `Foto ${i + 1} de ${fotos.length}`, onRemover: () => { fotos.splice(i, 1); desenharFotos(); } }));
+          box.appendChild(d);
+        } else {
+          const s = document.createElement("button"); s.type = "button"; s.className = "slot"; s.disabled = processando;
+          s.innerHTML = `<span class="mais">+</span><span>Foto ${i + 1}</span>`;
+          s.addEventListener("click", () => $("in-slot").click());   // no celular o sistema oferece câmera ou galeria
+          box.appendChild(s);
+        }
+      }
+      if (nSlots < MAX_FOTOS) {
+        const m = document.createElement("button");
+        m.type = "button"; m.className = "mais-foto"; m.textContent = "+ Incluir outra foto";
+        m.addEventListener("click", () => { nSlots++; desenharFotos(); });
+        box.appendChild(m);
+      }
+      $("btn-camera").disabled = $("btn-galeria").disabled = cheio() || processando;
       $("btn-camera").textContent = fotos.length ? "📷 Tirar outra foto" : "📷 Tirar foto agora";
-      $("contagem-fotos").textContent = processando ? "Processando as fotos..." : `${fotos.length} de ${MAX_FOTOS} fotos` + (cheio ? " (limite atingido)" : "");
+      $("contagem-fotos").textContent = processando ? "Processando as fotos..." : `${fotos.length} de ${MAX_FOTOS} fotos` + (cheio() ? " (limite atingido)" : "");
+    }
+    async function adicionarArquivo(arquivo) {
+      if (cheio()) return;
+      fotos.push(await window.comprimirFoto(arquivo));
     }
     async function adicionarArquivos(lista) {
       const arquivos = Array.from(lista || []);
@@ -235,16 +260,28 @@
       processando = true; desenharFotos();
       try {
         for (const a of arquivos.slice(0, Math.max(vagas, 0))) {
-          try { fotos.push(await window.comprimirFoto(a)); desenharFotos(); }
+          try { await adicionarArquivo(a); desenharFotos(); }
           catch (e) { mensagem(e.message || "Não consegui processar essa foto.", true); }
         }
       } finally { processando = false; desenharFotos(); }
     }
-    if (window.temCamera()) { $("btn-camera").style.display = ""; $("txt-galeria").textContent = "Escolher da galeria"; }
-    $("btn-camera").addEventListener("click", () => $("in-camera").click());
+    const aoEscolher = (e) => { const l = Array.from(e.target.files || []); e.target.value = ""; adicionarArquivos(l); };
+    $("in-camera").addEventListener("change", aoEscolher);
+    $("in-galeria").addEventListener("change", aoEscolher);
+    $("in-slot").addEventListener("change", aoEscolher);
     $("btn-galeria").addEventListener("click", () => $("in-galeria").click());
-    $("in-camera").addEventListener("change", (e) => { const l = e.target.files; adicionarArquivos(l).then(() => { e.target.value = ""; }); });
-    $("in-galeria").addEventListener("change", (e) => { const l = e.target.files; adicionarArquivos(l).then(() => { e.target.value = ""; }); });
+    // "Tirar foto agora": celular/tablet = câmera nativa direto; computador = webcam (janela com imagem ao vivo).
+    $("btn-camera").addEventListener("click", async () => {
+      if (window.temCamera()) return $("in-camera").click();
+      if (!window.camerasDisponiveis()) return $("in-galeria").click();
+      const abriu = await window.abrirCamera({
+        cheio,
+        aoCapturar: async (arq) => { processando = true; desenharFotos(); try { await adicionarArquivo(arq); } finally { processando = false; desenharFotos(); } },
+        aoFalhar: (msg) => { mensagem(msg, true); },
+      });
+      if (!abriu) $("in-galeria").click();   // sem permissão/câmera: cai no seletor de arquivos
+    });
+    if (window.temCamera()) $("txt-galeria").textContent = "Escolher várias da galeria";
     desenharFotos();
 
     // ---------- Contas (galpão escolhe; seller tem só a dele) ----------
@@ -311,7 +348,7 @@
           : `Reverso enviado com ${lista.length} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
         ["venda", "produto", "obs"].forEach(id => $(id).value = "");
         if (MODO_GALPAO) { $("conta").value = ""; document.querySelectorAll("[data-cond]").forEach(c => { c.checked = false; }); }
-        fotos = []; desenharFotos();
+        fotos = []; nSlots = 3; desenharFotos();
       } catch (e) {
         mensagem("Sem conexão. Tente de novo.", true);
       } finally {
