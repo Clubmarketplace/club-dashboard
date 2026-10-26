@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta, ProdutoCadastro
 from app import auth, config
 from app.contas_util import chave_conta
-from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, GALPOES, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
+from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
@@ -199,7 +199,7 @@ _AREAS = {
     # _PAGINAS_SO_GERENCIA (logo abaixo de _papel_pode_acessar).
     "solicitacoes_cancelamento": {
         "paginas": {"/solicitacoes-painel", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
-        "prefixos_api": ("/api/solicitacoes-cancelamento/", "/api/reverso/"),
+        "prefixos_api": ("/api/solicitacoes-cancelamento/",),
     },
     # Time de Cadastro (14/10): a tela de produtos novos e a API dela. A
     # tela de produtividade (/cadastro/produtividade) NÃO entra aqui de
@@ -217,8 +217,9 @@ _AREAS = {
             "/api/solicitacoes-cancelamento/contas",
             "/api/solicitacoes-cancelamento/opcoes",
         },
-        # Liberar reverso pra venda (checklist) -- 26/10.
-        "prefixos_api": ("/api/reverso/",),
+        # (26/10) O galpão só REGISTRA o reverso e acompanha; quem conclui
+        # ("voltou para o estoque") é o operador, em /api/solicitacoes-cancelamento/{id}/reverso/concluir.
+        "prefixos_api": (),
     },
 }
 
@@ -444,7 +445,6 @@ app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
 app.include_router(solicitacoes_cancelamento.router)
-app.include_router(solicitacoes_cancelamento.router_reverso)  # galpão libera o reverso pra venda (26/10)
 app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
 app.include_router(calibrar_ia_rotas.router)
@@ -489,6 +489,8 @@ templates.env.filters["hora_br"] = _hora_br
 # Nomes de plataforma/galpão disponíveis em todas as telas montadas no servidor.
 templates.env.globals["PLATAFORMAS"] = PLATAFORMAS
 templates.env.globals["RESULTADOS_REVERSO"] = RESULTADOS_REVERSO
+templates.env.globals["MOTIVOS_NAO_VOLTOU"] = MOTIVOS_NAO_VOLTOU
+templates.env.globals["CHECKLIST_REVERSO"] = CHECKLIST_REVERSO
 templates.env.globals["ESTADOS_CHEGADA"] = ESTADOS_CHEGADA
 
 
