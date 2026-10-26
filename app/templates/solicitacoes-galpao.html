@@ -86,7 +86,7 @@
       <header class="cmx-topbar">
         <div>
           <h1>Solicitações do galpão</h1>
-          <p class="cmx-subtitulo">Pedidos de cancelamento registrados pelos galpões (todas as contas)</p>
+          <p class="cmx-subtitulo">Pedidos de cancelamento e reversos registrados pelos galpões (todas as contas)</p>
         </div>
       </header>
 
@@ -152,15 +152,20 @@
 
     function linha(s) {
       const plataforma = `<span class="badge ${CLASSE_PLATAFORMA[s.plataforma] || "ml"}">${escaparHtml(s.plataforma_nome || s.plataforma)}</span>`;
-      const status = s.confirmado_por
+      const reverso = s.tipo === "reverso";
+      const status = reverso
+        ? (s.confirmado_por
+            ? `<span class="status-confirmado">✓ ${escaparHtml(s.resultado_reverso_nome || "Concluído")} · ${escaparHtml(s.confirmado_por)}</span>`
+            : (s.em_atendimento_por ? `<span class="status-pendente">Em tratamento · ${escaparHtml(s.em_atendimento_por)}</span>` : '<span class="status-pendente">Aguardando conferência</span>'))
+        : s.confirmado_por
         ? `<span class="status-confirmado">✓ Cancelado por ${escaparHtml(s.confirmado_por)}</span>${s.protocolo ? `<div class="quem">Protocolo: ${escaparHtml(s.protocolo)}</div>` : (s.protocolo === "" ? `<div class="quem">Cancelado pelo painel do ML</div>` : "")}`
         : '<span class="status-pendente">Pendente</span>';
-      return `<tr>
-        <td class="nowrap">${formatarData(s.criado_em)}</td>
+      return `<tr${reverso ? ' style="box-shadow:inset 4px 0 0 #0f766e; background:#f0faf8"' : ""}>
+        <td class="nowrap">${formatarData(s.criado_em)}${reverso ? '<div><span class="badge" style="background:#d1f0eb;color:#0b5d56">Reverso</span></div>' : ""}</td>
         <td>${escaparHtml(s.conta_nome || s.conta)}</td>
         <td>${plataforma}</td>
         <td>${escaparHtml(s.numero_venda)}</td>
-        <td>${escaparHtml(s.motivo)}</td>
+        <td>${escaparHtml(s.motivo)}${reverso && s.produto_titulo ? `<div class="quem">${escaparHtml(s.produto_titulo)}</div>` : ""}</td>
         <td class="nowrap"><span class="galpao-tag" title="${escaparHtml(s.galpao_nome || "")}">G${s.galpao || "?"}</span> <span class="quem">${escaparHtml(s.solicitado_por || "")}</span></td>
         <td>${status}</td>
       </tr>`;

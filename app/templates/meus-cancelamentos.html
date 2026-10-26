@@ -43,6 +43,12 @@
     /* Tipo da solicitação */
     .badge.tipo-cancelamento { background:#eef1f4; color:#1b2430; }
     .badge.tipo-reputacao { background:#efeafd; color:#5a3cc4; }
+    .badge.tipo-reverso { background:#d9f2ee; color:#0f766e; }
+    .rev-linha td:first-child { box-shadow:inset 4px 0 0 #0f766e; }
+    .rev-detalhe { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; line-height:1.5; }
+    .rev-fotos summary { cursor:pointer; font-size:12px; color:#0f766e; font-weight:600; margin-top:6px; }
+    .rev-fotos div { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; }
+    .rev-fotos img { width:84px; height:84px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); }
     .badge.tipo-cadastro { background:var(--cmx-leve); color:var(--cmx-atencao); }
     .filtro-tipo { display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
     .filtro-tipo button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:999px; padding:7px 14px;
@@ -101,7 +107,7 @@
       <header class="cmx-topbar">
         <div>
           <h1>Minhas solicitações</h1>
-          <p class="cmx-subtitulo">Pedidos de cancelamento e de reputação da conta {{ usuario.conta_vinculada }}</p>
+          <p class="cmx-subtitulo">Pedidos de cancelamento, reputação e reverso da conta {{ usuario.conta_vinculada }}</p>
         </div>
       </header>
 
@@ -116,10 +122,12 @@
     {% if solicitacoes or cadastros %}
     {# Filtro por tipo (feito aqui na tela: a lista já vem só com a conta do seller) #}
     {% set qtd_reputacao = solicitacoes|selectattr("tipo", "equalto", "reputacao")|list|length %}
+    {% set qtd_reverso = solicitacoes|selectattr("tipo", "equalto", "reverso")|list|length %}
     <div class="filtro-tipo" id="filtro-tipo">
       <button type="button" data-tipo="" class="ativo">Todas ({{ solicitacoes|length + cadastros|length }})</button>
-      <button type="button" data-tipo="cancelamento">Cancelamento ({{ solicitacoes|length - qtd_reputacao }})</button>
+      <button type="button" data-tipo="cancelamento">Cancelamento ({{ solicitacoes|length - qtd_reputacao - qtd_reverso }})</button>
       <button type="button" data-tipo="reputacao">Reputação ({{ qtd_reputacao }})</button>
+      <button type="button" data-tipo="reverso">Reverso ({{ qtd_reverso }})</button>
       <button type="button" data-tipo="cadastro">Cadastro ({{ cadastros|length }})</button>
     </div>
     {% endif %}
@@ -131,14 +139,41 @@
         <tbody>
           {% for s in solicitacoes %}
           {% set reputacao = s.tipo == "reputacao" %}
-          <tr data-tipo="{{ 'reputacao' if reputacao else 'cancelamento' }}" data-confirmado="{{ '1' if s.confirmado_por else '0' }}">
+          {% set reverso = s.tipo == "reverso" %}
+          <tr data-tipo="{{ 'reverso' if reverso else ('reputacao' if reputacao else 'cancelamento') }}" data-confirmado="{{ '1' if s.confirmado_por else '0' }}"{% if reverso %} class="rev-linha"{% endif %}>
             <td data-rotulo="Data">{{ s.criado_em | hora_br }}</td>
-            <td data-rotulo="Tipo"><span class="badge {{ 'tipo-reputacao' if reputacao else 'tipo-cancelamento' }}">{{ 'Reputação' if reputacao else 'Cancelamento' }}</span></td>
+            <td data-rotulo="Tipo"><span class="badge {{ 'tipo-reverso' if reverso else ('tipo-reputacao' if reputacao else 'tipo-cancelamento') }}">{{ 'Reverso' if reverso else ('Reputação' if reputacao else 'Cancelamento') }}</span></td>
             <td data-rotulo="Plataforma"><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></td>
-            <td data-rotulo="Nº da venda">{{ s.numero_venda }}</td>
-            <td data-rotulo="Motivo">{{ s.motivo }}</td>
+            <td data-rotulo="Nº da venda">{{ s.numero_venda }}{% if reverso and s.produto_titulo %}<div class="rev-detalhe">{{ s.produto_titulo }}</div>{% endif %}</td>
+            <td data-rotulo="Motivo">{{ s.motivo }}
+              {% if reverso %}
+              <div class="rev-detalhe">
+                {% if s.origem == "logistica" %}Retorno recebido no {{ GALPOES.get(s.galpao, "galpão") }}{% if s.solicitado_por %} por {{ s.solicitado_por }}{% endif %}, {{ s.criado_em | hora_br }}.{% else %}Você avisou este reverso.{% endif %}
+                {% if s.estado_chegada %}<br>Aspecto ao chegar: {{ ESTADOS_CHEGADA.get(s.estado_chegada, s.estado_chegada) }}.{% endif %}
+              </div>
+              {% set fotos = s.fotos_base64 | fotos_lista %}
+              {% if fotos %}<details class="rev-fotos"><summary>Ver fotos ({{ fotos|length }})</summary><div>{% for f in fotos %}<a href="{{ f }}" target="_blank" rel="noopener"><img src="{{ f }}" alt="Foto do reverso"></a>{% endfor %}</div></details>{% endif %}
+              {% endif %}
+            </td>
             <td data-rotulo="Status"><div>
-              {% if s.confirmado_por %}
+              {% if reverso %}
+                {% if s.confirmado_por %}
+                  {% if s.resultado_reverso == "liberado_venda" %}
+                  <span class="status-confirmado">✓ Liberado para venda por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  {% set itens_ck = s.checklist_json | checklist_itens %}
+                  {% if itens_ck %}<div class="rev-detalhe">Conferido pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
+                  {% else %}
+                  <span class="status-confirmado">✓ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Concluído") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  {% endif %}
+                  {% if s.observacao_resultado %}<div class="rev-detalhe">{{ s.observacao_resultado }}</div>{% endif %}
+                {% elif s.em_atendimento_por_id %}
+                <span class="status-pendente">Em tratamento por {{ s.em_atendimento_por }}</span>
+                {% elif s.origem == "logistica" %}
+                <span class="status-pendente">Recebido no galpão, em conferência</span>
+                {% else %}
+                <span class="status-pendente">Aguardando a equipe</span>
+                {% endif %}
+              {% elif s.confirmado_por %}
               <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
               {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>
               {% elif s.protocolo == "" and s.confirmado_por %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} pelo painel do ML</b> (sem protocolo)</div>{% endif %}

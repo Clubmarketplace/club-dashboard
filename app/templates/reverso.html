@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Reverso</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <style>
+    :root {
+      --cmx-leve:#fdf3e3; --cmx-atencao:#d98e2f; --cmx-critico:#c1502e; --cmx-critico-fundo:#fbe9e3;
+      --rev:#0f766e; --rev-fundo:#d9f2ee;
+    }
+    main { max-width:860px; margin:0 auto; padding:28px 24px 60px; }
+    .cartao-rev { background:#fff; border:1px solid var(--cmx-borda); border-radius:14px; padding:22px; margin-bottom:20px; }
+    .cartao-rev h2 { font-size:17px; margin:0 0 4px; }
+    .cartao-rev .sub { margin:0 0 16px; color:var(--cmx-texto-suave); font-size:13.5px; }
+    .grade { display:grid; grid-template-columns:1fr 1fr; gap:14px 16px; margin-bottom:14px; }
+    @media (max-width:700px) { .grade { grid-template-columns:1fr; } main { padding:20px 14px 50px; } }
+    .campo label.rot, label.rot { display:block; font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); margin-bottom:5px; }
+    .campo input[type=text], .campo select, .campo textarea {
+      width:100%; box-sizing:border-box; font:inherit; font-size:14px; padding:10px 12px; border:1.5px solid var(--cmx-borda); border-radius:9px; background:#fff;
+    }
+    .campo textarea { min-height:70px; resize:vertical; }
+    .plats { display:flex; gap:8px; flex-wrap:wrap; }
+    .plat { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:999px; padding:8px 14px; font:inherit; font-size:13px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; }
+    .plat[aria-pressed=true] { border-color:var(--rev); background:var(--rev); color:#fff; }
+    .fotos { display:grid; grid-template-columns:repeat(auto-fill,minmax(110px,1fr)); gap:10px; margin:6px 0 14px; }
+    .slot { position:relative; aspect-ratio:1; border:2px dashed var(--cmx-borda); border-radius:12px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; cursor:pointer; color:var(--cmx-texto-suave); font-size:12px; overflow:hidden; }
+    .slot .mais { font-size:26px; line-height:1; color:var(--rev); }
+    .slot input { display:none; }
+    .slot.cheio { border-style:solid; border-color:var(--rev); }
+    .slot img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+    .slot .rm { position:absolute; top:4px; right:4px; width:24px; height:24px; border-radius:50%; border:none; background:rgba(0,0,0,.65); color:#fff; cursor:pointer; font-size:14px; line-height:1; }
+    .mais-foto { border:1.5px dashed var(--rev); background:var(--rev-fundo); color:var(--rev); border-radius:12px; font:inherit; font-weight:600; font-size:13px; cursor:pointer; min-height:60px; }
+    .botao-rev { background:var(--rev); color:#fff; border:none; border-radius:9px; padding:11px 20px; font:inherit; font-weight:600; font-size:14px; cursor:pointer; }
+    .botao-rev:disabled { opacity:.5; cursor:not-allowed; }
+    .botao-sec { background:#fff; color:var(--cmx-texto); border:1.5px solid var(--cmx-borda); border-radius:9px; padding:10px 16px; font:inherit; font-weight:600; font-size:13.5px; cursor:pointer; }
+    .msg { margin-top:12px; font-size:13.5px; padding:10px 12px; border-radius:9px; display:none; }
+    .msg.ok { display:block; background:#e6f6ee; color:#1f6b45; }
+    .msg.erro { display:block; background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
+    .item-ag { padding:14px 0; border-top:1px solid var(--cmx-borda); }
+    .item-ag:first-child { border-top:none; }
+    .item-ag .topo { display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; }
+    .item-ag .peq { font-size:12.5px; color:var(--cmx-texto-suave); }
+    .check-box { margin-top:12px; padding:14px; border:1.5px solid var(--rev); border-radius:12px; background:var(--rev-fundo); }
+    .check-box label { display:flex; gap:10px; align-items:center; padding:5px 0; font-size:14px; cursor:pointer; }
+    .check-box .acoes { display:flex; gap:10px; flex-wrap:wrap; margin-top:10px; }
+    .pill { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; background:var(--rev-fundo); color:var(--rev); }
+    .pill.ok { background:#e6f6ee; color:#1f6b45; }
+    .vazio { text-align:center; padding:20px; color:var(--cmx-texto-suave); font-size:13.5px; }
+    .ver-fotos img { width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); margin:6px 6px 0 0; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% if modo_galpao %}{% include "_menu_logistica.html" %}{% else %}{% include "_menu_seller.html" %}{% endif %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ "Logística" if modo_galpao else conta_seller }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario"><a href="/logout">🚪 Sair</a></div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>{{ "Receber reverso" if modo_galpao else "Avisar um reverso" }}</h1>
+          <p class="cmx-subtitulo">{% if modo_galpao %}Produto que voltou para o galpão: registre a chegada com fotos e, depois de testar e conferir, libere para venda{% else %}Produto que voltou ou está voltando (devolução, recusa na entrega, chegou quebrado) da conta {{ conta_seller }}{% endif %}</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="cartao-rev">
+          <h2>{{ "Registrar chegada do reverso" if modo_galpao else "Novo aviso de reverso" }}</h2>
+          <p class="sub">{% if modo_galpao %}A conta é escolhida por você; o reverso já aparece no painel da equipe e no painel do seller dela.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
+
+          <div class="grade">
+            {% if modo_galpao %}
+            <div class="campo"><label class="rot" for="galpao">Galpão</label>
+              <select id="galpao">
+                <option value="">Escolha o galpão</option>
+                {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
+              </select></div>
+            {% endif %}
+            <div class="campo"><label class="rot">Plataforma</label>
+              <div class="plats" id="plats">
+                <button type="button" class="plat" data-v="mercado_livre" aria-pressed="true">Mercado Livre</button>
+                <button type="button" class="plat" data-v="shopee" aria-pressed="false">Shopee</button>
+                <button type="button" class="plat" data-v="magalu" aria-pressed="false">Magalu</button>
+                <button type="button" class="plat" data-v="tiktok_shop" aria-pressed="false">TikTok Shop</button>
+              </div></div>
+          </div>
+
+          <div class="grade">
+            {% if modo_galpao %}
+            <div class="campo"><label class="rot" for="conta">Conta</label>
+              <input type="text" id="conta" list="lista-contas" placeholder="Digite e escolha a conta" autocomplete="off" />
+              <datalist id="lista-contas"></datalist></div>
+            <div class="campo"><label class="rot" for="produto">Produto (SKU ou nome)</label>
+              <input type="text" id="produto" maxlength="200" placeholder="Ex.: Miniprocessador Cadence · MPR530" /></div>
+            {% else %}
+            <div class="campo"><label class="rot" for="produto">Produto (opcional)</label>
+              <input type="text" id="produto" maxlength="200" placeholder="SKU ou nome do produto" /></div>
+            {% endif %}
+            <div class="campo"><label class="rot" for="venda">Nº da venda{{ " (se souber)" if modo_galpao else "" }}</label>
+              <input type="text" id="venda" inputmode="numeric" placeholder="{{ 'Opcional' if modo_galpao else 'Número do pedido' }}" autocomplete="off" /></div>
+            {% if modo_galpao %}
+            <div class="campo"><label class="rot" for="estado">Aspecto ao chegar</label>
+              <select id="estado">
+                {% for chave, nome in ESTADOS_CHEGADA.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
+              </select></div>
+            {% else %}
+            <div class="campo"><label class="rot" for="motivo-sel">O que aconteceu</label>
+              <select id="motivo-sel">
+                <option>Devolução do cliente</option>
+                <option>Recusa na entrega</option>
+                <option>Chegou quebrado</option>
+                <option>Envio errado</option>
+                <option>Outro</option>
+              </select></div>
+            {% endif %}
+          </div>
+
+          <div class="campo" style="margin-bottom:14px">
+            <label class="rot" for="obs">Observação (opcional)</label>
+            <textarea id="obs" placeholder="{{ 'Ex.: embalagem violada, acessórios completos' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
+          </div>
+
+          <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
+          <div class="fotos" id="fotos"></div>
+
+          <button type="button" class="botao-rev" id="enviar">{{ "Registrar recebimento" if modo_galpao else "Enviar reverso" }}</button>
+          <div class="msg" id="msg"></div>
+        </div>
+
+        {% if modo_galpao %}
+        <div class="cartao-rev">
+          <h2>Recebidos aguardando conferência</h2>
+          <p class="sub">Depois de testar e conferir, clique em <b>Liberar para venda</b>. Abre o checklist; com tudo marcado, você confirma e o produto volta para venda. Fica registrado quem liberou, o dia e a hora, e o seller é informado.</p>
+          <div id="aguardando"><div class="vazio">Carregando...</div></div>
+        </div>
+        <div class="cartao-rev">
+          <h2>Liberados recentemente</h2>
+          <p class="sub">Reversos concluídos nos últimos 7 dias.</p>
+          <div id="liberados"><div class="vazio">Carregando...</div></div>
+        </div>
+        {% endif %}
+      </main>
+    </div>
+  </div>
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    const MODO_GALPAO = {{ 'true' if modo_galpao else 'false' }};
+    const CONTA_SELLER = {{ (conta_seller or '') | tojson }};
+    const MAX_FOTOS = 20;
+    const CHECKLIST = [
+      ["caixa", "Caixa original em boas condições"],
+      ["sem_avarias", "Produto sem avarias"],
+      ["acessorios_manuais", "Todos os acessórios e manuais"],
+      ["testado", "Testado e funcionando"],
+    ];
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    const chaveConta = (n) => String(n || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
+    function quando(iso) {
+      if (!iso) return "";
+      const d = new Date(/([zZ]|[+-]\d{2}:?\d{2})$/.test(iso) ? iso : iso + "Z");
+      return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short", timeZone: "America/Sao_Paulo" });
+    }
+    function mensagem(texto, erro) {
+      const m = $("msg"); m.className = "msg " + (erro ? "erro" : "ok"); m.textContent = texto;
+    }
+
+    // ---------- Plataforma ----------
+    let plataforma = "mercado_livre";
+    $("plats").addEventListener("click", (e) => {
+      const b = e.target.closest(".plat"); if (!b) return;
+      plataforma = b.dataset.v;
+      document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
+    });
+
+    // ---------- Fotos (cada uma é reduzida a 1280px e comprimida antes de enviar) ----------
+    let slots = MODO_GALPAO ? 3 : 1;
+    let fotos = [];   // dataURL por posição (null = vazio)
+    function lerFoto(arquivo, posicao) {
+      if (!arquivo || !arquivo.type.startsWith("image/")) return mensagem("O arquivo precisa ser uma imagem.", true);
+      const leitor = new FileReader();
+      leitor.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const maior = Math.max(img.width, img.height), escala = maior > 1280 ? 1280 / maior : 1;
+          const c = document.createElement("canvas");
+          c.width = Math.round(img.width * escala); c.height = Math.round(img.height * escala);
+          c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+          fotos[posicao] = c.toDataURL("image/jpeg", 0.75);
+          desenharFotos();
+        };
+        img.src = leitor.result;
+      };
+      leitor.readAsDataURL(arquivo);
+    }
+    function desenharFotos() {
+      const box = $("fotos"); box.innerHTML = "";
+      for (let i = 0; i < slots; i++) {
+        const l = document.createElement("label");
+        l.className = "slot" + (fotos[i] ? " cheio" : "");
+        l.innerHTML = fotos[i]
+          ? `<img src="${fotos[i]}" alt="Foto ${i + 1}"><button type="button" class="rm" aria-label="Remover foto">×</button>`
+          : `<span class="mais">+</span><span>Foto ${i + 1}</span><input type="file" accept="image/*" aria-label="Foto ${i + 1}">`;
+        if (fotos[i]) {
+          l.querySelector(".rm").addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); fotos[i] = null; desenharFotos(); });
+        } else {
+          l.querySelector("input").addEventListener("change", (e) => { if (e.target.files[0]) lerFoto(e.target.files[0], i); });
+        }
+        box.appendChild(l);
+      }
+      if (slots < MAX_FOTOS) {
+        const m = document.createElement("button");
+        m.type = "button"; m.className = "mais-foto"; m.textContent = "+ Incluir outra foto";
+        m.addEventListener("click", () => { slots++; desenharFotos(); });
+        box.appendChild(m);
+      }
+    }
+    desenharFotos();
+
+    // ---------- Contas (galpão escolhe; seller tem só a dele) ----------
+    let contas = [];
+    async function carregarContas() {
+      if (!MODO_GALPAO) return;
+      try {
+        const r = await fetch("/api/solicitacoes-cancelamento/contas", { cache: "no-store" });
+        if (r.ok) contas = await r.json();
+      } catch (e) { console.error(e); }
+      $("lista-contas").innerHTML = contas.map(c => `<option value="${esc(c.nome)}"></option>`).join("");
+    }
+    carregarContas();
+
+    // galpão lembra o último usado neste aparelho
+    const CHAVE_GALPAO = "club_galpao_ultimo";
+    if (MODO_GALPAO) {
+      try { const u = localStorage.getItem(CHAVE_GALPAO); if (u && Array.from($("galpao").options).some(o => o.value === u)) $("galpao").value = u; } catch (e) {}
+      $("galpao").addEventListener("change", () => { try { localStorage.setItem(CHAVE_GALPAO, $("galpao").value); } catch (e) {} });
+    }
+
+    // ---------- Envio ----------
+    let enviando = false;
+    $("enviar").addEventListener("click", async () => {
+      if (enviando) return;
+      const venda = $("venda").value.replace(/\s+/g, "");
+      const produto = $("produto").value.trim();
+      const obs = $("obs").value.trim();
+      const lista = fotos.filter(Boolean);
+      const corpo = { plataforma, tipo: "reverso", itens: [] };
+      const item = { numero_venda: venda, produto: produto || null, fotos_base64: lista.length ? lista : null };
+      if (MODO_GALPAO) {
+        if (!$("galpao").value) return mensagem("Escolha o galpão.", true);
+        const conta = contas.find(c => chaveConta(c.nome) === chaveConta($("conta").value));
+        if (!conta) return mensagem("Escolha a conta na lista (digite o nome e selecione).", true);
+        if (!produto) return mensagem("Informe o produto (SKU ou nome).", true);
+        corpo.galpao = +$("galpao").value; corpo.conta = conta.nome;
+        item.estado_chegada = $("estado").value; item.motivo = obs || "Retorno recebido no galpão";
+      } else {
+        if (!venda) return mensagem("Informe o número da venda.", true);
+        corpo.conta = CONTA_SELLER;
+        item.motivo = $("motivo-sel").value + (obs ? " · " + obs : "");
+      }
+      corpo.itens.push(item);
+      enviando = true; $("enviar").disabled = true;
+      try {
+        let r = await fetch("/api/solicitacoes-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        if (r.status === 409) {
+          const d = (await r.json()).detail || {};
+          if (!confirm((d.mensagem || "Já existe um reverso para essa venda.") + "\nEnviar mesmo assim?")) return;
+          corpo.confirmar_duplicadas = true;
+          r = await fetch("/api/solicitacoes-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+        }
+        if (!r.ok) {
+          let detalhe = "Não foi possível registrar. Tente de novo.";
+          try { const d = await r.json(); detalhe = typeof d.detail === "string" ? d.detail : (Array.isArray(d.detail) ? d.detail.map(x => x.msg).join("; ") : detalhe); } catch (e) {}
+          return mensagem(detalhe, true);
+        }
+        mensagem(MODO_GALPAO
+          ? `Recebimento registrado para ${corpo.conta} (${lista.length} foto(s)). Já aparece para a equipe e no painel do seller; confira e libere abaixo quando estiver testado.`
+          : `Reverso enviado com ${lista.length} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
+        ["venda", "produto", "obs"].forEach(id => $(id).value = "");
+        if (MODO_GALPAO) $("conta").value = "";
+        fotos = []; slots = MODO_GALPAO ? 3 : 1; desenharFotos();
+        if (MODO_GALPAO) { carregarListas(); }
+      } catch (e) {
+        mensagem("Sem conexão. Tente de novo.", true);
+      } finally {
+        enviando = false; $("enviar").disabled = false;
+      }
+    });
+
+    // ---------- Galpão: aguardando conferência / liberados ----------
+    const abertos = {};   // id -> {ck: {chave: bool}}
+    let pendentes = [];
+    async function buscar(qs) {
+      const r = await fetch("/api/solicitacoes-cancelamento/busca?" + new URLSearchParams({ tipo: "reverso", por_pagina: 100, ...qs }), { cache: "no-store" });
+      if (r.status === 401) { location.href = "/login"; return null; }
+      if (!r.ok) throw new Error("status " + r.status);
+      return r.json();
+    }
+    function desenharAguardando() {
+      const box = $("aguardando");
+      if (!pendentes.length) { box.innerHTML = '<div class="vazio">Nenhum produto aguardando conferência.</div>'; return; }
+      box.innerHTML = pendentes.map(s => {
+        const aberto = abertos[s.id];
+        const fotos = (s.fotos_base64 || []);
+        const estado = s.estado_chegada_nome ? ` · ${esc(s.estado_chegada_nome)}` : "";
+        let ck = "";
+        if (aberto) {
+          const tudo = CHECKLIST.every(([k]) => aberto.ck[k]);
+          ck = `<div class="check-box"><b>Checklist para liberar</b>
+            ${CHECKLIST.map(([k, t]) => `<label><input type="checkbox" data-ck="${s.id}:${k}" ${aberto.ck[k] ? "checked" : ""}> ${esc(t)}</label>`).join("")}
+            <div class="acoes"><button type="button" class="botao-rev" data-conf="${s.id}" ${tudo ? "" : "disabled"}>Confirmar liberação para venda</button>
+            <button type="button" class="botao-sec" data-canc="${s.id}">Voltar</button></div>
+            ${tudo ? "" : '<div class="peq" style="margin-top:8px">Marque os 4 itens para liberar. Se algo não estiver ok, deixe o item aqui: a equipe trata no painel.</div>'}
+            <div class="msg erro" id="erro-${s.id}" style="display:none"></div></div>`;
+        }
+        return `<div class="item-ag"><div class="topo"><div><b>${esc(s.produto_titulo || s.sku || "Produto")}</b>
+          <div class="peq">${esc(s.conta_nome || s.conta)} · ${esc(s.galpao_nome || "")} · recebido ${quando(s.criado_em)}${s.solicitado_por ? " por " + esc(s.solicitado_por) : ""}${estado}${s.numero_venda && s.numero_venda !== "sem número" ? " · venda " + esc(s.numero_venda) : ""}</div>
+          ${s.motivo && s.motivo !== "Retorno recebido no galpão" ? `<div class="peq">${esc(s.motivo)}</div>` : ""}
+          ${s.em_atendimento_por ? `<div class="peq">Em tratamento pela equipe: ${esc(s.em_atendimento_por)}</div>` : ""}
+          ${fotos.length ? `<div class="ver-fotos">${fotos.slice(0, 6).map(f => `<a href="${f}" target="_blank" rel="noopener"><img src="${f}" alt="Foto"></a>`).join("")}${fotos.length > 6 ? `<span class="peq"> +${fotos.length - 6}</span>` : ""}</div>` : ""}
+          </div>${aberto ? "" : `<button type="button" class="botao-rev" data-lib="${s.id}">Liberar para venda</button>`}</div>${ck}</div>`;
+      }).join("");
+    }
+    $("aguardando") && $("aguardando").addEventListener("click", async (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      if (b.dataset.lib) { abertos[b.dataset.lib] = { ck: {} }; desenharAguardando(); }
+      else if (b.dataset.canc) { delete abertos[b.dataset.canc]; desenharAguardando(); }
+      else if (b.dataset.conf) {
+        const id = b.dataset.conf; b.disabled = true;
+        try {
+          const r = await fetch(`/api/reverso/${id}/liberar-venda`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ checklist: abertos[id].ck }) });
+          if (!r.ok) {
+            let d = "Não foi possível liberar."; try { const j = await r.json(); if (typeof j.detail === "string") d = j.detail; } catch (x) {}
+            const er = $("erro-" + id); er.style.display = "block"; er.textContent = d; b.disabled = false; return;
+          }
+          delete abertos[id]; await carregarListas();
+        } catch (x) { b.disabled = false; }
+      }
+    });
+    $("aguardando") && $("aguardando").addEventListener("change", (e) => {
+      const d = e.target.dataset.ck; if (!d) return;
+      const [id, k] = d.split(":"); if (abertos[id]) { abertos[id].ck[k] = e.target.checked; desenharAguardando(); }
+    });
+    async function carregarListas() {
+      try {
+        const p = await buscar({ status: "pendente", dias: 90 });
+        if (p) { pendentes = p.itens.filter(s => !s.confirmado_por); desenharAguardando(); }
+        const c = await buscar({ status: "confirmado", dias: 7 });
+        if (c) {
+          $("liberados").innerHTML = c.itens.length ? c.itens.map(s => `<div class="item-ag"><div class="topo"><div><b>${esc(s.produto_titulo || s.sku || "Produto")}</b>
+            <div class="peq">${esc(s.conta_nome || s.conta)} · ${esc(s.galpao_nome || "")} · recebido ${quando(s.criado_em)}</div></div>
+            <div><span class="pill ${s.resultado_reverso === "liberado_venda" ? "ok" : ""}">${esc(s.resultado_reverso_nome || "Concluído")}</span>
+            <div class="peq">por ${esc(s.confirmado_por)} · ${quando(s.confirmado_em)}</div></div></div></div>`).join("")
+            : '<div class="vazio">Nenhum reverso concluído nos últimos 7 dias.</div>';
+        }
+      } catch (e) { console.error(e); }
+    }
+    if (MODO_GALPAO) { carregarListas(); setInterval(() => { if (!Object.keys(abertos).length) carregarListas(); }, 30000); }
+  </script>
+</body>
+</html>

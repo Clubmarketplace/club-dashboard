@@ -28,6 +28,11 @@
     .st-livre { background:#f1f3f5; color:#4a5663; } .st-outro { background:#fff0d6; color:#8a4f00; }
     /* Tipo da solicitação */
     .tp-cancelamento { background:#eceff2; color:#1b2430; } .tp-reputacao { background:#efeafd; color:#5a3cc4; }
+    /* Reverso (26/10): cor própria (verde-azulado) pro operador reconhecer de longe */
+    .tp-reverso { background:#d1f0eb; color:#0b5d56; }
+    .sl-row.rev { box-shadow:inset 5px 0 0 #0f766e; background:#f0faf8 !important; }
+    .sl-row.rev:hover { background:#e3f5f2 !important; }
+    .sl-pill.res-ok { background:#dff5e9; color:#0c6b44; } .sl-pill.res-ml { background:#fff0d6; color:#8a4f00; } .sl-pill.res-nao { background:#eceff2; color:#46525e; }
     .st-meu { background:#e1efff; color:#17589a; } .st-ok { background:#dff5e9; color:#0c6b44; }
 
     /* Aqui a barra de filtros "cola" na lista, formando um cartão só */
@@ -180,7 +185,7 @@
       {% endif %}      <header class="cmx-topbar">
         <div>
           <h1>Solicitações sellers</h1>
-          <p class="cmx-subtitulo">Pedidos de cancelamento e de reputação de todas as contas</p>
+          <p class="cmx-subtitulo">Pedidos de cancelamento, reputação e reverso de todas as contas</p>
         </div>
       </header>
 
@@ -232,6 +237,30 @@
       <div class="botoes">
         <button class="sl-btn grande" id="conf-cancelar">Cancelar</button>
         <button class="sl-btn grande pri" id="conf-ok">Confirmar cancelamento</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Concluir reverso (26/10) -->
+  <div class="sl-modal-fundo" id="modal-reverso">
+    <div class="sl-modal" role="dialog" aria-modal="true" aria-labelledby="rev-titulo">
+      <h3 id="rev-titulo">Concluir reverso</h3>
+      <p class="desc" id="rev-detalhe"></p>
+      <label class="t" for="rev-resultado">Resultado do tratamento</label>
+      <select id="rev-resultado">
+        <option value="">Selecione…</option>
+        <option value="liberado_venda">Liberado para venda</option>
+        <option value="negociacao_ml">Em negociação com o ML</option>
+        <option value="negociacao_ressarcido">Negociação com o ML: ressarcido</option>
+        <option value="negociacao_sem_ressarcimento">Negociação com o ML: sem ressarcimento</option>
+        <option value="descartado">Descartado (não vendável)</option>
+      </select>
+      <label class="t" for="rev-obs">Observação (opcional, o seller vê)</label>
+      <input type="text" id="rev-obs" maxlength="500" placeholder="Ex.: ML ressarciu em 3 dias" autocomplete="off" />
+      <div class="erro" id="rev-erro"></div>
+      <div class="botoes">
+        <button class="sl-btn grande" id="rev-cancelar">Cancelar</button>
+        <button class="sl-btn grande pri" id="rev-ok">Concluir reverso</button>
       </div>
     </div>
   </div>
@@ -303,12 +332,14 @@
 
     // ---------- Tipo da solicitação ----------
     // tipo nulo (registro antigo) = cancelamento. O fluxo é o mesmo; mudam os textos.
-    const NOMES_TIPO = { cancelamento: "Cancelamento", reputacao: "Reputação" };
-    const tipoDe = (s) => (s.tipo === "reputacao" ? "reputacao" : "cancelamento");
+    const NOMES_TIPO = { cancelamento: "Cancelamento", reputacao: "Reputação", reverso: "Reverso" };
+    const tipoDe = (s) => (s.tipo === "reputacao" ? "reputacao" : s.tipo === "reverso" ? "reverso" : "cancelamento");
     const ehReputacao = (s) => tipoDe(s) === "reputacao";
+    const ehReverso = (s) => tipoDe(s) === "reverso";
+    const CLASSE_RESULTADO = (r) => (r === "liberado_venda" ? "res-ok" : (r || "").startsWith("negociacao") ? "res-ml" : "res-nao");
     const htmlTipo = (s) => `<span class="sl-pill tp-${tipoDe(s)}">${NOMES_TIPO[tipoDe(s)]}</span>`;
     // "Confirmar cancelamento" / "Confirmar reputação" (botões e título da janela)
-    const textoConfirmar = (s) => (ehReputacao(s) ? "Confirmar reputação" : "Confirmar cancelamento");
+    const textoConfirmar = (s) => (ehReverso(s) ? "Concluir reverso" : ehReputacao(s) ? "Confirmar reputação" : "Confirmar cancelamento");
 
     let itens = [];            // o que está na tela
     let ultimaResposta = null;
@@ -364,6 +395,7 @@
       return min < 1 ? "agora" : textoEspera(min);
     }
     function situacao(s) {
+      if (s.confirmado_por && ehReverso(s)) return ["✓ " + (s.resultado_reverso_nome || "Concluído"), "st-ok"];
       if (s.confirmado_por) return [ehReputacao(s) ? "✓ Resolvido" : "✓ Cancelado", "st-ok"];
       if (ehMeu(s)) return ["Com você · " + tempoComOperador(s), "st-meu"];
       if (ehDeOutro(s)) return ["Com " + s.em_atendimento_por + " · " + tempoComOperador(s), "st-outro"];
@@ -402,14 +434,18 @@
           ${pendente ? `
             ${!ehMeu(s) ? `<button data-acao="confirmar" data-id="${s.id}">${textoConfirmar(s)}</button>` : ""}
             ${s.plataforma === "mercado_livre" ? `
-              <button data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
+              ${!ehReverso(s) ? `<button data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>` : ""}
               <a href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}">Abrir atendimento ML</a>
-              ${!ehReputacao(s) ? `<button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
+              ${!ehReputacao(s) && !ehReverso(s) ? `<button data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
             ${ehMeu(s) ? `<button data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}` : ""}
           <button data-acao="abrir" data-id="${s.id}">Ver detalhes e histórico</button>
         </div>`;
+      const detalheReverso = ehReverso(s) ? `
+            <div class="sl-sub">${s.produto_titulo ? "Produto: <b>" + esc(s.produto_titulo) + "</b>" : ""}${s.estado_chegada_nome ? (s.produto_titulo ? " · " : "") + esc(s.estado_chegada_nome) : ""}</div>
+            ${s.confirmado_por && s.resultado_reverso === "liberado_venda" && s.liberado_em && s.checklist ? `<div class="sl-sub"><b>Liberado pela logística</b> (checklist completo) · ${esc(s.liberado_por)}</div>` : ""}
+            ${s.observacao_resultado ? `<div class="sl-sub">${esc(s.observacao_resultado)}</div>` : ""}` : "";
       return `
-        <div class="sl-row">
+        <div class="sl-row${ehReverso(s) ? " rev" : ""}">
           <div class="c-venda">
             <div class="sl-venda"><button class="sl-num" data-acao="abrir" data-id="${s.id}">${esc(s.numero_venda)}</button><span class="sl-pill ${CLASSE_PLATAFORMA[s.plataforma] || ""}">${CURTO_PLATAFORMA[s.plataforma] || esc(s.plataforma)}</span>${htmlTipo(s)}</div>
             <div class="sl-conta">${esc(s.conta)}</div>
@@ -418,6 +454,7 @@
           <div class="c-motivo">
             <div class="sl-motivo">${esc(s.motivo)}${((s.fotos_base64 && s.fotos_base64.length) || s.link_evidencia) ? ' <span title="Tem foto ou link anexado" style="font-size:12px;">📎</span>' : ""}</div>
             <div style="margin-top:6px">${htmlOrigem(s)}</div>
+            ${detalheReverso}
             ${s.confirmado_por && s.protocolo === "" ? `<div class="sl-sub"><b>${ehReputacao(s) ? "Resolvido" : "Cancelado"} pelo painel do ML</b> (sem protocolo)</div>`
               : s.confirmado_por && s.protocolo != null ? `<div class="sl-sub">Protocolo: <b>${esc(textoProtocolo(s))}</b></div>` : ""}
           </div>
@@ -464,7 +501,7 @@
       if (acao === "liberar") return liberar(s);
       if (acao === "confirmar") {
         if (ehDeOutro(s) && !confirm(`${s.em_atendimento_por} está tratando esse pedido. Confirmar mesmo assim?`)) return renderizarLista();
-        return abrirConfirmacao(s);
+        return ehReverso(s) ? abrirConclusaoReverso(s) : abrirConfirmacao(s);
       }
       if (acao === "copiar") return copiarMensagem(s);
       if (acao === "atendimento") { // o link abre normalmente; aqui só assume
@@ -558,9 +595,9 @@
             : `<button class="sl-btn pri" data-acao="${ehDeOutro(s) ? "assumir-lugar" : "assumir"}" data-id="${s.id}">${ehDeOutro(s) ? "Assumir (está com " + esc(s.em_atendimento_por) + ")" : "Assumir atendimento"}</button>
                <button class="sl-btn" data-acao="confirmar" data-id="${s.id}">${textoConfirmar(s)}</button>`}
           ${s.plataforma === "mercado_livre" ? `
-            <button class="sl-btn" data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>
+            ${!ehReverso(s) ? `<button class="sl-btn" data-acao="copiar" data-id="${s.id}">Copiar mensagem para o ML</button>` : ""}
             <a class="sl-btn" href="https://www.mercadolivre.com.br/chat" target="_blank" rel="noopener" data-acao="atendimento" data-id="${s.id}" style="text-decoration:none">Abrir atendimento ML</a>
-            ${!ehReputacao(s) ? `<button class="sl-btn" data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
+            ${!ehReputacao(s) && !ehReverso(s) ? `<button class="sl-btn" data-acao="verificar" data-id="${s.id}">Verificar no ML agora</button>` : ""}` : ""}
           ${ehMeu(s) ? `<button class="sl-btn" data-acao="liberar" data-id="${s.id}">Liberar atendimento</button>` : ""}
         </div>`;
       }
@@ -568,7 +605,7 @@
         <div><span class="sl-pill ${sitCls}">${esc(sitTxt)}</span> ${htmlTipo(s)}</div>
         <div class="sl-campo"><div class="r">Motivo</div>${esc(s.motivo)}</div>
         <div class="sl-campo"><div class="r">Solicitado por</div>${esc(textoOrigem(s))} · ${formatarData(s.criado_em)}</div>
-        <div class="sl-campo"><div class="r">Produto (SKU)</div>${s.sku ? esc(s.sku.replace(/,/g, ", ")) + (s.produto_titulo ? " · " + esc(s.produto_titulo) : "") : '<span class="sl-sub">Não identificado</span>'}</div>
+        <div class="sl-campo"><div class="r">${ehReverso(s) ? "Produto" : "Produto (SKU)"}</div>${ehReverso(s) ? (s.produto_titulo ? esc(s.produto_titulo) : '<span class="sl-sub">Não informado</span>') : s.sku ? esc(s.sku.replace(/,/g, ", ")) + (s.produto_titulo ? " · " + esc(s.produto_titulo) : "") : '<span class="sl-sub">Não identificado</span>'}</div>
         ${((s.fotos_base64 && s.fotos_base64.length) || s.link_evidencia) ? `
         <div class="sl-campo"><div class="r">Evidência</div>
           ${(s.fotos_base64 && s.fotos_base64.length) ? `<div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:${s.link_evidencia ? "8px" : "0"};">
@@ -576,7 +613,14 @@
           </div>` : ""}
           ${s.link_evidencia ? `<a href="${esc(s.link_evidencia)}" target="_blank" rel="noopener" style="font-size:13px; color:#1f6fb2; word-break:break-all;">${esc(s.link_evidencia)}</a>` : ""}
         </div>` : ""}
-        ${s.confirmado_por ? `
+        ${ehReverso(s) ? `
+          ${s.estado_chegada_nome ? `<div class="sl-campo"><div class="r">Aspecto ao chegar</div>${esc(s.estado_chegada_nome)}</div>` : ""}
+          ${(s.checklist_itens && s.checklist_itens.length) ? `<div class="sl-campo"><div class="r">Checklist do galpão</div>${s.checklist_itens.map((i) => `<div>${i.ok ? "✓" : "✗"} ${esc(i.nome)}</div>`).join("")}</div>` : ""}
+          ${s.confirmado_por ? `
+            <div class="sl-campo"><div class="r">Resultado</div><span class="sl-pill ${CLASSE_RESULTADO(s.resultado_reverso)}">${esc(s.resultado_reverso_nome || "Concluído")}</span>
+              ${s.liberado_por && s.resultado_reverso === "liberado_venda" && s.checklist ? `<div class="sl-sub">Liberado pela logística: <b>${esc(s.liberado_por)}</b> · ${formatarData(s.liberado_em)}</div>` : ""}</div>
+            <div class="sl-campo"><div class="r">Concluído</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}${s.observacao_resultado ? `<div class="sl-sub">${esc(s.observacao_resultado)}</div>` : ""}</div>` : ""}`
+        : s.confirmado_por ? `
           <div class="sl-campo"><div class="r">${ehReputacao(s) ? "Resolvido" : "Cancelado"}</div>por <b>${esc(s.confirmado_por)}</b> · ${formatarData(s.confirmado_em)}</div>
           <div class="sl-campo"><div class="r">Protocolo</div>${s.protocolo != null ? esc(textoProtocolo(s)) : "—"}${s.resultado_impacto ? " · " + esc(ROTULO_IMPACTO[s.resultado_impacto] || s.resultado_impacto) : ""}</div>` : ""}
         ${acoes}
@@ -613,6 +657,36 @@
     }
     $("p-fechar").addEventListener("click", fecharPainel);
     $("veu").addEventListener("click", fecharPainel);
+
+    // ---------- Concluir reverso (resultado do tratamento) ----------
+    let concluindoId = null;
+    function abrirConclusaoReverso(s) {
+      concluindoId = s.id;
+      $("rev-detalhe").textContent = `Conta ${s.conta}${s.produto_titulo ? " · " + s.produto_titulo : ""}${s.numero_venda && s.numero_venda !== "sem número" ? " · venda " + s.numero_venda : ""}. Informe como o reverso terminou; o seller vê o resultado no painel dele.`;
+      $("rev-resultado").value = ""; $("rev-obs").value = ""; $("rev-erro").style.display = "none";
+      $("modal-reverso").classList.add("aberto");
+    }
+    $("rev-cancelar").addEventListener("click", () => fecharModal("modal-reverso"));
+    $("modal-reverso").addEventListener("click", (e) => { if (e.target.id === "modal-reverso") fecharModal("modal-reverso"); });
+    $("rev-ok").addEventListener("click", async () => {
+      const resultado = $("rev-resultado").value;
+      const erro = (t) => { $("rev-erro").textContent = t; $("rev-erro").style.display = "block"; };
+      if (!resultado) return erro("Selecione o resultado do tratamento.");
+      const botao = $("rev-ok"); botao.disabled = true;
+      try {
+        const r = await fetch(`/api/solicitacoes-cancelamento/${concluindoId}/reverso/concluir`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ resultado, observacao: $("rev-obs").value.trim() || null }),
+        });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : "Não foi possível concluir.");
+        fecharModal("modal-reverso");
+        avisar('Reverso concluído. Está no status "Confirmados".');
+        await atualizar();
+        if (painelDe) { desenharPainel(); carregarHistorico(painelDe); }
+      } catch (e) { erro(e.message); }
+      finally { botao.disabled = false; }
+    });
 
     // ---------- Confirmar cancelamento ----------
     let confirmandoId = null;

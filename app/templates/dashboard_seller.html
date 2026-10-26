@@ -141,6 +141,13 @@
                   <div class="club-sub">solicitações confirmadas no mês</div>
                 </div>
               </div>
+              <div class="club-item" id="club-reverso-item" style="display:none;">
+                <span class="club-check">✓</span>
+                <div>
+                  <div class="club-titulo" id="club-reverso-titulo">0 reversos recebidos</div>
+                  <div class="club-sub" id="club-reverso-sub"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -317,6 +324,24 @@ async function carregarDashboard() {
     document.getElementById("club-promocoes-titulo").textContent = (pa.mes || 0) + " promoções aderidas automaticamente";
     document.getElementById("club-promocoes-sub").textContent = (pa.hoje || 0) + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
     document.getElementById("club-cancel-titulo").textContent = (cancelMes.confirmados || 0) + " cancelamentos tratados";
+
+    // Reversos (produto que voltou): chegou no galpão -> conferência -> liberado pra venda
+    // ou resolvido com o ML. Só aparece se a conta teve algum reverso no mês.
+    const rev = (dados.reversos && dados.reversos.mes) || {};
+    const revItem = document.getElementById("club-reverso-item");
+    if (rev.chegaram) {
+      revItem.style.display = "";
+      document.getElementById("club-reverso-titulo").textContent =
+        rev.chegaram + (rev.chegaram === 1 ? " reverso recebido" : " reversos recebidos") + " no mês";
+      const partes = [];
+      if (rev.liberados_venda) partes.push(rev.liberados_venda + " liberado(s) para venda");
+      if (rev.negociacao_ml) partes.push(rev.negociacao_ml + " tratado(s) com o ML");
+      if (rev.descartados) partes.push(rev.descartados + " não vendável(is)");
+      if (rev.em_andamento) partes.push(rev.em_andamento + " em andamento (veja em Minhas solicitações)");
+      document.getElementById("club-reverso-sub").textContent = partes.join(" · ");
+    } else {
+      revItem.style.display = "none";
+    }
 
     // Gráfico de evolução: guarda os dois conjuntos (14 dias / mês) pra
     // trocar sem precisar buscar de novo, e desenha o selecionado.
