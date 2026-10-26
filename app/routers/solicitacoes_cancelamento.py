@@ -112,7 +112,11 @@ CHECKLIST_REVERSO = {
     "acessorios_manuais": "Todos os acessórios e manuais",
     "testado": "Testado e funcionando",
 }
-MAX_FOTOS_REVERSO = 20
+MAX_FOTOS_REVERSO = 10
+# Teto por foto (rede de segurança): o navegador já reduz pra ~80 KB (ver
+# static/fotos.js); isto só impede que algo fora do padrão encha o banco.
+# 800 mil caracteres de base64 = ~600 KB de imagem.
+MAX_CHARS_FOTO = 800_000
 MAX_FOTOS_OUTROS = 5
 
 
@@ -215,12 +219,10 @@ class ItemCancelamento(BaseModel):
     def validar_fotos(cls, valor: Optional[list]) -> Optional[list]:
         if not valor:
             return None
-        # Limite de segurança (não o tamanho esperado de verdade): no
-        # máximo 5 fotos por venda, cada uma até ~2.5 milhões de
-        # caracteres base64 (~1.8 MB) -- bem acima do que a compressão
-        # no navegador deveria gerar.
-        # (o limite de 5 vale só pra cancelamento/reputação e é conferido em
-        # criar_solicitacoes, que sabe o tipo; o reverso aceita até 20.)
+        # Limite de segurança: cada foto até MAX_CHARS_FOTO caracteres base64
+        # (o navegador gera ~80 KB; isto é só o teto). O limite de 5 fotos vale
+        # pra cancelamento/reputação e é conferido em criar_solicitacoes, que
+        # sabe o tipo; o reverso aceita até MAX_FOTOS_REVERSO.
         if len(valor) > MAX_FOTOS_REVERSO:
             raise ValueError(f"No máximo {MAX_FOTOS_REVERSO} fotos.")
         fotos = []
@@ -230,8 +232,8 @@ class ItemCancelamento(BaseModel):
                 continue
             if not foto.startswith("data:image/"):
                 raise ValueError("Foto inválida.")
-            if len(foto) > 2_500_000:
-                raise ValueError("Foto muito grande. Tente uma imagem menor.")
+            if len(foto) > MAX_CHARS_FOTO:
+                raise ValueError("Foto muito grande. Tente de novo (a foto é reduzida automaticamente).")
             fotos.append(foto)
         return fotos or None
 
