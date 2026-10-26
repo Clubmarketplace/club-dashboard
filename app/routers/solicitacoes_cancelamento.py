@@ -495,7 +495,9 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     numeros = []
     for i in corpo.itens:
         if not (i.numero_venda or "").strip():
-            if not eh_reverso:
+            # Só o galpão/equipe podem registrar reverso sem nº de venda (nem sempre
+            # sabem); seller e link público informam sempre.
+            if not eh_reverso or origem in ("seller", "publico"):
                 raise HTTPException(status_code=400, detail="Informe o número da venda.")
             if not (i.produto or i.fotos_base64):
                 raise HTTPException(status_code=400, detail="Reverso: informe o produto (SKU ou nome) ou o número da venda.")
