@@ -423,6 +423,23 @@ class SolicitacaoCancelamento(Base):
     fotos_base64 = Column(Text, nullable=True)
     link_evidencia = Column(String, nullable=True)
 
+    # --- 26/10: REVERSO (tipo "reverso") -- produto que voltou (devolução,
+    # recusa na entrega, chegou quebrado). Reaproveita o mesmo fluxo das
+    # outras solicitações (assumir -> concluir, mesmo painel/histórico) e
+    # só acrescenta o que é próprio do reverso. Nulos nos outros tipos.
+    # Aspecto do produto ao chegar: bom | avariado | faltando_peca | diferente.
+    estado_chegada = Column(String, nullable=True)
+    # Como o reverso terminou (ver RESULTADOS_REVERSO no router): liberado_venda,
+    # negociacao_ml, negociacao_ressarcido, negociacao_sem_ressarcimento, descartado.
+    resultado_reverso = Column(String, nullable=True, index=True)
+    # Liberação PELO GALPÃO (checklist completo): quem, quando e o checklist
+    # marcado (JSON {"caixa":true,...}). Nulo = não foi liberado pelo galpão.
+    liberado_por = Column(String, nullable=True)
+    liberado_em = Column(DateTime, nullable=True)
+    checklist_json = Column(Text, nullable=True)
+    # Observação livre de quem concluiu (ex.: "ML ressarciu R$ 120 em 3 dias").
+    observacao_resultado = Column(Text, nullable=True)
+
 
 class SolicitacaoEvento(Base):
     """

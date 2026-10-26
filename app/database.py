@@ -97,6 +97,13 @@ _COLUNAS_ADICIONAIS = {
         # 16/10: evidência (fotos em base64, lista JSON, + link), opcional -- ver app/models.py.
         "fotos_base64": "TEXT",
         "link_evidencia": "VARCHAR",
+        # 26/10: Reverso (tipo "reverso") -- ver app/models.py.
+        "estado_chegada": "VARCHAR",
+        "resultado_reverso": "VARCHAR",
+        "liberado_por": "VARCHAR",
+        "liberado_em": "TIMESTAMP",
+        "checklist_json": "TEXT",
+        "observacao_resultado": "TEXT",
     },
     "variaveis_conta": {
         # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,

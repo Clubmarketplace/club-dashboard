@@ -8,7 +8,7 @@ from sqlalchemy import func, or_
 from app.models import Usuario, SolicitacaoCancelamento, Devolucao, Pergunta, Conta, ProdutoCadastro
 from app import auth, config
 from app.contas_util import chave_conta
-from app.routers.solicitacoes_cancelamento import GALPOES, PLATAFORMAS
+from app.routers.solicitacoes_cancelamento import ESTADOS_CHEGADA, GALPOES, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
@@ -199,7 +199,7 @@ _AREAS = {
     # _PAGINAS_SO_GERENCIA (logo abaixo de _papel_pode_acessar).
     "solicitacoes_cancelamento": {
         "paginas": {"/solicitacoes-painel", "/solicitar-cancelamento", "/api/solicitacoes-cancelamento"},
-        "prefixos_api": ("/api/solicitacoes-cancelamento/",),
+        "prefixos_api": ("/api/solicitacoes-cancelamento/", "/api/reverso/"),
     },
     # Time de Cadastro (14/10): a tela de produtos novos e a API dela. A
     # tela de produtividade (/cadastro/produtividade) NÃO entra aqui de
@@ -212,12 +212,13 @@ _AREAS = {
     "logistica": {
         "paginas": {
             "/solicitacoes-galpao",
-            "/solicitar-cancelamento", "/api/solicitacoes-cancelamento",
+            "/solicitar-cancelamento", "/reverso", "/api/solicitacoes-cancelamento",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
             "/api/solicitacoes-cancelamento/opcoes",
         },
-        "prefixos_api": (),
+        # Liberar reverso pra venda (checklist) -- 26/10.
+        "prefixos_api": ("/api/reverso/",),
     },
 }
 
@@ -392,6 +393,7 @@ async def exigir_login(request: Request, call_next):
         "/dashboard",
         "/meus-cancelamentos", "/logout",
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
+        "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
         # "Cadastro", dentro de "Minhas solicitações" -- pedir cadastro de produto novo (15/10).
         "/cadastro-seller",
         "/extensao",
@@ -442,6 +444,7 @@ app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
 app.include_router(solicitacoes_cancelamento.router)
+app.include_router(solicitacoes_cancelamento.router_reverso)  # galpão libera o reverso pra venda (26/10)
 app.include_router(reputacao_rotas.router)
 app.include_router(respostas_padrao_rotas.router)
 app.include_router(calibrar_ia_rotas.router)
@@ -485,6 +488,22 @@ def _hora_br(data, formato: str = "%d/%m/%Y %H:%M") -> str:
 templates.env.filters["hora_br"] = _hora_br
 # Nomes de plataforma/galpão disponíveis em todas as telas montadas no servidor.
 templates.env.globals["PLATAFORMAS"] = PLATAFORMAS
+templates.env.globals["RESULTADOS_REVERSO"] = RESULTADOS_REVERSO
+templates.env.globals["ESTADOS_CHEGADA"] = ESTADOS_CHEGADA
+
+
+def _fotos_lista(texto):
+    """Lista de fotos (data URLs) gravada em JSON na solicitação; vazio se não tiver/inválido."""
+    import json as _json
+    try:
+        dados = _json.loads(texto or "[]")
+        return [f for f in dados if isinstance(f, str)] if isinstance(dados, list) else []
+    except (ValueError, TypeError):
+        return []
+
+
+templates.env.filters["fotos_lista"] = _fotos_lista
+templates.env.filters["checklist_itens"] = itens_do_checklist
 templates.env.globals["GALPOES"] = GALPOES
 
 
@@ -679,6 +698,36 @@ def pagina_solicitar_cancelamento(request: Request):
             "nome_usuario": nome_usuario,
         },
     )
+
+
+@app.get("/reverso", response_class=HTMLResponse)
+def pagina_reverso(request: Request):
+    """
+    Reverso (26/10): produto que voltou (devolução, recusa na entrega, chegou
+    quebrado). Uma tela só, dois usos:
+      - SELLER: avisa o reverso da conta dele (conta fixa, o servidor não deixa
+        pedir por outra) e manda as fotos;
+      - GALPÃO: recebe o produto que voltou escolhendo a conta, registra o
+        aspecto e as fotos, e depois -- testado e conferido -- libera pra venda
+        com o checklist (lista "Recebidos aguardando conferência").
+    """
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        if usuario is None:
+            return RedirectResponse("/login?proximo=/reverso", status_code=303)
+        conta_pre_preenchida = _conta_logada_de(usuario)
+        logistica = usuario.papel == "logistica"
+        if not (logistica or conta_pre_preenchida):
+            return RedirectResponse("/", status_code=303)
+        contexto = {
+            "usuario": usuario,
+            "usuario_logado": usuario,
+            "papel_logado": usuario.papel,
+            "nome_usuario": usuario.nome_exibicao,
+            "modo_galpao": logistica,
+            "conta_seller": conta_pre_preenchida if not logistica else None,
+        }
+    return templates.TemplateResponse(request=request, name="reverso.html", context=contexto)
 
 
 @app.get("/extensao", response_class=HTMLResponse)
