@@ -191,6 +191,43 @@ _INDICES_ADICIONAIS = [
 ]
 
 
+# Tempo máximo (segundos) que UM comando de estrutura (ALTER/CREATE INDEX) espera
+# pela tabela ficar livre no Postgres, e quantas vezes tenta de novo. Sem isso, se
+# outra conexão estiver usando a tabela (ex.: a versão antiga ainda no ar durante o
+# deploy), o ALTER espera PARA SEMPRE -- a subida trava ("fica só rodando") e, pior,
+# o ALTER na fila bloqueia também as consultas novas na tabela, derrubando a versão
+# antiga. Com limite, ele desiste rápido, libera a fila e tenta de novo.
+_LOCK_TIMEOUT_S = 5
+_TENTATIVAS_DDL = 6
+_PAUSA_ENTRE_TENTATIVAS_S = 3
+
+
+def _executar_ddl(sql: str) -> None:
+    """
+    Roda UM comando de estrutura (ALTER TABLE / CREATE INDEX) numa transação
+    própria, com limite de espera por lock no Postgres e novas tentativas.
+    No SQLite (uso local) roda direto, sem limite. Se esgotar as tentativas,
+    levanta o erro (a subida falha com mensagem clara no log em vez de travar).
+    """
+    import time
+    postgres = engine.dialect.name == "postgresql"
+    for tentativa in range(1, _TENTATIVAS_DDL + 1):
+        try:
+            with engine.begin() as conexao:
+                if postgres:
+                    # SET LOCAL vale só pra esta transação.
+                    conexao.execute(text(f"SET LOCAL lock_timeout = '{_LOCK_TIMEOUT_S}s'"))
+                conexao.execute(text(sql))
+            return
+        except Exception as erro:
+            if tentativa >= _TENTATIVAS_DDL:
+                logger.error("Estrutura do banco: desisti de '%s' após %d tentativas: %s", sql, tentativa, erro)
+                raise
+            logger.warning("Estrutura do banco: tabela ocupada (tentativa %d/%d) em '%s'; tentando de novo...",
+                           tentativa, _TENTATIVAS_DDL, sql)
+            time.sleep(_PAUSA_ENTRE_TENTATIVAS_S)
+
+
 def garantir_estrutura_atualizada() -> None:
     """
     Adiciona as colunas/índices novos se ainda não existirem e preenche
@@ -198,20 +235,26 @@ def garantir_estrutura_atualizada() -> None:
     sistema, logo depois do create_all. Se falhar, registra no log e
     interrompe a subida -- melhor o deploy falhar (e o Railway manter a
     versão anterior no ar) do que rodar com o banco pela metade.
+    Cada ALTER/CREATE INDEX roda isolado, com limite de espera (ver
+    _executar_ddl): coluna já criada numa tentativa anterior não é refeita.
     """
     try:
         inspetor = inspect(engine)
-        with engine.begin() as conexao:
-            for tabela, colunas in _COLUNAS_ADICIONAIS.items():
-                if not inspetor.has_table(tabela):
-                    continue  # tabela nova: o create_all já criou completa
-                existentes = {c["name"] for c in inspetor.get_columns(tabela)}
-                for nome, tipo in colunas.items():
-                    if nome not in existentes:
-                        conexao.execute(text(f"ALTER TABLE {tabela} ADD COLUMN {nome} {tipo}"))
-                        logger.info("Coluna adicionada: %s.%s", tabela, nome)
-            for nome_indice, tabela, coluna in _INDICES_ADICIONAIS:
-                conexao.execute(text(f"CREATE INDEX IF NOT EXISTS {nome_indice} ON {tabela} ({coluna})"))
+        for tabela, colunas in _COLUNAS_ADICIONAIS.items():
+            if not inspetor.has_table(tabela):
+                continue  # tabela nova: o create_all já criou completa
+            existentes = {c["name"] for c in inspetor.get_columns(tabela)}
+            for nome, tipo in colunas.items():
+                if nome not in existentes:
+                    # "IF NOT EXISTS" só no Postgres (o SQLite não aceita nesse comando).
+                    ine = "IF NOT EXISTS " if engine.dialect.name == "postgresql" else ""
+                    _executar_ddl(f"ALTER TABLE {tabela} ADD COLUMN {ine}{nome} {tipo}")
+                    logger.info("Coluna adicionada: %s.%s", tabela, nome)
+        for nome_indice, tabela, coluna in _INDICES_ADICIONAIS:
+            # Só cria se ainda não existe: evita pegar lock na tabela à toa em todo boot.
+            if inspetor.has_table(tabela) and nome_indice in {i["name"] for i in inspetor.get_indexes(tabela)}:
+                continue
+            _executar_ddl(f"CREATE INDEX IF NOT EXISTS {nome_indice} ON {tabela} ({coluna})")
 
         # Preenche a chave dos registros antigos (só os que ainda não têm).
         from app.contas_util import chave_conta  # import local: evita ciclo na carga
