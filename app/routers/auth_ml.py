@@ -18,6 +18,7 @@ from fastapi.responses import RedirectResponse, HTMLResponse
 from sqlalchemy.orm import Session
 
 from app import auth
+from app.contas_util import chave_conta, limpar_espacos
 from app.database import get_db
 from app.models import Conta, EmpresaPlanejada, Devolucao, AcaoRegistrada
 from app.ml_client import (
@@ -447,3 +448,48 @@ def reativar_conta(conta_id: int, request: Request, db: Session = Depends(get_db
     logger.warning("Conta %s (ml %s) reativada por %s",
                    conta.apelido, conta.ml_user_id, getattr(usuario, "nome_exibicao", "?"))
     return {"status": "reativada", "apelido": conta.apelido, "precisa_reconectar": not conta.access_token}
+
+
+@router.post("/contas/{conta_id}/renomear")
+def renomear_conta(
+    conta_id: int,
+    request: Request,
+    dados: dict = Body(default={}),
+    db: Session = Depends(get_db),
+):
+    """
+    Troca SÓ o nome (apelido) da conta -- ex: cadastrada como "MS AGRO" por
+    engano e o certo é "E AGRO". É ação deliberada do admin; a autorização
+    do Mercado Livre continua NÃO renomeando sozinha (essa trava existe pra
+    não misturar contas quando alguém abre o link logado na conta errada).
+
+    O que NÃO muda: id, ml_user_id, tokens, vendas, custos, histórico -- tudo
+    é ligado ao id da conta, não ao nome. Só o texto do apelido é trocado.
+    Recusa nome vazio e nome que já pertence a OUTRA conta (comparado pela
+    mesma "chave" usada no resto do sistema: sem acento/maiúscula/espaço extra).
+    """
+    usuario = _exigir_admin(request, db)
+    conta = _conta_ou_404(conta_id, db)
+
+    novo_nome = limpar_espacos(str((dados or {}).get("apelido") or ""))[:80]
+    if not novo_nome:
+        raise HTTPException(status_code=400, detail="Digite o novo nome da conta.")
+
+    nome_antigo = conta.apelido
+    if novo_nome == nome_antigo:
+        return {"status": "sem_mudanca", "apelido": nome_antigo}
+
+    chave_nova = chave_conta(novo_nome)
+    for outra in db.query(Conta).filter(Conta.id != conta.id).all():
+        if chave_conta(outra.apelido or "") == chave_nova:
+            raise HTTPException(
+                status_code=400,
+                detail=f'Já existe outra conta chamada "{outra.apelido}". Escolha um nome diferente.',
+            )
+
+    conta.apelido = novo_nome
+    db.commit()
+    logger.warning("Conta id %s (ml %s) renomeada de %r para %r por %s",
+                   conta.id, conta.ml_user_id, nome_antigo, novo_nome,
+                   getattr(usuario, "nome_exibicao", "?"))
+    return {"status": "renomeada", "apelido": novo_nome, "apelido_anterior": nome_antigo}
