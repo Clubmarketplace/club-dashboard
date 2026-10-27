@@ -66,6 +66,11 @@
     .pill.ok { background:#e6f6ee; color:#1f6b45; }
     .vazio { text-align:center; padding:20px; color:var(--cmx-texto-suave); font-size:13.5px; }
     .ver-fotos img { width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); margin:6px 6px 0 0; }
+    .item-card { border:1.5px solid var(--cmx-borda); border-radius:14px; padding:16px; margin-bottom:14px; background:#fcfdfd; }
+    .item-topo { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
+    .item-titulo { font-size:14px; color:var(--rev); }
+    .erro-campo { display:none; margin-top:5px; font-size:12.5px; font-weight:600; color:var(--cmx-critico); }
+    .campo input.invalido { border-color:var(--cmx-critico); background:var(--cmx-critico-fundo); }
   </style>
 </head>
 <body>
@@ -131,59 +136,75 @@
             <div class="campo"><label class="rot" for="conta">Conta</label>
               <input type="text" id="conta" list="lista-contas" placeholder="Digite e escolha a conta" autocomplete="off" />
               <datalist id="lista-contas"></datalist></div>
-            <div class="campo"><label class="rot" for="produto">Produto (SKU ou nome, opcional)</label>
-              <input type="text" id="produto" maxlength="200" placeholder="Ex.: Miniprocessador Cadence · MPR530" /></div>
-            {% else %}
-            <div class="campo"><label class="rot" for="produto">Produto (opcional)</label>
-              <input type="text" id="produto" maxlength="200" placeholder="SKU ou nome do produto" /></div>
             {% endif %}
             <div class="campo"><label class="rot" for="venda">Nº da venda (obrigatório)</label>
-              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido" autocomplete="off" required /></div>
-            {% if modo_galpao %}
-            <div class="campo"><label class="rot" for="estado">Aspecto ao chegar</label>
-              <select id="estado">
-                {% for chave, nome in ESTADOS_CHEGADA.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
-              </select></div>
-            {% else %}
-            <div class="campo"><label class="rot" for="motivo-sel">O que aconteceu</label>
-              <select id="motivo-sel">
-                <option>Devolução do cliente</option>
-                <option>Recusa na entrega</option>
-                <option>Chegou quebrado</option>
-                <option>Envio errado</option>
-                <option>Outro</option>
-              </select></div>
-            {% endif %}
+              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido" autocomplete="off" required />
+              <div class="erro-campo" id="erro-venda">Informe o número da venda para enviar.</div></div>
           </div>
 
-          {% if modo_galpao %}
-          <div class="campo" style="margin-bottom:14px">
-            <label class="rot">Condições do produto (marque o que for verdade)</label>
-            <div class="condicoes">
-              {% for chave, nome in CHECKLIST_REVERSO.items() %}<label><input type="checkbox" data-cond="{{ chave }}" /> {{ nome }}</label>{% endfor %}
-            </div>
-            <div class="peq" style="margin-top:6px">Só informativo: o galpão não libera para venda. A equipe confere no painel e decide.</div>
-          </div>
-          {% endif %}
-          <div class="campo" style="margin-bottom:14px">
-            <label class="rot" for="obs">Observação (opcional)</label>
-            <textarea id="obs" placeholder="{{ 'Ex.: embalagem violada, acessórios completos' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
-          </div>
+          <!-- Itens da venda: normalmente 1; se a mesma venda voltou com mais de uma unidade
+               (ex.: 2 ferros do mesmo SKU com defeitos diferentes), adiciona-se outro item.
+               Cada item vira um reverso próprio, com as suas fotos. -->
+          <div id="itens"></div>
+          <button type="button" class="botao-sec" id="add-item" style="margin:2px 0 8px">➕ Adicionar outro item desta venda</button>
+          <div class="peq" id="dica-itens" style="margin:0 0 18px"></div>
 
-          <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
-          <div class="foto-botoes">
-            <button type="button" class="botao-foto principal" id="btn-camera">📷 Tirar foto agora</button>
-            <button type="button" class="botao-foto" id="btn-galeria">🖼 <span id="txt-galeria">Escolher várias da pasta</span></button>
-          </div>
-          <input type="file" id="in-camera" accept="image/*" capture="environment" style="display:none" />
-          <input type="file" id="in-galeria" accept="image/*" multiple style="display:none" />
-          <input type="file" id="in-slot" accept="image/*" style="display:none" />
-          <div class="fotos" id="fotos"></div>
-          <div class="contagem-fotos" id="contagem-fotos"></div>
-
-          <button type="button" class="botao-rev" id="enviar">{{ "Registrar recebimento" if modo_galpao else "Enviar reverso" }}</button>
+          <button type="button" class="botao-rev" id="enviar" disabled>{{ "Registrar recebimento" if modo_galpao else "Enviar reverso" }}</button>
+          <div class="peq" id="dica-envio" style="margin-top:8px">Informe o número da venda para liberar o envio.</div>
           <div class="msg" id="msg"></div>
         </div>
+
+        <!-- Modelo de um item (clonado pelo script) -->
+        <template id="tpl-item">
+          <div class="item-card">
+            <div class="item-topo">
+              <b class="item-titulo">Item 1</b>
+              <button type="button" class="botao-sec item-remover" style="display:none">Remover este item</button>
+            </div>
+            <div class="grade">
+              <div class="campo"><label class="rot">Produto (SKU ou nome, opcional)</label>
+                <input type="text" class="f-produto" maxlength="200" placeholder="{{ 'Ex.: Miniprocessador Cadence · MPR530' if modo_galpao else 'SKU ou nome do produto' }}" /></div>
+              {% if modo_galpao %}
+              <div class="campo"><label class="rot">Aspecto ao chegar</label>
+                <select class="f-estado">
+                  {% for chave, nome in ESTADOS_CHEGADA.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
+                </select></div>
+              {% else %}
+              <div class="campo"><label class="rot">O que aconteceu</label>
+                <select class="f-motivo">
+                  <option>Devolução do cliente</option>
+                  <option>Recusa na entrega</option>
+                  <option>Chegou quebrado</option>
+                  <option>Envio errado</option>
+                  <option>Outro</option>
+                </select></div>
+              {% endif %}
+            </div>
+            {% if modo_galpao %}
+            <div class="campo" style="margin-bottom:14px">
+              <label class="rot">Condições do produto (marque o que for verdade)</label>
+              <div class="condicoes">
+                {% for chave, nome in CHECKLIST_REVERSO.items() %}<label><input type="checkbox" data-cond="{{ chave }}" /> {{ nome }}</label>{% endfor %}
+              </div>
+              <div class="peq" style="margin-top:6px">Só informativo: o galpão não libera para venda. A equipe confere no painel e decide.</div>
+            </div>
+            {% endif %}
+            <div class="campo" style="margin-bottom:14px">
+              <label class="rot">Observação / problema deste item (opcional)</label>
+              <textarea class="f-obs" placeholder="{{ 'Ex.: embalagem violada, cabo quebrado' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
+            </div>
+            <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
+            <div class="foto-botoes">
+              <button type="button" class="botao-foto principal btn-camera">📷 Tirar foto agora</button>
+              <button type="button" class="botao-foto btn-galeria">🖼 <span class="txt-galeria">Escolher várias da pasta</span></button>
+            </div>
+            <div class="fotos"></div>
+            <div class="contagem-fotos"></div>
+          </div>
+        </template>
+        <input type="file" id="in-camera" accept="image/*" capture="environment" style="display:none" />
+        <input type="file" id="in-galeria" accept="image/*" multiple style="display:none" />
+        <input type="file" id="in-slot" accept="image/*" style="display:none" />
 
       </main>
     </div>
@@ -214,75 +235,108 @@
       document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
     });
 
-    // ---------- Fotos: quadradinhos (como antes) + câmera + várias da pasta ----------
-    // Cada foto é reduzida no próprio aparelho (fotos.js) antes de entrar aqui.
-    let fotos = [];       // dataURL já reduzida (sem buracos)
-    let nSlots = 3;       // quadradinhos visíveis (começa com 3; "+ Incluir outra foto" aumenta)
-    let processando = false;
-    const cheio = () => fotos.length >= MAX_FOTOS;
-    function desenharFotos() {
-      nSlots = Math.min(Math.max(nSlots, fotos.length, 3), MAX_FOTOS);
-      const box = $("fotos"); box.innerHTML = "";
-      for (let i = 0; i < nSlots; i++) {
-        if (i < fotos.length) {
+    // ---------- Itens da venda (1 a 3) ----------
+    // Cada item guarda as próprias fotos. Cada foto é reduzida no próprio aparelho (fotos.js)
+    // antes de entrar aqui. Os 3 seletores de arquivo são compartilhados: `alvo` indica
+    // para qual item a próxima foto vai.
+    const MAX_ITENS = 3;   // mesmo limite do servidor (MAX_ITENS_POR_VENDA_REVERSO)
+    const cartoes = [];    // { el, fotos, nSlots, processando }
+    let alvo = null;
+    function desenharFotos(c) {
+      c.nSlots = Math.min(Math.max(c.nSlots, c.fotos.length, 3), MAX_FOTOS);
+      const cheio = c.fotos.length >= MAX_FOTOS;
+      const box = c.el.querySelector(".fotos"); box.innerHTML = "";
+      for (let i = 0; i < c.nSlots; i++) {
+        if (i < c.fotos.length) {
           const d = document.createElement("div"); d.className = "miniatura";
-          d.innerHTML = `<img src="${fotos[i]}" alt="Foto ${i + 1}" title="Toque para ampliar"><button type="button" class="rm" aria-label="Remover foto ${i + 1}">×</button>`;
-          d.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); fotos.splice(i, 1); desenharFotos(); });
+          d.innerHTML = `<img src="${c.fotos[i]}" alt="Foto ${i + 1}" title="Toque para ampliar"><button type="button" class="rm" aria-label="Remover foto ${i + 1}">×</button>`;
+          d.querySelector(".rm").addEventListener("click", (e) => { e.stopPropagation(); c.fotos.splice(i, 1); desenharFotos(c); });
           // Toque na miniatura: abre ampliada pra conferir a nitidez (e remover, se não ficou boa)
-          d.querySelector("img").addEventListener("click", () => window.abrirPreviaFoto(fotos[i], { rotulo: `Foto ${i + 1} de ${fotos.length}`, onRemover: () => { fotos.splice(i, 1); desenharFotos(); } }));
+          d.querySelector("img").addEventListener("click", () => window.abrirPreviaFoto(c.fotos[i], { rotulo: `Foto ${i + 1} de ${c.fotos.length}`, onRemover: () => { c.fotos.splice(i, 1); desenharFotos(c); } }));
           box.appendChild(d);
         } else {
-          const s = document.createElement("button"); s.type = "button"; s.className = "slot"; s.disabled = processando;
+          const s = document.createElement("button"); s.type = "button"; s.className = "slot"; s.disabled = c.processando;
           s.innerHTML = `<span class="mais">+</span><span>Foto ${i + 1}</span>`;
-          s.addEventListener("click", () => $("in-slot").click());   // no celular o sistema oferece câmera ou galeria
+          s.addEventListener("click", () => { alvo = c; $("in-slot").click(); });   // no celular o sistema oferece câmera ou galeria
           box.appendChild(s);
         }
       }
-      if (nSlots < MAX_FOTOS) {
+      if (c.nSlots < MAX_FOTOS) {
         const m = document.createElement("button");
         m.type = "button"; m.className = "mais-foto"; m.textContent = "+ Incluir outra foto";
-        m.addEventListener("click", () => { nSlots++; desenharFotos(); });
+        m.addEventListener("click", () => { c.nSlots++; desenharFotos(c); });
         box.appendChild(m);
       }
-      $("btn-camera").disabled = $("btn-galeria").disabled = cheio() || processando;
-      $("btn-camera").textContent = fotos.length ? "📷 Tirar outra foto" : "📷 Tirar foto agora";
-      $("contagem-fotos").textContent = processando ? "Processando as fotos..." : `${fotos.length} de ${MAX_FOTOS} fotos` + (cheio() ? " (limite atingido)" : "");
+      const bc = c.el.querySelector(".btn-camera"), bg = c.el.querySelector(".btn-galeria");
+      bc.disabled = bg.disabled = cheio || c.processando;
+      bc.textContent = c.fotos.length ? "📷 Tirar outra foto" : "📷 Tirar foto agora";
+      c.el.querySelector(".contagem-fotos").textContent = c.processando ? "Processando as fotos..." : `${c.fotos.length} de ${MAX_FOTOS} fotos` + (cheio ? " (limite atingido)" : "");
     }
-    async function adicionarArquivo(arquivo) {
-      if (cheio()) return;
-      fotos.push(await window.comprimirFoto(arquivo));
+    async function adicionarArquivo(c, arquivo) {
+      if (c.fotos.length >= MAX_FOTOS) return;
+      c.fotos.push(await window.comprimirFoto(arquivo));
     }
-    async function adicionarArquivos(lista) {
+    async function adicionarArquivos(c, lista) {
       const arquivos = Array.from(lista || []);
-      if (!arquivos.length) return;
-      const vagas = MAX_FOTOS - fotos.length;
+      if (!c || !arquivos.length) return;
+      const vagas = MAX_FOTOS - c.fotos.length;
       if (arquivos.length > vagas) mensagem(`Só cabem mais ${vagas} foto(s); as demais foram ignoradas.`, true);
-      processando = true; desenharFotos();
+      c.processando = true; desenharFotos(c);
       try {
         for (const a of arquivos.slice(0, Math.max(vagas, 0))) {
-          try { await adicionarArquivo(a); desenharFotos(); }
+          try { await adicionarArquivo(c, a); desenharFotos(c); }
           catch (e) { mensagem(e.message || "Não consegui processar essa foto.", true); }
         }
-      } finally { processando = false; desenharFotos(); }
+      } finally { c.processando = false; desenharFotos(c); }
     }
-    const aoEscolher = (e) => { const l = Array.from(e.target.files || []); e.target.value = ""; adicionarArquivos(l); };
+    const aoEscolher = (e) => { const l = Array.from(e.target.files || []); e.target.value = ""; adicionarArquivos(alvo, l); };
     $("in-camera").addEventListener("change", aoEscolher);
     $("in-galeria").addEventListener("change", aoEscolher);
     $("in-slot").addEventListener("change", aoEscolher);
-    $("btn-galeria").addEventListener("click", () => $("in-galeria").click());
-    // "Tirar foto agora": celular/tablet = câmera nativa direto; computador = webcam (janela com imagem ao vivo).
-    $("btn-camera").addEventListener("click", async () => {
-      if (window.temCamera()) return $("in-camera").click();
-      if (!window.camerasDisponiveis()) return $("in-galeria").click();
-      const abriu = await window.abrirCamera({
-        cheio,
-        aoCapturar: async (arq) => { processando = true; desenharFotos(); try { await adicionarArquivo(arq); } finally { processando = false; desenharFotos(); } },
-        aoFalhar: (msg) => { mensagem(msg, true); },
+
+    function numerarItens() {
+      cartoes.forEach((c, i) => {
+        c.el.querySelector(".item-titulo").textContent = cartoes.length > 1 ? `Item ${i + 1} de ${cartoes.length}` : "Item 1";
+        c.el.querySelector(".item-remover").style.display = cartoes.length > 1 ? "" : "none";
       });
-      if (!abriu) $("in-galeria").click();   // sem permissão/câmera: cai no seletor de arquivos
+      $("add-item").style.display = cartoes.length >= MAX_ITENS ? "none" : "";
+      $("dica-itens").textContent = cartoes.length >= MAX_ITENS
+        ? `Limite de ${MAX_ITENS} itens por venda atingido.`
+        : `Use quando a mesma venda voltou com mais de uma unidade, cada uma com um problema. Até ${MAX_ITENS} itens por venda.`;
+    }
+    function adicionarItem() {
+      if (cartoes.length >= MAX_ITENS) return null;
+      const el = $("tpl-item").content.firstElementChild.cloneNode(true);
+      const c = { el, fotos: [], nSlots: 3, processando: false };
+      cartoes.push(c);
+      $("itens").appendChild(el);
+      el.querySelector(".item-remover").addEventListener("click", () => {
+        const n = c.fotos.length;
+        if (n && !confirm(`Remover este item e as ${n} foto(s) dele?`)) return;
+        cartoes.splice(cartoes.indexOf(c), 1); el.remove(); numerarItens();
+      });
+      el.querySelector(".btn-galeria").addEventListener("click", () => { alvo = c; $("in-galeria").click(); });
+      if (window.temCamera()) el.querySelector(".txt-galeria").textContent = "Escolher várias da galeria";
+      // "Tirar foto agora": celular/tablet = câmera nativa direto; computador = webcam (janela com imagem ao vivo).
+      el.querySelector(".btn-camera").addEventListener("click", async () => {
+        alvo = c;
+        if (window.temCamera()) return $("in-camera").click();
+        if (!window.camerasDisponiveis()) return $("in-galeria").click();
+        const abriu = await window.abrirCamera({
+          cheio: () => c.fotos.length >= MAX_FOTOS,
+          aoCapturar: async (arq) => { c.processando = true; desenharFotos(c); try { await adicionarArquivo(c, arq); } finally { c.processando = false; desenharFotos(c); } },
+          aoFalhar: (msg) => { mensagem(msg, true); },
+        });
+        if (!abriu) $("in-galeria").click();   // sem permissão/câmera: cai no seletor de arquivos
+      });
+      desenharFotos(c); numerarItens();
+      return c;
+    }
+    $("add-item").addEventListener("click", () => {
+      if (!vendaTexto()) return avisarVenda();   // a venda vale para todos os itens
+      const c = adicionarItem(); if (c) c.el.scrollIntoView({ behavior: "smooth", block: "nearest" });
     });
-    if (window.temCamera()) $("txt-galeria").textContent = "Escolher várias da galeria";
-    desenharFotos();
+    adicionarItem();
 
     // ---------- Contas (galpão escolhe; seller tem só a dele) ----------
     let contas = [];
@@ -304,55 +358,76 @@
     }
 
     // ---------- Envio ----------
+    // Nº da venda é obrigatório e TRAVA o envio: o botão só libera com o número preenchido
+    // (o servidor também recusa sem ele, então não dá para burlar).
     let enviando = false;
+    const vendaTexto = () => $("venda").value.replace(/\s+/g, "");
+    function atualizarTrava() {
+      const ok = !!vendaTexto();
+      $("enviar").disabled = enviando || !ok;
+      $("dica-envio").style.display = ok ? "none" : "";
+      if (ok) { $("venda").classList.remove("invalido"); $("erro-venda").style.display = "none"; }
+    }
+    function avisarVenda() {
+      $("venda").classList.add("invalido"); $("erro-venda").style.display = "block"; $("venda").focus();
+      mensagem("Informe o número da venda.", true);
+    }
+    $("venda").addEventListener("input", atualizarTrava);
+    atualizarTrava();
+
     $("enviar").addEventListener("click", async () => {
       if (enviando) return;
-      const venda = $("venda").value.replace(/\s+/g, "");
-      const produto = $("produto").value.trim();
-      const obs = $("obs").value.trim();
-      const lista = fotos.filter(Boolean);
+      const venda = vendaTexto();
+      if (!venda) return avisarVenda();
+      if (cartoes.some(c => c.processando)) return mensagem("Aguarde terminar de processar as fotos.", true);
       const corpo = { plataforma, tipo: "reverso", itens: [] };
-      const item = { numero_venda: venda, produto: produto || null, fotos_base64: lista.length ? lista : null };
       if (MODO_GALPAO) {
         if (!$("galpao").value) return mensagem("Escolha o galpão.", true);
         const conta = contas.find(c => chaveConta(c.nome) === chaveConta($("conta").value));
         if (!conta) return mensagem("Escolha a conta na lista (digite o nome e selecione).", true);
-        if (!venda) return mensagem("Informe o número da venda.", true);
         corpo.galpao = +$("galpao").value; corpo.conta = conta.nome;
-        item.estado_chegada = $("estado").value;
-        // condições que o galpão marcou (todas as chaves: marcada = true)
-        item.checklist = {}; document.querySelectorAll("[data-cond]").forEach(c => { item.checklist[c.dataset.cond] = c.checked; });
-        item.motivo = obs || "Retorno recebido no galpão";
       } else {
-        if (!venda) return mensagem("Informe o número da venda.", true);
         corpo.conta = CONTA_SELLER;
-        item.motivo = $("motivo-sel").value + (obs ? " · " + obs : "");
       }
-      corpo.itens.push(item);
-      enviando = true; $("enviar").disabled = true;
-      try {
-        let r = await fetch("/api/solicitacoes-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
-        if (r.status === 409) {
-          const d = (await r.json()).detail || {};
-          if (!confirm((d.mensagem || "Já existe um reverso para essa venda.") + "\nEnviar mesmo assim?")) return;
-          corpo.confirmar_duplicadas = true;
-          r = await fetch("/api/solicitacoes-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      let totalFotos = 0;
+      for (const c of cartoes) {
+        const q = (s) => c.el.querySelector(s);
+        const produto = q(".f-produto").value.trim();
+        const obs = q(".f-obs").value.trim();
+        const lista = c.fotos.filter(Boolean); totalFotos += lista.length;
+        // Mesmo número de venda em todos os itens; produto/problema/fotos são de cada item.
+        const item = { numero_venda: venda, produto: produto || null, fotos_base64: lista.length ? lista : null };
+        if (MODO_GALPAO) {
+          item.estado_chegada = q(".f-estado").value;
+          // condições que o galpão marcou (todas as chaves: marcada = true)
+          item.checklist = {}; c.el.querySelectorAll("[data-cond]").forEach(x => { item.checklist[x.dataset.cond] = x.checked; });
+          item.motivo = obs || "Retorno recebido no galpão";
+        } else {
+          item.motivo = q(".f-motivo").value + (obs ? " · " + obs : "");
         }
+        corpo.itens.push(item);
+      }
+      enviando = true; atualizarTrava();
+      try {
+        const r = await fetch("/api/solicitacoes-cancelamento", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
         if (!r.ok) {
           let detalhe = "Não foi possível registrar. Tente de novo.";
           try { const d = await r.json(); detalhe = typeof d.detail === "string" ? d.detail : (Array.isArray(d.detail) ? d.detail.map(x => x.msg).join("; ") : detalhe); } catch (e) {}
           return mensagem(detalhe, true);
         }
+        const n = corpo.itens.length;
+        const itensTxt = n > 1 ? `${n} itens da venda ${venda}` : "";
         mensagem(MODO_GALPAO
-          ? `Recebimento registrado para ${corpo.conta} (${lista.length} foto(s)). Já aparece para a equipe e no painel do seller. A equipe confere e decide se volta ao estoque; acompanhe em Acompanhar solicitações.`
-          : `Reverso enviado com ${lista.length} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
-        ["venda", "produto", "obs"].forEach(id => $(id).value = "");
-        if (MODO_GALPAO) { $("conta").value = ""; document.querySelectorAll("[data-cond]").forEach(c => { c.checked = false; }); }
-        fotos = []; nSlots = 3; desenharFotos();
+          ? `Recebimento registrado${itensTxt ? " (" + itensTxt + ")" : ""} para ${corpo.conta} (${totalFotos} foto(s)). Já aparece para a equipe e no painel do seller. A equipe confere e decide se volta ao estoque; acompanhe em Acompanhar solicitações.`
+          : `Reverso enviado${itensTxt ? " (" + itensTxt + ")" : ""} com ${totalFotos} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
+        // limpa o formulário: volta a 1 item vazio
+        $("venda").value = ""; if (MODO_GALPAO) $("conta").value = "";
+        cartoes.splice(0).forEach(c => c.el.remove());
+        adicionarItem();
       } catch (e) {
         mensagem("Sem conexão. Tente de novo.", true);
       } finally {
-        enviando = false; $("enviar").disabled = false;
+        enviando = false; atualizarTrava();
       }
     });
 

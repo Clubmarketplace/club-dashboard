@@ -378,7 +378,18 @@
     const ehReverso = (s) => tipoDe(s) === "reverso";
     const CLASSE_RESULTADO = (r) => (r === "liberado_venda" ? "res-ok" : (r || "").startsWith("negociacao") ? "res-ml" : "res-nao");
     const VOLTOU = "liberado_venda"; // chave gravada = "Voltou para o estoque"
-    const htmlTipo = (s) => `<span class="sl-pill tp-${tipoDe(s)}">${NOMES_TIPO[tipoDe(s)]}</span>`;
+    // Reverso com mais de um item na mesma venda (ex.: 2 ferros do mesmo SKU, defeitos diferentes):
+    // cada item é um registro próprio; esta etiqueta só avisa que são da mesma venda.
+    // Conta pelos itens carregados na tela (sem consulta extra ao banco).
+    let itensPorVenda = {};
+    const chaveVenda = (s) => [s.plataforma, s.conta, s.numero_venda].join("|");
+    function contarItensPorVenda(lista) {
+      itensPorVenda = {};
+      (lista || []).forEach((s) => { if (tipoDe(s) === "reverso") itensPorVenda[chaveVenda(s)] = (itensPorVenda[chaveVenda(s)] || 0) + 1; });
+    }
+    const htmlTipo = (s) => `<span class="sl-pill tp-${tipoDe(s)}">${NOMES_TIPO[tipoDe(s)]}</span>`
+      + (tipoDe(s) === "reverso" && (itensPorVenda[chaveVenda(s)] || 0) > 1
+        ? `<span class="sl-pill" style="background:#fdf3e3;color:#8a5a12" title="Mais de um item deste reverso na mesma venda; conclua cada um separadamente">${itensPorVenda[chaveVenda(s)]} itens nesta venda</span>` : "");
     // "Confirmar cancelamento" / "Confirmar reputação" (botões e título da janela)
     const textoConfirmar = (s) => (ehReverso(s) ? "Concluir reverso" : ehReputacao(s) ? "Confirmar reputação" : "Confirmar cancelamento");
 
@@ -540,6 +551,7 @@
       } else if (itens.length) {
         rodape = `<div class="sl-rodape">${itens.length} pedido(s)</div>`;
       }
+      contarItensPorVenda(itens);
       $("lista").innerHTML = cab + (itens.length ? itens.map(linha).join("") : `<div class="sl-vazio">${vazio}</div>`) + rodape;
       const mais = $("carregar-mais");
       if (mais) mais.addEventListener("click", carregarMais);
