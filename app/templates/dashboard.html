@@ -377,6 +377,19 @@
               </div>
             </div>
 
+            <div class="adm-setor-card" id="adm-card-reversos">
+              <h3><span class="adm-chip-setor db-icone verde">↩</span>Reversos</h3>
+              <p class="sub">Produtos que voltaram para o galpão</p>
+              <div class="adm-setor-destaque" id="rev-card-recebidos">--</div>
+              <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">recebidos hoje</div>
+              <div class="adm-setor-linha"><span>Voltaram ao estoque (hoje)</span><span class="r" id="rev-card-voltaram">--</span></div>
+              <div class="adm-setor-linha"><span>Não voltaram ao estoque (hoje)</span><span class="r" id="rev-card-nao">--</span></div>
+              <div class="adm-setor-linha"><span>Aguardando a equipe (fila agora)</span><span class="r" id="rev-card-fila">--</span></div>
+              <div class="adm-setor-linha"><span>Tempo médio até decidir (hoje)</span><span class="r" id="rev-card-tempo">--</span></div>
+              <div class="adm-setor-aviso" id="rev-card-parados" style="display:none; color:#a83232; font-weight:600;"></div>
+              <a class="adm-ver-ranking" href="/reversos-gestao" style="text-decoration:none; display:inline-block;">Abrir a tela de Reversos →</a>
+            </div>
+
             <div class="adm-setor-card">
               <h3><span class="adm-chip-setor db-icone verde">💬</span>Mensagens</h3>
               <p class="sub">Pré-venda + pós-venda (chamados)</p>
@@ -453,6 +466,14 @@
             <div class="valor">{{ cancelamentos_tratados }}/{{ cancelamentos_total }}</div>
             <div class="nota">esta semana</div>
           </a>
+          {% if eh_supervisor %}
+          <a class="db-card" href="/reversos-gestao" id="adm-card-reversos">
+            <div class="icone db-icone verde">↩</div>
+            <div class="titulo">Reversos hoje</div>
+            <div class="valor" id="rev-card-recebidos">--</div>
+            <div class="nota" id="rev-card-nota-sup">carregando…</div>
+          </a>
+          {% endif %}
         </div>
 
         {% if eh_supervisor %}
@@ -1067,6 +1088,46 @@
   });
 
   carregarResumoAdmin();
+  </script>
+  {% endif %}
+  {% if eh_admin or eh_supervisor %}
+  <script>
+    // Card "Reversos" (27/10): carrega sozinho e NUNCA derruba o resto do dashboard (erro = traços).
+    (function () {
+      var el = function (id) { return document.getElementById(id); };
+      function tempo(m) {
+        if (m === null || m === undefined) return "--";
+        if (m < 60) return m + " min";
+        if (m < 1440) { var h = Math.floor(m / 60), mm = m % 60; return mm ? h + " h " + (mm < 10 ? "0" : "") + mm + " min" : h + " h"; }
+        var d = Math.floor(m / 1440), hh = Math.floor((m % 1440) / 60); return hh ? d + " d " + hh + " h" : d + " d";
+      }
+      async function carregarCardReversos() {
+        if (!el("rev-card-recebidos")) return;
+        try {
+          var r = await fetch("/api/reversos-gestor/card", { cache: "no-store" });
+          if (!r.ok) throw new Error("status " + r.status);
+          var d = await r.json(), h = d.hoje, f = d.fila;
+          el("rev-card-recebidos").textContent = h.recebidos;
+          if (el("rev-card-voltaram")) {   // card do admin (detalhado)
+            el("rev-card-voltaram").textContent = h.voltaram;
+            el("rev-card-nao").textContent = h.nao_voltaram;
+            el("rev-card-fila").textContent = f.aguardando;
+            el("rev-card-tempo").textContent = tempo(d.tempo_medio_min);
+            var av = el("rev-card-parados");
+            av.style.display = f.parados ? "block" : "none";
+            av.textContent = f.parados ? "⚠ " + f.parados + " parado(s) há mais de " + f.dias_parado + " dias" : "";
+          }
+          if (el("rev-card-nota-sup")) {   // card do supervisor (resumido)
+            el("rev-card-nota-sup").textContent = f.aguardando + " aguardando a equipe" + (f.parados ? " · ⚠ " + f.parados + " parado(s)" : "") + " · " + h.voltaram + " voltaram ao estoque";
+          }
+        } catch (e) {
+          console.error("Card de reversos:", e);
+          if (el("rev-card-nota-sup")) el("rev-card-nota-sup").textContent = "não consegui carregar agora";
+        }
+      }
+      carregarCardReversos();
+      setInterval(carregarCardReversos, 120000);
+    })();
   </script>
   {% endif %}
 </body>

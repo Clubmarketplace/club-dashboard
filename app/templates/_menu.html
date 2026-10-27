@@ -98,6 +98,14 @@
     {{ item("/produtividade-cancelamento", "Produtividade") }}
   {% endcall %}
 
+  {#- 27/10: tela de Reversos do gestor -- SÓ admin e supervisor (nem gerente de setor vê) -#}
+  {% if _papel in ("admin", "supervisor") %}
+  {% call grupo("reversos", "Reversos", ["/reversos-gestao"]) %}
+    {{ item("/reversos-gestao", "Visão geral dos reversos") }}
+    {{ item("/painel-galpao", "Dashboard do galpão") }}
+  {% endcall %}
+  {% endif %}
+
   {% endif %}
 
   {% if _eh_setor_cancelamento %}

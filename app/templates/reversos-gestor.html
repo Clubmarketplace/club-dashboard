@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Reversos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --canc:#5b6773; --rev:#0f766e; --voltou:#2f9e63; --nao:#c24141; --aguarda:#d98e2f;
+    }
+    main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
+    .barra { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
+    .periodos { display:inline-flex; border:1.5px solid var(--cmx-borda); border-radius:10px; overflow:hidden; background:#fff; }
+    .periodos button { border:none; background:#fff; padding:9px 16px; font:inherit; font-size:13.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; border-right:1px solid var(--cmx-borda); }
+    .periodos button:last-child { border-right:none; }
+    .periodos button[aria-pressed=true] { background:var(--cmx-texto, #17202a); color:#fff; }
+    select.filtro { font:inherit; font-size:13.5px; padding:9px 12px; border:1.5px solid var(--cmx-borda); border-radius:10px; background:#fff; }
+    .espaco { flex:1; }
+    .btn { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:10px; padding:9px 14px; font:inherit; font-size:13.5px; font-weight:600; cursor:pointer; color:var(--cmx-texto); text-decoration:none; display:inline-block; }
+    .btn.pri { background:var(--rev); border-color:var(--rev); color:#fff; }
+    .periodo-txt { font-size:13px; color:var(--cmx-texto-suave); margin:-6px 0 16px; }
+
+    .grupo-titulo { font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--cmx-texto-suave); margin:6px 0 8px; display:flex; align-items:center; gap:8px; }
+    .grupo-titulo i { width:10px; height:10px; border-radius:3px; display:inline-block; }
+    .cartoes { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:18px; }
+    .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 16px; border-top:4px solid var(--cor, var(--cmx-borda)); }
+    .cartao .valor { font-size:28px; font-weight:700; line-height:1.1; }
+    .cartao .rotulo { font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .cartao .sub { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+
+    .grade2 { display:grid; grid-template-columns:3fr 2fr; gap:14px; margin-bottom:18px; }
+    @media (max-width:860px) { .grade2 { grid-template-columns:1fr; } }
+    .painel { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:16px 18px; margin-bottom:18px; }
+    .grade2 .painel { margin-bottom:0; }
+    .painel h2 { font-size:15px; margin:0 0 12px; }
+    .caixa-grafico { position:relative; height:260px; }
+    .legenda { display:flex; flex-wrap:wrap; gap:6px 14px; margin-top:10px; font-size:12.5px; color:var(--cmx-texto-suave); }
+    .legenda i { width:10px; height:10px; border-radius:3px; display:inline-block; margin-right:5px; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--cmx-borda); }
+    td { padding:9px 10px; border-bottom:1px solid var(--cmx-borda); }
+    td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+    tbody tr:last-child td { border-bottom:none; }
+    .vazio { text-align:center; color:var(--cmx-texto-suave); padding:22px; font-size:13.5px; }
+    .erro { color:var(--cmx-critico); background:var(--cmx-critico-fundo); padding:10px 12px; border-radius:9px; margin-bottom:14px; display:none; font-size:13.5px; }
+    .tabela-rolagem { overflow-x:auto; }
+    .nota-tab { font-size:12px; color:var(--cmx-texto-suave); margin-top:10px; line-height:1.5; }
+    tr.linha-total td { font-weight:700; background:#f3f6f6; border-top:2px solid var(--cmx-borda); }
+    td.verde { color:#1f6b45; } td.verm { color:#a83232; } td.laranja { color:#a86a14; }
+
+    /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
+    .so-impressao { display:none; }
+    @media print {
+      .cmx-sidebar, .cmx-menu-usuario, .barra, .cmx-topbar { display:none !important; }
+      .cmx-shell { display:block !important; } .cmx-conteudo { margin:0 !important; padding:0 !important; }
+      main { padding:0; max-width:none; }
+      .so-impressao { display:block; margin-bottom:10px; }
+      .painel, .cartao { break-inside:avoid; }
+      body { background:#fff !important; }
+    }
+  
+    .barra input[type=date] { font:inherit; font-size:13.5px; padding:8px 10px; border:1.5px solid var(--cmx-borda); border-radius:10px; background:#fff; }
+    .barra .ate { font-size:13px; color:var(--cmx-texto-suave); }
+    .alerta-parados { border-top-color:var(--nao) !important; background:#fdf1f1; }
+    .alerta-parados .valor { color:#a83232; }
+    .duas { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
+    @media (max-width:860px) { .duas { grid-template-columns:1fr; } }
+    .duas .painel { margin-bottom:0; }
+    .barra-motivo { height:8px; border-radius:99px; background:#eef1f3; overflow:hidden; margin-top:5px; }
+    .barra-motivo i { display:block; height:100%; background:var(--nao); border-radius:99px; }
+    .motivo-linha { padding:8px 0; border-bottom:1px solid var(--cmx-borda); font-size:13.5px; }
+    .motivo-linha:last-child { border-bottom:none; }
+    .motivo-linha .topo { display:flex; justify-content:space-between; gap:10px; }
+</style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario"><a href="/logout">🚪 Sair</a></div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Reversos</h1>
+          <p class="cmx-subtitulo">Tudo sobre os produtos que voltaram: o que chegou, o que voltou ao estoque, o que está parado, quem recebeu e quanto tempo levou</p>
+        </div>
+      </header>
+
+      <main>
+        <div class="barra">
+          <div class="periodos" id="periodos" role="group" aria-label="Período">
+            <button type="button" data-d="1" aria-pressed="false">Hoje</button>
+            <button type="button" data-d="7" aria-pressed="true">7 dias</button>
+            <button type="button" data-d="15" aria-pressed="false">15 dias</button>
+            <button type="button" data-d="30" aria-pressed="false">30 dias</button>
+          </div>
+          <label for="f-de" style="position:absolute;left:-9999px">De</label>
+          <input type="date" id="f-de" />
+          <span class="ate">até</span>
+          <label for="f-ate" style="position:absolute;left:-9999px">Até</label>
+          <input type="date" id="f-ate" />
+          <button type="button" class="btn" id="aplicar">Ver</button>
+          <select class="filtro" id="galpao" aria-label="Galpão">
+            <option value="">Todos os galpões</option>
+            {% for numero, nome in GALPOES.items() %}<option value="{{ numero }}">{{ nome }}</option>{% endfor %}
+          </select>
+          <span class="espaco"></span>
+          <a class="btn pri" id="baixar" href="#">⬇ Baixar relatório (Excel)</a>
+          <button type="button" class="btn" id="imprimir">🖨 Imprimir / PDF</button>
+        </div>
+        <div class="erro" id="erro"></div>
+        <div class="periodo-txt" id="periodo-txt">Carregando…</div>
+        <div class="so-impressao"><b>Reversos</b> — <span id="print-titulo"></span></div>
+
+        <div class="grupo-titulo"><i style="background:var(--aguarda)"></i> Fila agora <span style="font-weight:400; text-transform:none; letter-spacing:0">(não depende do período)</span></div>
+        <div class="cartoes">
+          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="f-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">reversos ainda sem decisão</div></div>
+          <div class="cartao" id="cartao-parados" style="--cor:var(--nao)"><div class="valor" id="f-par">—</div><div class="rotulo" id="f-par-rot">Parados há mais de 3 dias</div><div class="sub">precisam de atenção</div></div>
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="f-antigo">—</div><div class="rotulo">Mais antigo na fila</div><div class="sub">tempo esperando a equipe</div></div>
+        </div>
+
+        <div class="grupo-titulo"><i style="background:var(--rev)"></i> No período</div>
+        <div class="cartoes">
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
+          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
+          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub" id="k-tempo-sub">do recebimento à decisão</div></div>
+        </div>
+
+        <div class="grade2">
+          <div class="painel">
+            <h2>Recebidos por dia</h2>
+            <div class="caixa-grafico"><canvas id="g-dia" role="img" aria-label="Reversos recebidos por dia, por situação"></canvas></div>
+          </div>
+          <div class="painel">
+            <h2>O que aconteceu com os reversos</h2>
+            <div class="caixa-grafico" style="height:200px"><canvas id="g-res" role="img" aria-label="Resultado dos reversos"></canvas></div>
+            <div class="legenda" id="leg-res"></div>
+          </div>
+        </div>
+
+        <div class="painel">
+          <h2>Comparação entre os galpões</h2>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Galpão</th><th class="n">Recebidos</th>
+              <th class="n" title="Reversos que a equipe liberou para venda">No estoque</th>
+              <th class="n" title="Reversos que a equipe decidiu que não voltam ao estoque">Fora do estoque</th>
+              <th class="n" title="Reversos ainda sem decisão da equipe">Aguardando</th>
+              <th class="n" title="Dos já conferidos pela equipe">% no estoque</th>
+              <th class="n" title="Do recebimento até a equipe decidir">Tempo médio</th></tr></thead>
+            <tbody id="t-galpoes"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="nota-tab"><b>No estoque</b> = a equipe liberou para venda. <b>Fora do estoque</b> = a equipe decidiu que não volta (avariado, faltando peça etc.). <b>Aguardando</b> = ainda sem decisão da equipe.</div>
+        </div>
+
+        <div class="duas">
+          <div class="painel">
+            <h2>Quem recebeu no galpão <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)">(usuário que registrou)</span></h2>
+            <div class="tabela-rolagem"><table>
+              <thead><tr><th>Quem</th><th>Galpão</th><th class="n">Recebidos</th></tr></thead>
+              <tbody id="t-quem"><tr><td colspan="3" class="vazio">Carregando…</td></tr></tbody>
+            </table></div>
+          </div>
+          <div class="painel">
+            <h2>Quem concluiu <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)">(equipe que decidiu)</span></h2>
+            <div class="tabela-rolagem"><table>
+              <thead><tr><th>Quem</th><th class="n">Concluídos</th><th class="n">No estoque</th><th class="n">Fora</th><th class="n">Tempo médio</th></tr></thead>
+              <tbody id="t-conc"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="duas">
+          <div class="painel">
+            <h2>Por que não voltaram ao estoque</h2>
+            <div id="motivos"><div class="vazio">Carregando…</div></div>
+          </div>
+          <div class="painel">
+            <h2>Contas com mais reversos <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)" id="t-contas-info"></span></h2>
+            <div class="tabela-rolagem"><table>
+              <thead><tr><th>Conta</th><th class="n">Recebidos</th><th class="n">No estoque</th><th class="n">Fora</th><th class="n">Aguardando</th></tr></thead>
+              <tbody id="t-contas"><tr><td colspan="5" class="vazio">Carregando…</td></tr></tbody>
+            </table></div>
+          </div>
+        </div>
+
+        <div class="nota-tab" style="margin-top:-6px">Esta tela mostra só números e não carrega fotos. Para ver as fotos de um reverso, abra-o em <a href="/solicitacoes-painel">Solicitações</a>.</div>
+      </main>
+    </div>
+  </div>
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    const COR = { voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f" };
+    const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    let dias = 7, modoCustom = false, graficoDia = null, graficoRes = null;
+    const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+    const dataBRano = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
+    // minutos -> "45 min", "3 h 20 min", "2 d 4 h" (igual ao Excel)
+    function tempo(m) {
+      if (m === null || m === undefined) return "—";
+      if (m < 60) return m + " min";
+      if (m < 1440) { const h = Math.floor(m / 60), mm = m % 60; return mm ? `${h} h ${String(mm).padStart(2, "0")} min` : `${h} h`; }
+      const dd = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60); return h ? `${dd} d ${h} h` : `${dd} d`;
+    }
+
+    function params() {
+      const p = new URLSearchParams();
+      if (modoCustom) { p.set("de", $("f-de").value); p.set("ate", $("f-ate").value); } else { p.set("dias", dias); }
+      if ($("galpao").value) p.set("galpao", $("galpao").value);
+      return p;
+    }
+    function atualizarLinkExcel() { $("baixar").href = "/api/reversos-gestor/relatorio?" + params().toString(); }
+
+    function desenharGraficos(d) {
+      if (graficoDia) graficoDia.destroy();
+      if (graficoRes) graficoRes.destroy();
+      graficoDia = new Chart($("g-dia"), {
+        type: "bar",
+        data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
+          { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
+          { label: "Não voltaram ao estoque", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
+          { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
+        ] },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
+          scales: { y: { beginAtZero: true, stacked: true, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 16 } } },
+          plugins: { legend: { position: "bottom" } } },
+      });
+      const res = d.resultado;
+      if (res.length) {
+        graficoRes = new Chart($("g-res"), {
+          type: "doughnut",
+          data: { labels: res.map(x => x.nome), datasets: [{ data: res.map(x => x.quantidade), backgroundColor: res.map(x => COR_RESULTADO[x.chave] || "#9aa5b1"), borderWidth: 2, borderColor: "#fff" }] },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } } },
+        });
+        $("leg-res").innerHTML = res.map(x => `<span><i style="background:${COR_RESULTADO[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}: <b>${x.quantidade}</b></span>`).join("");
+      } else {
+        $("leg-res").innerHTML = '<div class="vazio" style="padding:60px 0 20px">Nenhum reverso neste período.</div>';
+      }
+    }
+
+    function desenhar(d) {
+      const k = d.kpis, f = d.fila;
+      const gTxt = $("galpao").value ? $("galpao").selectedOptions[0].textContent : "todos os galpões";
+      $("periodo-txt").textContent = `${dataBRano(d.periodo.de)} a ${dataBRano(d.periodo.ate)} (${d.periodo.dias} dia${d.periodo.dias > 1 ? "s" : ""}) · ${gTxt}`;
+      $("print-titulo").textContent = $("periodo-txt").textContent;
+
+      // Fila agora (independe do período)
+      $("f-ag").textContent = f.aguardando; $("f-par").textContent = f.parados;
+      $("f-par-rot").textContent = `Parados há mais de ${f.dias_parado} dias`;
+      $("f-antigo").textContent = tempo(f.mais_antigo_min);
+      $("cartao-parados").classList.toggle("alerta-parados", f.parados > 0);
+
+      // Período
+      $("k-rec").textContent = k.recebidos;
+      $("k-rec-sub").textContent = k.avisados_seller ? `inclui ${k.avisados_seller} avisado(s) pelo seller` : "registrados nos galpões";
+      $("k-volt").textContent = k.voltaram; $("k-nao").textContent = k.nao_voltaram; $("k-ag").textContent = k.aguardando;
+      $("k-pct").textContent = k.conferidos ? k.pct_voltaram + "%" : "—";
+      $("k-tempo").textContent = tempo(k.tempo_medio_min);
+      $("k-tempo-sub").textContent = k.tempo_max_min != null ? `o mais demorado levou ${tempo(k.tempo_max_min)}` : "do recebimento à decisão";
+
+      const linhaG = (g, rotulo, cls) => `<tr class="${cls || ""}"><td><b>${esc(rotulo)}</b></td><td class="n">${g.recebidos}</td><td class="n verde">${g.voltaram}</td><td class="n verm">${g.nao_voltaram}</td><td class="n laranja">${g.aguardando}</td><td class="n">${(g.voltaram + g.nao_voltaram) ? g.pct_voltaram + "%" : "—"}</td><td class="n">${tempo(g.tempo_medio_min)}</td></tr>`;
+      const rotTotal = $("galpao").value ? "Total (" + $("galpao").selectedOptions[0].textContent + ")" : "Total";
+      $("t-galpoes").innerHTML = d.por_galpao.map(g => linhaG(g, g.nome)).join("") + linhaG(d.total_galpoes, rotTotal, "linha-total");
+
+      $("t-quem").innerHTML = d.quem_recebeu.length
+        ? d.quem_recebeu.map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.galpao_nome)}</td><td class="n"><b>${x.quantidade}</b></td></tr>`).join("")
+        : '<tr><td colspan="3" class="vazio">Nenhum reverso recebido no galpão neste período.</td></tr>';
+      $("t-conc").innerHTML = d.quem_concluiu.length
+        ? d.quem_concluiu.map(x => `<tr><td>${esc(x.nome)}</td><td class="n"><b>${x.concluidos}</b></td><td class="n verde">${x.voltaram}</td><td class="n verm">${x.nao_voltaram}</td><td class="n">${tempo(x.tempo_medio_min)}</td></tr>`).join("")
+        : '<tr><td colspan="5" class="vazio">Nenhum reverso concluído neste período.</td></tr>';
+
+      // Motivos de "não voltou ao estoque" (tudo que não é voltou/aguardando)
+      const motivos = d.resultado.filter(x => x.chave !== "voltou" && x.chave !== "aguardando");
+      const totM = motivos.reduce((s, x) => s + x.quantidade, 0);
+      $("motivos").innerHTML = motivos.length
+        ? motivos.map(x => `<div class="motivo-linha"><div class="topo"><span>${esc(x.nome)}</span><b>${x.quantidade} <span style="font-weight:400;color:var(--cmx-texto-suave)">(${Math.round(x.quantidade * 100 / totM)}%)</span></b></div><div class="barra-motivo"><i style="width:${Math.round(x.quantidade * 100 / totM)}%"></i></div></div>`).join("")
+        : '<div class="vazio">Nenhum reverso deixou de voltar ao estoque neste período.</div>';
+
+      $("t-contas").innerHTML = d.contas.length
+        ? d.contas.map(c => `<tr><td>${esc(c.conta)}</td><td class="n"><b>${c.recebidos}</b></td><td class="n verde">${c.voltaram}</td><td class="n verm">${c.nao_voltaram}</td><td class="n laranja">${c.aguardando}</td></tr>`).join("")
+        : '<tr><td colspan="5" class="vazio">Nenhum reverso neste período.</td></tr>';
+      $("t-contas-info").textContent = d.total_contas > d.contas.length ? `(as ${d.contas.length} primeiras de ${d.total_contas}; o Excel traz todas)` : "";
+      desenharGraficos(d);
+    }
+
+    let vez = 0;
+    async function carregar() {
+      const minha = ++vez; atualizarLinkExcel();
+      try {
+        const r = await fetch("/api/reversos-gestor/resumo?" + params().toString(), { cache: "no-store" });
+        if (r.status === 401) { location.href = "/login"; return; }
+        if (!r.ok) { let m = "status " + r.status; try { const j = await r.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+        const d = await r.json();
+        if (minha !== vez) return;
+        $("erro").style.display = "none"; desenhar(d);
+      } catch (e) {
+        console.error(e); $("erro").style.display = "block"; $("erro").textContent = "Não consegui carregar os números agora. " + (e.message || "") + " Tente de novo em instantes.";
+      }
+    }
+    // Hoje / 7 / 15 / 30 dias
+    $("periodos").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      dias = +b.dataset.d; modoCustom = false;
+      document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      $("f-de").value = ""; $("f-ate").value = "";
+      carregar();
+    });
+    // De / Até (livre)
+    $("aplicar").addEventListener("click", () => {
+      if (!$("f-de").value && !$("f-ate").value) { $("erro").style.display = "block"; $("erro").textContent = "Escolha a data inicial e/ou final."; return; }
+      if ($("f-de").value && !$("f-ate").value) $("f-ate").value = $("f-de").value;
+      if ($("f-ate").value && !$("f-de").value) $("f-de").value = $("f-ate").value;
+      modoCustom = true;
+      document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", "false"));
+      carregar();
+    });
+    $("galpao").addEventListener("change", carregar);
+    $("imprimir").addEventListener("click", () => window.print());
+    carregar();
+    setInterval(carregar, 60000);   // atualiza sozinho a cada minuto
+  </script>
+</body>
+</html>

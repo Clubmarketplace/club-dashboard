@@ -98,12 +98,15 @@
         <h2 class="pd-tit" id="pd-titulo-periodo">No período</h2>
         <div class="pd-tabela" id="pd-pessoas"><div class="pd-vazio">Carregando…</div></div>
 
-        <h2 class="pd-tit">Reversos</h2>
+        {#- 27/10: Reversos SÓ para admin e supervisor (gerente de setor não vê) -#}
+        {% if usuario_logado and usuario_logado.papel in ("admin", "supervisor") %}
+        <h2 class="pd-tit">Reversos <a href="/reversos-gestao" style="font-size:13px; font-weight:600; margin-left:8px;">Abrir a tela completa de Reversos →</a></h2>
         <div class="pd-cards" id="pd-rev-kpis"></div>
         <h3 class="pd-tit" style="font-size:15px">Por conta</h3>
         <div class="pd-tabela" id="pd-rev-conta"><div class="pd-vazio">Carregando…</div></div>
         <h3 class="pd-tit" style="font-size:15px">Por galpão</h3>
         <div class="pd-tabela" id="pd-rev-galpao"><div class="pd-vazio">Carregando…</div></div>
+        {% endif %}
 
         <div class="pd-info">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="flex-shrink:0;margin-top:1px" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4M12 8h.01"></path></svg>
