@@ -114,6 +114,9 @@ CHECKLIST_REVERSO = {
     "testado": "Testado e funcionando",
 }
 MAX_FOTOS_REVERSO = 10
+# Itens (unidades) do MESMO reverso na mesma venda: ex.: cliente comprou 2 ferros do mesmo SKU
+# e os 2 chegaram com defeitos diferentes. Definido com o operacional em 27/10.
+MAX_ITENS_POR_VENDA_REVERSO = 3
 # Teto por foto (rede de segurança): o navegador já reduz pra ~80 KB (ver
 # static/fotos.js); isto só impede que algo fora do padrão encha o banco.
 # 800 mil caracteres de base64 = ~600 KB de imagem.
@@ -556,6 +559,14 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         if not (i.numero_venda or "").strip():
             raise HTTPException(status_code=400, detail="Informe o número da venda.")
         numeros.append(_normalizar_numero_venda(i.numero_venda, corpo.plataforma, estrito))
+    if eh_reverso:
+        # Limite por número de venda (não por envio): a mesma venda pode ter até 3 itens.
+        for numero_ in set(numeros):
+            if numeros.count(numero_) > MAX_ITENS_POR_VENDA_REVERSO:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"No máximo {MAX_ITENS_POR_VENDA_REVERSO} itens por venda.",
+                )
     for i in corpo.itens:
         if not eh_reverso and len(i.fotos_base64 or []) > MAX_FOTOS_OUTROS:
             raise HTTPException(status_code=400, detail=f"No máximo {MAX_FOTOS_OUTROS} fotos por venda.")
@@ -564,7 +575,10 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
 
     # --- Aviso de duplicidade (mesma venda + mesma plataforma + mesmo tipo) ---
     # Pedir cancelamento e depois reputação da MESMA venda é normal: não avisa.
-    if not corpo.confirmar_duplicadas:
+    # REVERSO fica de fora (26/10): a mesma venda pode voltar mais de uma vez e mais de
+    # uma unidade do mesmo SKU (ex.: cliente comprou 2 ferros e os 2 chegaram quebrados) --
+    # cada unidade é um registro próprio, com suas fotos. Nunca barra nem pergunta.
+    if not corpo.confirmar_duplicadas and not eh_reverso:
         existentes = (
             db.query(SolicitacaoCancelamento)
             .filter(SolicitacaoCancelamento.plataforma == corpo.plataforma)
