@@ -1770,6 +1770,14 @@ def _supervisao_cancelamento_logado(request: Request, db: Session = Depends(get_
     return usuario
 
 
+def _so_admin_supervisor_logado(request: Request, db: Session = Depends(get_db)) -> Usuario:
+    """Reversos na Produtividade: SÓ admin e supervisor (27/10) -- gerente de setor não vê."""
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin", "supervisor")):
+        raise HTTPException(status_code=403, detail="Acesso restrito.")
+    return usuario
+
+
 def _limites_utc_produtividade(de: date, ate: date):
     """Dias (inclusive) em horário de Brasília -> [início, fim) em UTC cru
     (como o banco guarda) -- mesma conta de _inicio_do_dia_br_em_utc, só que
@@ -1943,7 +1951,7 @@ def reversos_resumo(
     de: Optional[str] = None,
     ate: Optional[str] = None,
     db: Session = Depends(get_db),
-    _usuario: Usuario = Depends(_supervisao_cancelamento_logado),
+    _usuario: Usuario = Depends(_so_admin_supervisor_logado),
 ):
     """Reversos do período (padrão: hoje): quantos chegaram no total, por conta e
     por galpão, e quantos voltaram pro estoque e quantos não. Também devolve
