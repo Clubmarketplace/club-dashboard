@@ -88,11 +88,30 @@
     $("ci-ativa-info").textContent = ultimaPausa ? `${ultimaPausa.depois ? "Ligada" : "Pausada"} por ${ultimaPausa.por || "—"} em ${new Date(ultimaPausa.em).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}` : "";
   }
 
+  // Traduz o erro técnico da API numa dica clara. Só ajuda a ler: o motivo
+  // original sempre é mostrado inteiro logo abaixo, então nada fica escondido.
+  function dicaDoMotivo(motivo) {
+    const m = String(motivo || "").toLowerCase();
+    if (!m) return "";
+    if (m.includes("credit balance") || m.includes("billing")) return "Falta de crédito na conta da Anthropic.";
+    if (m.includes("401") || m.includes("invalid x-api-key") || m.includes("authentication")) return "Chave da API inválida ou revogada (ANTHROPIC_API_KEY).";
+    if (m.includes("permission") || m.includes("403")) return "A chave não tem permissão para esse recurso/modelo.";
+    if (m.includes("not_found") || m.includes("404") || m.includes("model")) return "Modelo não encontrado ou desativado (CLAUDE_MODEL_PRE_VENDA).";
+    if (m.includes("429") || m.includes("rate")) return "Limite de requisições atingido — costuma passar sozinho.";
+    if (m.includes("overloaded") || m.includes("529") || m.includes("500") || m.includes("timeout") || m.includes("connection")) return "Instabilidade temporária da API ou de rede.";
+    return "";
+  }
+
   function pintarSaude(saude) {
     const el = $("ci-saude");
     if (!saude) { el.style.display = "none"; return; }
     const hora = new Date(saude.desde).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", hour: "2-digit", minute: "2-digit" });
-    el.textContent = `⚠️ IA sem crédito/falhando desde ${hora} — perguntas estão indo direto pra equipe.`;
+    const dica = dicaDoMotivo(saude.motivo);
+    // textContent (nunca innerHTML): o motivo vem de texto de erro externo.
+    el.textContent = `⚠️ IA falhando desde ${hora} — perguntas estão indo direto pra equipe.`
+      + (dica ? `\n${dica}` : "")
+      + `\nMotivo registrado: ${saude.motivo || "(sem detalhe registrado)"}`;
+    el.style.whiteSpace = "pre-line";
     el.style.display = "block";
   }
 
