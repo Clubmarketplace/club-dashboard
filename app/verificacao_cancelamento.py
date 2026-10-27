@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.contas_util import chave_conta
 from app.database import SessionLocal
 from app.ml_client import MLApiError, MLAuthError, buscar_pedido, garantir_token_valido, repor_estoque_item
-from app.cancelamento_apoio import preencher_produto_do_pedido, registrar_evento
+from app.cancelamento_apoio import preencher_produto_do_pedido, reivindicar_conclusao, registrar_evento
 from app.models import Conta, SolicitacaoCancelamento
 
 logger = logging.getLogger("verificacao_cancelamento")
@@ -96,6 +96,10 @@ def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session)
         return {"confirmou": False, "situacao": "plataforma_nao_suportada", "detalhe": "Verificação automática só existe pra Mercado Livre."}
     if solicitacao.confirmado_por:
         return {"confirmou": False, "situacao": "ja_confirmada", "detalhe": "Essa solicitação já foi confirmada antes."}
+    if not (solicitacao.numero_venda or "").isdigit():
+        # 27/10: venda com letras não existe como pedido no ML -- confirmar manualmente.
+        return {"confirmou": False, "situacao": "erro_consulta",
+                "detalhe": "O número da venda tem letras, então o Mercado Livre não consegue conferir sozinho. Confirme manualmente."}
 
     conta = _achar_conta(solicitacao, db)
     if conta is None:
@@ -133,6 +137,10 @@ def verificar_uma_solicitacao(solicitacao: SolicitacaoCancelamento, db: Session)
             "detalhe": f'O Mercado Livre ainda mostra o status "{status_pedido}" pra essa venda -- ainda não foi cancelada por lá.',
         }
 
+    # Trava de conclusão: se alguém concluiu na mesma hora, o sistema NÃO sobrescreve.
+    if not reivindicar_conclusao(db, solicitacao.id, "Sistema (verificação automática)"):
+        db.rollback()
+        return {"confirmou": False, "situacao": "ja_confirmada", "detalhe": "Essa solicitação já foi confirmada antes."}
     solicitacao.resultado_impacto = _classificar_resultado(pedido.get("cancel_detail"))
     solicitacao.confirmado_por = "Sistema (verificação automática)"
     solicitacao.confirmado_em = datetime.utcnow()

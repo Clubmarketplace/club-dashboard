@@ -18,6 +18,7 @@ mesmo se o Mercado Livre estiver fora do ar).
 import logging
 from datetime import datetime
 
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.contas_util import chave_conta
@@ -31,6 +32,26 @@ TAMANHO_MAX_DETALHE = 500
 # ---------------------------------------------------------------------------
 # Histórico
 # ---------------------------------------------------------------------------
+def reivindicar_conclusao(db: Session, solicitacao_id: int, quem: str) -> bool:
+    """
+    TRAVA DE CONCLUSÃO (27/10): "depois de concluída, ninguém mexe mais".
+    Um UPDATE condicional e atômico no banco (WHERE confirmado_por IS NULL): se duas
+    pessoas (ou uma pessoa e a verificação automática) concluírem a mesma solicitação
+    ao mesmo tempo, SÓ UMA consegue; a outra recebe False e não altera nada. Só marca
+    quem concluiu e quando -- o resto da conclusão é gravado pelo chamador na mesma
+    transação (o commit é dele). No Postgres o UPDATE segura a linha até o commit, então
+    a segunda tentativa espera e depois enxerga a conclusão da primeira.
+    Devolve True se esta chamada foi quem concluiu.
+    """
+    resultado = db.execute(
+        update(SolicitacaoCancelamento)
+        .where(SolicitacaoCancelamento.id == solicitacao_id, SolicitacaoCancelamento.confirmado_por.is_(None))
+        .values(confirmado_por=quem, confirmado_em=datetime.utcnow())
+        .execution_options(synchronize_session=False)
+    )
+    return resultado.rowcount == 1
+
+
 def registrar_evento(db: Session, solicitacao_id: int, tipo: str, usuario=None, detalhe: str | None = None, nome: str | None = None) -> None:
     """
     Acrescenta um evento ao histórico (NÃO faz commit -- entra junto com a
@@ -76,6 +97,7 @@ def preencher_produto_do_pedido(solicitacao: SolicitacaoCancelamento, pedido: di
     """
     if solicitacao.sku and solicitacao.produto_titulo:
         return
+    # (27/10) O SKU digitado pela pessoa NUNCA é trocado: a leitura do pedido só completa o que faltar.
     sku, titulo = extrair_produto_do_pedido(pedido)
     if not solicitacao.sku:
         solicitacao.sku = sku
@@ -99,6 +121,10 @@ def buscar_produto_da_venda(solicitacao: SolicitacaoCancelamento, db: Session) -
     from app.ml_client import MLApiError, MLAuthError, buscar_pedido, garantir_token_valido
 
     if solicitacao.plataforma != "mercado_livre":
+        return "falha"
+    # 27/10: nº da venda com letras não existe no ML (pedidos de lá são só números):
+    # não gasta chamada à API; o produto/SKU fica para a equipe preencher.
+    if not (solicitacao.numero_venda or "").isdigit():
         return "falha"
     conta = conta_da_solicitacao(solicitacao, db)
     if conta is None:
