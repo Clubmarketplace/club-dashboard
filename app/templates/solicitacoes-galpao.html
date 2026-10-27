@@ -159,7 +159,9 @@
       const voltou = s.voltou_estoque === true;
       const status = reverso
         ? (s.confirmado_por
-            ? (voltou
+            ? (s.garantia === true
+                ? `<span class="status-confirmado" style="color:#b45309">🛡 Garantia</span><div class="quem">Por ${escaparHtml(s.confirmado_por)} · ${formatarData(s.confirmado_em)}</div>`
+                : voltou
                 ? `<span class="status-confirmado">✓ Voltou para o estoque</span><div class="quem">Liberado por ${escaparHtml(s.confirmado_por)} · ${formatarData(s.confirmado_em)}</div>`
                 : `<span class="status-pendente" style="color:#9b1c1c">✗ ${escaparHtml(s.resultado_reverso_nome || "Não voltou")}</span><div class="quem">Por ${escaparHtml(s.confirmado_por)}${s.protocolo ? " · Protocolo " + escaparHtml(s.protocolo) : ""}${s.observacao_resultado ? " · " + escaparHtml(s.observacao_resultado) : ""}</div>`)
             : (s.em_atendimento_por ? `<span class="status-pendente">Em conferência · ${escaparHtml(s.em_atendimento_por)}</span>` : '<span class="status-pendente">Aguardando a equipe conferir</span>'))

@@ -40,6 +40,18 @@
 
   .vazio { text-align:center; padding:26px 10px; color:var(--cmx-texto-suave); font-size:13.5px; }
 
+  /* Destaque (27/10): produtos revisados, testados e devolvidos ao estoque do seller */
+  .destaque-estoque { display:none; background:#e8f6ee; border:2px solid #2f9e63; border-radius:16px; padding:22px 26px; margin-bottom:22px; }
+  .destaque-estoque h2 { margin:0 0 4px; font-size:17px; color:#1e6b43; }
+  .destaque-estoque .de-sub { font-size:13px; color:#3d6b52; margin-bottom:14px; }
+  .de-linha { display:flex; flex-wrap:wrap; gap:14px 36px; align-items:flex-end; }
+  .de-num { font-size:44px; font-weight:800; line-height:1; color:#14532d; }
+  .de-rot { font-size:12.5px; color:#3d6b52; margin-top:4px; }
+  .de-gar { border-left:2px solid #bfe3cd; padding-left:24px; }
+  .de-gar .de-num { font-size:28px; color:#b45309; }
+  .de-gar .de-rot { color:#8a5a1f; }
+  .de-link { display:inline-block; margin-top:14px; font-size:13px; font-weight:600; color:#1e6b43; }
+
   /* Card "O que o Club fez pela sua conta" */
   .cartao-club { background:#12181f; color:#fff; border-radius:16px; padding:26px 28px; margin-bottom:22px; }
   .cartao-club h2 { margin:0 0 16px; font-size:16px; }
@@ -110,6 +122,16 @@
         <div id="dashboard-vazio" class="vazio" style="display:none;">Não consegui carregar os dados agora. Atualize a página.</div>
 
         <div id="dashboard-conteudo">
+          <div class="destaque-estoque" id="destaque-estoque" role="region" aria-label="Reversos revisados e devolvidos ao seu estoque">
+            <h2>✓ Revisado, testado e retornado ao seu estoque</h2>
+            <div class="de-sub">Produtos que voltaram para você, conferidos pela equipe do Club antes de voltar a vender.</div>
+            <div class="de-linha">
+              <div><div class="de-num" id="de-mes">0</div><div class="de-rot">no mês</div></div>
+              <div><div class="de-num" id="de-hoje" style="font-size:28px">0</div><div class="de-rot">hoje</div></div>
+              <div class="de-gar"><div class="de-num" id="de-gar-mes">0</div><div class="de-rot">foram para garantia no mês</div></div>
+            </div>
+            <a class="de-link" href="/meus-cancelamentos">Ver os reversos e o motivo de cada um →</a>
+          </div>
           <div class="cartao-club">
             <h2>O que o Club fez pela sua conta este mês</h2>
             <div class="club-grid">
@@ -328,6 +350,17 @@ async function carregarDashboard() {
     // Reversos (produto que voltou): chegou no galpão -> conferência da equipe -> voltou (ou não) para o estoque
     // ou resolvido com o ML. Só aparece se a conta teve algum reverso no mês.
     const rev = (dados.reversos && dados.reversos.mes) || {};
+    // Destaque: revisado, testado e retornado ao estoque (+ garantia). Só aparece se houve reverso no mês.
+    const revHoje = (dados.reversos && dados.reversos.hoje) || {};
+    const destaque = document.getElementById("destaque-estoque");
+    if (rev.chegaram) {
+      destaque.style.display = "block";
+      document.getElementById("de-mes").textContent = rev.liberados_venda || 0;
+      document.getElementById("de-hoje").textContent = revHoje.liberados_venda || 0;
+      document.getElementById("de-gar-mes").textContent = rev.garantias || 0;
+    } else {
+      destaque.style.display = "none";
+    }
     const revItem = document.getElementById("club-reverso-item");
     if (rev.chegaram) {
       revItem.style.display = "";
@@ -335,6 +368,7 @@ async function carregarDashboard() {
         rev.chegaram + (rev.chegaram === 1 ? " reverso recebido" : " reversos recebidos") + " no mês";
       const partes = [];
       if (rev.liberados_venda) partes.push(rev.liberados_venda + " voltou(aram) para o estoque");
+      if (rev.garantias) partes.push(rev.garantias + " foi(ram) para garantia");
       if (rev.nao_voltaram) partes.push(rev.nao_voltaram + " não voltou(aram) (veja o motivo em Minhas solicitações)");
       if (rev.em_andamento) partes.push(rev.em_andamento + " em andamento (veja em Minhas solicitações)");
       document.getElementById("club-reverso-sub").textContent = partes.join(" · ");

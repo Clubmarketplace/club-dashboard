@@ -160,6 +160,8 @@
                 {% if s.confirmado_por %}
                   {% if s.resultado_reverso == "liberado_venda" %}
                   <span class="status-confirmado">✓ Voltou para o estoque · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  {% elif s.resultado_reverso == "garantia" %}
+                  <span class="status-confirmado" style="color:#b45309">🛡 Garantia · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% else %}
                   <span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Não voltou para o estoque") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% endif %}

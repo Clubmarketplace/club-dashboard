@@ -11,7 +11,7 @@
   <script src="/static/vendor/chart.umd.min.js"></script>
   <style>
     :root {
-      --canc:#5b6773; --rev:#0f766e; --voltou:#2f9e63; --nao:#c24141; --aguarda:#d98e2f;
+      --canc:#5b6773; --rev:#0f766e; --voltou:#2f9e63; --nao:#c24141; --aguarda:#d98e2f; --gar:#b45309;
     }
     main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
     .barra { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:18px; }
@@ -70,6 +70,10 @@
     .alerta-parados .valor { color:#a83232; }
     .duas { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:18px; }
     @media (max-width:860px) { .duas { grid-template-columns:1fr; } }
+    /* v28: variação em relação ao período anterior (nos cartões) */
+    .cartao .var { font-size:12px; font-weight:600; margin-top:4px; min-height:15px; color:var(--cmx-texto-suave); }
+    .cartao .var.bom { color:#1e8449; } .cartao .var.ruim { color:#c0392b; }
+    .duas { align-items:start; }   /* 27/10: painel curto não estica até a altura do vizinho */
     .duas .painel { margin-bottom:0; }
     .barra-motivo { height:8px; border-radius:99px; background:#eef1f3; overflow:hidden; margin-top:5px; }
     .barra-motivo i { display:block; height:100%; background:var(--nao); border-radius:99px; }
@@ -183,9 +187,10 @@
 
         <div class="grupo-titulo"><i style="background:var(--rev)"></i> No período <span style="font-weight:400; text-transform:none; letter-spacing:0">(clique num cartão para ver quais são)</span></div>
         <div class="cartoes">
-          <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div></div>
-          <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
-          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
+          <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div><div class="var" id="v-rec"></div></div>
+          <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div><div class="var" id="v-volt"></div></div>
+          <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Foram para garantia</div><div class="sub">a equipe emite a nota</div><div class="var" id="v-gar"></div></div>
+          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc. (fora garantia)</div><div class="var" id="v-nao"></div></div>
           <div class="cartao clicavel" data-grupo="aguardando" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub" id="k-tempo-sub">do recebimento à decisão</div></div>
@@ -193,11 +198,11 @@
 
         <div class="grade2">
           <div class="painel">
-            <h2>Recebidos por dia</h2>
+            <h2>O que chegou por dia e o destino de cada um</h2>
             <div class="caixa-grafico"><canvas id="g-dia" role="img" aria-label="Reversos recebidos por dia, por situação"></canvas></div>
           </div>
           <div class="painel">
-            <h2>O que aconteceu com os reversos</h2>
+            <h2>Destino dos reversos</h2>
             <div class="caixa-grafico" style="height:200px"><canvas id="g-res" role="img" aria-label="Resultado dos reversos"></canvas></div>
             <div class="legenda" id="leg-res"></div>
           </div>
@@ -234,9 +239,42 @@
           </div>
         </div>
 
+        <div class="painel">
+          <h2>Produtos (SKU) com mais reversos <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)" id="t-sku-info"></span></h2>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>#</th><th>SKU</th><th class="n">Reversos</th><th class="n">No estoque</th><th class="n">Garantia</th><th class="n">Sem solução</th><th class="n">Aguardando</th></tr></thead>
+            <tbody id="t-sku"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="nota-tab">Clique num SKU para ver os reversos dele. <b>Sem solução</b> = a equipe decidiu que não volta ao estoque.</div>
+        </div>
+
+        <div class="painel" id="sec-garantias">
+          <h2>Garantias <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)" id="gar-info"></span></h2>
+          <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima.</div>
+          <div class="barra" style="margin-bottom:12px">
+            <label for="gar-busca" style="position:absolute;left:-9999px">Buscar conta</label>
+            <input type="search" id="gar-busca" placeholder="Buscar conta…" autocomplete="off" style="min-height:40px; box-sizing:border-box; padding:0 12px; border:1px solid var(--cmx-borda); border-radius:8px; font:inherit; width:200px" />
+            <label for="gar-conta" style="position:absolute;left:-9999px">Conta</label>
+            <select id="gar-conta" class="filtro" style="min-width:260px"><option value="">Todas as contas</option></select>
+            <span class="espaco"></span>
+            <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a>
+          </div>
+          <div class="cartoes">
+            <div class="cartao" style="--cor:var(--gar)"><div class="valor" id="gar-qtd">—</div><div class="rotulo">Reversos em garantia</div></div>
+            <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="gar-custo">—</div><div class="rotulo">Custo total desses produtos</div><div class="sub">soma só os que têm custo cadastrado</div></div>
+            <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="gar-sem">—</div><div class="rotulo">Sem custo cadastrado</div><div class="sub">cadastre o custo para fechar a conta</div></div>
+            <div class="cartao" style="--cor:var(--canc)"><div class="valor" id="gar-medio">—</div><div class="rotulo">Custo médio por garantia</div></div>
+          </div>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th></tr></thead>
+            <tbody id="t-gar"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="nota-tab" id="gar-nota"></div>
+        </div>
+
         <div class="duas">
           <div class="painel">
-            <h2>Por que não voltaram ao estoque</h2>
+            <h2>Reversos sem solução: motivos</h2>
             <div id="motivos"><div class="vazio">Carregando…</div></div>
           </div>
           <div class="painel">
@@ -273,8 +311,8 @@
   <script>
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
-    const COR = { voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f" };
-    const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    const COR = { voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f", garantia:"#b45309" };
+    const COR_RESULTADO = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
     let dias = 7, modoCustom = false, graficoDia = null, graficoRes = null;
     const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
     const dataBRano = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
@@ -302,6 +340,7 @@
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
           { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
+          { label: "Foram para garantia", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
           { label: "Não voltaram ao estoque", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
           { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
         ] },
@@ -309,7 +348,7 @@
           onClick: (evt, _els, chart) => {   // clique numa barra = reversos daquele dia e situação
             const hit = chart.getElementsAtEventForMode(evt, "nearest", { intersect: true }, true);
             if (!hit.length) return;
-            abrirLista({ grupo: ["voltaram", "nao_voltaram", "aguardando"][hit[0].datasetIndex], dia: d.por_dia[hit[0].index].data });
+            abrirLista({ grupo: ["voltaram", "garantias", "nao_voltaram", "aguardando"][hit[0].datasetIndex], dia: d.por_dia[hit[0].index].data });
           },
           scales: { y: { beginAtZero: true, stacked: true, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 16 } } },
           plugins: { legend: { position: "bottom" } } },
@@ -360,7 +399,7 @@
         : '<tr><td colspan="5" class="vazio">Nenhum reverso concluído neste período.</td></tr>';
 
       // Motivos de "não voltou ao estoque" (tudo que não é voltou/aguardando)
-      const motivos = d.resultado.filter(x => x.chave !== "voltou" && x.chave !== "aguardando");
+      const motivos = d.resultado.filter(x => x.chave !== "voltou" && x.chave !== "aguardando" && x.chave !== "garantia");
       const totM = motivos.reduce((s, x) => s + x.quantidade, 0);
       $("motivos").innerHTML = motivos.length
         ? motivos.map(x => `<div class="motivo-linha clicavel" data-chave="${esc(x.chave)}" title="Clique para ver a lista"><div class="topo"><span>${esc(x.nome)}</span><b>${x.quantidade} <span style="font-weight:400;color:var(--cmx-texto-suave)">(${Math.round(x.quantidade * 100 / totM)}%)</span></b></div><div class="barra-motivo"><i style="width:${Math.round(x.quantidade * 100 / totM)}%"></i></div></div>`).join("")
@@ -369,6 +408,26 @@
       $("t-contas").innerHTML = d.contas.length
         ? d.contas.map(c => `<tr class="clicavel" data-conta="${esc(c.conta)}" title="Clique para ver os reversos desta conta"><td>${esc(c.conta)}</td><td class="n"><b>${c.recebidos}</b></td><td class="n verde">${c.voltaram}</td><td class="n verm">${c.nao_voltaram}</td><td class="n laranja">${c.aguardando}</td></tr>`).join("")
         : '<tr><td colspan="5" class="vazio">Nenhum reverso neste período.</td></tr>';
+      // Ranking de SKUs (clicável)
+      $("t-sku").innerHTML = d.ranking_sku.length
+        ? d.ranking_sku.map((x, i) => `<tr class="clicavel" data-sku="${esc(x.sku)}" title="Clique para ver os reversos deste SKU"><td>${i + 1}</td><td><b>${esc(x.nome)}</b></td><td class="n"><b>${x.recebidos}</b></td><td class="n verde">${x.voltaram}</td><td class="n" style="color:#b45309">${x.garantias || 0}</td><td class="n verm">${x.nao_voltaram}</td><td class="n laranja">${x.aguardando}</td></tr>`).join("")
+        : '<tr><td colspan="7" class="vazio">Nenhum reverso neste período.</td></tr>';
+      $("t-sku-info").textContent = d.total_skus > d.ranking_sku.length ? `(os ${d.ranking_sku.length} primeiros de ${d.total_skus} SKUs)` : "";
+      // Variação x período anterior: para reverso, subir "Recebidos"/"Sem solução" é ruim; subir "Voltaram" é bom
+      const an = d.anterior;
+      const variacao = (id, atual, ant, subirEhRuim) => {
+        const el = $(id); el.className = "var"; if (!an) { el.textContent = ""; return; }
+        if (!ant) { el.textContent = atual ? "novo: antes não havia" : "igual ao período anterior"; return; }
+        const pct = Math.round((atual - ant) * 100 / ant);
+        if (pct === 0) { el.textContent = "= igual ao período anterior"; return; }
+        el.textContent = `${pct > 0 ? "▲" : "▼"} ${Math.abs(pct)}% (antes: ${ant})`;
+        el.classList.add((pct > 0) === subirEhRuim ? "ruim" : "bom");
+      };
+      variacao("v-rec", k.recebidos, an && an.recebidos, true);
+      variacao("v-volt", k.voltaram, an && an.voltaram, false);
+      variacao("v-nao", k.nao_voltaram, an && an.nao_voltaram, true);
+      $("k-gar").textContent = k.garantias || 0;
+      variacao("v-gar", k.garantias || 0, an && an.garantias, true);
       $("t-contas-info").textContent = d.total_contas > d.contas.length ? `(as ${d.contas.length} primeiras de ${d.total_contas}; o Excel traz todas)` : "";
       desenharGraficos(d);
     }
@@ -380,6 +439,7 @@
     function gSit(chave) {
       if (chave === "voltou") return { grupo: "voltaram" };
       if (chave === "aguardando") return { grupo: "aguardando" };
+      if (chave === "garantia") return { grupo: "garantias" };
       return { grupo: "nao_voltaram", situacao: chave };
     }
     function paramsDet() {
@@ -388,10 +448,11 @@
       if (sel.situacao) p.set("situacao", sel.situacao);
       if (sel.dia) p.set("dia", sel.dia);
       if (sel.conta) p.set("conta", sel.conta);
+      if (sel.sku) p.set("sku", sel.sku);
       return p;
     }
     function marcarSelecionado() {
-      document.querySelectorAll(".cartao.clicavel").forEach(c => c.classList.toggle("sel", !!sel && c.dataset.grupo === sel.grupo && !sel.situacao && !sel.dia && !sel.conta));
+      document.querySelectorAll(".cartao.clicavel").forEach(c => c.classList.toggle("sel", !!sel && c.dataset.grupo === sel.grupo && !sel.situacao && !sel.dia && !sel.conta && !sel.sku));
     }
     function abrirLista(novo, rolar = true) { sel = novo; pagDet = 1; marcarSelecionado(); carregarLista(rolar); }
     function fecharLista() { sel = null; $("detalhe").hidden = true; marcarSelecionado(); }
@@ -429,6 +490,7 @@
       if (sel.situacao) chips.push(`<button type="button" class="chip" data-rem="situacao">Situação: ${esc(nomeSit(sel.situacao))} ✕</button>`);
       if (sel.dia) chips.push(`<button type="button" class="chip" data-rem="dia">Dia: ${dataBRano(sel.dia)} ✕</button>`);
       if (sel.conta) chips.push(`<button type="button" class="chip" data-rem="conta">Conta: ${esc(sel.conta)} ✕</button>`);
+      if (sel.sku) chips.push(`<button type="button" class="chip" data-rem="sku">SKU: ${sel.sku === "__sem__" ? "sem SKU informado" : esc(sel.sku)} ✕</button>`);
       $("det-filtros").innerHTML = chips.join("");
 
       // resumo do grupo inteiro (não só da página)
@@ -492,6 +554,7 @@
       let el;
       if ((el = alvo("#leg-res span[data-chave]"))) return abrirLista(gSit(el.dataset.chave));
       if ((el = alvo("#motivos .motivo-linha[data-chave]"))) return abrirLista(gSit(el.dataset.chave));
+      if ((el = alvo("#t-sku tr[data-sku]"))) return abrirLista({ grupo: "recebidos", sku: el.dataset.sku });
       if ((el = alvo("#t-contas tr[data-conta]"))) return abrirLista({ grupo: "recebidos", conta: el.dataset.conta });
       if ((el = alvo("#det-resumo button[data-f]"))) { if (sel) { sel = { ...sel, [el.dataset.f]: el.dataset.v }; pagDet = 1; marcarSelecionado(); carregarLista(false); } return; }
       if ((el = alvo("#det-filtros button[data-rem]"))) { if (sel) { const n = { ...sel }; delete n[el.dataset.rem]; sel = n; pagDet = 1; marcarSelecionado(); carregarLista(false); } return; }
@@ -508,12 +571,47 @@
         if (!r.ok) { let m = "status " + r.status; try { const j = await r.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
         const d = await r.json();
         if (minha !== vez) return;
-        $("erro").style.display = "none"; desenhar(d);
+        $("erro").style.display = "none"; desenhar(d); carregarGarantias();
         if (sel) carregarLista(false);   // a lista aberta acompanha período, galpão e a atualização de 1 min
       } catch (e) {
         console.error(e); $("erro").style.display = "block"; $("erro").textContent = "Não consegui carregar os números agora. " + (e.message || "") + " Tente de novo em instantes.";
       }
     }
+    // ---------- Garantias (27/10): conta + período (o de cima) + custo ----------
+    let garConta = "", garBusca = "", garUltimo = null, vezGar = 0;
+    const brl = (v) => Number(v).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    function opcoesContaGar() {
+      const d = garUltimo; if (!d) return;
+      const termo = garBusca.trim().toLowerCase();
+      const total = d.contas.reduce((s, c) => s + c.quantidade, 0);
+      const vis = d.contas.filter(c => !termo || c.conta.toLowerCase().includes(termo));
+      if (garConta && !vis.some(c => c.conta === garConta)) vis.push({ conta: garConta, quantidade: (d.contas.find(c => c.conta === garConta) || {}).quantidade || 0 });
+      $("gar-conta").innerHTML = `<option value="">Todas as contas (${total})</option>` + vis.map(c => `<option value="${esc(c.conta)}">${esc(c.conta)} (${c.quantidade})</option>`).join("");
+      $("gar-conta").value = garConta;
+    }
+    function desenharGarantias(d) {
+      garUltimo = d; opcoesContaGar();
+      const k = d.kpis;
+      $("gar-qtd").textContent = k.quantidade; $("gar-custo").textContent = brl(k.custo_total);
+      $("gar-sem").textContent = k.sem_custo; $("gar-medio").textContent = k.custo_medio == null ? "—" : brl(k.custo_medio);
+      $("gar-info").textContent = `${dataBRano(d.periodo.de)} a ${dataBRano(d.periodo.ate)} · ${garConta || "todas as contas"}`;
+      $("t-gar").innerHTML = d.itens.length
+        ? d.itens.map(i => `<tr><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td><td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td></tr>`).join("")
+        : '<tr><td colspan="7" class="vazio">Nenhuma garantia nesta conta e período.</td></tr>';
+      $("gar-nota").textContent = d.total_itens > d.itens.length ? `Mostrando as ${d.itens.length} mais recentes de ${d.total_itens}. O Excel traz todas.` : "";
+    }
+    async function carregarGarantias() {
+      const minha = ++vezGar; const p = params(); if (garConta) p.set("conta", garConta);
+      $("gar-excel").href = "/api/reversos-gestor/garantias/excel?" + p.toString();
+      try {
+        const r = await fetch("/api/reversos-gestor/garantias?" + p.toString(), { cache: "no-store" });
+        if (!r.ok) throw new Error("status " + r.status);
+        const d = await r.json(); if (minha !== vezGar) return; desenharGarantias(d);
+      } catch (e) { console.error(e); $("t-gar").innerHTML = '<tr><td colspan="7" class="vazio">Não consegui carregar as garantias agora. Tente de novo em instantes.</td></tr>'; }
+    }
+    $("gar-conta").addEventListener("change", () => { garConta = $("gar-conta").value; carregarGarantias(); });
+    $("gar-busca").addEventListener("input", () => { garBusca = $("gar-busca").value; opcoesContaGar(); });
+
     // Hoje / 7 / 15 / 30 dias
     $("periodos").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;

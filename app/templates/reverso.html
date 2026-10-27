@@ -67,6 +67,16 @@
     .vazio { text-align:center; padding:20px; color:var(--cmx-texto-suave); font-size:13.5px; }
     .ver-fotos img { width:64px; height:64px; object-fit:cover; border-radius:8px; border:1px solid var(--cmx-borda); margin:6px 6px 0 0; }
     .item-card { border:1.5px solid var(--cmx-borda); border-radius:14px; padding:16px; margin-bottom:14px; background:#fcfdfd; }
+    .selo-reverso { display:flex; align-items:center; gap:14px; background:var(--rev); color:#fff; border-radius:14px; padding:16px 20px; margin-bottom:18px; }
+    .selo-reverso .grande { font-size:28px; font-weight:900; letter-spacing:.12em; line-height:1; }
+    .selo-reverso .peq-b { font-size:13px; opacity:.92; }
+    .aval { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+    .aval button { border:2px solid var(--cmx-borda); background:#fff; border-radius:14px; padding:18px 12px; font:inherit; font-size:16px; font-weight:700; cursor:pointer; color:var(--cmx-texto); }
+    .aval button small { display:block; font-weight:500; font-size:12px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .aval button.bom[aria-pressed=true] { border-color:#15803d; background:#e6f6ee; color:#14532d; }
+    .aval button.quebrado[aria-pressed=true] { border-color:#b45309; background:#fff3e0; color:#7c2d12; }
+    .bloco-aval { margin-bottom:14px; }
+    .falta { color:#b45309; font-weight:600; }
     .item-topo { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; }
     .item-titulo { font-size:14px; color:var(--rev); }
     .erro-campo { display:none; margin-top:5px; font-size:12.5px; font-weight:600; color:var(--cmx-critico); }
@@ -104,15 +114,19 @@
 
       <header class="cmx-topbar">
         <div>
-          <h1>{{ "Receber reverso" if modo_galpao else "Avisar um reverso" }}</h1>
+          <h1>🔄 REVERSO</h1>
           <p class="cmx-subtitulo">{% if modo_galpao %}Produto que voltou para o galpão: registre a chegada com conta, nº da venda, condições e fotos. A equipe do Club decide se volta ao estoque{% else %}Produto que voltou ou está voltando (devolução, recusa na entrega, chegou quebrado) da conta {{ conta_seller }}{% endif %}</p>
         </div>
       </header>
 
       <main>
+        <div class="selo-reverso" role="note">
+          <span class="grande">REVERSO</span>
+          <span class="peq-b">Produto que VOLTOU. Não é cancelamento, nem cadastro, nem reputação.</span>
+        </div>
         <div class="cartao-rev">
           <h2>{{ "Registrar chegada do reverso" if modo_galpao else "Novo aviso de reverso" }}</h2>
-          <p class="sub">{% if modo_galpao %}Conta, nº da venda e SKU são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
+          <p class="sub">{% if modo_galpao %}Conta, nº da venda/pedido, SKU, avaliação e 1 a 5 fotos são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
 
           <div class="grade">
             {% if modo_galpao %}
@@ -137,7 +151,7 @@
               <input type="text" id="conta" list="lista-contas" placeholder="Digite e escolha a conta" autocomplete="off" />
               <datalist id="lista-contas"></datalist></div>
             {% endif %}
-            <div class="campo"><label class="rot" for="venda">Nº da venda (obrigatório)</label>
+            <div class="campo"><label class="rot" for="venda">Nº da venda ou do pedido (obrigatório)</label>
               <input type="text" id="venda" inputmode="text" placeholder="Número do pedido (letras e números)" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
               <div class="erro-campo" id="erro-venda">Informe o número da venda para enviar.</div></div>
           </div>
@@ -164,12 +178,7 @@
             <div class="grade">
               <div class="campo"><label class="rot">SKU do produto (obrigatório)</label>
                 <input type="text" class="f-produto" maxlength="200" placeholder="{{ 'Ex.: MPR530' if modo_galpao else 'SKU do produto' }}" /></div>
-              {% if modo_galpao %}
-              <div class="campo"><label class="rot">Aspecto ao chegar</label>
-                <select class="f-estado">
-                  {% for chave, nome in ESTADOS_CHEGADA.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
-                </select></div>
-              {% else %}
+              {% if not modo_galpao %}
               <div class="campo"><label class="rot">O que aconteceu</label>
                 <select class="f-motivo">
                   <option>Devolução do cliente</option>
@@ -181,19 +190,33 @@
               {% endif %}
             </div>
             {% if modo_galpao %}
-            <div class="campo" style="margin-bottom:14px">
-              <label class="rot">Condições do produto (marque o que for verdade)</label>
-              <div class="condicoes">
-                {% for chave, nome in CHECKLIST_REVERSO.items() %}<label><input type="checkbox" data-cond="{{ chave }}" /> {{ nome }}</label>{% endfor %}
+            <div class="campo bloco-aval">
+              <label class="rot">Avaliação do galpão (obrigatória)</label>
+              <div class="aval">
+                <button type="button" class="bom" data-aval="bom" aria-pressed="false">✅ Em boas condições<small>Sugere voltar ao estoque</small></button>
+                <button type="button" class="quebrado" data-aval="quebrado" aria-pressed="false">🛠 Quebrado, sem jeito<small>Sugere garantia</small></button>
               </div>
-              <div class="peq" style="margin-top:6px">Só informativo: o galpão não libera para venda. A equipe confere no painel e decide.</div>
+              <div class="sub-bom" style="display:none">
+                <label class="rot">Condições do produto (marque o que for verdade)</label>
+                <div class="condicoes">
+                  {% for chave, nome in CHECKLIST_REVERSO.items() %}<label><input type="checkbox" data-cond="{{ chave }}" /> {{ nome }}</label>{% endfor %}
+                </div>
+              </div>
+              <div class="sub-quebrado" style="display:none">
+                <label class="rot">Qual é o problema? (obrigatório)</label>
+                <select class="f-problema">
+                  <option value="">Escolha o problema</option>
+                  {% for chave, nome in PROBLEMAS_GALPAO.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
+                </select>
+              </div>
+              <div class="peq" style="margin-top:6px">O galpão só sinaliza. Quem decide se volta ao estoque ou vai para garantia é a equipe do Club.</div>
             </div>
             {% endif %}
             <div class="campo" style="margin-bottom:14px">
-              <label class="rot">Observação / problema deste item (opcional)</label>
+              <label class="rot f-obs-rot">{{ "Observação (obrigatória se quebrado)" if modo_galpao else "Observação / problema deste item (opcional)" }}</label>
               <textarea class="f-obs" placeholder="{{ 'Ex.: embalagem violada, cabo quebrado' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
             </div>
-            <label class="rot">Fotos {{ "do retorno" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
+            <label class="rot">Fotos {{ "do produto (obrigatório, de 1 a 5)" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
             <div class="foto-botoes">
               <button type="button" class="botao-foto principal btn-camera">📷 Tirar foto agora</button>
               <button type="button" class="botao-foto btn-galeria">🖼 <span class="txt-galeria">Escolher várias da pasta</span></button>
@@ -228,6 +251,7 @@
     }
 
     // ---------- Plataforma ----------
+    let enviando = false;   // declarado cedo: atualizarTrava() roda já ao montar o 1º item
     let plataforma = "mercado_livre";
     $("plats").addEventListener("click", (e) => {
       const b = e.target.closest(".plat"); if (!b) return;
@@ -278,6 +302,7 @@
       const bc = c.el.querySelector(".btn-camera"), bg = c.el.querySelector(".btn-galeria");
       bc.disabled = bg.disabled = cheio || c.processando;
       bc.textContent = c.fotos.length ? "📷 Tirar outra foto" : "📷 Tirar foto agora";
+      if (typeof atualizarTrava === "function") atualizarTrava();
       c.el.querySelector(".contagem-fotos").textContent = c.processando ? "Processando as fotos..." : `${c.fotos.length} de ${MAX_FOTOS} fotos` + (cheio ? " (limite atingido)" : "");
     }
     async function adicionarArquivo(c, arquivo) {
@@ -318,6 +343,18 @@
       const c = { el, fotos: [], nSlots: 3, processando: false };
       cartoes.push(c);
       $("itens").appendChild(el);
+      c.aval = null;
+      if (MODO_GALPAO) {
+        el.querySelectorAll("[data-aval]").forEach(b => b.addEventListener("click", () => {
+          c.aval = b.dataset.aval;
+          el.querySelectorAll("[data-aval]").forEach(x => x.setAttribute("aria-pressed", x === b));
+          el.querySelector(".sub-bom").style.display = c.aval === "bom" ? "" : "none";
+          el.querySelector(".sub-quebrado").style.display = c.aval === "quebrado" ? "" : "none";
+          el.querySelector(".f-obs-rot").textContent = c.aval === "quebrado" ? "Observação (obrigatória)" : "Observação (opcional)";
+          atualizarTrava();
+        }));
+        ["input", "change"].forEach(ev => el.addEventListener(ev, atualizarTrava));
+      }
       el.querySelector(".item-remover").addEventListener("click", () => {
         const n = c.fotos.length;
         if (n && !confirm(`Remover este item e as ${n} foto(s) dele?`)) return;
@@ -368,13 +405,32 @@
     // ---------- Envio ----------
     // Nº da venda é obrigatório e TRAVA o envio: o botão só libera com o número preenchido
     // (o servidor também recusa sem ele, então não dá para burlar).
-    let enviando = false;
-    const vendaTexto = () => $("venda").value.replace(/\s+/g, "");
+    function vendaTexto() { return $("venda").value.replace(/\s+/g, ""); }
+    // O que ainda falta (galpão): venda, avaliação, problema+observação se quebrado, 1 a 5 fotos, SKU.
+    function faltas() {
+      const f = [];
+      if (!vendaTexto()) f.push("número da venda/pedido");
+      if (!MODO_GALPAO) return f;
+      cartoes.forEach((c, i) => {
+        const p = cartoes.length > 1 ? `item ${i + 1}: ` : "";
+        const q = (s) => c.el.querySelector(s);
+        if (!q(".f-produto").value.trim()) f.push(p + "SKU");
+        if (!c.aval) f.push(p + "avaliação (boas condições ou quebrado)");
+        if (c.aval === "quebrado") {
+          if (!q(".f-problema").value) f.push(p + "qual é o problema");
+          if (!q(".f-obs").value.trim()) f.push(p + "observação");
+        }
+        if (!c.fotos.filter(Boolean).length) f.push(p + "pelo menos 1 foto");
+      });
+      return f;
+    }
     function atualizarTrava() {
-      const ok = !!vendaTexto();
+      const falt = faltas();
+      const ok = falt.length === 0;
       $("enviar").disabled = enviando || !ok;
       $("dica-envio").style.display = ok ? "none" : "";
-      if (ok) { $("venda").classList.remove("invalido"); $("erro-venda").style.display = "none"; }
+      $("dica-envio").innerHTML = ok ? "" : "Falta: <span class='falta'>" + falt.map(esc).join(", ") + "</span>.";
+      if (vendaTexto()) { $("venda").classList.remove("invalido"); $("erro-venda").style.display = "none"; }
     }
     function avisarVenda() {
       $("venda").classList.add("invalido"); $("erro-venda").style.display = "block"; $("venda").focus();
@@ -404,6 +460,7 @@
         campo.classList.toggle("invalido", !campo.value.trim());
         if (!campo.value.trim() && !faltaSku) faltaSku = campo;
       }
+      if (MODO_GALPAO) { const fl = faltas(); if (fl.length) return mensagem("Falta: " + fl.join(", ") + ".", true); }
       if (faltaSku) { faltaSku.focus(); return mensagem("Informe o SKU do produto em todos os itens.", true); }
       let totalFotos = 0;
       for (const c of cartoes) {
@@ -414,9 +471,10 @@
         // Mesmo número de venda em todos os itens; produto/problema/fotos são de cada item.
         const item = { numero_venda: venda, produto: produto || null, fotos_base64: lista.length ? lista : null };
         if (MODO_GALPAO) {
-          item.estado_chegada = q(".f-estado").value;
+          item.avaliacao = c.aval;
+          if (c.aval === "quebrado") item.problema = q(".f-problema").value;
           // condições que o galpão marcou (todas as chaves: marcada = true)
-          item.checklist = {}; c.el.querySelectorAll("[data-cond]").forEach(x => { item.checklist[x.dataset.cond] = x.checked; });
+          item.checklist = {}; c.el.querySelectorAll("[data-cond]").forEach(x => { item.checklist[x.dataset.cond] = (c.aval === "bom") && x.checked; });
           item.motivo = obs || "Retorno recebido no galpão";
         } else {
           item.motivo = q(".f-motivo").value + (obs ? " · " + obs : "");
@@ -434,7 +492,7 @@
         const n = corpo.itens.length;
         const itensTxt = n > 1 ? `${n} itens da venda ${venda}` : "";
         mensagem(MODO_GALPAO
-          ? `Recebimento registrado${itensTxt ? " (" + itensTxt + ")" : ""} para ${corpo.conta} (${totalFotos} foto(s)). Já aparece para a equipe e no painel do seller. A equipe confere e decide se volta ao estoque; acompanhe em Acompanhar solicitações.`
+          ? `Recebimento registrado${itensTxt ? " (" + itensTxt + ")" : ""} para ${corpo.conta} (${totalFotos} foto(s)). Já aparece para a equipe. A equipe confere e decide se volta ao estoque ou vai para garantia; acompanhe em Acompanhar solicitações.`
           : `Reverso enviado${itensTxt ? " (" + itensTxt + ")" : ""} com ${totalFotos} foto(s). A equipe já recebeu; acompanhe em Minhas solicitações.`, false);
         // limpa o formulário: volta a 1 item vazio
         $("venda").value = ""; if (MODO_GALPAO) $("conta").value = "";
