@@ -580,8 +580,8 @@
         <span class="item-numero">Venda</span>
         <button type="button" class="btn-remover-item" style="display:none;">Remover</button>
       </div>
-      <label>Número da venda</label>
-      <input type="text" class="campo-numero-venda" placeholder="Número do pedido" required autocomplete="off" />
+      <label>Número da venda (letras e números)</label>
+      <input type="text" class="campo-numero-venda" placeholder="Nº do pedido" required autocomplete="off" autocapitalize="characters" spellcheck="false" />
       <label class="rotulo-sku">SKU do produto (opcional)</label>
       <input type="text" class="campo-sku" placeholder="SKU (opcional)" autocomplete="off" maxlength="60" />
       <label class="rotulo-motivo">${TEXTOS_TIPO[tipoAtual()].rotulo}</label>

@@ -112,7 +112,7 @@
       <main>
         <div class="cartao-rev">
           <h2>{{ "Registrar chegada do reverso" if modo_galpao else "Novo aviso de reverso" }}</h2>
-          <p class="sub">{% if modo_galpao %}Conta e nº da venda são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
+          <p class="sub">{% if modo_galpao %}Conta, nº da venda e SKU são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
 
           <div class="grade">
             {% if modo_galpao %}
@@ -138,7 +138,7 @@
               <datalist id="lista-contas"></datalist></div>
             {% endif %}
             <div class="campo"><label class="rot" for="venda">Nº da venda (obrigatório)</label>
-              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido (só números)" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
+              <input type="text" id="venda" inputmode="text" placeholder="Número do pedido (letras e números)" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
               <div class="erro-campo" id="erro-venda">Informe o número da venda para enviar.</div></div>
           </div>
 
@@ -162,8 +162,8 @@
               <button type="button" class="botao-sec item-remover" style="display:none">Remover este item</button>
             </div>
             <div class="grade">
-              <div class="campo"><label class="rot">Produto (SKU ou nome, opcional)</label>
-                <input type="text" class="f-produto" maxlength="200" placeholder="{{ 'Ex.: Miniprocessador Cadence · MPR530' if modo_galpao else 'SKU ou nome do produto' }}" /></div>
+              <div class="campo"><label class="rot">SKU do produto (obrigatório)</label>
+                <input type="text" class="f-produto" maxlength="200" placeholder="{{ 'Ex.: MPR530' if modo_galpao else 'SKU do produto' }}" /></div>
               {% if modo_galpao %}
               <div class="campo"><label class="rot">Aspecto ao chegar</label>
                 <select class="f-estado">
@@ -235,12 +235,11 @@
       document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
       ajustarCampoVenda();
     });
-    // Nº da venda: Mercado Livre = só números (teclado numérico no celular); Shopee, Magalu e
-    // TikTok Shop = letras e números (teclado completo). O servidor já aceita assim (27/10).
+    // Nº da venda: letras e números em TODAS as plataformas (Mercado Livre inclusive, desde 27/10);
+    // o teclado do celular é o completo. O servidor aplica a mesma regra.
     function ajustarCampoVenda() {
-      const soNumeros = plataforma === "mercado_livre";
-      $("venda").setAttribute("inputmode", soNumeros ? "numeric" : "text");
-      $("venda").placeholder = soNumeros ? "Número do pedido (só números)" : "Número do pedido (letras e números)";
+      $("venda").setAttribute("inputmode", "text");
+      $("venda").placeholder = "Número do pedido (letras e números)";
     }
     ajustarCampoVenda();
 
@@ -398,6 +397,14 @@
       } else {
         corpo.conta = CONTA_SELLER;
       }
+      // SKU obrigatório em todos os itens (o servidor também recusa sem ele).
+      let faltaSku = null;
+      for (const c of cartoes) {
+        const campo = c.el.querySelector(".f-produto");
+        campo.classList.toggle("invalido", !campo.value.trim());
+        if (!campo.value.trim() && !faltaSku) faltaSku = campo;
+      }
+      if (faltaSku) { faltaSku.focus(); return mensagem("Informe o SKU do produto em todos os itens.", true); }
       let totalFotos = 0;
       for (const c of cartoes) {
         const q = (s) => c.el.querySelector(s);
