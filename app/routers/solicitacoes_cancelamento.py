@@ -90,8 +90,12 @@ ESTADOS_CHEGADA = {
 # ATENÇÃO: a chave "liberado_venda" é a que já existe no banco (reversos
 # antigos) e passa a significar "Voltou para o estoque" -- só o nome mudou.
 RESULTADO_VOLTOU = "liberado_venda"
+# 27/10: GARANTIA = o produto não volta ao estoque; vai para o procedimento de garantia
+# (a equipe emite a nota). Escolha própria na conclusão, ao lado de "voltou" e "não voltou".
+RESULTADO_GARANTIA = "garantia"
 RESULTADOS_REVERSO = {
     RESULTADO_VOLTOU: "Voltou para o estoque",
+    RESULTADO_GARANTIA: "Garantia",
     # --- Não voltou (motivo obrigatório) ---
     "avariado": "Não voltou: avariado",
     "faltando_peca": "Não voltou: faltando peça ou acessório",
@@ -113,7 +117,17 @@ CHECKLIST_REVERSO = {
     "acessorios_manuais": "Todos os acessórios e manuais",
     "testado": "Testado e funcionando",
 }
-MAX_FOTOS_REVERSO = 10
+MAX_FOTOS_REVERSO = 5   # 27/10: máximo 5 fotos por item
+# 27/10 (v30): o GALPÃO só SINALIZA: "bom" (sugere voltar ao estoque) ou "quebrado" (sugere
+# garantia). Quem decide é a equipe do escritório (concluir_reverso). Só informativo.
+AVALIACOES_GALPAO = {"bom": "Em boas condições", "quebrado": "Quebrado, sem jeito"}
+PROBLEMAS_GALPAO = {
+    "quebrado": "Quebrado",
+    "nao_funciona": "Não liga / não funciona",
+    "faltando_peca": "Faltando peça ou acessório",
+    "diferente": "Diferente do anunciado",
+    "outro": "Outro",
+}
 # Itens (unidades) do MESMO reverso na mesma venda: ex.: cliente comprou 2 ferros do mesmo SKU
 # e os 2 chegaram com defeitos diferentes. Definido com o operacional em 27/10.
 MAX_ITENS_POR_VENDA_REVERSO = 3
@@ -188,6 +202,29 @@ class ItemCancelamento(BaseModel):
     estado_chegada: Optional[str] = None
     # Só Reverso: condições que o galpão marcou {"caixa": true, ...} -- informativo.
     checklist: Optional[dict[str, bool]] = None
+    # Só Reverso vindo do galpão (v30): avaliação ("bom"/"quebrado") e, se quebrado, o problema.
+    avaliacao: Optional[str] = None
+    problema: Optional[str] = None
+
+    @field_validator("avaliacao")
+    @classmethod
+    def validar_avaliacao(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in AVALIACOES_GALPAO:
+            raise ValueError(f"avaliacao inválida. Use um de: {', '.join(AVALIACOES_GALPAO)}")
+        return valor
+
+    @field_validator("problema")
+    @classmethod
+    def validar_problema(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in PROBLEMAS_GALPAO:
+            raise ValueError(f"problema inválido. Use um de: {', '.join(PROBLEMAS_GALPAO)}")
+        return valor
 
     @field_validator("produto")
     @classmethod
@@ -415,9 +452,15 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None,
         # Reverso (nulos nos outros tipos)
         "estado_chegada": s.estado_chegada,
         "estado_chegada_nome": ESTADOS_CHEGADA.get(s.estado_chegada) if s.estado_chegada else None,
+        # v30: sugestão do galpão (informativa; o seller NUNCA recebe isto -- ver serialização do seller)
+        "avaliacao_galpao": s.avaliacao_galpao,
+        "avaliacao_galpao_nome": AVALIACOES_GALPAO.get(s.avaliacao_galpao) if s.avaliacao_galpao else None,
+        "problema_galpao": s.problema_galpao,
+        "problema_galpao_nome": PROBLEMAS_GALPAO.get(s.problema_galpao) if s.problema_galpao else None,
         "resultado_reverso": s.resultado_reverso,
         "resultado_reverso_nome": RESULTADOS_REVERSO.get(s.resultado_reverso) if s.resultado_reverso else None,
         "voltou_estoque": (s.resultado_reverso == RESULTADO_VOLTOU) if s.resultado_reverso else None,
+        "garantia": (s.resultado_reverso == RESULTADO_GARANTIA) if s.resultado_reverso else None,
         "liberado_por": s.liberado_por,
         "liberado_em": s.liberado_em.isoformat() if s.liberado_em else None,
         "checklist": _checklist_de(s),
@@ -547,6 +590,11 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         origem = "publico"
         conta_digitada = corpo.conta
 
+    # 27/10: REVERSO só o GALPÃO recebe e cadastra (com as fotos). O seller apenas acompanha
+    # o reverso e o status; equipe e link público também não cadastram.
+    if corpo.tipo == TIPO_REVERSO and papel != "logistica":
+        raise HTTPException(status_code=403, detail="Só o galpão registra reverso. O seller acompanha o reverso e o status no painel.")
+
     chave = chave_conta(conta_digitada)
     # Conta conhecida -> sempre o nome oficial; conta nova -> nome padronizado.
     nome_conta = mapa_contas.get(chave) or nome_exibicao_novo(conta_digitada)
@@ -574,6 +622,19 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         for i in corpo.itens:
             if not (i.produto or "").strip():
                 raise HTTPException(status_code=400, detail="Informe o SKU do produto.")
+    # v30: reverso vindo do galpão/equipe -> avaliação obrigatória; quebrado exige problema e
+    # observação; fotos (1 a 5) obrigatórias nos dois casos (evidência).
+    if eh_reverso and estrito:
+        for i in corpo.itens:
+            if not i.avaliacao:
+                raise HTTPException(status_code=400, detail="Informe a avaliação do galpão: em boas condições ou quebrado.")
+            if i.avaliacao == "quebrado":
+                if not i.problema:
+                    raise HTTPException(status_code=400, detail="Informe qual é o problema do produto.")
+                if not (i.motivo or "").strip() or (i.motivo or "").strip() == "Retorno recebido no galpão":
+                    raise HTTPException(status_code=400, detail="Descreva o problema na observação.")
+            if not i.fotos_base64:
+                raise HTTPException(status_code=400, detail="Envie pelo menos 1 foto do produto (máximo 5).")
     for i in corpo.itens:
         if not eh_reverso and len(i.fotos_base64 or []) > MAX_FOTOS_OUTROS:
             raise HTTPException(status_code=400, detail=f"No máximo {MAX_FOTOS_OUTROS} fotos por venda.")
@@ -630,6 +691,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
                 produto_titulo=(item.produto if eh_reverso else None),
                 estado_chegada=(item.estado_chegada if eh_reverso else None),
+                avaliacao_galpao=(item.avaliacao if eh_reverso and estrito else None),
+                problema_galpao=(item.problema if eh_reverso and estrito and item.avaliacao == "quebrado" else None),
                 checklist_json=_checklist_para_gravar(item.checklist) if eh_reverso else None,
                 link_evidencia=item.link_evidencia,
             )
@@ -646,7 +709,9 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         for s in criadas:
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
                              detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}"
-                                     + (f" · aspecto: {ESTADOS_CHEGADA[s.estado_chegada]}" if s.estado_chegada else ""))
+                                     + (f" · aspecto: {ESTADOS_CHEGADA[s.estado_chegada]}" if s.estado_chegada else "")
+                                     + (f" · galpão avaliou: {AVALIACOES_GALPAO[s.avaliacao_galpao]}" if s.avaliacao_galpao else "")
+                                     + (f" ({PROBLEMAS_GALPAO[s.problema_galpao]})" if s.problema_galpao else ""))
         db.commit()
         for s in criadas:
             db.refresh(s)
@@ -698,8 +763,10 @@ def listar_opcoes():
     """Plataformas e galpões disponíveis (pro formulário e pros filtros)."""
     return {
         "tipos": [{"valor": k, "nome": v} for k, v in TIPOS.items()],
+        "avaliacoes_galpao": [{"valor": k, "nome": v} for k, v in AVALIACOES_GALPAO.items()],
+        "problemas_galpao": [{"valor": k, "nome": v} for k, v in PROBLEMAS_GALPAO.items()],
         "estados_chegada": [{"valor": k, "nome": v} for k, v in ESTADOS_CHEGADA.items()],
-        "resultados_reverso": [{"valor": k, "nome": RESULTADOS_REVERSO[k]} for k in (RESULTADO_VOLTOU, *MOTIVOS_NAO_VOLTOU)],
+        "resultados_reverso": [{"valor": k, "nome": RESULTADOS_REVERSO[k]} for k in (RESULTADO_VOLTOU, RESULTADO_GARANTIA, *MOTIVOS_NAO_VOLTOU)],
         "motivos_nao_voltou": [{"valor": k, "nome": RESULTADOS_REVERSO[k]} for k in MOTIVOS_NAO_VOLTOU],
         "checklist_reverso": [{"valor": k, "nome": v} for k, v in CHECKLIST_REVERSO.items()],
         "plataformas": [{"valor": k, "nome": v} for k, v in PLATAFORMAS.items()],
@@ -965,6 +1032,9 @@ class ConcluirReversoBody(BaseModel):
     # True = voltou para o estoque; False = NÃO voltou (aí "motivo" é obrigatório,
     # e a observação também). Escolha explícita: sem ela o servidor recusa.
     voltou_estoque: bool
+    # 27/10: True = o produto vai para GARANTIA (exclusivo com voltou_estoque; observação
+    # opcional). Padrão False: quem não manda o campo continua funcionando como antes.
+    garantia: bool = False
     motivo: Optional[str] = None
     observacao: Optional[str] = None
     # Protocolo do ML, SE houver (opcional; vazio = não havia protocolo).
@@ -1039,8 +1109,12 @@ def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: R
     O galpão não tem acesso a esta rota."""
     usuario = _operador_que_confirma(request, db)
     s = _reverso_aberto_ou_erro(solicitacao_id, db)
+    if corpo.voltou_estoque and corpo.garantia:
+        raise HTTPException(status_code=400, detail="Escolha só uma opção: voltou para o estoque OU garantia.")
     if corpo.voltou_estoque:
         resultado = RESULTADO_VOLTOU
+    elif corpo.garantia:
+        resultado = RESULTADO_GARANTIA
     else:
         if not corpo.motivo:
             raise HTTPException(status_code=400, detail="Escolha o motivo de o produto não ter voltado para o estoque.")
@@ -1062,7 +1136,7 @@ def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: R
     db.commit()
     db.refresh(s)
     return {"status": "concluido", "id": s.id, "resultado_reverso": s.resultado_reverso,
-            "voltou_estoque": corpo.voltou_estoque,
+            "voltou_estoque": corpo.voltou_estoque, "garantia": corpo.garantia,
             "confirmado_por": s.confirmado_por, "confirmado_em": s.confirmado_em.isoformat()}
 
 
@@ -1926,7 +2000,7 @@ def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
     """
     def novo():
         return {"chegaram": 0, "liberados_venda": 0, "nao_voltaram": 0, "avariados": 0,
-                "negociacao_ml": 0, "descartados": 0, "em_andamento": 0}
+                "negociacao_ml": 0, "descartados": 0, "em_andamento": 0, "garantias": 0}
 
     por_conta, por_galpao, total = {}, {}, novo()
     for s in linhas:
@@ -1954,6 +2028,8 @@ def _agregar_reversos(linhas, inicio: datetime, fim: datetime) -> dict:
                     alvo["negociacao_ml"] += 1
                 elif r == "descartado":
                     alvo["descartados"] += 1
+                elif r == RESULTADO_GARANTIA:   # (27/10) garantia segue dentro de "não voltaram" aqui; este é só o detalhe
+                    alvo["garantias"] += 1
 
     def com_taxa(d):
         d["pct_venda"] = round(d["liberados_venda"] * 100 / d["chegaram"]) if d["chegaram"] else 0
