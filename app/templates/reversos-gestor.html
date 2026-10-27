@@ -76,6 +76,40 @@
     .motivo-linha { padding:8px 0; border-bottom:1px solid var(--cmx-borda); font-size:13.5px; }
     .motivo-linha:last-child { border-bottom:none; }
     .motivo-linha .topo { display:flex; justify-content:space-between; gap:10px; }
+
+    /* v22: cartões / motivos / contas clicáveis + painel com a lista dos reversos */
+    [hidden] { display:none !important; }
+    .clicavel { cursor:pointer; transition:box-shadow .12s, transform .12s; }
+    .clicavel:hover { box-shadow:0 3px 12px rgba(0,0,0,.10); transform:translateY(-1px); }
+    .clicavel:focus-visible { outline:2px solid var(--rev); outline-offset:2px; }
+    .cartao.sel { box-shadow:0 0 0 2px var(--cor); }
+    .cartao .ver { font-size:11px; color:var(--rev); font-weight:600; margin-top:6px; }
+    tr.clicavel:hover { background:#f3f6f6; transform:none; box-shadow:none; }
+    #detalhe { border-top:4px solid var(--rev); scroll-margin-top:12px; }
+    .det-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+    .det-topo h2 { margin:0; }
+    .det-sub { font-size:12.5px; color:var(--cmx-texto-suave); margin-top:3px; }
+    .det-acoes { display:flex; gap:8px; flex-wrap:wrap; }
+    .chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+    .chip { background:#e8f3f1; color:#0b5a53; border:none; border-radius:99px; padding:4px 10px; font:inherit; font-size:12px; font-weight:600; cursor:pointer; }
+    .det-resumo { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; margin-bottom:14px; }
+    .bloco { background:#f7f9f9; border:1px solid var(--cmx-borda); border-radius:10px; padding:10px 12px; font-size:12.5px; }
+    .bloco h3 { font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--cmx-texto-suave); margin:0 0 6px; }
+    .bloco .rolagem { max-height:170px; overflow:auto; }
+    .bloco .lin { display:flex; justify-content:space-between; gap:8px; padding:3px 0; }
+    button.lin { width:100%; border:none; background:none; font:inherit; font-size:12.5px; text-align:left; cursor:pointer; border-radius:6px; padding:3px 4px; }
+    button.lin:hover { background:#e8f3f1; }
+    .bloco .nota { font-size:11px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .tab-det td { vertical-align:top; font-size:12.5px; }
+    .tab-det .peq { display:block; font-size:11px; color:var(--cmx-texto-suave); margin-top:1px; }
+    .tab-det .prod { max-width:260px; }
+    .selo { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11.5px; font-weight:700; color:#fff; white-space:normal; }
+    .espera-velha { color:#a83232; font-weight:700; }
+    .paginacao { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:12px; font-size:12.5px; color:var(--cmx-texto-suave); flex-wrap:wrap; }
+    .paginacao .btn { padding:6px 12px; font-size:12.5px; }
+    .paginacao .btn[disabled] { opacity:.4; cursor:default; }
+    .legenda span[data-chave] { cursor:pointer; }
+    .legenda span[data-chave]:hover { text-decoration:underline; }
 </style>
 </head>
 <body>
@@ -142,17 +176,17 @@
 
         <div class="grupo-titulo"><i style="background:var(--aguarda)"></i> Fila agora <span style="font-weight:400; text-transform:none; letter-spacing:0">(não depende do período)</span></div>
         <div class="cartoes">
-          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="f-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">reversos ainda sem decisão</div></div>
-          <div class="cartao" id="cartao-parados" style="--cor:var(--nao)"><div class="valor" id="f-par">—</div><div class="rotulo" id="f-par-rot">Parados há mais de 3 dias</div><div class="sub">precisam de atenção</div></div>
-          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="f-antigo">—</div><div class="rotulo">Mais antigo na fila</div><div class="sub">tempo esperando a equipe</div></div>
+          <div class="cartao clicavel" data-grupo="fila" style="--cor:var(--aguarda)"><div class="valor" id="f-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">reversos ainda sem decisão</div></div>
+          <div class="cartao clicavel" data-grupo="parados" id="cartao-parados" style="--cor:var(--nao)"><div class="valor" id="f-par">—</div><div class="rotulo" id="f-par-rot">Parados há mais de 3 dias</div><div class="sub">precisam de atenção</div></div>
+          <div class="cartao clicavel" data-grupo="fila" style="--cor:var(--rev)"><div class="valor" id="f-antigo">—</div><div class="rotulo">Mais antigo na fila</div><div class="sub">tempo esperando a equipe</div></div>
         </div>
 
-        <div class="grupo-titulo"><i style="background:var(--rev)"></i> No período</div>
+        <div class="grupo-titulo"><i style="background:var(--rev)"></i> No período <span style="font-weight:400; text-transform:none; letter-spacing:0">(clique num cartão para ver quais são)</span></div>
         <div class="cartoes">
-          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div></div>
-          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
-          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
-          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
+          <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div></div>
+          <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
+          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
+          <div class="cartao clicavel" data-grupo="aguardando" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub" id="k-tempo-sub">do recebimento à decisão</div></div>
         </div>
@@ -214,6 +248,23 @@
           </div>
         </div>
 
+        <div class="painel" id="detalhe" hidden>
+          <div class="det-topo">
+            <div><h2 id="det-titulo">—</h2><div class="det-sub" id="det-sub"></div></div>
+            <div class="det-acoes">
+              <a class="btn pri" id="det-excel" href="#">⬇ Baixar esta lista (Excel)</a>
+              <button type="button" class="btn" id="det-fechar">✕ Fechar</button>
+            </div>
+          </div>
+          <div class="chips" id="det-filtros"></div>
+          <div class="det-resumo" id="det-resumo"></div>
+          <div class="tabela-rolagem"><table class="tab-det">
+            <thead><tr><th>Recebido</th><th>Conta</th><th>Produto</th><th>Nº da venda</th><th>Situação / motivo</th><th>Aspecto relatado</th><th>Decisão da equipe</th><th>Tempo</th><th>Galpão</th></tr></thead>
+            <tbody id="det-corpo"><tr><td colspan="9" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="paginacao" id="det-pag"></div>
+        </div>
+
         <div class="nota-tab" style="margin-top:-6px">Esta tela mostra só números e não carrega fotos. Para ver as fotos de um reverso, abra-o em <a href="/solicitacoes-painel">Solicitações</a>.</div>
       </main>
     </div>
@@ -246,6 +297,7 @@
     function desenharGraficos(d) {
       if (graficoDia) graficoDia.destroy();
       if (graficoRes) graficoRes.destroy();
+      $("g-dia").style.cursor = "pointer"; $("g-res").style.cursor = "pointer";
       graficoDia = new Chart($("g-dia"), {
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
@@ -254,6 +306,11 @@
           { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
+          onClick: (evt, _els, chart) => {   // clique numa barra = reversos daquele dia e situação
+            const hit = chart.getElementsAtEventForMode(evt, "nearest", { intersect: true }, true);
+            if (!hit.length) return;
+            abrirLista({ grupo: ["voltaram", "nao_voltaram", "aguardando"][hit[0].datasetIndex], dia: d.por_dia[hit[0].index].data });
+          },
           scales: { y: { beginAtZero: true, stacked: true, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false }, ticks: { maxTicksLimit: 16 } } },
           plugins: { legend: { position: "bottom" } } },
       });
@@ -262,9 +319,10 @@
         graficoRes = new Chart($("g-res"), {
           type: "doughnut",
           data: { labels: res.map(x => x.nome), datasets: [{ data: res.map(x => x.quantidade), backgroundColor: res.map(x => COR_RESULTADO[x.chave] || "#9aa5b1"), borderWidth: 2, borderColor: "#fff" }] },
-          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } } },
+          options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } },
+            onClick: (_e, els) => { if (els.length) abrirLista(gSit(res[els[0].index].chave)); } },
         });
-        $("leg-res").innerHTML = res.map(x => `<span><i style="background:${COR_RESULTADO[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}: <b>${x.quantidade}</b></span>`).join("");
+        $("leg-res").innerHTML = res.map(x => `<span data-chave="${esc(x.chave)}" title="Clique para ver a lista"><i style="background:${COR_RESULTADO[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}: <b>${x.quantidade}</b></span>`).join("");
       } else {
         $("leg-res").innerHTML = '<div class="vazio" style="padding:60px 0 20px">Nenhum reverso neste período.</div>';
       }
@@ -305,15 +363,141 @@
       const motivos = d.resultado.filter(x => x.chave !== "voltou" && x.chave !== "aguardando");
       const totM = motivos.reduce((s, x) => s + x.quantidade, 0);
       $("motivos").innerHTML = motivos.length
-        ? motivos.map(x => `<div class="motivo-linha"><div class="topo"><span>${esc(x.nome)}</span><b>${x.quantidade} <span style="font-weight:400;color:var(--cmx-texto-suave)">(${Math.round(x.quantidade * 100 / totM)}%)</span></b></div><div class="barra-motivo"><i style="width:${Math.round(x.quantidade * 100 / totM)}%"></i></div></div>`).join("")
+        ? motivos.map(x => `<div class="motivo-linha clicavel" data-chave="${esc(x.chave)}" title="Clique para ver a lista"><div class="topo"><span>${esc(x.nome)}</span><b>${x.quantidade} <span style="font-weight:400;color:var(--cmx-texto-suave)">(${Math.round(x.quantidade * 100 / totM)}%)</span></b></div><div class="barra-motivo"><i style="width:${Math.round(x.quantidade * 100 / totM)}%"></i></div></div>`).join("")
         : '<div class="vazio">Nenhum reverso deixou de voltar ao estoque neste período.</div>';
 
       $("t-contas").innerHTML = d.contas.length
-        ? d.contas.map(c => `<tr><td>${esc(c.conta)}</td><td class="n"><b>${c.recebidos}</b></td><td class="n verde">${c.voltaram}</td><td class="n verm">${c.nao_voltaram}</td><td class="n laranja">${c.aguardando}</td></tr>`).join("")
+        ? d.contas.map(c => `<tr class="clicavel" data-conta="${esc(c.conta)}" title="Clique para ver os reversos desta conta"><td>${esc(c.conta)}</td><td class="n"><b>${c.recebidos}</b></td><td class="n verde">${c.voltaram}</td><td class="n verm">${c.nao_voltaram}</td><td class="n laranja">${c.aguardando}</td></tr>`).join("")
         : '<tr><td colspan="5" class="vazio">Nenhum reverso neste período.</td></tr>';
       $("t-contas-info").textContent = d.total_contas > d.contas.length ? `(as ${d.contas.length} primeiras de ${d.total_contas}; o Excel traz todas)` : "";
       desenharGraficos(d);
     }
+
+    // ---------- v22: lista detalhada do grupo clicado ----------
+    let sel = null, pagDet = 1, vezDet = 0;
+    const SEM_PERIODO = ["fila", "parados"];
+    // situação (chave) -> grupo da lista
+    function gSit(chave) {
+      if (chave === "voltou") return { grupo: "voltaram" };
+      if (chave === "aguardando") return { grupo: "aguardando" };
+      return { grupo: "nao_voltaram", situacao: chave };
+    }
+    function paramsDet() {
+      const p = params();
+      p.set("grupo", sel.grupo);
+      if (sel.situacao) p.set("situacao", sel.situacao);
+      if (sel.dia) p.set("dia", sel.dia);
+      if (sel.conta) p.set("conta", sel.conta);
+      return p;
+    }
+    function marcarSelecionado() {
+      document.querySelectorAll(".cartao.clicavel").forEach(c => c.classList.toggle("sel", !!sel && c.dataset.grupo === sel.grupo && !sel.situacao && !sel.dia && !sel.conta));
+    }
+    function abrirLista(novo, rolar = true) { sel = novo; pagDet = 1; marcarSelecionado(); carregarLista(rolar); }
+    function fecharLista() { sel = null; $("detalhe").hidden = true; marcarSelecionado(); }
+
+    async function carregarLista(rolar) {
+      if (!sel) return;
+      const minha = ++vezDet;
+      $("det-excel").href = "/api/reversos-gestor/lista/excel?" + paramsDet().toString();
+      $("detalhe").hidden = false;
+      if (rolar) { $("det-corpo").innerHTML = '<tr><td colspan="9" class="vazio">Carregando…</td></tr>'; $("detalhe").scrollIntoView({ behavior: "smooth", block: "start" }); }
+      try {
+        const p = paramsDet(); p.set("pagina", pagDet);
+        const r = await fetch("/api/reversos-gestor/lista?" + p.toString(), { cache: "no-store" });
+        if (r.status === 401) { location.href = "/login"; return; }
+        if (!r.ok) { let m = "status " + r.status; try { const j = await r.json(); if (typeof j.detail === "string") m = j.detail; } catch (e) {} throw new Error(m); }
+        const d = await r.json();
+        if (minha !== vezDet) return;
+        pagDet = d.pagina;
+        desenharLista(d);
+      } catch (e) {
+        console.error(e);
+        $("det-corpo").innerHTML = `<tr><td colspan="9" class="vazio">Não consegui carregar a lista agora. ${esc(e.message || "")} Tente de novo em instantes.</td></tr>`;
+      }
+    }
+
+    function desenharLista(d) {
+      const gTxt = $("galpao").value ? $("galpao").selectedOptions[0].textContent : "todos os galpões";
+      const per = d.usa_periodo ? `${dataBRano(d.periodo.de)} a ${dataBRano(d.periodo.ate)}` : "de qualquer data";
+      $("det-titulo").textContent = `${d.titulo}: ${d.total} reverso${d.total === 1 ? "" : "s"}`;
+      $("det-sub").textContent = `${per} · ${gTxt}`;
+
+      // filtros ativos (cada um pode ser removido)
+      const nomeSit = (c) => (d.resumo.por_motivo.find(m => m.chave === c) || {}).nome || c;
+      const chips = [];
+      if (sel.situacao) chips.push(`<button type="button" class="chip" data-rem="situacao">Situação: ${esc(nomeSit(sel.situacao))} ✕</button>`);
+      if (sel.dia) chips.push(`<button type="button" class="chip" data-rem="dia">Dia: ${dataBRano(sel.dia)} ✕</button>`);
+      if (sel.conta) chips.push(`<button type="button" class="chip" data-rem="conta">Conta: ${esc(sel.conta)} ✕</button>`);
+      $("det-filtros").innerHTML = chips.join("");
+
+      // resumo do grupo inteiro (não só da página)
+      const s = d.resumo;
+      const blocoResumo = `<div class="bloco"><h3>Resumo</h3>
+        <div class="lin"><span>No estoque</span><b class="verde">${s.voltaram}</b></div>
+        <div class="lin"><span>Fora do estoque</span><b class="verm">${s.nao_voltaram}</b></div>
+        <div class="lin"><span>Aguardando a equipe</span><b class="laranja">${s.aguardando}</b></div>
+        <div class="lin"><span>Tempo médio até decidir</span><b>${tempo(s.tempo_medio_min)}</b></div>
+        ${s.mais_antigo_min != null ? `<div class="lin"><span>Mais antigo esperando</span><b>${tempo(s.mais_antigo_min)}</b></div>` : ""}
+        ${s.avisados_seller ? `<div class="lin"><span>Avisados pelo seller</span><b>${s.avisados_seller}</b></div>` : ""}
+        ${s.por_galpao.map(g => `<div class="lin"><span>${esc(g.nome)}</span><b>${g.quantidade}</b></div>`).join("")}</div>`;
+      const blocoMotivo = `<div class="bloco"><h3>Situação / motivo</h3><div class="rolagem">${s.por_motivo.map(m =>
+        `<button type="button" class="lin" data-f="situacao" data-v="${esc(m.chave)}"><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;background:${COR_RESULTADO[m.chave] || "#9aa5b1"}"></i>${esc(m.nome)}</span><b>${m.quantidade}</b></button>`).join("")}</div></div>`;
+      const blocoConta = `<div class="bloco"><h3>Contas</h3><div class="rolagem">${s.contas.map(c =>
+        `<button type="button" class="lin" data-f="conta" data-v="${esc(c.conta)}"><span>${esc(c.conta)}</span><b>${c.quantidade}</b></button>`).join("")}</div>
+        ${s.total_contas > s.contas.length ? `<div class="nota">${s.contas.length} primeiras de ${s.total_contas}; o Excel traz todas.</div>` : ""}</div>`;
+      const blocoDia = `<div class="bloco"><h3>Por dia</h3><div class="rolagem">${s.dias.map(x =>
+        `<button type="button" class="lin" data-f="dia" data-v="${esc(x.data)}"><span>${dataBRano(x.data)}</span><b>${x.quantidade}</b></button>`).join("")}</div>
+        ${s.total_dias > s.dias.length ? `<div class="nota">${s.dias.length} dias mais recentes de ${s.total_dias}; o Excel traz todos.</div>` : ""}</div>`;
+      const blocoQuem = s.quem_decidiu.length ? `<div class="bloco"><h3>Quem decidiu</h3><div class="rolagem">${s.quem_decidiu.map(q =>
+        `<div class="lin"><span>${esc(q.nome)}</span><b>${q.quantidade}</b></div>`).join("")}</div></div>` : "";
+      $("det-resumo").innerHTML = d.total ? blocoResumo + blocoMotivo + blocoConta + blocoDia + blocoQuem : "";
+
+      // linhas da tabela
+      const linha = (x) => {
+        const hora = x.recebido_em.split(" ");
+        const cor = COR_RESULTADO[x.situacao] || "#9aa5b1";
+        let tempoTxt = "—";
+        if (x.espera_min != null) tempoTxt = tempo(x.espera_min);
+        else if (x.parado_ha_min != null) tempoTxt = `<span class="${x.parado_ha_min > 3 * 1440 ? "espera-velha" : ""}">esperando há ${tempo(x.parado_ha_min)}</span>`;
+        const decisao = x.concluido_por ? `${esc(x.concluido_por)}<span class="peq">${esc(x.concluido_em)}</span>` : '<span style="color:var(--cmx-texto-suave)">ainda sem decisão</span>';
+        return `<tr>
+          <td><b>${esc(hora[0])}</b><span class="peq">${esc(hora[1] || "")}</span></td>
+          <td>${esc(x.conta)}<span class="peq">${esc(x.plataforma)}</span></td>
+          <td class="prod">${esc(x.produto || "—")}${x.sku ? `<span class="peq">SKU: ${esc(x.sku)}</span>` : ""}</td>
+          <td>${esc(x.numero_venda || "—")}</td>
+          <td><span class="selo" style="background:${cor}">${esc(x.situacao_nome)}</span>${x.observacao ? `<span class="peq">${esc(x.observacao)}</span>` : ""}</td>
+          <td>${esc(x.aspecto || "—")}</td>
+          <td>${decisao}</td>
+          <td>${tempoTxt}</td>
+          <td>${esc(x.galpao_nome)}<span class="peq">${x.origem === "Seller" ? "avisado pelo seller" : "por " + esc(x.registrado_por || "—")}</span></td></tr>`;
+      };
+      $("det-corpo").innerHTML = d.itens.length ? d.itens.map(linha).join("") : '<tr><td colspan="9" class="vazio">Nenhum reverso neste grupo.</td></tr>';
+
+      // paginação
+      const ini = d.total ? (d.pagina - 1) * d.por_pagina + 1 : 0, fim = Math.min(d.pagina * d.por_pagina, d.total);
+      $("det-pag").innerHTML = d.total ? `<span>Mostrando ${ini}–${fim} de ${d.total}${d.paginas > 1 ? ` · página ${d.pagina} de ${d.paginas}` : ""}</span>
+        <span>${d.paginas > 1 ? `<button type="button" class="btn" data-pg="-1" ${d.pagina <= 1 ? "disabled" : ""}>← Anterior</button> <button type="button" class="btn" data-pg="1" ${d.pagina >= d.paginas ? "disabled" : ""}>Próxima →</button>` : ""}</span>` : "";
+    }
+
+    // cliques: cartões, motivos, contas, legenda, resumo, chips, paginação, fechar
+    function ativar(el, fn) { el.addEventListener("click", fn); el.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fn(); } }); }
+    document.querySelectorAll(".cartao.clicavel").forEach(c => {
+      c.tabIndex = 0; c.setAttribute("role", "button");
+      c.insertAdjacentHTML("beforeend", '<div class="ver">Ver quais são ›</div>');
+      ativar(c, () => abrirLista({ grupo: c.dataset.grupo }));
+    });
+    document.addEventListener("click", (e) => {
+      const alvo = (sel_) => e.target.closest(sel_);
+      let el;
+      if ((el = alvo("#leg-res span[data-chave]"))) return abrirLista(gSit(el.dataset.chave));
+      if ((el = alvo("#motivos .motivo-linha[data-chave]"))) return abrirLista(gSit(el.dataset.chave));
+      if ((el = alvo("#t-contas tr[data-conta]"))) return abrirLista({ grupo: "recebidos", conta: el.dataset.conta });
+      if ((el = alvo("#det-resumo button[data-f]"))) { if (sel) { sel = { ...sel, [el.dataset.f]: el.dataset.v }; pagDet = 1; marcarSelecionado(); carregarLista(false); } return; }
+      if ((el = alvo("#det-filtros button[data-rem]"))) { if (sel) { const n = { ...sel }; delete n[el.dataset.rem]; sel = n; pagDet = 1; marcarSelecionado(); carregarLista(false); } return; }
+      if ((el = alvo("#det-pag button[data-pg]"))) { if (!el.disabled) { pagDet = Math.max(1, pagDet + +el.dataset.pg); carregarLista(false); $("detalhe").scrollIntoView({ behavior: "smooth", block: "start" }); } return; }
+    });
+    $("det-fechar").addEventListener("click", fecharLista);
 
     let vez = 0;
     async function carregar() {
@@ -325,6 +509,7 @@
         const d = await r.json();
         if (minha !== vez) return;
         $("erro").style.display = "none"; desenhar(d);
+        if (sel) carregarLista(false);   // a lista aberta acompanha período, galpão e a atualização de 1 min
       } catch (e) {
         console.error(e); $("erro").style.display = "block"; $("erro").textContent = "Não consegui carregar os números agora. " + (e.message || "") + " Tente de novo em instantes.";
       }
@@ -332,7 +517,7 @@
     // Hoje / 7 / 15 / 30 dias
     $("periodos").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b) return;
-      dias = +b.dataset.d; modoCustom = false;
+      dias = +b.dataset.d; modoCustom = false; if (sel) delete sel.dia;
       document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
       $("f-de").value = ""; $("f-ate").value = "";
       carregar();
@@ -342,7 +527,7 @@
       if (!$("f-de").value && !$("f-ate").value) { $("erro").style.display = "block"; $("erro").textContent = "Escolha a data inicial e/ou final."; return; }
       if ($("f-de").value && !$("f-ate").value) $("f-ate").value = $("f-de").value;
       if ($("f-ate").value && !$("f-de").value) $("f-de").value = $("f-ate").value;
-      modoCustom = true;
+      modoCustom = true; if (sel) delete sel.dia;
       document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", "false"));
       carregar();
     });
