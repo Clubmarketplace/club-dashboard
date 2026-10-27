@@ -267,6 +267,13 @@ _FONTES_DO_DEGRAU = {
 _DEGRAUS_QUE_EXIGEM_DUAS_FONTES = ("lojas", "videos", "tecnicos", "aberta")
 
 
+# Limite de tokens da resposta da PESQUISA. Modelos com "raciocínio" ligado por padrão
+# (ex.: Haiku 5.5) gastam parte do limite pensando -- nos testes a saída passou de 1.400
+# tokens. Com o limite antigo (1.024) a resposta podia sair cortada ou vazia. Só se paga o
+# que a IA realmente escreve, então um teto maior não encarece as respostas normais.
+MAX_TOKENS_PESQUISA = 4096
+
+
 def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: str, detalhes: str) -> str | None:
     """Uma tentativa de pesquisa, limitada às fontes de UM degrau. Devolve o texto pronto ou None."""
     from app import config_ia
@@ -289,7 +296,7 @@ def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: 
         f"--- PRODUTO: {identificador} ---" + detalhes
     )
     parametros = dict(
-        max_tokens=1024,
+        max_tokens=MAX_TOKENS_PESQUISA,
         system=prompt_sistema,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": cfg["buscas_por_degrau"]}],
         messages=[{"role": "user", "content": pergunta_texto}],
@@ -315,6 +322,12 @@ def _pesquisar_degrau(cliente, degrau: str, pergunta_texto: str, identificador: 
             saude_ia.registrar_falha(str(exc2))
             return None
     saude_ia.registrar_sucesso_de(resposta, modelo_usado)
+    if getattr(resposta, "stop_reason", None) == "max_tokens":
+        # Resposta CORTADA no meio: nunca manda pro comprador um texto pela metade.
+        # Descarta (vai pro próximo degrau/equipe) e deixa o aviso no log pra ajustar o limite.
+        logger.warning("Pesquisa (degrau %s, modelo %s) cortada pelo limite de %s tokens -- resposta descartada",
+                       degrau, modelo_usado, MAX_TOKENS_PESQUISA)
+        return None
     return resposta_segura(_texto_final(resposta))
 
 
