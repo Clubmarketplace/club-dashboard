@@ -34,7 +34,7 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.orm import Session, defer
 
 from app import auth
-from app.cancelamento_apoio import preencher_produtos_em_segundo_plano, registrar_evento
+from app.cancelamento_apoio import preencher_produtos_em_segundo_plano, registrar_evento, reivindicar_conclusao
 from app.contas_util import chave_conta, limpar_espacos, nome_exibicao_novo, sufixo_de_plataforma
 from app.database import get_db
 from app.fotos_armazenamento import TETO_TOTAL_CHARS, contar_fotos, listar_fotos, obter_bytes, salvar_fotos, solicitacao_da_foto
@@ -302,18 +302,19 @@ class NovaSolicitacaoLote(BaseModel):
 # ---------------------------------------------------------------------------
 def _normalizar_numero_venda(numero: str, plataforma: str, estrito: bool) -> str:
     """
-    Tira espaços/pontos/traços. No modo estrito (logística): ML só aceita
-    números; Shopee, Magalu e TikTok Shop aceitam letras e números, sempre
-    em maiúsculo (formato dos pedidos não confirmado pra todas). Fora do
-    modo estrito (seller/link público) só limpa espaços -- mantém o
-    comportamento que já existia.
+    Tira espaços/pontos/traços. No modo estrito (logística/equipe): TODAS as
+      plataformas, inclusive o Mercado Livre, em TODOS os tipos (reverso,
+      cancelamento, reputação), aceitam letras e números, sempre em maiúsculo
+      (27/10: pedido do Washington -- algumas vendas não têm numeração).
+    Fora do modo estrito (seller/link público) só limpa espaços.
+    Obs.: o Mercado Livre identifica o pedido só por número; uma venda com letras
+    não é conferida/lido automaticamente no ML (fica para conferência manual) --
+    ver cancelamento_apoio.py e verificacao_cancelamento.py.
     """
     if not estrito:
         return re.sub(r"\s+", "", numero)
     limpo = re.sub(r"[\s.\-/]", "", numero).upper()
-    if plataforma == "mercado_livre" and not limpo.isdigit():
-        raise HTTPException(status_code=400, detail=f"Nº da venda do Mercado Livre deve ter só números: \"{numero}\".")
-    if plataforma != "mercado_livre" and not limpo.isalnum():
+    if not limpo.isalnum():
         nome = PLATAFORMAS.get(plataforma, plataforma)
         raise HTTPException(status_code=400, detail=f"Nº da venda da {nome} deve ter só letras e números: \"{numero}\".")
     return limpo
@@ -567,6 +568,12 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                     status_code=400,
                     detail=f"No máximo {MAX_ITENS_POR_VENDA_REVERSO} itens por venda.",
                 )
+    # SKU obrigatório (27/10) SÓ no reverso (campo "produto" = SKU). Cancelamento e
+    # reputação seguem como antes. O mesmo SKU pode repetir em quantas vendas forem.
+    if eh_reverso:
+        for i in corpo.itens:
+            if not (i.produto or "").strip():
+                raise HTTPException(status_code=400, detail="Informe o SKU do produto.")
     for i in corpo.itens:
         if not eh_reverso and len(i.fotos_base64 or []) > MAX_FOTOS_OUTROS:
             raise HTTPException(status_code=400, detail=f"No máximo {MAX_FOTOS_OUTROS} fotos por venda.")
@@ -914,6 +921,7 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         raise HTTPException(status_code=400, detail="Reverso é concluído com o resultado do tratamento (botão Concluir reverso).")
     if not corpo.sem_protocolo and not corpo.protocolo:
         raise HTTPException(status_code=400, detail="Informe o número do protocolo (ou marque que foi resolvido sem protocolo).")
+    _travar_conclusao_ou_erro(db, solicitacao, usuario_logado.nome_exibicao)
 
     # Confirmou direto, sem ter assumido: o histórico registra os dois passos.
     atual = _dados_atendimento(solicitacao)
@@ -987,6 +995,15 @@ class ConcluirReversoBody(BaseModel):
         return valor[:500] or None
 
 
+def _travar_conclusao_ou_erro(db: Session, solicitacao: SolicitacaoCancelamento, quem: str) -> None:
+    """Trava de conclusão (27/10): garante, no banco, que só UMA pessoa conclui. Quem chegar
+    depois (mesmo por 1 segundo) recebe 409 e a conclusão da primeira fica intacta."""
+    if not reivindicar_conclusao(db, solicitacao.id, quem):
+        db.rollback()
+        db.refresh(solicitacao)
+        raise HTTPException(status_code=409, detail=f"Essa solicitação já foi concluída por {solicitacao.confirmado_por or 'outra pessoa'} e não pode mais ser alterada.")
+
+
 def _reverso_aberto_ou_erro(solicitacao_id: int, db: Session) -> SolicitacaoCancelamento:
     s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
     if s is None or s.excluido_em is not None:
@@ -1030,6 +1047,7 @@ def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: R
         if not corpo.observacao:
             raise HTTPException(status_code=400, detail="Explique na observação por que o produto não voltou para o estoque.")
         resultado = corpo.motivo
+    _travar_conclusao_ou_erro(db, s, usuario.nome_exibicao)
     atual = _dados_atendimento(s)
     if atual["em_atendimento_por_id"] != usuario.id:
         registrar_evento(db, s.id, "assumiu", usuario=usuario,
@@ -1134,6 +1152,8 @@ def liberar_atendimento(solicitacao_id: int, request: Request, db: Session = Dep
     solicitacao = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
     if solicitacao is None:
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if solicitacao.confirmado_por:   # concluída: ninguém mexe mais
+        raise HTTPException(status_code=400, detail=f"Essa solicitação já foi concluída por {solicitacao.confirmado_por} e não pode mais ser alterada.")
     atual = _dados_atendimento(solicitacao)
     if atual["em_atendimento_por_id"] not in (None, usuario.id) and usuario.papel not in ("admin", "supervisor"):
         raise HTTPException(status_code=403, detail=f"Esse pedido está com {atual['em_atendimento_por']}; só essa pessoa (ou um supervisor) pode liberar.")
