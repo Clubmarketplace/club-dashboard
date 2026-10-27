@@ -6,6 +6,8 @@ quem recebeu, quem concluiu e o tempo médio de tratamento.
   GET /api/reversos-gestor/resumo     ?dias=1|7|15|30  (ou ?de=&ate=)  &galpao=  -> JSON
   GET /api/reversos-gestor/card                                                   -> JSON (card do dashboard)
   GET /api/reversos-gestor/relatorio  ?dias=... (ou ?de=&ate=)  &galpao=          -> Excel (.xlsx)
+  GET /api/reversos-gestor/lista      ?grupo=&situacao=&dia=&conta=&pagina=...    -> JSON (v22: clique nos cartões)
+  GET /api/reversos-gestor/lista/excel  (mesmos filtros, sem paginação)           -> Excel (.xlsx)
 
 Regras:
   - SÓ admin e supervisor (decisão do Washington, 27/10). Os demais perfis recebem 403,
@@ -347,6 +349,245 @@ def relatorio(request: Request, dias: Optional[int] = None, de: Optional[str] = 
     wb.save(buffer)
     buffer.seek(0)
     nome = f"reversos_{d1.isoformat()}_a_{d2.isoformat()}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{nome}"'},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Lista detalhada de um grupo (v22, 27/10): o gestor clica num cartão, numa barra
+# do gráfico, numa fatia da rosca, num motivo ou numa conta e vê QUAIS reversos são,
+# com conta, motivo, dia, quem recebeu, quem decidiu e quanto tempo levou.
+# Continua SEM fotos (só texto e números), pelo mesmo motivo da queda de 26/10.
+# ---------------------------------------------------------------------------
+GRUPOS_LISTA = {
+    "recebidos": "Todos os recebidos no período",
+    "voltaram": "Voltaram ao estoque",
+    "nao_voltaram": "Não voltaram ao estoque",
+    "aguardando": "Aguardando a equipe (recebidos no período)",
+    "fila": "Fila agora: aguardando a equipe",
+    "parados": "Parados na fila há mais de %d dias" % DIAS_PARADO,
+}
+GRUPOS_SEM_PERIODO = ("fila", "parados")   # são o que está pendente HOJE, de qualquer data
+POR_PAGINA_PADRAO = 50
+POR_PAGINA_MAX = 200
+TOP_RESUMO_LISTA = 8
+
+
+def _espera_min(s: SolicitacaoCancelamento) -> Optional[int]:
+    """Minutos entre o recebimento e a decisão da equipe (None se ainda não decidiu).
+    Defensivo: data faltando ou fuso misturado não derruba a lista."""
+    if s.confirmado_por and s.confirmado_em and s.criado_em:
+        try:
+            return max(round((s.confirmado_em - s.criado_em).total_seconds() / 60), 0)
+        except TypeError:
+            return None
+    return None
+
+
+def _item_lista(s: SolicitacaoCancelamento, agora_utc: datetime) -> dict:
+    sit = _situacao_reverso(s)
+    return {
+        "id": s.id,
+        "recebido_em": _hora_br(s.criado_em),
+        "dia": _dia_br(s).isoformat() if s.criado_em else None,
+        "galpao_nome": GALPOES.get(s.galpao, "Sem galpão"),
+        "conta": s.conta or "—",
+        "plataforma": PLATAFORMAS.get(s.plataforma, s.plataforma or ""),
+        "numero_venda": s.numero_venda or "",
+        "produto": s.produto_titulo or s.sku or "",
+        "sku": s.sku or "",
+        "aspecto": s.motivo or "",                       # o que o galpão/seller relatou ao receber
+        "situacao": sit,
+        "situacao_nome": _nome_situacao(sit),
+        "observacao": s.observacao_resultado or "",
+        "concluido_por": s.confirmado_por or "",
+        "concluido_em": _hora_br(s.confirmado_em),
+        "espera_min": _espera_min(s),                    # recebimento -> decisão
+        "parado_ha_min": _idade_min(s, agora_utc) if sit == "aguardando" else None,
+        "registrado_por": s.solicitado_por or "",
+        "origem": "Galpão" if s.origem == "logistica" else "Seller",
+        "protocolo": _texto_protocolo(s),
+    }
+
+
+def _selecionar_lista(db: Session, grupo: str, situacao: Optional[str], dia: Optional[str], conta: Optional[str],
+                      dias: Optional[int], de: Optional[str], ate: Optional[str], galpao: Optional[int],
+                      agora_utc: Optional[datetime] = None):
+    """Devolve (linhas, d1, d2). d1/d2 = None nos grupos que não dependem do período."""
+    if grupo not in GRUPOS_LISTA:
+        raise HTTPException(status_code=422, detail="Grupo inválido.")
+    _checar_galpao(galpao)
+    dia_d = None
+    if dia:
+        try:
+            dia_d = date.fromisoformat(dia)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Dia no formato AAAA-MM-DD.")
+    agora_utc = agora_utc or datetime.utcnow()
+
+    d1 = d2 = None
+    if grupo in GRUPOS_SEM_PERIODO:
+        linhas = _reversos_aguardando(db, galpao)
+        if grupo == "parados":
+            limite = DIAS_PARADO * 1440
+            linhas = [s for s in linhas if _idade_min(s, agora_utc) > limite]
+    else:
+        d1, d2 = _intervalo(dias, de, ate)
+        linhas = _reversos_do_periodo(db, d1, d2, galpao)
+        if grupo == "voltaram":
+            linhas = [s for s in linhas if _situacao_reverso(s) == "voltou"]
+        elif grupo == "nao_voltaram":
+            linhas = [s for s in linhas if _situacao_reverso(s) not in ("voltou", "aguardando")]
+        elif grupo == "aguardando":
+            linhas = [s for s in linhas if _situacao_reverso(s) == "aguardando"]
+
+    if situacao:
+        linhas = [s for s in linhas if _situacao_reverso(s) == situacao]
+    if dia_d:
+        linhas = [s for s in linhas if s.criado_em and _dia_br(s) == dia_d]
+    if conta:
+        q = conta.strip().lower()
+        linhas = [s for s in linhas if (s.conta_chave or "").lower() == q or (s.conta or "").lower() == q]
+
+    # Fila: o que espera há mais tempo primeiro. Demais: o mais recente primeiro.
+    linhas = sorted(linhas, key=lambda s: s.criado_em or datetime.min, reverse=grupo not in GRUPOS_SEM_PERIODO)
+    return linhas, d1, d2
+
+
+def resumo_da_lista(linhas, agora_utc: Optional[datetime] = None) -> dict:
+    """Resumo do que está na lista (função pura): motivos, contas, dias, galpões e quem decidiu."""
+    agora_utc = agora_utc or datetime.utcnow()
+    sit = Counter(_situacao_reverso(s) for s in linhas)
+    voltaram, aguardando = sit.get("voltou", 0), sit.get("aguardando", 0)
+
+    ordem = ["voltou", "avariado", "faltando_peca", "diferente", "negociacao_ml", "descartado", "outro", "aguardando"]
+    chaves = ordem + [k for k in sit if k not in ordem]
+    por_motivo = [{"chave": k, "nome": _nome_situacao(k), "quantidade": sit[k]} for k in chaves if sit.get(k)]
+
+    por_conta = defaultdict(list)
+    nomes = {}
+    for s in linhas:
+        k = s.conta_chave or (s.conta or "").lower()
+        nomes.setdefault(k, s.conta or "—")
+        por_conta[k].append(s)
+    contas = sorted(
+        ({"conta": nomes[k], "quantidade": len(rs),
+          "voltaram": sum(1 for s in rs if _situacao_reverso(s) == "voltou"),
+          "aguardando": sum(1 for s in rs if _situacao_reverso(s) == "aguardando"),
+          "nao_voltaram": sum(1 for s in rs if _situacao_reverso(s) not in ("voltou", "aguardando"))}
+         for k, rs in por_conta.items()),
+        key=lambda x: (-x["quantidade"], x["conta"].lower()))
+
+    por_dia = Counter(_dia_br(s) for s in linhas if s.criado_em)
+    dias_lista = [{"data": d.isoformat(), "quantidade": q} for d, q in sorted(por_dia.items(), reverse=True)]
+
+    por_galpao = Counter(GALPOES.get(s.galpao, "Sem galpão") for s in linhas)
+    decidiu = Counter(s.confirmado_por for s in linhas if s.confirmado_por)
+    idades = [_idade_min(s, agora_utc) for s in linhas if _situacao_reverso(s) == "aguardando"]
+    return {
+        "total": len(linhas), "voltaram": voltaram, "aguardando": aguardando,
+        "nao_voltaram": len(linhas) - voltaram - aguardando,
+        "tempo_medio_min": _tempo_medio_min(linhas),
+        "mais_antigo_min": max(idades) if idades else None,
+        "avisados_seller": sum(1 for s in linhas if s.origem != "logistica"),
+        "por_motivo": por_motivo,
+        "contas": contas[:TOP_RESUMO_LISTA], "total_contas": len(contas),
+        "dias": dias_lista[:31], "total_dias": len(dias_lista),
+        "por_galpao": [{"nome": n, "quantidade": q} for n, q in por_galpao.most_common()],
+        "quem_decidiu": [{"nome": n, "quantidade": q} for n, q in decidiu.most_common(TOP_RESUMO_LISTA)],
+    }
+
+
+@router.get("/lista")
+def lista(request: Request, grupo: str = "recebidos", situacao: Optional[str] = None, dia: Optional[str] = None,
+          conta: Optional[str] = None, dias: Optional[int] = None, de: Optional[str] = None, ate: Optional[str] = None,
+          galpao: Optional[int] = None, pagina: int = 1, por_pagina: int = POR_PAGINA_PADRAO,
+          db: Session = Depends(get_db)):
+    """Lista paginada dos reversos de um grupo + resumo do grupo inteiro (não só da página)."""
+    usuario_gestor_reversos(request, db)
+    if pagina < 1 or por_pagina < 10 or por_pagina > POR_PAGINA_MAX:
+        raise HTTPException(status_code=422, detail=f"Página inválida (por página: 10 a {POR_PAGINA_MAX}).")
+    agora = datetime.utcnow()
+    linhas, d1, d2 = _selecionar_lista(db, grupo, situacao, dia, conta, dias, de, ate, galpao, agora)
+    total = len(linhas)
+    paginas = max((total + por_pagina - 1) // por_pagina, 1)
+    pagina = min(pagina, paginas)
+    ini = (pagina - 1) * por_pagina
+    return {
+        "grupo": grupo, "titulo": GRUPOS_LISTA[grupo],
+        "usa_periodo": d1 is not None,
+        "periodo": {"de": d1.isoformat(), "ate": d2.isoformat()} if d1 else None,
+        "filtros": {"situacao": situacao, "dia": dia, "conta": conta},
+        "total": total, "pagina": pagina, "paginas": paginas, "por_pagina": por_pagina,
+        "resumo": resumo_da_lista(linhas, agora),
+        "itens": [_item_lista(s, agora) for s in linhas[ini:ini + por_pagina]],
+    }
+
+
+@router.get("/lista/excel")
+def lista_excel(request: Request, grupo: str = "recebidos", situacao: Optional[str] = None, dia: Optional[str] = None,
+                conta: Optional[str] = None, dias: Optional[int] = None, de: Optional[str] = None,
+                ate: Optional[str] = None, galpao: Optional[int] = None, db: Session = Depends(get_db)):
+    """Excel só do grupo clicado (mesmos filtros da lista, sem paginação)."""
+    usuario = usuario_gestor_reversos(request, db)
+    agora = datetime.utcnow()
+    linhas, d1, d2 = _selecionar_lista(db, grupo, situacao, dia, conta, dias, de, ate, galpao, agora)
+    r = resumo_da_lista(linhas, agora)
+
+    wb = Workbook()
+    aba = wb.active
+    aba.title = "Resumo"
+    filtros = [x for x in (f"situação: {_nome_situacao(situacao)}" if situacao else "",
+                           f"dia: {date.fromisoformat(dia).strftime('%d/%m/%Y')}" if dia else "",
+                           f"conta: {conta}" if conta else "") if x]
+    for linha in (
+        ["Lista de reversos"], ["Grupo", GRUPOS_LISTA[grupo]],
+        ["Período", f"{d1.strftime('%d/%m/%Y')} a {d2.strftime('%d/%m/%Y')}" if d1 else "Fila de hoje (qualquer data)"],
+        ["Galpão", GALPOES[galpao] if galpao else "Todos os galpões"],
+        ["Filtros", "; ".join(filtros) or "nenhum"],
+        ["Gerado em", f"{datetime.now(FUSO_BR).strftime('%d/%m/%Y %H:%M')} por {usuario.nome_exibicao}"], [],
+        ["Total na lista", r["total"]], ["Voltaram ao estoque", r["voltaram"]],
+        ["Não voltaram ao estoque", r["nao_voltaram"]], ["Aguardando a equipe", r["aguardando"]],
+        ["Tempo médio até decidir", formatar_tempo(r["tempo_medio_min"])], [],
+        ["POR SITUAÇÃO / MOTIVO"], *([x["nome"], x["quantidade"]] for x in r["por_motivo"]), [],
+        ["POR CONTA", "Reversos", "No estoque", "Fora", "Aguardando"],
+    ):
+        aba.append(linha)
+    # Excel traz TODAS as contas (a tela mostra só as primeiras)
+    por_conta = defaultdict(list)
+    nomes = {}
+    for s in linhas:
+        k = s.conta_chave or (s.conta or "").lower()
+        nomes.setdefault(k, s.conta or "—")
+        por_conta[k].append(s)
+    for k, rs in sorted(por_conta.items(), key=lambda kv: (-len(kv[1]), nomes[kv[0]].lower())):
+        c = Counter(_situacao_reverso(s) for s in rs)
+        v, a = c.get("voltou", 0), c.get("aguardando", 0)
+        aba.append([nomes[k], len(rs), v, len(rs) - v - a, a])
+    aba.column_dimensions["A"].width = 40
+    for col in "BCDE":
+        aba.column_dimensions[col].width = 16
+
+    aba_l = wb.create_sheet("Lista")
+    aba_l.append(["Recebido em", "Galpão", "Conta", "Plataforma", "Nº da venda", "Produto", "SKU", "Aspecto / motivo relatado",
+                  "Situação", "Observação da equipe", "Concluído por", "Concluído em", "Tempo até decidir",
+                  "Parado há", "Registrado por", "Origem", "Protocolo"])
+    for it in (_item_lista(s, agora) for s in linhas):
+        aba_l.append([it["recebido_em"], it["galpao_nome"], it["conta"], it["plataforma"], it["numero_venda"], it["produto"],
+                      it["sku"], it["aspecto"], it["situacao_nome"], it["observacao"], it["concluido_por"], it["concluido_em"],
+                      formatar_tempo(it["espera_min"]) if it["espera_min"] is not None else "",
+                      formatar_tempo(it["parado_ha_min"]) if it["parado_ha_min"] is not None else "",
+                      it["registrado_por"], it["origem"], it["protocolo"]])
+    for i, larg in enumerate((17, 12, 22, 14, 20, 36, 16, 30, 32, 30, 18, 17, 14, 12, 18, 10, 18), start=1):
+        aba_l.column_dimensions[aba_l.cell(row=1, column=i).column_letter].width = larg
+
+    buffer = io.BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    nome = f"reversos_{grupo}_{datetime.now(FUSO_BR).strftime('%Y-%m-%d')}.xlsx"
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
