@@ -434,6 +434,9 @@ class SolicitacaoCancelamento(Base):
     # só acrescenta o que é próprio do reverso. Nulos nos outros tipos.
     # Aspecto do produto ao chegar: bom | avariado | faltando_peca | diferente.
     estado_chegada = Column(String, nullable=True)
+    # v30: sugestão do galpão: "bom" | "quebrado" (+ problema). Informativo; a equipe decide.
+    avaliacao_galpao = Column(String, nullable=True)
+    problema_galpao = Column(String, nullable=True)
     # Como o reverso terminou (ver RESULTADOS_REVERSO no router): liberado_venda,
     # negociacao_ml, negociacao_ressarcido, negociacao_sem_ressarcimento, descartado.
     resultado_reverso = Column(String, nullable=True, index=True)

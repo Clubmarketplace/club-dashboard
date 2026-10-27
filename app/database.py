@@ -99,6 +99,8 @@ _COLUNAS_ADICIONAIS = {
         "link_evidencia": "VARCHAR",
         # 26/10: Reverso (tipo "reverso") -- ver app/models.py.
         "estado_chegada": "VARCHAR",
+        "avaliacao_galpao": "VARCHAR",
+        "problema_galpao": "VARCHAR",
         "resultado_reverso": "VARCHAR",
         "liberado_por": "VARCHAR",
         "liberado_em": "TIMESTAMP",
