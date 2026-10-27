@@ -106,6 +106,37 @@ def _nome_situacao(chave: str) -> str:
     return RESULTADOS_REVERSO.get(chave, "Não voltou: outro motivo")
 
 
+def _tempo_medio_min(reversos) -> Optional[int]:
+    """Tempo médio (em minutos) entre o galpão registrar o reverso e a equipe decidir
+    (voltou ou não ao estoque). Só entram os já concluídos; sem nenhum, devolve None.
+    Defensivo: ignora datas faltando e nunca devolve negativo (relógio/dado ruim)."""
+    esperas = []
+    for s in reversos:
+        if s.confirmado_por and s.confirmado_em and s.criado_em:
+            try:
+                esperas.append(max((s.confirmado_em - s.criado_em).total_seconds(), 0))
+            except TypeError:   # datas com/sem fuso misturadas: ignora esse registro, não derruba o painel
+                continue
+    return round(sum(esperas) / len(esperas) / 60) if esperas else None
+
+
+def formatar_tempo(minutos: Optional[int]) -> str:
+    """Minutos -> texto curto: '45 min', '3 h 20 min', '2 d 4 h'. None -> '—'."""
+    if minutos is None:
+        return "—"
+    if minutos < 60:
+        return f"{minutos} min"
+    if minutos < 1440:
+        h, m = divmod(minutos, 60)
+        return f"{h} h {m:02d} min" if m else f"{h} h"
+    d, resto = divmod(minutos, 1440)
+    return f"{d} d {resto // 60} h" if resto // 60 else f"{d} d"
+
+
+def _pct(parte: int, total: int) -> int:
+    return round(parte * 100 / total) if total else 0
+
+
 def montar_resumo(linhas, de: date, ate: date) -> dict:
     """Função pura (testável): números do painel a partir das linhas do período."""
     canc = [s for s in linhas if not _eh_reverso(s)]
@@ -118,11 +149,16 @@ def montar_resumo(linhas, de: date, ate: date) -> dict:
     concluidos = voltaram + nao_voltaram
 
     # Gráfico por dia (todos os dias do período, mesmo sem registro)
-    por_dia = {de + timedelta(days=i): {"cancelamentos": 0, "reversos": 0} for i in range((ate - de).days + 1)}
+    # Reversos do dia também separados por situação (voltou / não voltou ao estoque / aguardando)
+    por_dia = {de + timedelta(days=i): {"cancelamentos": 0, "reversos": 0, "rev_voltou": 0, "rev_nao_voltou": 0, "rev_aguardando": 0}
+               for i in range((ate - de).days + 1)}
     for s in linhas:
         d = _dia_br(s)
         if d in por_dia:
             por_dia[d]["reversos" if _eh_reverso(s) else "cancelamentos"] += 1
+            if _eh_reverso(s):
+                sit_ = _situacao_reverso(s)
+                por_dia[d]["rev_voltou" if sit_ == "voltou" else "rev_aguardando" if sit_ == "aguardando" else "rev_nao_voltou"] += 1
 
     # Resultado dos reversos (voltou, cada motivo de não voltar, aguardando) -- só o que existe
     ordem = ["voltou", "avariado", "faltando_peca", "diferente", "negociacao_ml", "descartado", "outro", "aguardando"]
@@ -141,7 +177,23 @@ def montar_resumo(linhas, de: date, ate: date) -> dict:
             "cancelamentos": len(c), "cancelamentos_resolvidos": sum(1 for s in c if s.confirmado_por),
             "reversos": len(r), "voltaram": rs.get("voltou", 0), "aguardando": rs.get("aguardando", 0),
             "nao_voltaram": len(r) - rs.get("voltou", 0) - rs.get("aguardando", 0),
+            "pct_voltaram": _pct(rs.get("voltou", 0), len(r) - rs.get("aguardando", 0)),
+            "tempo_medio_min": _tempo_medio_min(r),
         })
+    # Linha "Total (3 galpões)": soma de todos os galpões listados, pra ninguém somar na mão.
+    total_galpoes = {k: sum(g[k] for g in por_galpao)
+                     for k in ("cancelamentos", "cancelamentos_resolvidos", "reversos", "voltaram", "nao_voltaram", "aguardando")}
+    total_galpoes["pct_voltaram"] = _pct(total_galpoes["voltaram"], total_galpoes["voltaram"] + total_galpoes["nao_voltaram"])
+    total_galpoes["tempo_medio_min"] = _tempo_medio_min([s for s in rev if s.galpao in GALPOES])
+
+    # Quem recebeu os reversos no galpão (usuário logado no momento do registro), por galpão.
+    quem = defaultdict(int)
+    for s in rev:
+        quem[(s.solicitado_por or "Não informado", s.galpao)] += 1
+    quem_recebeu = sorted(
+        ({"nome": n, "galpao": g, "galpao_nome": GALPOES.get(g, "—"), "quantidade": q} for (n, g), q in quem.items()),
+        key=lambda x: (-x["quantidade"], x["nome"].lower()),
+    )
 
     # Contas com mais ocorrências
     por_conta = defaultdict(lambda: {"cancelamentos": 0, "reversos": 0})
@@ -165,10 +217,13 @@ def montar_resumo(linhas, de: date, ate: date) -> dict:
         "reversos": {
             "total": len(rev), "voltaram": voltaram, "nao_voltaram": nao_voltaram, "aguardando": aguardando,
             "pct_voltaram": round(voltaram * 100 / concluidos) if concluidos else 0,   # dos já concluídos
+            "tempo_medio_min": _tempo_medio_min(rev),
         },
         "por_dia": [{"data": d.isoformat(), **v} for d, v in sorted(por_dia.items())],
         "resultado_reversos": resultado,
         "por_galpao": por_galpao,
+        "total_galpoes": total_galpoes,
+        "quem_recebeu": quem_recebeu,
         "contas": contas[:TOP_CONTAS],
         "total_contas": len(contas),
     }
@@ -211,17 +266,22 @@ def relatorio(request: Request, dias: int = 7, galpao: Optional[int] = None, db:
         ["Galpão", galpao_txt], ["Gerado em", f"{datetime.now(FUSO_BR).strftime('%d/%m/%Y %H:%M')} por {usuario.nome_exibicao}"], [],
         ["CANCELAMENTOS"], ["Registrados", r["cancelamentos"]["total"]], ["Resolvidos", r["cancelamentos"]["resolvidos"]],
         ["Pendentes", r["cancelamentos"]["pendentes"]], [],
-        ["REVERSOS"], ["Recebidos", r["reversos"]["total"]], ["Voltaram para o estoque", r["reversos"]["voltaram"]],
-        ["Não voltaram", r["reversos"]["nao_voltaram"]], ["Aguardando a equipe", r["reversos"]["aguardando"]],
-        ["% que voltou (dos concluídos)", f"{r['reversos']['pct_voltaram']}%"], [],
+        ["REVERSOS"], ["Recebidos", r["reversos"]["total"]], ["Voltaram ao estoque", r["reversos"]["voltaram"]],
+        ["Não voltaram ao estoque", r["reversos"]["nao_voltaram"]], ["Aguardando a equipe", r["reversos"]["aguardando"]],
+        ["% que voltou ao estoque (dos concluídos)", f"{r['reversos']['pct_voltaram']}%"],
+        ["Tempo médio até a equipe decidir", formatar_tempo(r["reversos"]["tempo_medio_min"])], [],
         ["RESULTADO DOS REVERSOS"], *([x["nome"], x["quantidade"]] for x in r["resultado_reversos"]), [],
-        ["POR GALPÃO", "Cancelamentos", "Cancel. resolvidos", "Reversos", "Voltaram", "Não voltaram", "Aguardando"],
-        *([g["nome"], g["cancelamentos"], g["cancelamentos_resolvidos"], g["reversos"], g["voltaram"], g["nao_voltaram"], g["aguardando"]]
-          for g in r["por_galpao"]),
+        ["POR GALPÃO", "Cancelamentos", "Cancel. resolvidos", "Reversos", "No estoque", "Fora do estoque", "Aguardando", "% no estoque", "Tempo médio"],
+        *([g["nome"], g["cancelamentos"], g["cancelamentos_resolvidos"], g["reversos"], g["voltaram"], g["nao_voltaram"], g["aguardando"],
+           f"{g['pct_voltaram']}%", formatar_tempo(g["tempo_medio_min"])] for g in r["por_galpao"]),
+        (lambda g: [f"TOTAL ({galpao_txt})" if galpao else "TOTAL (3 galpões)", g["cancelamentos"], g["cancelamentos_resolvidos"], g["reversos"], g["voltaram"], g["nao_voltaram"],
+                    g["aguardando"], f"{g['pct_voltaram']}%", formatar_tempo(g["tempo_medio_min"])])(r["total_galpoes"]),
+        [], ["QUEM RECEBEU OS REVERSOS", "Galpão", "Quantidade"],
+        *([x["nome"], x["galpao_nome"], x["quantidade"]] for x in r["quem_recebeu"]),
     ):
         aba.append(linha)
     aba.column_dimensions["A"].width = 38
-    for col in "BCDEFG":
+    for col in "BCDEFGHI":
         aba.column_dimensions[col].width = 18
 
     aba_c = wb.create_sheet("Por conta")
