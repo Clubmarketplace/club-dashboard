@@ -17,8 +17,15 @@ Duas formas de saber o gasto, nesta ordem de preferência:
      noção real do gasto sem precisar virar organização Team.
 
 Não existe endpoint de "saldo restante" em nenhum dos dois casos -- o
-"resta" é sempre calculado aqui: saldo comprado (tela Calibrar IA) - gasto
-do mês.
+"resta" é sempre calculado aqui.
+
+MODO SALDO CONFERIDO (o que a tela usa): a pessoa informa o saldo que o
+Console da Anthropic mostra e o servidor grava o INSTANTE da conferência.
+  resta = saldo conferido - gasto estimado DESDE esse instante
+Assim o gasto de um crédito antigo nunca contamina o crédito novo, e o erro
+da estimativa fica limitado ao pouco tempo desde a última conferência.
+A cada nova conferência o sistema compara o que estimou com o que realmente
+saiu do saldo e ajusta a estimativa sozinho (ver nova_conferencia).
 """
 import logging
 import os
@@ -93,19 +100,18 @@ def _somar_gasto_desde(inicio: datetime, chave: str) -> float:
     return round(total_centavos / 100.0, 2)
 
 
-def _estimativa_local_usd(inicio: datetime) -> float:
-    """Soma o consumo que a própria IA registrou (app/saude_ia.registrar_sucesso_de) desde `inicio`."""
+def _estimativa_local_usd(inicio: datetime, fim: datetime | None = None) -> float:
+    """Soma o consumo que a própria IA registrou (app/saude_ia.registrar_sucesso_de) de `inicio` até `fim` (agora, se omitido)."""
     from app.database import SessionLocal
     from app.models import EventoIA
 
     inicio_sem_fuso = inicio.replace(tzinfo=None)  # ocorrido_em é salvo sem fuso (UTC "naive")
     total = 0.0
     with SessionLocal() as db:
-        linhas = (
-            db.query(EventoIA)
-            .filter(EventoIA.tipo == "sucesso", EventoIA.ocorrido_em >= inicio_sem_fuso)
-            .all()
-        )
+        consulta = db.query(EventoIA).filter(EventoIA.tipo == "sucesso", EventoIA.ocorrido_em >= inicio_sem_fuso)
+        if fim is not None:
+            consulta = consulta.filter(EventoIA.ocorrido_em <= fim.replace(tzinfo=None))
+        linhas = consulta.all()
         for linha in linhas:
             if not linha.modelo:
                 continue  # evento de antes do termômetro existir -- sem como estimar
@@ -145,3 +151,82 @@ def gasto_do_mes_usd(forcar: bool = False) -> dict:
 
     _cache.update(quando=agora, valor=resultado)
     return resultado
+
+
+# ---------------------------------------------------------------------------
+# Modo "saldo conferido"
+# ---------------------------------------------------------------------------
+LIMITE_MIN_CALIBRAR_USD = 1.00   # só ajusta a estimativa se houve gasto suficiente pra comparar (evita ruído)
+FATOR_MIN, FATOR_MAX = 0.5, 2.0  # o ajuste automático nunca foge disso
+
+_cache_desde: dict = {}
+CACHE_DESDE_SEG = 30
+
+
+def interpretar_data(texto) -> datetime | None:
+    """'2026-10-27T15:40:00Z' (ou sem Z) -> datetime com fuso UTC. None se vazio/inválido."""
+    if not texto:
+        return None
+    try:
+        data = datetime.fromisoformat(str(texto).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return data if data.tzinfo else data.replace(tzinfo=timezone.utc)
+
+
+def gasto_desde_usd(inicio: datetime, forcar: bool = False) -> dict:
+    """
+    Gasto ESTIMADO (bruto, sem o ajuste automático) desde `inicio`. Sempre local, com
+    precisão de minutos -- a Cost API só agrupa por dia, o que não serve pra
+    "desde a hora em que conferi o saldo".
+    {"disponivel": True, "gasto_usd": 0.42, "erro": None}
+    """
+    chave = inicio.isoformat()
+    agora = time.monotonic()
+    guardado = _cache_desde.get(chave)
+    if not forcar and guardado and agora - guardado[0] < CACHE_DESDE_SEG:
+        return guardado[1]
+    try:
+        resultado = {"disponivel": True, "gasto_usd": _estimativa_local_usd(inicio), "erro": None}
+    except Exception as exc:
+        logger.exception("Não consegui estimar o gasto da IA desde a última conferência")
+        resultado = {"disponivel": False, "gasto_usd": None, "erro": str(exc)[:200]}
+    if len(_cache_desde) > 20:
+        _cache_desde.clear()
+    _cache_desde[chave] = (agora, resultado)
+    return resultado
+
+
+def nova_conferencia(config: dict, saldo_novo: float, agora: datetime | None = None) -> dict:
+    """
+    Campos a gravar quando alguém informa o saldo do Console:
+    {"credito_saldo_usd", "credito_saldo_em", "credito_calibracao"}.
+
+    Calibração: compara o que REALMENTE saiu do saldo desde a conferência anterior
+    (saldo anterior - saldo novo) com o que a estimativa BRUTA calculou no mesmo
+    período. Se a estimativa vinha errando (preço diferente, tokens não contados...),
+    o fator corrige as próximas contas. Só calibra quando:
+      - houve gasto estimado suficiente (>= LIMITE_MIN_CALIBRAR_USD), e
+      - o saldo não subiu (se subiu, houve compra de crédito e não dá pra comparar).
+    Suaviza (média com o fator anterior) e limita entre FATOR_MIN e FATOR_MAX.
+    """
+    agora = agora or datetime.now(timezone.utc)
+    fator = float(config.get("credito_calibracao") or 1.0)
+    saldo_anterior = float(config.get("credito_saldo_usd") or 0.0)
+    em_anterior = interpretar_data(config.get("credito_saldo_em"))
+
+    if saldo_anterior > 0 and em_anterior and em_anterior < agora:
+        try:
+            estimado = _estimativa_local_usd(em_anterior, agora)
+            real = round(saldo_anterior - saldo_novo, 2)
+            if estimado >= LIMITE_MIN_CALIBRAR_USD and real > 0:
+                medido = max(FATOR_MIN, min(FATOR_MAX, real / estimado))
+                fator = (fator + medido) / 2
+        except Exception:
+            logger.exception("Não consegui calibrar a estimativa -- mantendo o ajuste anterior")
+
+    return {
+        "credito_saldo_usd": round(float(saldo_novo), 2),
+        "credito_saldo_em": agora.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),  # com microssegundos: nenhum evento de antes entra na conta
+        "credito_calibracao": round(max(FATOR_MIN, min(FATOR_MAX, fator)), 3),
+    }

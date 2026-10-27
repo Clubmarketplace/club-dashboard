@@ -60,7 +60,13 @@ def padroes() -> dict:
         "modelo_pesquisa": "preciso",  # preciso (Sonnet) | economico (modelo padrão)
         "tom": "cordial",
         "tamanho": "normal",
-        "credito_comprado_usd": 0.0,  # quanto comprou de crédito da API da Anthropic (termômetro)
+        "credito_comprado_usd": 0.0,  # LEGADO: só usado enquanto ninguém informou o saldo do Console
+        # Termômetro de crédito: o saldo que aparece no Console da Anthropic,
+        # conferido numa data/hora. O gasto passa a ser contado DESSE momento
+        # em diante (assim o gasto de um crédito antigo nunca contamina o novo).
+        "credito_saldo_usd": 0.0,
+        "credito_saldo_em": None,      # ISO UTC de quando o saldo foi conferido (gravado pelo servidor)
+        "credito_calibracao": 1.0,     # ajuste automático da estimativa (ver uso_ia_custo.nova_conferencia)
     }
 
 
@@ -80,6 +86,28 @@ def normalizar(dados: dict) -> dict:
                 saida[chave] = max(0.0, round(float(valor), 2))
             except (TypeError, ValueError):
                 raise ValueError("Valor de crédito inválido.")
+        elif chave == "credito_saldo_usd":
+            try:
+                valor_usd = round(float(valor), 2)
+            except (TypeError, ValueError):
+                raise ValueError("Saldo inválido.")
+            if not (0 <= valor_usd <= 100000):
+                raise ValueError("Saldo fora do intervalo permitido.")
+            saida[chave] = valor_usd
+        elif chave == "credito_saldo_em":
+            if valor is None:
+                saida[chave] = None
+            else:
+                try:
+                    datetime.fromisoformat(str(valor).replace("Z", "+00:00"))
+                except ValueError:
+                    raise ValueError("Data da conferência inválida.")
+                saida[chave] = str(valor)
+        elif chave == "credito_calibracao":
+            try:
+                saida[chave] = max(0.5, min(2.0, round(float(valor), 3)))
+            except (TypeError, ValueError):
+                raise ValueError("Ajuste de estimativa inválido.")
         elif chave == "buscas_por_degrau":
             try:
                 saida[chave] = max(1, min(5, int(valor)))
