@@ -15,6 +15,7 @@
     degraus: "Degraus da pesquisa", duas_fontes: "Exigir duas fontes", buscas_por_degrau: "Buscas por degrau",
     modelo_pesquisa: "Modelo da pesquisa", tom: "Tom", tamanho: "Tamanho",
     credito_comprado_usd: "Saldo comprado (crédito da IA)",
+    credito_saldo_usd: "Saldo conferido no Console", credito_saldo_em: "Data da conferência do saldo", credito_calibracao: "Ajuste da estimativa de gasto",
   };
   const DESCRICOES = {
     fabricante: "Site oficial da marca.",
@@ -39,13 +40,16 @@
     if (chave === "degraus") return degraus.filter((d) => v[d.chave]).map((d) => d.nome.split(" · ")[0]).join(", ") || "nenhum";
     if (chave === "janela_ml_min") return v + " min";
     if (chave === "modelo_pesquisa") return v === "preciso" ? "mais preciso" : "econômico";
-    if (chave === "credito_comprado_usd") return "US$ " + Number(v).toFixed(2);
+    if (chave === "credito_comprado_usd" || chave === "credito_saldo_usd") return "US$ " + Number(v).toFixed(2);
+    if (chave === "credito_saldo_em") return new Date(v).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+    if (chave === "credito_calibracao") return "×" + Number(v).toFixed(2);
     return String(v);
   }
 
   function mudancas() {
     // janela_ml_min é fixa (3 min): nunca vai como alteração
-    return Object.keys(atual).filter((k) => k !== "janela_ml_min" && JSON.stringify(atual[k]) !== JSON.stringify(salvo[k]));
+    // Os campos do termômetro (credito_*) têm botão próprio ("Conferir agora"): nunca viram alteração pendente.
+    return Object.keys(atual).filter((k) => k !== "janela_ml_min" && !k.startsWith("credito_") && JSON.stringify(atual[k]) !== JSON.stringify(salvo[k]));
   }
 
   function pintar() {
@@ -60,7 +64,10 @@
     document.querySelectorAll("input[data-degrau]").forEach((c) => { c.checked = !!atual.degraus[c.dataset.degrau]; c.disabled = !atual.fonte_internet; });
     $("ci-duas").disabled = $("ci-buscas").disabled = !atual.fonte_internet;
     $("ci-buscas").value = String(atual.buscas_por_degrau);
-    $("ci-termo-comprado").value = atual.credito_comprado_usd;
+    // Campo do saldo: só preenche se a pessoa não estiver digitando nele agora.
+    if (document.activeElement !== $("ci-saldo-input") && !$("ci-saldo-input").value && atual.credito_saldo_usd > 0) {
+      $("ci-saldo-input").value = Number(atual.credito_saldo_usd).toFixed(2);
+    }
     ["modelo", "tom", "tamanho"].forEach((nome) => {
       const chave = nome === "modelo" ? "modelo_pesquisa" : nome;
       document.querySelectorAll(`input[name="${nome}"]`).forEach((r) => { r.checked = r.value === atual[chave]; });
@@ -115,6 +122,14 @@
     el.style.display = "block";
   }
 
+  const dinheiro = (n) => "US$ " + Number(n).toFixed(2).replace(".", ",");
+  const dataHora = (iso) => new Date(iso).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  function haQuanto(horas) {
+    if (horas < 1) return "há menos de 1 hora";
+    if (horas < 48) return "há " + Math.round(horas) + " h";
+    return "há " + Math.round(horas / 24) + " dias";
+  }
+
   function pintarCredito(credito) {
     if (!credito) return;
     const semChave = $("ci-termo-sem-chave"), corpo = $("ci-termo-corpo");
@@ -127,33 +142,85 @@
     corpo.style.display = "block";
 
     const selo = $("ci-termo-selo");
-    if (credito.exato) {
-      selo.textContent = "exato";
-      selo.className = "ci-termo-selo ci-selo-exato";
-      selo.title = "Direto da Cost API da Anthropic.";
-    } else {
-      selo.textContent = "estimado";
+    const info = $("ci-termo-info"), velho = $("ci-termo-aviso-velho"), baixo = $("ci-termo-aviso-baixo");
+    const barra = $("ci-termo-barra");
+    barra.classList.remove("ci-termo-amarelo", "ci-termo-vermelho");
+    velho.style.display = "none"; velho.classList.remove("ci-velho-forte");
+
+    if (credito.modo === "saldo") {
+      // Saldo conferido no Console + gasto estimado desde aquele instante.
+      selo.textContent = "estimado desde a conferência";
       selo.className = "ci-termo-selo ci-selo-estimado";
-      selo.title = "Calculado pelos tokens que a nossa IA registrou em cada resposta (sem chave Admin configurada).";
+      selo.title = "Saldo informado do Console menos o gasto calculado pelos tokens de cada resposta da IA desde a conferência. Quanto mais recente a conferência, mais preciso.";
+      $("ci-termo-gasto-rot").textContent = "Gasto desde a conferência";
+      $("ci-termo-base-rot").textContent = "Saldo conferido";
+      $("ci-termo-resta").textContent = dinheiro(credito.resta_usd);
+      $("ci-termo-gasto").textContent = dinheiro(credito.gasto_usd);
+      $("ci-termo-comprado-txt").textContent = dinheiro(credito.saldo_usd);
+
+      const pct = credito.saldo_usd > 0 ? Math.max(0, Math.min(100, (credito.resta_usd / credito.saldo_usd) * 100)) : 0;
+      barra.style.width = pct + "%";
+      if (credito.comprar_mais) barra.classList.add("ci-termo-vermelho");
+      else if (pct <= 40) barra.classList.add("ci-termo-amarelo");
+
+      const partes = [`Conferido em ${dataHora(credito.conferido_em)} (${haQuanto(credito.horas_desde)})`];
+      if (credito.ritmo_dia_usd) partes.push(`ritmo de ${dinheiro(credito.ritmo_dia_usd)} por dia`);
+      if (credito.dias_restantes != null) partes.push(`dá para cerca de ${credito.dias_restantes.toLocaleString("pt-BR")} dia(s)`);
+      if (Math.abs(credito.fator - 1) >= 0.02) partes.push(`estimativa ajustada ×${credito.fator.toFixed(2).replace(".", ",")} pelas últimas conferências`);
+      info.textContent = partes.join(" · ");
+      info.style.display = "block";
+
+      baixo.style.display = credito.comprar_mais ? "block" : "none";
+      if (credito.horas_desde >= 72) {
+        velho.textContent = "⚠ O saldo foi conferido " + haQuanto(credito.horas_desde) + ". Confira no Console e clique em \"Conferir agora\": a estimativa perde precisão com o tempo.";
+        velho.classList.add("ci-velho-forte"); velho.style.display = "block";
+      } else if (credito.horas_desde >= 24) {
+        velho.textContent = "Faz mais de 24 h desde a última conferência. Vale conferir o saldo no Console de novo.";
+        velho.style.display = "block";
+      }
+      return;
     }
 
-    const gasto = credito.gasto_usd ?? 0;
-    const comprado = credito.comprado_usd ?? 0;
+    // Legado: ninguém informou o saldo do Console ainda.
+    selo.textContent = credito.exato ? "exato" : "estimado";
+    selo.className = "ci-termo-selo " + (credito.exato ? "ci-selo-exato" : "ci-selo-estimado");
+    selo.title = credito.exato ? "Direto da Cost API da Anthropic." : "Calculado pelos tokens que a nossa IA registrou em cada resposta.";
+    $("ci-termo-gasto-rot").textContent = "Gasto este mês (só o que a IA registrou)";
+    $("ci-termo-base-rot").textContent = "Comprado";
+    const gasto = credito.gasto_usd ?? 0, comprado = credito.comprado_usd ?? 0;
     const resta = credito.resta_usd ?? (comprado - gasto);
+    $("ci-termo-resta").textContent = dinheiro(resta);
+    $("ci-termo-gasto").textContent = dinheiro(gasto);
+    $("ci-termo-comprado-txt").textContent = dinheiro(comprado);
     const pct = comprado > 0 ? Math.max(0, Math.min(100, (resta / comprado) * 100)) : 0;
-
-    $("ci-termo-resta").textContent = "US$ " + resta.toFixed(2);
-    $("ci-termo-gasto").textContent = "US$ " + gasto.toFixed(2);
-    $("ci-termo-comprado-txt").textContent = "US$ " + comprado.toFixed(2);
-
-    const barra = $("ci-termo-barra");
     barra.style.width = pct + "%";
-    barra.classList.remove("ci-termo-amarelo", "ci-termo-vermelho");
-    if (pct <= 15) barra.classList.add("ci-termo-vermelho");
-    else if (pct <= 40) barra.classList.add("ci-termo-amarelo");
-
-    $("ci-termo-aviso-baixo").style.display = (pct <= 15 && comprado > 0) ? "block" : "none";
+    if (pct <= 15) barra.classList.add("ci-termo-vermelho"); else if (pct <= 40) barra.classList.add("ci-termo-amarelo");
+    info.textContent = "Para medir com precisão, informe o saldo que o Console mostra agora e clique em \"Conferir agora\".";
+    info.style.display = "block";
+    baixo.style.display = (pct <= 15 && comprado > 0) ? "block" : "none";
   }
+
+  // Botão "Conferir agora": manda o saldo do Console; o servidor grava o valor e o instante.
+  async function conferirSaldo() {
+    const campo = $("ci-saldo-input"), botao = $("ci-saldo-btn");
+    const valor = Number(String(campo.value).replace(",", "."));
+    if (!(valor > 0)) { aviso("Informe o saldo que aparece no Console (ex.: 19.99).", "erro"); return; }
+    botao.disabled = true; botao.textContent = "Conferindo…";
+    try {
+      const r = await fetch("/api/calibrar-ia/saldo", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ saldo_usd: valor }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.detail || "status " + r.status);
+      // Atualiza só o termômetro e o histórico: não mexe em ajustes que a pessoa esteja editando.
+      ["credito_saldo_usd", "credito_saldo_em", "credito_calibracao"].forEach((k) => { salvo[k] = d.config[k]; atual[k] = d.config[k]; });
+      pintarCredito(d.credito || null);
+      pintarHistorico(d.historico || []);
+      aviso("✓ Saldo conferido: " + dinheiro(valor) + ". O gasto passa a ser contado a partir de agora.", "ok");
+    } catch (e) {
+      aviso("Não foi possível conferir o saldo: " + e.message, "erro");
+    } finally { botao.disabled = false; botao.textContent = "Conferir agora"; }
+  }
+  $("ci-saldo-btn").addEventListener("click", conferirSaldo);
+  $("ci-saldo-input").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); conferirSaldo(); } });
 
   function aplicar(dados) {
     degraus = dados.degraus;
@@ -193,8 +260,8 @@
   document.addEventListener("change", (e) => {
     const t = e.target;
     if (!atual) return;
-    if (t.id === "ci-termo-comprado") atual.credito_comprado_usd = Math.max(0, Number(t.value) || 0);
-    else if (t.dataset.chave) atual[t.dataset.chave] = t.checked;
+    if (t.id === "ci-saldo-input") return;  // só vale ao clicar em "Conferir agora"
+    if (t.dataset.chave) atual[t.dataset.chave] = t.checked;
     else if (t.dataset.degrau) atual.degraus = { ...atual.degraus, [t.dataset.degrau]: t.checked };
     else if (t.id === "ci-buscas") atual.buscas_por_degrau = Number(t.value);
     else if (t.name === "modelo") atual.modelo_pesquisa = t.value;
