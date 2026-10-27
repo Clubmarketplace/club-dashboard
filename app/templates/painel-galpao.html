@@ -49,6 +49,9 @@
     .vazio { text-align:center; color:var(--cmx-texto-suave); padding:22px; font-size:13.5px; }
     .erro { color:var(--cmx-critico); background:var(--cmx-critico-fundo); padding:10px 12px; border-radius:9px; margin-bottom:14px; display:none; font-size:13.5px; }
     .tabela-rolagem { overflow-x:auto; }
+    .nota-tab { font-size:12px; color:var(--cmx-texto-suave); margin-top:10px; line-height:1.5; }
+    tr.linha-total td { font-weight:700; background:#f3f6f6; border-top:2px solid var(--cmx-borda); }
+    td.verde { color:#1f6b45; } td.verm { color:#a83232; } td.laranja { color:#a86a14; }
 
     /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
     .so-impressao { display:none; }
@@ -128,9 +131,11 @@
         <div class="grupo-titulo"><i style="background:var(--rev)"></i> Reversos</div>
         <div class="cartoes">
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-total">—</div><div class="rotulo">Recebidos</div></div>
-          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-volt">—</div><div class="rotulo">Voltaram para o estoque</div><div class="sub" id="r-pct"></div></div>
-          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="r-nao">—</div><div class="rotulo">Não voltaram</div></div>
-          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="r-ag">—</div><div class="rotulo">Aguardando a equipe</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
+          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="r-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
+          <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="r-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">ainda sem decisão</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub">do recebimento à decisão</div></div>
         </div>
 
         <div class="grade2">
@@ -148,8 +153,22 @@
         <div class="painel">
           <h2>Comparação entre os galpões</h2>
           <div class="tabela-rolagem"><table>
-            <thead><tr><th>Galpão</th><th class="n">Cancelamentos</th><th class="n">Resolvidos</th><th class="n">Reversos</th><th class="n">Voltaram</th><th class="n">Não voltaram</th><th class="n">Aguardando</th></tr></thead>
-            <tbody id="t-galpoes"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+            <thead><tr><th>Galpão</th><th class="n">Cancelamentos</th><th class="n">Resolvidos</th><th class="n">Reversos</th>
+              <th class="n" title="Reversos que a equipe liberou para venda">No estoque</th>
+              <th class="n" title="Reversos que a equipe decidiu que não voltam ao estoque">Fora do estoque</th>
+              <th class="n" title="Reversos ainda sem decisão da equipe">Aguardando</th>
+              <th class="n" title="Dos já conferidos pela equipe">% no estoque</th>
+              <th class="n" title="Do recebimento até a equipe decidir">Tempo médio</th></tr></thead>
+            <tbody id="t-galpoes"><tr><td colspan="9" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="nota-tab"><b>No estoque</b> = a equipe liberou para venda. <b>Fora do estoque</b> = a equipe decidiu que não volta (avariado, faltando peça etc.). <b>Aguardando</b> = ainda sem decisão da equipe.</div>
+        </div>
+
+        <div class="painel">
+          <h2>Quem recebeu os reversos <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)">(usuário que registrou o recebimento no galpão)</span></h2>
+          <div class="tabela-rolagem"><table>
+            <thead><tr><th>Quem recebeu</th><th>Galpão</th><th class="n">Reversos recebidos</th></tr></thead>
+            <tbody id="t-quem"><tr><td colspan="3" class="vazio">Carregando…</td></tr></tbody>
           </table></div>
         </div>
 
@@ -171,6 +190,13 @@
     // cor de cada resultado do reverso (voltou = verde, não voltou = tons de vermelho, aguardando = âmbar)
     const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
     let dias = 7, graficoDia = null, graficoRes = null;
+    // minutos -> "45 min", "3 h 20 min", "2 d 4 h" (igual ao Excel)
+    function tempo(m) {
+      if (m === null || m === undefined) return "—";
+      if (m < 60) return m + " min";
+      if (m < 1440) { const h = Math.floor(m / 60), mm = m % 60; return mm ? `${h} h ${String(mm).padStart(2, "0")} min` : `${h} h`; }
+      const dd = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60); return h ? `${dd} d ${h} h` : `${dd} d`;
+    }
     const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
 
     function params() { return new URLSearchParams({ dias, ...($("galpao").value ? { galpao: $("galpao").value } : {}) }); }
@@ -182,11 +208,14 @@
       graficoDia = new Chart($("g-dia"), {
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
-          { label: "Cancelamentos", data: d.por_dia.map(x => x.cancelamentos), backgroundColor: COR.canc, borderRadius: 4 },
-          { label: "Reversos", data: d.por_dia.map(x => x.reversos), backgroundColor: COR.rev, borderRadius: 4 },
+          // Cancelamentos numa coluna; reversos em outra, empilhados por situação (stack = coluna)
+          { label: "Cancelamentos", data: d.por_dia.map(x => x.cancelamentos), backgroundColor: COR.canc, stack: "canc", borderRadius: 4 },
+          { label: "Reversos: voltaram ao estoque", data: d.por_dia.map(x => x.rev_voltou), backgroundColor: COR.voltou, stack: "rev" },
+          { label: "Reversos: não voltaram ao estoque", data: d.por_dia.map(x => x.rev_nao_voltou), backgroundColor: COR.nao, stack: "rev" },
+          { label: "Reversos: aguardando a equipe", data: d.por_dia.map(x => x.rev_aguardando), backgroundColor: COR.aguarda, stack: "rev" },
         ] },
-        options: { responsive: true, maintainAspectRatio: false, animation: false,
-          scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } },
+        options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
+          scales: { y: { beginAtZero: true, stacked: true, ticks: { precision: 0 } }, x: { stacked: true, grid: { display: false } } },
           plugins: { legend: { position: "bottom" } } },
       });
       const res = d.resultado_reversos;
@@ -211,8 +240,14 @@
       $("c-total").textContent = d.cancelamentos.total; $("c-res").textContent = d.cancelamentos.resolvidos; $("c-pen").textContent = d.cancelamentos.pendentes;
       $("r-total").textContent = d.reversos.total; $("r-volt").textContent = d.reversos.voltaram; $("r-nao").textContent = d.reversos.nao_voltaram; $("r-ag").textContent = d.reversos.aguardando;
       const concl = d.reversos.voltaram + d.reversos.nao_voltaram;
-      $("r-pct").textContent = concl ? `${d.reversos.pct_voltaram}% dos já conferidos` : "";
-      $("t-galpoes").innerHTML = d.por_galpao.map(g => `<tr><td><b>${esc(g.nome)}</b></td><td class="n">${g.cancelamentos}</td><td class="n">${g.cancelamentos_resolvidos}</td><td class="n">${g.reversos}</td><td class="n">${g.voltaram}</td><td class="n">${g.nao_voltaram}</td><td class="n">${g.aguardando}</td></tr>`).join("");
+      $("r-pct").textContent = concl ? d.reversos.pct_voltaram + "%" : "—";
+      $("r-tempo").textContent = tempo(d.reversos.tempo_medio_min);
+      // uma linha por galpão + linha de TOTAL (soma dos galpões, pra ninguém somar na mão)
+      const linhaG = (g, rotulo, cls) => `<tr class="${cls || ""}"><td><b>${esc(rotulo)}</b></td><td class="n">${g.cancelamentos}</td><td class="n">${g.cancelamentos_resolvidos}</td><td class="n">${g.reversos}</td><td class="n verde">${g.voltaram}</td><td class="n verm">${g.nao_voltaram}</td><td class="n laranja">${g.aguardando}</td><td class="n">${(g.voltaram + g.nao_voltaram) ? g.pct_voltaram + "%" : "—"}</td><td class="n">${tempo(g.tempo_medio_min)}</td></tr>`;
+      $("t-galpoes").innerHTML = d.por_galpao.map(g => linhaG(g, g.nome)).join("") + (d.total_galpoes ? linhaG(d.total_galpoes, $("galpao").value ? "Total (" + $("galpao").selectedOptions[0].textContent + ")" : "Total (3 galpões)", "linha-total") : "");
+      $("t-quem").innerHTML = (d.quem_recebeu || []).length
+        ? d.quem_recebeu.map(x => `<tr><td>${esc(x.nome)}</td><td>${esc(x.galpao_nome)}</td><td class="n"><b>${x.quantidade}</b></td></tr>`).join("")
+        : '<tr><td colspan="3" class="vazio">Nenhum reverso recebido neste período.</td></tr>';
       $("t-contas").innerHTML = d.contas.length
         ? d.contas.map(c => `<tr><td>${esc(c.conta)}</td><td class="n">${c.cancelamentos}</td><td class="n">${c.reversos}</td><td class="n"><b>${c.total}</b></td></tr>`).join("")
         : '<tr><td colspan="4" class="vazio">Nenhum registro neste período.</td></tr>';
