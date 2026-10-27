@@ -133,7 +133,10 @@
       aviso("");
       desenharFila(d.fila);
       desenharPessoas(d);
-      try { desenharReversos(await buscarReversos(de, ate)); } catch (e2) { if (!silencioso) aviso("Reversos: " + e2.message); }
+      // A seção de Reversos só existe na tela de admin/supervisor (27/10): sem ela, nem busca.
+      if (document.getElementById("pd-rev-kpis")) {
+        try { desenharReversos(await buscarReversos(de, ate)); } catch (e2) { if (!silencioso) aviso("Reversos: " + e2.message); }
+      }
     } catch (e) {
       if (!silencioso) aviso("Não consegui carregar: " + e.message);
     } finally {
