@@ -49,13 +49,17 @@
     .ci-termo-valores div b { display:block; font-size:20px; line-height:1.2; }
     .ci-termo-valores div span { font-size:12px; color:var(--cmx-texto-suave); }
     .ci-termo-barra-fundo { width:100%; height:14px; border-radius:7px; background:#eef1f4; overflow:hidden; }
-    .ci-termo-barra-cheia { height:100%; border-radius:7px; transition:width .25s, background-color .25s; background:var(--green); }
+    .ci-termo-barra-cheia { height:100%; border-radius:7px; transition:width .25s, background-color .25s; background:var(--green, #16a36a); }
     .ci-termo-barra-cheia.ci-termo-amarelo { background:var(--amber, #f0a93d); }
     .ci-termo-barra-cheia.ci-termo-vermelho { background:#c0392b; }
     .ci-termo-aviso-baixo { font-size:13px; color:#8a1f11; font-weight:600; display:none; }
     .ci-termo-config { display:flex; align-items:center; gap:8px; font-size:13.5px; }
     .ci-termo-config input { width:110px; height:34px; border:1px solid #d5dbe1; border-radius:8px; padding:0 10px; font:14px Inter,sans-serif; }
     .ci-termo-sem-chave { font-size:13px; color:#5b6776; background:#f6f8fa; border:1px solid #e2e7ec; border-radius:9px; padding:10px 12px; }
+    .ci-btn-pequeno { height:34px; padding:0 12px; font-size:13px; }
+    .ci-termo-info { font-size:12.5px; color:var(--cmx-texto-suave); margin:10px 0 0; line-height:1.5; }
+    .ci-termo-aviso-velho { font-size:13px; font-weight:600; display:none; margin:8px 0 0; color:#8a5a0a; }
+    .ci-termo-aviso-velho.ci-velho-forte { color:#8a1f11; }
     .ci-termo-selo { font-size:11px; font-weight:700; padding:3px 8px; border-radius:20px; text-transform:uppercase; letter-spacing:.03em; }
     .ci-termo-selo.ci-selo-exato { background:#e8f6ef; color:#14532d; }
     .ci-termo-selo.ci-selo-estimado { background:#fff7e8; color:#8a5a0a; }
@@ -109,21 +113,24 @@
               <span class="ci-termo-selo" id="ci-termo-selo"></span>
             </div>
             <div class="ci-termo-config">
-              <label for="ci-termo-comprado">Saldo comprado (US$)</label>
-              <input type="number" id="ci-termo-comprado" step="0.01" min="0" data-chave="credito_comprado_usd" />
+              <label for="ci-saldo-input">Saldo atual no Console (US$)</label>
+              <input type="number" id="ci-saldo-input" step="0.01" min="0" inputmode="decimal" placeholder="ex.: 19.99" />
+              <button type="button" class="ci-btn ci-btn-claro ci-btn-pequeno" id="ci-saldo-btn">Conferir agora</button>
             </div>
           </div>
           <div id="ci-termo-corpo">
             <div class="ci-termo-valores">
               <div><b id="ci-termo-resta">—</b><span>Resta</span></div>
-              <div><b id="ci-termo-gasto">—</b><span>Gasto este mês</span></div>
-              <div><b id="ci-termo-comprado-txt">—</b><span>Comprado</span></div>
+              <div><b id="ci-termo-gasto">—</b><span id="ci-termo-gasto-rot">Gasto desde a conferência</span></div>
+              <div><b id="ci-termo-comprado-txt">—</b><span id="ci-termo-base-rot">Saldo conferido</span></div>
             </div>
             <div class="ci-termo-barra-fundo"><div class="ci-termo-barra-cheia" id="ci-termo-barra" style="width:0%"></div></div>
+            <p class="ci-termo-info" id="ci-termo-info"></p>
             <p class="ci-termo-aviso-baixo" id="ci-termo-aviso-baixo">⚠ Crédito baixo — considere comprar mais ou confirmar o auto-reload.</p>
+            <p class="ci-termo-aviso-velho" id="ci-termo-aviso-velho"></p>
           </div>
           <p class="ci-termo-sem-chave" id="ci-termo-sem-chave" style="display:none">
-            Para ver o gasto exato, configure a chave Admin da Anthropic (variável <code>ANTHROPIC_ADMIN_API_KEY</code> no servidor).
+            Não consegui calcular o gasto agora. Informe o saldo do Console e clique em "Conferir agora", ou tente de novo em instantes.
           </p>
         </section>
 
