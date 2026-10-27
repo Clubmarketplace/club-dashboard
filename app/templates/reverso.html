@@ -138,7 +138,7 @@
               <datalist id="lista-contas"></datalist></div>
             {% endif %}
             <div class="campo"><label class="rot" for="venda">Nº da venda (obrigatório)</label>
-              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido" autocomplete="off" required />
+              <input type="text" id="venda" inputmode="numeric" placeholder="Número do pedido (só números)" autocomplete="off" autocapitalize="characters" spellcheck="false" required />
               <div class="erro-campo" id="erro-venda">Informe o número da venda para enviar.</div></div>
           </div>
 
@@ -233,7 +233,16 @@
       const b = e.target.closest(".plat"); if (!b) return;
       plataforma = b.dataset.v;
       document.querySelectorAll("#plats .plat").forEach(x => x.setAttribute("aria-pressed", x === b));
+      ajustarCampoVenda();
     });
+    // Nº da venda: Mercado Livre = só números (teclado numérico no celular); Shopee, Magalu e
+    // TikTok Shop = letras e números (teclado completo). O servidor já aceita assim (27/10).
+    function ajustarCampoVenda() {
+      const soNumeros = plataforma === "mercado_livre";
+      $("venda").setAttribute("inputmode", soNumeros ? "numeric" : "text");
+      $("venda").placeholder = soNumeros ? "Número do pedido (só números)" : "Número do pedido (letras e números)";
+    }
+    ajustarCampoVenda();
 
     // ---------- Itens da venda (1 a 3) ----------
     // Cada item guarda as próprias fotos. Cada foto é reduzida no próprio aparelho (fotos.js)
