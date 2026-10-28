@@ -43,19 +43,25 @@
       {% endif %}      <header class="cmx-topbar">
         <div>
           <h1>Pós-venda</h1>
-          <p class="cmx-subtitulo">Mensagens e reclamações/devoluções -- a IA sugere, um atendente sempre decide e envia</p>
+          <p class="cmx-subtitulo">Mensagens e reclamações/devoluções -- a IA sugere, uma pessoa sempre decide e envia</p>
         </div>
       </header>
 
       <main>
         <section class="cmx-tabela-secao" style="margin-top: 0;">
-          <h2>Aguardando atendimento</h2>
+          <h2>Mensagens dos compradores</h2>
+          <p class="cmx-grafico-nota">As mesmas mensagens que o seller vê no painel dele: quem abre primeiro fica "em atendimento" e o outro só acompanha. Contamos a partir de 02/11/2026; os 10 dias anteriores só se a equipe pedir (botão abaixo).</p>
+          <div id="pv-app" data-base="/api/pos-venda/conversas" data-modo="equipe"></div>
+        </section>
+
+        <section class="cmx-tabela-secao">
+          <h2>Reclamações e devoluções aguardando atendimento</h2>
           <p class="cmx-grafico-nota" id="fila-aviso" style="display: none;"></p>
           <div id="lista-fila"></div>
         </section>
 
         <section class="cmx-tabela-secao">
-          <h2>Respondidas recentemente</h2>
+          <h2>Reclamações respondidas recentemente</h2>
           <table class="cmx-tabela" id="tabela-resolvidas">
             <thead>
               <tr>
@@ -74,6 +80,7 @@
     </div>
   </div>
 
+  <script src="/static/pos-venda-conversas.js?v=2"></script>
   <script src="/static/pos-venda.js"></script>
   <script src="/static/menu-celular.js?v=1"></script>
 </body>

@@ -46,6 +46,13 @@
   .cartao-club h2 { margin:0 0 16px; font-size:16px; }
   .club-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px 28px; }
   @media (max-width:700px) { .club-grid { grid-template-columns:1fr; } }
+  /* Destaque das mensagens pós-venda aguardando (28/10): só aparece quando há alguma. */
+  .alerta-mensagens { display:none; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap; background:#fff4e0; border:2px solid #e8a33d; border-radius:14px; padding:16px 20px; margin-bottom:18px; }
+  .alerta-mensagens.vermelho { background:#fdeceb; border-color:#d8584b; }
+  .alerta-mensagens b { font-size:16px; color:#6b3d00; }
+  .alerta-mensagens.vermelho b { color:#8a1f14; }
+  .alerta-mensagens span { display:block; font-size:13px; color:#7a5a2a; margin-top:2px; }
+  .alerta-mensagens a { background:#111827; color:#fff; text-decoration:none; font-weight:700; font-size:14px; padding:12px 20px; border-radius:10px; min-height:44px; display:inline-flex; align-items:center; box-sizing:border-box; }
   .club-item { display:flex; gap:10px; padding:8px 0; }
   .club-check { color:var(--green); flex-shrink:0; font-weight:700; }
   .club-titulo { font-size:13.5px; font-weight:700; }
@@ -111,6 +118,13 @@
         <div id="dashboard-vazio" class="vazio" style="display:none;">Não consegui carregar os dados agora. Atualize a página.</div>
 
         <div id="dashboard-conteudo">
+          <div class="alerta-mensagens" id="alerta-mensagens" role="alert">
+            <div>
+              <b id="alerta-mensagens-titulo">0 mensagens de compradores aguardando a sua resposta</b>
+              <span id="alerta-mensagens-sub"></span>
+            </div>
+            <a href="/minhas-mensagens">Responder agora</a>
+          </div>
           <div class="cartao-club">
             <h2>O que o Club fez pela sua conta este mês</h2>
             <div class="club-grid">
@@ -140,6 +154,13 @@
                 <div>
                   <div class="club-titulo" id="club-cancel-titulo">0 cancelamentos tratados</div>
                   <div class="club-sub">solicitações confirmadas no mês</div>
+                </div>
+              </div>
+              <div class="club-item" id="club-mensagens-aguardando-item" style="display:none;">
+                <span class="club-check" style="color:#f5b83d;">●</span>
+                <div>
+                  <div class="club-titulo" id="club-mensagens-aguardando-titulo">0 mensagens aguardando a sua resposta</div>
+                  <div class="club-sub"><a href="/minhas-mensagens" style="color:#9bd3ff;">Abrir mensagens pós-venda</a></div>
                 </div>
               </div>
               <div class="club-item" id="club-estoque-item" style="display:none;">
@@ -332,6 +353,26 @@ async function carregarDashboard() {
     document.getElementById("club-promocoes-titulo").textContent = (pa.mes || 0) + " promoções aderidas automaticamente";
     document.getElementById("club-promocoes-sub").textContent = (pa.hoje || 0) + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
     document.getElementById("club-cancel-titulo").textContent = (cancelMes.confirmados || 0) + " cancelamentos tratados";
+
+    // Mensagens pós-venda aguardando resposta (28/10): faixa de destaque no topo + item no bloco escuro. Só quando há.
+    const pv = dados.pos_venda || {};
+    const alerta = document.getElementById("alerta-mensagens");
+    const itemPv = document.getElementById("club-mensagens-aguardando-item");
+    if (pv.aguardando) {
+      const n = pv.aguardando;
+      const txt = n + (n === 1 ? " mensagem" : " mensagens");
+      document.getElementById("alerta-mensagens-titulo").textContent = txt + " de compradores aguardando a sua resposta";
+      const h = pv.mais_antiga_horas;
+      document.getElementById("alerta-mensagens-sub").textContent =
+        h != null ? "A mais antiga espera há " + (h >= 24 ? Math.floor(h / 24) + " dia(s)" : Math.floor(h) + " h") + ". Responder rápido ajuda a sua reputação." : "Responder rápido ajuda a sua reputação.";
+      alerta.classList.toggle("vermelho", h != null && h >= 24);
+      alerta.style.display = "flex";
+      itemPv.style.display = "";
+      document.getElementById("club-mensagens-aguardando-titulo").textContent = txt + " aguardando a sua resposta";
+    } else {
+      alerta.style.display = "none";
+      itemPv.style.display = "none";
+    }
 
     // Reversos (produto que voltou): chegou no galpão -> conferência da equipe -> voltou (ou não) para o estoque
     // ou resolvido com o ML. Só aparece se a conta teve algum reverso no mês.
