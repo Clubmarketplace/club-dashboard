@@ -28,8 +28,11 @@ from app import auth
 from app.database import get_db
 from app.models import SolicitacaoCancelamento
 from app.routers.solicitacoes_cancelamento import (
+    AVALIACOES_GALPAO,
+    ESTADOS_CHEGADA,
     FUSO_BR,
     GALPOES,
+    MOTIVOS_REVERSO,
     PLATAFORMAS,
     RESULTADO_VOLTOU,
     RESULTADOS_REVERSO,
@@ -37,6 +40,7 @@ from app.routers.solicitacoes_cancelamento import (
     TIPO_REVERSO,
     _limites_utc_produtividade,
     _texto_protocolo,
+    n_fotos_sql,
 )
 
 router = APIRouter(prefix="/api/painel-galpao", tags=["painel-galpao"])
@@ -246,6 +250,205 @@ def _situacao_texto(s: SolicitacaoCancelamento) -> str:
     if _eh_reverso(s):
         return _nome_situacao(_situacao_reverso(s))
     return "Resolvido" if s.confirmado_por else "Pendente"
+
+
+# ---------------------------------------------------------------------------
+# Visão explodida (28/10): clicar num cartão, coluna, fatia ou linha abre a LISTA dos registros
+# por trás do número, com a situação de cada um e a linha do tempo (recebido -> análise -> decisão).
+# Usa as MESMAS linhas do resumo (_registros) e a MESMA regra de situação, então o número do
+# cartão e a quantidade da lista são sempre iguais. Só leitura.
+# ---------------------------------------------------------------------------
+ATRASO_HORAS = 24          # sem decisão da equipe há mais que isso = destaque de atrasado
+LIMITE_DETALHE = 500       # teto de linhas por consulta (o Excel da lista traz as mesmas)
+_SITUACOES_REVERSO = ("voltou", "nao_voltou", "aguardando", "concluidos")
+_SITUACOES_CANCELAMENTO = ("resolvido", "pendente")
+
+
+def _grupo_da_linha(s: SolicitacaoCancelamento) -> str:
+    """Cor/agrupamento da linha: voltou | nao_voltou | aguardando (reversos) | resolvido | pendente (cancelamentos)."""
+    if _eh_reverso(s):
+        chave = _situacao_reverso(s)
+        return "voltou" if chave == "voltou" else "aguardando" if chave == "aguardando" else "nao_voltou"
+    return "resolvido" if s.confirmado_por else "pendente"
+
+
+def _passa_filtro(s, tipo: Optional[str], situacao: Optional[str], dia: Optional[date], conta: Optional[str], quem: Optional[str], q: Optional[str] = None) -> bool:
+    if tipo == "reverso" and not _eh_reverso(s):
+        return False
+    if tipo == "cancelamento" and _eh_reverso(s):
+        return False
+    if situacao:
+        if _eh_reverso(s):
+            chave = _situacao_reverso(s)
+            grupo = _grupo_da_linha(s)
+            if situacao == "concluidos":
+                if grupo == "aguardando":
+                    return False
+            elif situacao in ("voltou", "nao_voltou", "aguardando"):
+                if grupo != situacao:
+                    return False
+            elif chave != situacao:           # chave exata do resultado (avariado, garantia, ...)
+                return False
+        else:
+            if situacao not in _SITUACOES_CANCELAMENTO or _grupo_da_linha(s) != situacao:
+                return False
+    if dia and _dia_br(s) != dia:
+        return False
+    if conta and conta.strip().lower() not in ((s.conta or "").lower(), (s.conta_chave or "").lower()):
+        return False
+    if quem and (s.solicitado_por or "Não informado") != quem:
+        return False
+    if q and q.strip():   # busca livre: conta, venda, SKU, produto ou quem registrou
+        alvo = " ".join(str(x or "") for x in (s.conta, s.numero_venda, s.sku, s.produto_titulo, s.solicitado_por)).lower()
+        if q.strip().lower() not in alvo:
+            return False
+    return True
+
+
+def _minutos(a: Optional[datetime], b: Optional[datetime]) -> Optional[int]:
+    if not a or not b:
+        return None
+    try:
+        return max(round((b - a).total_seconds() / 60), 0)
+    except TypeError:     # datas com/sem fuso misturadas: ignora, não derruba a tela
+        return None
+
+
+def _linha_do_tempo(s: SolicitacaoCancelamento, agora: datetime) -> list[dict]:
+    """Etapas do registro, na ordem. `feito=False` = etapa que ainda não aconteceu (aguardando)."""
+    passos = []
+    if _eh_reverso(s):
+        det = [x for x in (
+            ESTADOS_CHEGADA.get(s.estado_chegada or "", ""), AVALIACOES_GALPAO.get(s.avaliacao_galpao or "", ""),
+            MOTIVOS_REVERSO.get(s.motivo_reverso or "", ""), (s.problema_galpao or ""),
+        ) if x]
+        passos.append({"etapa": "Recebido no galpão", "feito": True, "quando": _hora_br(s.criado_em), "quem": s.solicitado_por or "", "detalhe": " · ".join(det)})
+        if s.em_analise_em or s.em_analise_por:
+            passos.append({"etapa": "Em análise pela equipe", "feito": True, "quando": _hora_br(s.em_analise_em), "quem": s.em_analise_por or "", "detalhe": s.em_analise_obs or ""})
+        elif not s.confirmado_por:
+            passos.append({"etapa": "Em análise pela equipe", "feito": False, "quando": "", "quem": s.em_atendimento_por or "", "detalhe": "ainda não pegaram"})
+        if s.confirmado_por:
+            nome = RESULTADOS_REVERSO.get(s.resultado_reverso or "", _nome_situacao(_situacao_reverso(s)))
+            passos.append({"etapa": "Decisão da equipe", "feito": True, "quando": _hora_br(s.confirmado_em or s.liberado_em),
+                           "quem": s.confirmado_por or s.liberado_por or "", "detalhe": " · ".join(x for x in (nome, s.observacao_resultado or "") if x)})
+        else:
+            espera = _minutos(s.criado_em, agora)
+            passos.append({"etapa": "Decisão da equipe", "feito": False, "quando": "", "quem": "", "detalhe": f"aguardando há {formatar_tempo(espera)}" if espera is not None else "aguardando"})
+    else:
+        passos.append({"etapa": "Registrado pelo galpão", "feito": True, "quando": _hora_br(s.criado_em), "quem": s.solicitado_por or "", "detalhe": s.motivo or ""})
+        if s.confirmado_por:
+            passos.append({"etapa": "Resolvido", "feito": True, "quando": _hora_br(s.confirmado_em), "quem": s.confirmado_por, "detalhe": ("Protocolo: " + _texto_protocolo(s)) if _texto_protocolo(s) else ""})
+        else:
+            espera = _minutos(s.criado_em, agora)
+            passos.append({"etapa": "Resolução", "feito": False, "quando": "", "quem": "", "detalhe": f"pendente há {formatar_tempo(espera)}" if espera is not None else "pendente"})
+    return passos
+
+
+def _item_detalhe(s: SolicitacaoCancelamento, n_fotos: int, agora: datetime) -> dict:
+    reverso = _eh_reverso(s)
+    decidido = bool(s.confirmado_por)
+    espera = None if decidido else _minutos(s.criado_em, agora)
+    return {
+        "id": s.id,
+        "tipo": "reverso" if reverso else "cancelamento",
+        "tipo_nome": "Reverso" if reverso else "Cancelamento",
+        "grupo": _grupo_da_linha(s),
+        "situacao": _situacao_texto(s),
+        "situacao_chave": _situacao_reverso(s) if reverso else ("resolvido" if decidido else "pendente"),
+        "conta": s.conta,
+        "plataforma": s.plataforma,
+        "numero_venda": s.numero_venda,
+        "sku": s.sku or "",
+        "produto": s.produto_titulo or "",
+        "galpao": s.galpao,
+        "galpao_nome": GALPOES.get(s.galpao, "—"),
+        "registrado_por": s.solicitado_por or "",
+        "registrado_em": _hora_br(s.criado_em),
+        "dia": _dia_br(s).isoformat(),
+        "motivo": (MOTIVOS_REVERSO.get(s.motivo_reverso or "", "") if reverso else (s.motivo or "")),
+        "espera_min": espera,
+        "espera_txt": formatar_tempo(espera) if espera is not None else "",
+        "tempo_decisao_min": _minutos(s.criado_em, s.confirmado_em) if decidido else None,
+        "tempo_decisao_txt": formatar_tempo(_minutos(s.criado_em, s.confirmado_em)) if decidido and s.confirmado_em else "",
+        "atrasado": bool(espera is not None and espera > ATRASO_HORAS * 60),
+        "decidido_por": s.confirmado_por or "",
+        "n_fotos": int(n_fotos or 0),
+        "linha_do_tempo": _linha_do_tempo(s, agora),
+    }
+
+
+def _montar_detalhe(db: Session, dias: int, galpao: Optional[int], tipo, situacao, dia, conta, quem, q=None) -> dict:
+    de, ate = _periodo(dias)
+    if tipo not in (None, "", "reverso", "cancelamento"):
+        raise HTTPException(status_code=422, detail="Tipo inválido.")
+    d_dia = None
+    if dia:
+        try:
+            d_dia = date.fromisoformat(dia)
+        except ValueError:
+            raise HTTPException(status_code=422, detail="Dia inválido (use AAAA-MM-DD).")
+    linhas = [s for s in _registros(db, de, ate, galpao) if _passa_filtro(s, tipo or None, situacao or None, d_dia, conta, quem, q)]
+    agora = datetime.utcnow()
+    pendentes = [s for s in linhas if not s.confirmado_por]
+    # Quem espera decisão: o mais antigo primeiro (é o que precisa de atenção). O resto: o mais novo primeiro.
+    if linhas and len(pendentes) == len(linhas):
+        linhas.sort(key=lambda s: s.criado_em or agora)
+    else:
+        linhas.sort(key=lambda s: s.criado_em or agora, reverse=True)
+    total = len(linhas)
+    linhas = linhas[:LIMITE_DETALHE]
+    fotos = {}
+    if linhas:   # só a QUANTIDADE de fotos (calculada no banco, sem ler foto nenhuma)
+        ids = [s.id for s in linhas]
+        fotos = {i: n for i, n in db.query(SolicitacaoCancelamento.id, n_fotos_sql()).filter(SolicitacaoCancelamento.id.in_(ids)).all()}
+    itens = [_item_detalhe(s, fotos.get(s.id, 0), agora) for s in linhas]
+    return {
+        "total": total, "truncado": total > len(itens), "limite": LIMITE_DETALHE, "atraso_horas": ATRASO_HORAS,
+        "atrasados": sum(1 for i in itens if i["atrasado"]),
+        "periodo": {"de": de.isoformat(), "ate": ate.isoformat(), "dias": dias},
+        "itens": itens,
+    }
+
+
+@router.get("/detalhe")
+def detalhe(request: Request, dias: int = 7, galpao: Optional[int] = None, tipo: Optional[str] = None,
+            situacao: Optional[str] = None, dia: Optional[str] = None, conta: Optional[str] = None,
+            quem: Optional[str] = None, q: Optional[str] = None, db: Session = Depends(get_db)):
+    """Lista dos registros por trás de um cartão/coluna/fatia/linha do Dashboard (mesmos filtros, mesma regra)."""
+    _usuario_do_painel(request, db)
+    return _montar_detalhe(db, dias, galpao, tipo, situacao, dia, conta, quem, q)
+
+
+@router.get("/detalhe/excel")
+def detalhe_excel(request: Request, dias: int = 7, galpao: Optional[int] = None, tipo: Optional[str] = None,
+                  situacao: Optional[str] = None, dia: Optional[str] = None, conta: Optional[str] = None,
+                  quem: Optional[str] = None, q: Optional[str] = None, titulo: Optional[str] = None, db: Session = Depends(get_db)):
+    """Excel só da lista que o gestor está vendo (uma linha por registro, com a linha do tempo em colunas)."""
+    usuario = _usuario_do_painel(request, db)
+    d = _montar_detalhe(db, dias, galpao, tipo, situacao, dia, conta, quem, q)
+    wb = Workbook()
+    aba = wb.active
+    aba.title = "Lista"
+    aba.append([(titulo or "Registros do galpão")[:120]])
+    aba.append([f"Período: {d['periodo']['de']} a {d['periodo']['ate']} · {d['total']} registro(s) · gerado em "
+                f"{datetime.now(FUSO_BR).strftime('%d/%m/%Y %H:%M')} por {usuario.nome_exibicao}"])
+    aba.append([])
+    cab = ["Tipo", "Situação", "Atrasado", "Conta", "Plataforma", "Venda", "SKU", "Produto", "Galpão", "Registrado por", "Registrado em",
+           "Motivo", "Espera (sem decisão)", "Tempo até a decisão", "Decidido por", "Fotos", "Linha do tempo"]
+    aba.append(cab)
+    for i in d["itens"]:
+        tempo = " → ".join(f"{p['etapa']}{' (' + p['quando'] + ')' if p['quando'] else ''}{' por ' + p['quem'] if p['quem'] else ''}{': ' + p['detalhe'] if p['detalhe'] else ''}"
+                           for p in i["linha_do_tempo"])
+        aba.append([i["tipo_nome"], i["situacao"], "SIM" if i["atrasado"] else "", i["conta"], i["plataforma"], i["numero_venda"], i["sku"], i["produto"],
+                    i["galpao_nome"], i["registrado_por"], i["registrado_em"], i["motivo"], i["espera_txt"], i["tempo_decisao_txt"], i["decidido_por"], i["n_fotos"], tempo])
+    for n, larg in enumerate((12, 38, 9, 18, 12, 20, 14, 34, 11, 18, 17, 24, 18, 18, 18, 7, 90), start=1):
+        aba.column_dimensions[aba.cell(row=4, column=n).column_letter].width = larg
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    nome = f"lista_galpao_{datetime.now(FUSO_BR).strftime('%Y-%m-%d_%H%M')}.xlsx"
+    return StreamingResponse(buf, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="{nome}"'})
 
 
 @router.get("/relatorio")
