@@ -1,0 +1,12 @@
+{#
+  MENU AUTOMÁTICO (36) -- usado nas telas que antes incluíam _menu_seller.html.
+  Admin e supervisor (que também abrem essas telas) veem o menu COMPLETO da
+  equipe; o seller e o suporte continuam com o menu de seller.
+  A pessoa logada vem da função global usuario_do_request (main.py).
+#}
+{% set usuario_logado = usuario_do_request(request) %}
+{% if usuario_logado and usuario_logado.papel in ("admin", "supervisor") %}
+  {% include "_menu.html" %}
+{% else %}
+  {% include "_menu_seller.html" %}
+{% endif %}

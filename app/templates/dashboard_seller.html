@@ -80,7 +80,7 @@
       <div class="cmx-marca">
         <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
       </div>
-      {% include "_menu_seller.html" %}
+      {% include "_menu_auto.html" %}
     </aside>
 
     <div class="cmx-conteudo">
@@ -358,17 +358,19 @@ async function carregarDashboard() {
     const pv = dados.pos_venda || {};
     const alerta = document.getElementById("alerta-mensagens");
     const itemPv = document.getElementById("club-mensagens-aguardando-item");
-    if (pv.aguardando) {
-      const n = pv.aguardando;
-      const txt = n + (n === 1 ? " mensagem" : " mensagens");
-      document.getElementById("alerta-mensagens-titulo").textContent = txt + " de compradores aguardando a sua resposta";
+    if (pv.aguardando || pv.reclamacoes) {
+      const n = pv.aguardando || 0, rc = pv.reclamacoes || 0;
+      const partes = [];
+      if (n) partes.push(n + (n === 1 ? " mensagem de comprador aguardando" : " mensagens de compradores aguardando") + " a sua resposta");
+      if (rc) partes.push(rc + (rc === 1 ? " reclamação precisa" : " reclamações precisam") + " da sua ação");
+      document.getElementById("alerta-mensagens-titulo").textContent = partes.join(" · ");
       const h = pv.mais_antiga_horas;
       document.getElementById("alerta-mensagens-sub").textContent =
-        h != null ? "A mais antiga espera há " + (h >= 24 ? Math.floor(h / 24) + " dia(s)" : Math.floor(h) + " h") + ". Responder rápido ajuda a sua reputação." : "Responder rápido ajuda a sua reputação.";
-      alerta.classList.toggle("vermelho", h != null && h >= 24);
+        n && h != null ? "A mensagem mais antiga espera há " + (h >= 24 ? Math.floor(h / 24) + " dia(s)" : Math.floor(h) + " h") + ". Responder rápido ajuda a sua reputação." : "Responder rápido ajuda a sua reputação.";
+      alerta.classList.toggle("vermelho", n > 0 && h != null && h >= 24);
       alerta.style.display = "flex";
       itemPv.style.display = "";
-      document.getElementById("club-mensagens-aguardando-titulo").textContent = txt + " aguardando a sua resposta";
+      document.getElementById("club-mensagens-aguardando-titulo").textContent = partes.join(" · ");
     } else {
       alerta.style.display = "none";
       itemPv.style.display = "none";

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-tema="escuro">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Menu</title>
+<link rel="stylesheet" href="/static/dashboard.css?v=1" />
+<style>
+  /* Página mínima, só com o menu lateral, para a gaveta das telas de TV.
+     Dentro do <iframe> a largura é pequena e o CSS do sistema esconderia o
+     menu (regra de celular); aqui ele é forçado a aparecer inteiro. */
+  html, body { margin:0; height:100%; background:#0f172b; }
+  .cmx-sidebar { position:static !important; transform:none !important; width:auto !important; min-height:100vh; border-right:0 !important; padding-top:14px; box-sizing:border-box; }
+  .tv-x, .cmx-botao-menu, .cmx-veu-menu, .cmx-fechar-menu { display:none !important; }
+</style>
+</head>
+<body>
+  {# Links abrem na janela inteira (e não dentro do quadrinho do menu) #}
+  <base target="_top" />
+  <aside class="cmx-sidebar">
+    <div class="cmx-marca"><img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" /></div>
+    {% include "_menu.html" %}
+  </aside>
+</body>
+</html>

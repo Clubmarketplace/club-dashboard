@@ -1,0 +1,53 @@
+{#
+  NAVEGAÇÃO DAS TELAS DE TV (36) -- só aparece para quem está logado e NÃO é o
+  perfil "tv" (admin, supervisor, atendente...). Antes essas telas abriam em
+  nova aba sem menu e a pessoa ficava presa. Aqui entram:
+    - botão "← Dashboard": volta para o dashboard geral;
+    - botão "☰ Menu": abre uma gaveta com o menu lateral completo do perfil.
+  A gaveta é um <iframe> da página /menu-gaveta (o menu usa o CSS do sistema,
+  que não pode ser misturado com o CSS escuro da TV). O perfil "tv" (a TV
+  fixa na parede) continua vendo a tela limpa, sem botões.
+  Uso: {% include "_tv_navegacao.html" %} logo depois do <header> da TV.
+#}
+{% if mostrar_menu %}
+<style>
+  .tv-nav { display:flex; align-items:center; gap:8px; }
+  .tv-nav a, .tv-nav button {
+    font: inherit; font-size:13px; font-weight:600; color:#e5e7eb; text-decoration:none; cursor:pointer;
+    background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.22); border-radius:10px; padding:8px 14px; white-space:nowrap;
+  }
+  .tv-nav a:hover, .tv-nav button:hover { background:rgba(255,255,255,.16); }
+  .tv-nav .tv-nav-dash { background:#1d4ed8; border-color:#3b82f6; color:#fff; }
+  .tv-nav .tv-nav-dash:hover { background:#2563eb; }
+  .tv-gaveta-veu { position:fixed; inset:0; background:rgba(0,0,0,.55); z-index:900; opacity:0; pointer-events:none; transition:opacity .2s; }
+  .tv-gaveta { position:fixed; top:0; bottom:0; left:0; width:268px; max-width:86vw; z-index:901; transform:translateX(-102%); transition:transform .22s ease; box-shadow:8px 0 30px rgba(0,0,0,.5); background:#0f172b; }
+  .tv-gaveta iframe { width:100%; height:100%; border:0; display:block; }
+  .tv-gaveta-fechar { position:absolute; top:10px; right:8px; z-index:2; width:32px; height:32px; padding:0 !important; border-radius:9px !important; font-size:15px !important; }
+  body.tv-gaveta-aberta .tv-gaveta { transform:none; }
+  body.tv-gaveta-aberta .tv-gaveta-veu { opacity:1; pointer-events:auto; }
+</style>
+<div class="tv-nav">
+  <a class="tv-nav-dash" href="/" title="Voltar para o dashboard geral">← Dashboard</a>
+  <button type="button" id="tv-btn-menu" aria-expanded="false" aria-controls="tv-gaveta">☰ Menu</button>
+</div>
+<div class="tv-gaveta-veu" id="tv-gaveta-veu"></div>
+<aside class="tv-gaveta" id="tv-gaveta" aria-label="Menu principal">
+  <button type="button" class="tv-gaveta-fechar" id="tv-gaveta-fechar" aria-label="Fechar menu">✕</button>
+  <iframe title="Menu" data-src="/menu-gaveta"></iframe>
+</aside>
+<script>
+(function () {
+  var corpo = document.body, btn = document.getElementById("tv-btn-menu"),
+      quadro = document.querySelector("#tv-gaveta iframe");
+  function abrir() {
+    if (!quadro.src) quadro.src = quadro.getAttribute("data-src");   // carrega só na 1ª vez
+    corpo.classList.add("tv-gaveta-aberta"); btn.setAttribute("aria-expanded", "true");
+  }
+  function fechar() { corpo.classList.remove("tv-gaveta-aberta"); btn.setAttribute("aria-expanded", "false"); }
+  btn.addEventListener("click", abrir);
+  document.getElementById("tv-gaveta-fechar").addEventListener("click", fechar);
+  document.getElementById("tv-gaveta-veu").addEventListener("click", fechar);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") fechar(); });
+})();
+</script>
+{% endif %}
