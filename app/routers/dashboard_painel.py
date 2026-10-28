@@ -267,8 +267,21 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
                 r["nao_voltaram"] += 1
         return r
 
+    def _pos_venda_aguardando() -> dict:
+        """Conversas de pós-venda esperando resposta (28/10): vira destaque no topo do dashboard e item do bloco escuro."""
+        q = db.query(MensagemPosVenda).filter(
+            MensagemPosVenda.conta_id == conta.id, MensagemPosVenda.tipo == "mensagem",
+            MensagemPosVenda.status.in_(("fila_humana", "enviando")),
+        )
+        pend = q.order_by(MensagemPosVenda.recebida_em.asc()).all()
+        mais_antiga_h = None
+        if pend and pend[0].recebida_em:
+            mais_antiga_h = round((datetime.utcnow() - pend[0].recebida_em).total_seconds() / 3600, 1)
+        return {"aguardando": len(pend), "mais_antiga_horas": mais_antiga_h}
+
     return {
         "conta": conta.apelido,
+        "pos_venda": _pos_venda_aguardando(),
         "hoje": resumo_hoje,
         "mes": resumo_mes,
         "evolucao_14_dias": evolucao,

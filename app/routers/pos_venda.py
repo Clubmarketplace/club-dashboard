@@ -27,6 +27,7 @@ def listar_fila(db: Session = Depends(get_db)):
     itens = (
         db.query(MensagemPosVenda)
         .filter(MensagemPosVenda.status == "fila_humana")
+        .filter(MensagemPosVenda.tipo != "mensagem")   # (28/10) mensagens agora têm conversa própria: /api/pos-venda/conversas
         .order_by(MensagemPosVenda.recebida_em.desc())
         .all()
     )
@@ -77,6 +78,8 @@ def responder_manualmente(item_id: int, corpo: RespostaManual, db: Session = Dep
         raise HTTPException(status_code=404, detail="Mensagem não encontrada")
     if item.status != "fila_humana":
         raise HTTPException(status_code=400, detail="Essa mensagem já foi tratada")
+    if item.tipo == "mensagem":
+        raise HTTPException(status_code=400, detail="Use a tela de conversas para responder mensagens.")
 
     conta = db.query(Conta).filter(Conta.id == item.conta_id).first()
     if conta is None:

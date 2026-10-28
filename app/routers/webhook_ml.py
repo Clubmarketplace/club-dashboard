@@ -350,6 +350,17 @@ async def _processar_mensagem(payload: dict, db: Session) -> dict:
     if ja_existe:
         return {"status": "ja_processada", "id": ja_existe.id}
 
+    # (28/10) Conversa por pack: aparece no painel do seller e da equipe (ver app/pos_venda_conversas.py).
+    from app.pos_venda_conversas import processar_webhook_mensagem
+    try:
+        novo = processar_webhook_mensagem(db, conta, message_id)
+        if novo.get("status") != "sem_pack":
+            return novo
+        logger.info("Aviso de mensagem sem pack (id=%s) -- usando o fluxo antigo.", message_id)
+    except (MLAuthError, MLApiError) as exc:
+        logger.warning("Pós-venda: não consegui ler a mensagem %s: %s", message_id, exc)
+        return {"status": "erro_ml", "detalhe": str(exc)}
+
     access_token = garantir_token_valido(conta, db)
     dados = buscar_mensagem(access_token, message_id)
 
