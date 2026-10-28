@@ -13,7 +13,7 @@
       --cmx-leve:#fdf3e3; --cmx-atencao:#d98e2f; --cmx-critico:#c1502e; --cmx-critico-fundo:#fbe9e3;
       --cmx-azul:#2baff2; --cmx-azul-fundo:#e6f7ff;
     }
-    main { max-width:820px; margin:0 auto; padding:28px 24px 60px; }
+    main { max-width:1180px; margin:0 auto; padding:28px 24px 60px; }
     .topo-pagina { display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; flex-wrap:wrap; gap:12px; }
     .topo-pagina h1 { font-size:20px; margin:0; }
     .topo-pagina p { margin:2px 0 0; color:var(--cmx-texto-suave); font-size:13.5px; }
@@ -29,10 +29,6 @@
     .resumo .item .rotulo { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
 
     .lista-cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; overflow:hidden; }
-    table { width:100%; border-collapse:collapse; font-size:13.5px; }
-    thead th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:12px 18px; border-bottom:1px solid var(--cmx-borda); background:#fafbfc; }
-    tbody td { padding:12px 18px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
-    tbody tr:last-child td { border-bottom:none; }
     .badge { display:inline-flex; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:999px; }
     .badge.ml { background:#fff6b8; color:#6b5b00; }
     .badge.shopee { background:var(--cmx-critico-fundo); color:var(--cmx-critico); }
@@ -56,19 +52,38 @@
       font-family:inherit; font-size:12.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; }
     .filtro-tipo button.ativo { border-color:var(--cmx-texto); background:var(--cmx-texto); color:#fff; }
     .vazio-filtro { display:none; text-align:center; padding:30px 20px; color:var(--cmx-texto-suave); }
-    /* Celular: cada solicitação vira um cartão (rótulo à esquerda, valor à direita) */
+    /* Lista compacta: cada solicitação é uma linha clicável (resumo) que abre os detalhes (spoiler). */
+    .sol-cab, .sol-resumo { display:grid; grid-template-columns:96px 96px 124px 140px minmax(0,1fr) minmax(0,1.3fr) 18px; gap:10px; align-items:center; }
+    .sol-cab { padding:11px 16px; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; border-bottom:1px solid var(--cmx-borda); background:#fafbfc; }
+    .sol { border-bottom:1px solid var(--cmx-borda); border-left:4px solid transparent; }
+    .sol:last-of-type { border-bottom:none; }
+    .sol.rev-linha { border-left-color:#0f766e; }
+    .sol-resumo { padding:11px 16px; min-height:44px; cursor:pointer; font-size:13.5px; }
+    .sol-resumo:hover { background:#fafbfc; }
+    .sol-resumo:focus-visible { outline:2px solid var(--cmx-azul); outline-offset:-2px; }
+    .sol-resumo > * { min-width:0; }
+    .c-plat { display:flex; flex-wrap:wrap; gap:4px; }
+    .sol-motivo { overflow:hidden; text-overflow:ellipsis; }
+    .sol-seta { color:var(--cmx-texto-suave); font-size:14px; transition:transform .15s; }
+    .sol.aberta .sol-seta { transform:rotate(90deg); }
+    .sol-det { display:none; padding:2px 16px 14px 20px; font-size:13px; line-height:1.55; color:#374151; }
+    .sol.aberta .sol-det { display:block; }
+    .sol-det .linha { margin-top:5px; }
+    .sol-det .linha b { color:#1b2430; }
     @media (max-width: 700px) {
       header { padding:14px 16px; }
       main { padding:20px 14px 50px; }
       .resumo { gap:8px; }
       .resumo .item { padding:12px 8px; }
-      table thead { display:none; }
-      table, tbody, tbody tr, tbody td { display:block; width:100%; }
-      tbody tr { padding:10px 14px; border-bottom:1px solid var(--cmx-borda); }
-      tbody tr:last-child { border-bottom:none; }
-      tbody td { display:flex; gap:12px; padding:5px 0; border-bottom:none; }
-      tbody td::before { content:attr(data-rotulo); flex:0 0 92px; font-size:11.5px; font-weight:600; color:var(--cmx-texto-suave); padding-top:2px; }
-      tbody td > * { min-width:0; }
+      .sol-cab { display:none; }
+      .sol-resumo { grid-template-columns:auto minmax(0,1fr) auto 18px; grid-template-areas:"tipo plat data seta" "venda venda venda venda" "motivo motivo motivo motivo" "status status status status"; gap:6px 8px; padding:12px; }
+      .sol-resumo .c-tipo { grid-area:tipo; } .sol-resumo .c-plat { grid-area:plat; }
+      .sol-resumo .c-data { grid-area:data; text-align:right; font-size:12px; color:var(--cmx-texto-suave); white-space:nowrap; }
+      .sol-resumo .sol-seta { grid-area:seta; }
+      .sol-resumo .c-venda { grid-area:venda; }
+      .sol-resumo .sol-motivo { grid-area:motivo; white-space:normal; }
+      .sol-resumo .c-status { grid-area:status; }
+      .sol-det { padding:2px 12px 14px 12px; }
     }
     .vazio { text-align:center; padding:50px 20px; color:var(--cmx-texto-suave); }
     .vazio .emoji { font-size:36px; margin-bottom:10px; }
@@ -135,88 +150,81 @@
 
     <div class="lista-cartao">
       {% if solicitacoes or cadastros %}
-      <table>
-        <thead><tr><th>Data</th><th>Tipo</th><th>Plataforma</th><th>Nº da venda</th><th>Motivo</th><th>Status</th></tr></thead>
-        <tbody>
+      <div class="sol-cab"><div>Data</div><div>Tipo</div><div>Plataforma</div><div>Nº da venda</div><div>Motivo</div><div>Status</div><div></div></div>
+      <div id="lista-sol">
           {% for s in solicitacoes %}
           {% set reputacao = s.tipo == "reputacao" %}
           {% set reverso = s.tipo == "reverso" %}
-          <tr data-tipo="{{ 'reverso' if reverso else ('reputacao' if reputacao else 'cancelamento') }}" data-confirmado="{{ '1' if s.confirmado_por else '0' }}"{% if reverso %} class="rev-linha"{% endif %}>
-            <td data-rotulo="Data">{{ s.criado_em | hora_br }}</td>
-            <td data-rotulo="Tipo"><span class="badge {{ 'tipo-reverso' if reverso else ('tipo-reputacao' if reputacao else 'tipo-cancelamento') }}">{{ 'Reverso' if reverso else ('Reputação' if reputacao else 'Cancelamento') }}</span></td>
-            <td data-rotulo="Plataforma"><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></td>
-            <td data-rotulo="Nº da venda">{{ s.numero_venda }}{% if reverso and s.produto_titulo %}<div class="rev-detalhe">{{ s.produto_titulo }}</div>{% endif %}</td>
-            <td data-rotulo="Motivo">{{ s.motivo }}
-              {% if reverso %}
-              <div class="rev-detalhe">
-                {% if s.origem == "logistica" %}Retorno recebido no {{ GALPOES.get(s.galpao, "galpão") }}{% if s.solicitado_por %} por {{ s.solicitado_por }}{% endif %}, {{ s.criado_em | hora_br }}.{% else %}Você avisou este reverso.{% endif %}
-                {% if s.motivo_reverso %}<br>Motivo do reverso: {{ MOTIVOS_REVERSO.get(s.motivo_reverso, s.motivo_reverso) }}{% if s.detalhe_envio %} ({{ DETALHES_ENVIO_ERRADO.get(s.detalhe_envio, s.detalhe_envio) }}){% endif %}.{% endif %}
-                {% if s.estado_chegada %}<br>Aspecto ao chegar: {{ ESTADOS_CHEGADA.get(s.estado_chegada, s.estado_chegada) }}.{% endif %}
-              </div>
-              {% if s.n_fotos_tmp %}<details class="rev-fotos" data-id="{{ s.id }}"><summary>Ver fotos ({{ s.n_fotos_tmp }})</summary><div class="rev-fotos-corpo"></div></details>{% endif %}
-              {% endif %}
-            </td>
-            <td data-rotulo="Status"><div>
+          {% set motivo_curto = (MOTIVOS_REVERSO.get(s.motivo_reverso, s.motivo_reverso) if (reverso and s.motivo_reverso) else s.motivo) %}
+          <div class="sol{% if reverso %} rev-linha{% endif %}" data-tipo="{{ 'reverso' if reverso else ('reputacao' if reputacao else 'cancelamento') }}" data-confirmado="{{ '1' if s.confirmado_por else '0' }}">
+            <div class="sol-resumo" role="button" tabindex="0" aria-expanded="false">
+              <div class="c-data">{{ s.criado_em | hora_br }}</div>
+              <div class="c-tipo"><span class="badge {{ 'tipo-reverso' if reverso else ('tipo-reputacao' if reputacao else 'tipo-cancelamento') }}">{{ 'Reverso' if reverso else ('Reputação' if reputacao else 'Cancelamento') }}</span></div>
+              <div class="c-plat"><span class="badge {{ {'mercado_livre':'ml','shopee':'shopee','magalu':'magalu','tiktok_shop':'tiktok'}.get(s.plataforma, 'ml') }}">{{ PLATAFORMAS.get(s.plataforma, s.plataforma) }}</span></div>
+              <div class="c-venda">{{ s.numero_venda }}</div>
+              <div class="sol-motivo" title="{{ motivo_curto }}">{{ motivo_curto }}</div>
+              <div class="c-status">
               {% if reverso %}
                 {% if s.confirmado_por %}
-                  {% if s.resultado_reverso == "liberado_venda" %}
-                  <span class="status-confirmado">✓ Retornou: no estoque · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
-                  {% elif s.resultado_reverso == "garantia" %}
-                  <span class="status-confirmado" style="color:#b45309">🛡 Retornou: garantia · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
-                  {% else %}
-                  <span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Retornou: sem condição de venda") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
-                  {% endif %}
-
-                  {% if s.protocolo %}<div class="rev-detalhe">Protocolo: <b>{{ s.protocolo }}</b></div>{% endif %}
-                  {% if s.observacao_resultado %}<div class="rev-detalhe">{{ s.observacao_resultado }}</div>{% endif %}
-                {% elif s.em_atendimento_por_id %}
-                <span class="status-pendente">Em tratamento por {{ s.em_atendimento_por }}</span>
-                {% elif s.em_analise_em %}
-                <span class="status-pendente" style="color:#3730a3">🔎 Retornou · em análise pela equipe</span>
-                {% elif s.origem == "logistica" %}
-                <span class="status-pendente">Retornou ao galpão, aguardando a equipe conferir</span>
-                {% else %}
-                <span class="status-pendente">Aguardando a equipe</span>
-                {% endif %}
+                  {% if s.resultado_reverso == "liberado_venda" %}<span class="status-confirmado">✓ Retornou: no estoque</span>
+                  {% elif s.resultado_reverso == "garantia" %}<span class="status-confirmado" style="color:#b45309">🛡 Retornou: garantia</span>
+                  {% else %}<span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Retornou: sem condição de venda") }}</span>{% endif %}
+                {% elif s.em_atendimento_por_id %}<span class="status-pendente">Em tratamento por {{ s.em_atendimento_por }}</span>
+                {% elif s.em_analise_em %}<span class="status-pendente" style="color:#3730a3">🔎 Retornou · em análise pela equipe</span>
+                {% elif s.origem == "logistica" %}<span class="status-pendente">Retornou ao galpão, aguardando a equipe</span>
+                {% else %}<span class="status-pendente">Aguardando a equipe</span>{% endif %}
+              {% elif s.confirmado_por %}<span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }}</span>
+              {% else %}<span class="status-pendente">Pendente</span>{% endif %}
+              </div>
+              <div class="sol-seta" aria-hidden="true">▸</div>
+            </div>
+            <div class="sol-det">
+              {% if s.produto_titulo %}<div class="linha"><b>Produto:</b> {{ s.produto_titulo }}</div>{% endif %}
+              <div class="linha"><b>Motivo informado:</b> {{ s.motivo }}</div>
+              {% if reverso %}
+                <div class="linha">{% if s.origem == "logistica" %}Retorno recebido no {{ GALPOES.get(s.galpao, "galpão") }}{% if s.solicitado_por %} por {{ s.solicitado_por }}{% endif %}, {{ s.criado_em | hora_br }}.{% else %}Você avisou este reverso.{% endif %}</div>
+                {% if s.motivo_reverso %}<div class="linha"><b>Motivo do reverso:</b> {{ MOTIVOS_REVERSO.get(s.motivo_reverso, s.motivo_reverso) }}{% if s.detalhe_envio %} ({{ DETALHES_ENVIO_ERRADO.get(s.detalhe_envio, s.detalhe_envio) }}){% endif %}</div>{% endif %}
+                {% if s.estado_chegada %}<div class="linha"><b>Aspecto ao chegar:</b> {{ ESTADOS_CHEGADA.get(s.estado_chegada, s.estado_chegada) }}</div>{% endif %}
+                {% if s.confirmado_por %}<div class="linha"><b>Conferido por:</b> {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</div>{% endif %}
+                {% if s.protocolo %}<div class="linha"><b>Protocolo:</b> {{ s.protocolo }}</div>{% endif %}
+                {% if s.observacao_resultado %}<div class="linha"><b>Observação:</b> {{ s.observacao_resultado }}</div>{% endif %}
                 {# condições que o galpão marcou ao registrar (aparecem em qualquer fase) #}
                 {% set itens_ck = s.checklist_json | checklist_itens %}
-                {% if itens_ck and s.avaliacao_galpao != "quebrado" %}<div class="rev-detalhe">Condições informadas pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
+                {% if itens_ck and s.avaliacao_galpao != "quebrado" %}<div class="linha"><b>Condições informadas pelo galpão:</b>{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
+                {% if s.n_fotos_tmp %}<details class="rev-fotos" data-id="{{ s.id }}"><summary>Ver fotos ({{ s.n_fotos_tmp }})</summary><div class="rev-fotos-corpo"></div></details>{% endif %}
               {% elif s.confirmado_por %}
-              <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
-              {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>
-              {% elif s.protocolo == "" and s.confirmado_por %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} pelo painel do ML</b> (sem protocolo)</div>{% endif %}
-              {% else %}
-              <span class="status-pendente">Pendente</span>
+                <div class="linha"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} por:</b> {{ s.confirmado_por }}</div>
+                {% if s.protocolo %}<div class="linha"><b>Protocolo:</b> {{ s.protocolo }}</div>
+                {% elif s.protocolo == "" %}<div class="linha"><b>{{ 'Resolvido' if reputacao else 'Cancelado' }} pelo painel do ML</b> (sem protocolo)</div>{% endif %}
               {% endif %}
-            </div></td>
-          </tr>
+            </div>
+          </div>
           {% endfor %}
-          {# Cadastro (15/10): mesma tabela, reaproveitando as colunas -- "Nº da venda"
-             vira o SKU e "Motivo" vira o nome do produto (ver explicação combinada
-             com o usuário antes de implementar). #}
+          {# Cadastro (15/10): "Nº da venda" vira o SKU e "Motivo" vira o nome do produto. #}
           {% for c in cadastros %}
           {% set feito = c.status == "cadastrado" %}
-          <tr data-tipo="cadastro" data-confirmado="{{ '1' if feito else '0' }}">
-            <td data-rotulo="Data">{{ c.recebido_em | hora_br }}</td>
-            <td data-rotulo="Tipo"><span class="badge tipo-cadastro">Cadastro</span></td>
-            <td data-rotulo="Plataforma">
-              {% if c.ml_status != "nao_se_aplica" %}<span class="badge ml">Mercado Livre</span>{% endif %}
-              {% if c.tiktok_status != "nao_se_aplica" %}<span class="badge tiktok">TikTok</span>{% endif %}
-              {% if c.shopee_status != "nao_se_aplica" %}<span class="badge shopee">Shopee</span>{% endif %}
-            </td>
-            <td data-rotulo="SKU">{{ c.sku }}</td>
-            <td data-rotulo="Produto">{{ c.produto }}</td>
-            <td data-rotulo="Status"><div>
-              {% if feito %}
-              <span class="status-confirmado">✓ Cadastro feito{% if c.cadastrado_por %} por {{ c.cadastrado_por }}{% endif %}</span>
-              {% else %}
-              <span class="status-pendente">Pendente</span>
-              {% endif %}
-            </div></td>
-          </tr>
+          <div class="sol" data-tipo="cadastro" data-confirmado="{{ '1' if feito else '0' }}">
+            <div class="sol-resumo" role="button" tabindex="0" aria-expanded="false">
+              <div class="c-data">{{ c.recebido_em | hora_br }}</div>
+              <div class="c-tipo"><span class="badge tipo-cadastro">Cadastro</span></div>
+              <div class="c-plat">
+                {% if c.ml_status != "nao_se_aplica" %}<span class="badge ml">Mercado Livre</span>{% endif %}
+                {% if c.tiktok_status != "nao_se_aplica" %}<span class="badge tiktok">TikTok</span>{% endif %}
+                {% if c.shopee_status != "nao_se_aplica" %}<span class="badge shopee">Shopee</span>{% endif %}
+              </div>
+              <div class="c-venda">{{ c.sku }}</div>
+              <div class="sol-motivo" title="{{ c.produto }}">{{ c.produto }}</div>
+              <div class="c-status">{% if feito %}<span class="status-confirmado">✓ Cadastro feito</span>{% else %}<span class="status-pendente">Pendente</span>{% endif %}</div>
+              <div class="sol-seta" aria-hidden="true">▸</div>
+            </div>
+            <div class="sol-det">
+              <div class="linha"><b>SKU:</b> {{ c.sku }}</div>
+              <div class="linha"><b>Produto:</b> {{ c.produto }}</div>
+              {% if feito and c.cadastrado_por %}<div class="linha"><b>Cadastro feito por:</b> {{ c.cadastrado_por }}</div>{% endif %}
+            </div>
+          </div>
           {% endfor %}
-        </tbody>
-      </table>
+      </div>
       <div class="vazio-filtro" id="vazio-filtro">Nenhuma solicitação desse tipo.</div>
       {% else %}
       <div class="vazio">
@@ -258,6 +266,27 @@
     }, true);
   </script>
   <script>
+    // Spoiler: clicar (ou Enter/Espaço) na linha abre/fecha os detalhes. Várias podem ficar abertas.
+    (function () {
+      var lista = document.getElementById("lista-sol");
+      if (!lista) return;
+      function alterna(resumo) {
+        var linha = resumo.closest(".sol");
+        var aberta = linha.classList.toggle("aberta");
+        resumo.setAttribute("aria-expanded", aberta ? "true" : "false");
+      }
+      lista.addEventListener("click", function (e) {
+        var r = e.target.closest(".sol-resumo");
+        if (r) alterna(r);
+      });
+      lista.addEventListener("keydown", function (e) {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        var r = e.target.closest(".sol-resumo");
+        if (r && e.target === r) { e.preventDefault(); alterna(r); }
+      });
+    })();
+  </script>
+  <script>
     // Filtro por tipo: esconde/mostra as linhas e recalcula o resumo.
     (function () {
       var barra = document.getElementById("filtro-tipo");
@@ -267,7 +296,7 @@
         if (!botao) return;
         barra.querySelectorAll("button").forEach(function (b) { b.classList.toggle("ativo", b === botao); });
         var tipo = botao.dataset.tipo, total = 0, confirmados = 0;
-        document.querySelectorAll("tbody tr[data-tipo]").forEach(function (tr) {
+        document.querySelectorAll("#lista-sol .sol[data-tipo]").forEach(function (tr) {
           var mostra = !tipo || tr.dataset.tipo === tipo;
           tr.style.display = mostra ? "" : "none";
           if (mostra) { total++; if (tr.dataset.confirmado === "1") confirmados++; }
