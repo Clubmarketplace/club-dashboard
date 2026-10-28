@@ -107,7 +107,7 @@
     const tr = (x, destaque) => `<tr${destaque ? ' style="font-weight:700"' : ""}>
       <td class="pd-nome">${esc(destaque ? "Total" : nome(x))}</td><td class="pd-total">${x.chegaram}</td>
       <td>${x.liberados_venda}</td><td>${x.nao_voltaram}</td><td>${x.avariados}</td><td>${x.em_andamento}</td><td>${x.pct_venda}%</td></tr>`;
-    return `<table><thead><tr><th>${esc(rotuloPrimeira)}</th><th>Chegaram</th><th>Voltaram para o estoque</th><th>Não voltaram</th><th>(avariados)</th><th>Em andamento</th><th>% voltou para o estoque</th></tr></thead>
+    return `<table><thead><tr><th>${esc(rotuloPrimeira)}</th><th>Chegaram</th><th>No estoque</th><th>Sem condição de venda</th><th>(avariados)</th><th>Em andamento</th><th>% voltou para o estoque</th></tr></thead>
       <tbody>${linhas.map((x) => tr(x, false)).join("")}</tbody><tfoot>${tr(total, true).replace("<tr", '<tr class="pd-tot"')}</tfoot></table>`;
   }
 
@@ -118,8 +118,8 @@
       card("Chegaram hoje", d.chegaram_hoje, "reversos recebidos hoje") +
       card("Chegaram na semana", d.chegaram_semana, "últimos 7 dias") +
       card("Chegaram no período", t.chegaram, "do período escolhido") +
-      card("Voltaram para o estoque", t.liberados_venda, `${t.pct_venda}% dos que chegaram`) +
-      card("Não voltaram", t.nao_voltaram, `${t.avariados} avariado(s)`) +
+      card("No estoque", t.liberados_venda, `${t.pct_venda}% dos que chegaram`) +
+      card("Sem condição de venda", t.nao_voltaram, `${t.avariados} avariado(s)`) +
       card("Em andamento", t.em_andamento, "ainda sem conclusão");
     document.getElementById("pd-rev-conta").innerHTML = tabelaReversos(d.por_conta, "Conta", (x) => x.conta, t);
     document.getElementById("pd-rev-galpao").innerHTML = tabelaReversos(d.por_galpao, "Galpão", (x) => x.galpao_nome, t);
