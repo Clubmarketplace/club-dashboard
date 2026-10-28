@@ -94,21 +94,23 @@ RESULTADO_VOLTOU = "liberado_venda"
 # (a equipe emite a nota). Escolha própria na conclusão, ao lado de "voltou" e "não voltou".
 RESULTADO_GARANTIA = "garantia"
 RESULTADOS_REVERSO = {
-    RESULTADO_VOLTOU: "Voltou para o estoque",
-    RESULTADO_GARANTIA: "Garantia",
-    # --- Não voltou (motivo obrigatório) ---
-    "avariado": "Não voltou: avariado",
-    "faltando_peca": "Não voltou: faltando peça ou acessório",
-    "diferente": "Não voltou: produto diferente do enviado",
-    "negociacao_ml": "Não voltou: em negociação com o ML",
-    "descartado": "Não voltou: descartado (não vendável)",
-    "outro": "Não voltou: outro motivo",
+    # 27/10 (v31): o produto JÁ RETORNOU ao galpão; o que muda é o destino dele.
+    RESULTADO_VOLTOU: "Retornou: no estoque",
+    RESULTADO_GARANTIA: "Retornou: garantia",
+    # --- Sem condição de venda (motivo obrigatório) ---
+    "avariado": "Retornou: sem condição de venda (avariado)",
+    "faltando_peca": "Retornou: sem condição de venda (faltando peça ou acessório)",
+    "negociacao_ml": "Retornou: sem condição de venda (em negociação com o ML)",
+    "descartado": "Retornou: sem condição de venda (descartado)",
+    "outro": "Retornou: sem condição de venda (outro motivo)",
+    # Legado (reversos concluídos antes de 27/10 v31): só leitura, não é mais opção nova.
+    "diferente": "Retornou: sem condição de venda (produto diferente do enviado)",
     # --- Legados (reversos concluídos antes de 26/10): só leitura ---
     "negociacao_ressarcido": "Negociação com o ML: ressarcido",
     "negociacao_sem_ressarcimento": "Negociação com o ML: sem ressarcimento",
 }
 # Motivos que o operador pode escolher quando o produto NÃO volta.
-MOTIVOS_NAO_VOLTOU = ("avariado", "faltando_peca", "diferente", "negociacao_ml", "descartado", "outro")
+MOTIVOS_NAO_VOLTOU = ("avariado", "faltando_peca", "negociacao_ml", "descartado", "outro")
 # Condições que o GALPÃO informa ao registrar (só informativo -- não libera nada).
 # Dá pra acrescentar itens aqui; reversos antigos só mostram os que existiam.
 CHECKLIST_REVERSO = {
@@ -120,6 +122,22 @@ CHECKLIST_REVERSO = {
 MAX_FOTOS_REVERSO = 5   # 27/10: máximo 5 fotos por item
 # 27/10 (v30): o GALPÃO só SINALIZA: "bom" (sugere voltar ao estoque) ou "quebrado" (sugere
 # garantia). Quem decide é a equipe do escritório (concluir_reverso). Só informativo.
+# v31: MOTIVO do reverso (por que o produto voltou) -- escolhido pelo galpão. É a CAUSA; o
+# destino (estoque/garantia/em análise/sem condição de venda) é decisão da equipe.
+MOTIVOS_REVERSO = {
+    "devolucao": "Devolução do cliente",
+    "recusa": "Recusa na entrega",
+    "chegou_quebrado": "Chegou quebrado",
+    "envio_errado": "Envio errado",
+    "outro": "Outro",
+}
+DETALHES_ENVIO_ERRADO = {
+    "voltagem": "Voltagem errada",
+    "modelo_cor": "Modelo ou cor errados",
+    "produto_diferente": "Produto diferente do pedido",
+    "quantidade_kit": "Quantidade ou kit errado",
+    "outro": "Outro",
+}
 AVALIACOES_GALPAO = {"bom": "Em boas condições", "quebrado": "Quebrado, sem jeito"}
 PROBLEMAS_GALPAO = {
     "quebrado": "Quebrado",
@@ -205,6 +223,29 @@ class ItemCancelamento(BaseModel):
     # Só Reverso vindo do galpão (v30): avaliação ("bom"/"quebrado") e, se quebrado, o problema.
     avaliacao: Optional[str] = None
     problema: Optional[str] = None
+    # v31: por que o produto voltou (+ detalhe quando é envio errado)
+    motivo_reverso: Optional[str] = None
+    detalhe_envio: Optional[str] = None
+
+    @field_validator("motivo_reverso")
+    @classmethod
+    def validar_motivo_reverso(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in MOTIVOS_REVERSO:
+            raise ValueError(f"motivo_reverso inválido. Use um de: {', '.join(MOTIVOS_REVERSO)}")
+        return valor
+
+    @field_validator("detalhe_envio")
+    @classmethod
+    def validar_detalhe_envio(cls, valor: Optional[str]) -> Optional[str]:
+        valor = (valor or "").strip()
+        if not valor:
+            return None
+        if valor not in DETALHES_ENVIO_ERRADO:
+            raise ValueError(f"detalhe_envio inválido. Use um de: {', '.join(DETALHES_ENVIO_ERRADO)}")
+        return valor
 
     @field_validator("avaliacao")
     @classmethod
@@ -453,6 +494,14 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None,
         "estado_chegada": s.estado_chegada,
         "estado_chegada_nome": ESTADOS_CHEGADA.get(s.estado_chegada) if s.estado_chegada else None,
         # v30: sugestão do galpão (informativa; o seller NUNCA recebe isto -- ver serialização do seller)
+        "motivo_reverso": s.motivo_reverso,
+        "motivo_reverso_nome": MOTIVOS_REVERSO.get(s.motivo_reverso) if s.motivo_reverso else None,
+        "detalhe_envio": s.detalhe_envio,
+        "detalhe_envio_nome": DETALHES_ENVIO_ERRADO.get(s.detalhe_envio) if s.detalhe_envio else None,
+        # "Em análise": produto já está no galpão e a equipe ainda decide (não conclui nada)
+        "em_analise": bool(s.em_analise_em and not s.confirmado_por),
+        "em_analise_obs": s.em_analise_obs if (s.em_analise_em and not s.confirmado_por) else None,
+        "em_analise_por": s.em_analise_por if (s.em_analise_em and not s.confirmado_por) else None,
         "avaliacao_galpao": s.avaliacao_galpao,
         "avaliacao_galpao_nome": AVALIACOES_GALPAO.get(s.avaliacao_galpao) if s.avaliacao_galpao else None,
         "problema_galpao": s.problema_galpao,
@@ -626,6 +675,13 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     # observação; fotos (1 a 5) obrigatórias nos dois casos (evidência).
     if eh_reverso and estrito:
         for i in corpo.itens:
+            if not i.motivo_reverso:
+                raise HTTPException(status_code=400, detail="Informe o motivo do reverso.")
+            if i.motivo_reverso == "envio_errado":
+                if not i.detalhe_envio:
+                    raise HTTPException(status_code=400, detail="Informe o que foi enviado errado.")
+                if not (i.motivo or "").strip() or (i.motivo or "").strip() == "Retorno recebido no galpão":
+                    raise HTTPException(status_code=400, detail="Descreva na observação o que foi pedido e o que foi enviado.")
             if not i.avaliacao:
                 raise HTTPException(status_code=400, detail="Informe a avaliação do galpão: em boas condições ou quebrado.")
             if i.avaliacao == "quebrado":
@@ -691,6 +747,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
                 produto_titulo=(item.produto if eh_reverso else None),
                 estado_chegada=(item.estado_chegada if eh_reverso else None),
+                motivo_reverso=(item.motivo_reverso if eh_reverso and estrito else None),
+                detalhe_envio=(item.detalhe_envio if eh_reverso and estrito and item.motivo_reverso == "envio_errado" else None),
                 avaliacao_galpao=(item.avaliacao if eh_reverso and estrito else None),
                 problema_galpao=(item.problema if eh_reverso and estrito and item.avaliacao == "quebrado" else None),
                 checklist_json=_checklist_para_gravar(item.checklist) if eh_reverso else None,
@@ -710,6 +768,8 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
                              detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}"
                                      + (f" · aspecto: {ESTADOS_CHEGADA[s.estado_chegada]}" if s.estado_chegada else "")
+                                     + (f" · motivo do reverso: {MOTIVOS_REVERSO[s.motivo_reverso]}" if s.motivo_reverso else "")
+                                     + (f" ({DETALHES_ENVIO_ERRADO[s.detalhe_envio]})" if s.detalhe_envio else "")
                                      + (f" · galpão avaliou: {AVALIACOES_GALPAO[s.avaliacao_galpao]}" if s.avaliacao_galpao else "")
                                      + (f" ({PROBLEMAS_GALPAO[s.problema_galpao]})" if s.problema_galpao else ""))
         db.commit()
@@ -763,6 +823,8 @@ def listar_opcoes():
     """Plataformas e galpões disponíveis (pro formulário e pros filtros)."""
     return {
         "tipos": [{"valor": k, "nome": v} for k, v in TIPOS.items()],
+        "motivos_reverso": [{"valor": k, "nome": v} for k, v in MOTIVOS_REVERSO.items()],
+        "detalhes_envio_errado": [{"valor": k, "nome": v} for k, v in DETALHES_ENVIO_ERRADO.items()],
         "avaliacoes_galpao": [{"valor": k, "nome": v} for k, v in AVALIACOES_GALPAO.items()],
         "problemas_galpao": [{"valor": k, "nome": v} for k, v in PROBLEMAS_GALPAO.items()],
         "estados_chegada": [{"valor": k, "nome": v} for k, v in ESTADOS_CHEGADA.items()],
@@ -1102,6 +1164,37 @@ def _fechar_reverso(s: SolicitacaoCancelamento, usuario, resultado: str, observa
     s.em_atendimento_desde = None
 
 
+class EmAnaliseBody(BaseModel):
+    observacao: Optional[str] = None
+
+    @field_validator("observacao")
+    @classmethod
+    def limpar_observacao(cls, valor: Optional[str]) -> Optional[str]:
+        valor = limpar_espacos(valor or "")
+        return valor[:500] or None
+
+
+@router.post("/{solicitacao_id}/reverso/analise")
+def marcar_reverso_em_analise(solicitacao_id: int, corpo: EmAnaliseBody, request: Request, db: Session = Depends(get_db)):
+    """v31: a equipe marca o reverso como EM ANÁLISE (produto já retornou ao galpão e está sendo
+    testado/conferido). NÃO conclui: o reverso continua na fila (conta como "aguardando a equipe")
+    e a equipe decide o destino depois. Observação obrigatória. O galpão e o seller não usam esta rota."""
+    usuario = _operador_que_confirma(request, db)
+    s = _reverso_aberto_ou_erro(solicitacao_id, db)
+    if not corpo.observacao:
+        raise HTTPException(status_code=400, detail="Escreva na observação o que está sendo analisado.")
+    s.em_analise_em = datetime.utcnow()
+    s.em_analise_por = usuario.nome_exibicao
+    s.em_analise_obs = corpo.observacao
+    # solta o atendimento: o reverso volta pra fila, com o selo "Em análise"
+    s.em_atendimento_por = None
+    s.em_atendimento_por_id = None
+    s.em_atendimento_desde = None
+    registrar_evento(db, s.id, "em_analise", usuario=usuario, detalhe=corpo.observacao)
+    db.commit()
+    return {"status": "em_analise", "id": s.id, "em_analise_por": s.em_analise_por, "observacao": s.em_analise_obs}
+
+
 @router.post("/{solicitacao_id}/reverso/concluir")
 def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: Request, db: Session = Depends(get_db)):
     """A equipe do painel conclui o reverso dizendo se o produto VOLTOU ou NÃO
@@ -1110,16 +1203,16 @@ def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: R
     usuario = _operador_que_confirma(request, db)
     s = _reverso_aberto_ou_erro(solicitacao_id, db)
     if corpo.voltou_estoque and corpo.garantia:
-        raise HTTPException(status_code=400, detail="Escolha só uma opção: voltou para o estoque OU garantia.")
+        raise HTTPException(status_code=400, detail="Escolha só uma opção: no estoque OU garantia.")
     if corpo.voltou_estoque:
         resultado = RESULTADO_VOLTOU
     elif corpo.garantia:
         resultado = RESULTADO_GARANTIA
     else:
         if not corpo.motivo:
-            raise HTTPException(status_code=400, detail="Escolha o motivo de o produto não ter voltado para o estoque.")
+            raise HTTPException(status_code=400, detail="Escolha o motivo de o produto estar sem condição de venda.")
         if not corpo.observacao:
-            raise HTTPException(status_code=400, detail="Explique na observação por que o produto não voltou para o estoque.")
+            raise HTTPException(status_code=400, detail="Explique na observação por que o produto está sem condição de venda.")
         resultado = corpo.motivo
     _travar_conclusao_ou_erro(db, s, usuario.nome_exibicao)
     atual = _dados_atendimento(s)
@@ -1250,6 +1343,7 @@ ROTULO_EVENTO = {
     "confirmou_automatico": "Cancelamento confirmado automaticamente",
     "liberou_venda": "Liberou o produto para venda (registro antigo)",
     "concluiu_reverso": "Concluiu o reverso",
+    "em_analise": "Marcou o reverso como Em análise",
 }
 
 

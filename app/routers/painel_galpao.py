@@ -103,7 +103,7 @@ def _nome_situacao(chave: str) -> str:
         return "Aguardando a equipe"
     if chave == "voltou":
         return RESULTADOS_REVERSO[RESULTADO_VOLTOU]
-    return RESULTADOS_REVERSO.get(chave, "Não voltou: outro motivo")
+    return RESULTADOS_REVERSO.get(chave, "Retornou: sem condição de venda (outro motivo)")
 
 
 def _tempo_medio_min(reversos) -> Optional[int]:
@@ -266,8 +266,8 @@ def relatorio(request: Request, dias: int = 7, galpao: Optional[int] = None, db:
         ["Galpão", galpao_txt], ["Gerado em", f"{datetime.now(FUSO_BR).strftime('%d/%m/%Y %H:%M')} por {usuario.nome_exibicao}"], [],
         ["CANCELAMENTOS"], ["Registrados", r["cancelamentos"]["total"]], ["Resolvidos", r["cancelamentos"]["resolvidos"]],
         ["Pendentes", r["cancelamentos"]["pendentes"]], [],
-        ["REVERSOS"], ["Recebidos", r["reversos"]["total"]], ["Voltaram ao estoque", r["reversos"]["voltaram"]],
-        ["Não voltaram ao estoque", r["reversos"]["nao_voltaram"]], ["Aguardando a equipe", r["reversos"]["aguardando"]],
+        ["REVERSOS"], ["Recebidos", r["reversos"]["total"]], ["No estoque", r["reversos"]["voltaram"]],
+        ["Sem condição de venda", r["reversos"]["nao_voltaram"]], ["Aguardando a equipe", r["reversos"]["aguardando"]],
         ["% que voltou ao estoque (dos concluídos)", f"{r['reversos']['pct_voltaram']}%"],
         ["Tempo médio até a equipe decidir", formatar_tempo(r["reversos"]["tempo_medio_min"])], [],
         ["RESULTADO DOS REVERSOS"], *([x["nome"], x["quantidade"]] for x in r["resultado_reversos"]), [],
