@@ -212,7 +212,7 @@ _AREAS = {
     # Painéis de TV + os dados que eles leem (só leitura: endereços EXATOS).
     "paineis_tv": {
         "paginas": {
-            "/painel-tv/geral", "/painel-tv/fila",
+            "/painel-tv/geral", "/painel-tv/fila", "/menu-gaveta",
             "/api/pre-venda/fila", "/api/pre-venda/painel-geral", "/api/pre-venda/painel-resumo", "/api/pre-venda/painel-detalhe",
         },
         "prefixos_api": (),
@@ -249,6 +249,7 @@ _AREAS = {
         "paginas": {
             "/solicitacoes-galpao", "/painel-galpao",
             "/api/painel-galpao/resumo", "/api/painel-galpao/relatorio",
+            "/api/painel-galpao/detalhe", "/api/painel-galpao/detalhe/excel",   # visão explodida (28/10)
             "/solicitar-cancelamento", "/reverso", "/api/solicitacoes-cancelamento",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
@@ -634,6 +635,16 @@ def _usuario_logado(request: Request):
         return auth.usuario_atual(request, db)
 
 
+# Usado por templates/_menu_auto.html pra escolher o menu certo (36).
+templates.env.globals["usuario_do_request"] = _usuario_logado
+
+
+@app.get("/menu-gaveta", response_class=HTMLResponse)
+def pagina_menu_gaveta(request: Request):
+    """Só o menu lateral, para a gaveta (iframe) das telas de TV."""
+    return templates.TemplateResponse(request=request, name="menu-gaveta.html", context={"usuario_logado": _usuario_logado(request)})
+
+
 @app.get("/devolucoes", response_class=HTMLResponse)
 def pagina_devolucoes(request: Request):
     return templates.TemplateResponse(request=request, name="devolucoes.html", context={"usuario_logado": _usuario_logado(request)})
@@ -712,9 +723,11 @@ def pagina_painel_tv_geral(request: Request):
     # direto da lista; o perfil "tv" só visualiza.
     usuario = _usuario_logado(request)
     pode_responder = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
+    # Botões "Dashboard" e "Menu" nas TVs: todo mundo menos o perfil "tv" (36).
+    mostrar_menu = bool(usuario and usuario.papel != "tv")
     return templates.TemplateResponse(
         request=request, name="painel-tv-geral.html",
-        context={"usuario_logado": usuario, "pode_responder": pode_responder},
+        context={"usuario_logado": usuario, "pode_responder": pode_responder, "mostrar_menu": mostrar_menu},
     )
 
 
@@ -727,9 +740,11 @@ def pagina_painel_tv_fila(request: Request):
     """
     usuario = _usuario_logado(request)
     pode_responder = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
+    # Botões "Dashboard" e "Menu" nas TVs: todo mundo menos o perfil "tv" (36).
+    mostrar_menu = bool(usuario and usuario.papel != "tv")
     return templates.TemplateResponse(
         request=request, name="painel-tv-fila.html",
-        context={"usuario_logado": usuario, "pode_responder": pode_responder},
+        context={"usuario_logado": usuario, "pode_responder": pode_responder, "mostrar_menu": mostrar_menu},
     )
 
 
@@ -993,7 +1008,7 @@ def pagina_solicitacoes_galpao(request: Request):
         if not auth.papel_permite(usuario, ("logistica", "admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(
-            request=request, name="solicitacoes-galpao.html", context={"usuario": usuario},
+            request=request, name="solicitacoes-galpao.html", context={"usuario": usuario, "usuario_logado": usuario, "modo_logistica": usuario.papel == "logistica"},
         )
 
 
@@ -1005,7 +1020,8 @@ def pagina_painel_galpao(request: Request):
         if not auth.papel_permite(usuario, ("logistica", "admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(
-            request=request, name="painel-galpao.html", context={"usuario": usuario, "modo_logistica": usuario.papel == "logistica"},
+            # (28/10) usuario_logado = menu completo para admin/supervisor (antes ficavam presos no menu da logística).
+            request=request, name="painel-galpao.html", context={"usuario": usuario, "usuario_logado": usuario, "modo_logistica": usuario.papel == "logistica"},
         )
 
 
