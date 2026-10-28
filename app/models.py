@@ -436,6 +436,13 @@ class SolicitacaoCancelamento(Base):
     estado_chegada = Column(String, nullable=True)
     # v30: sugestão do galpão: "bom" | "quebrado" (+ problema). Informativo; a equipe decide.
     avaliacao_galpao = Column(String, nullable=True)
+    # v31: por que o produto voltou (devolucao/recusa/chegou_quebrado/envio_errado/outro) + detalhe do envio errado
+    motivo_reverso = Column(String, nullable=True, index=True)
+    detalhe_envio = Column(String, nullable=True)
+    # v31: "Em análise" (não conclui): quando/quem marcou e a observação interna (seller não vê)
+    em_analise_em = Column(DateTime, nullable=True)
+    em_analise_por = Column(String, nullable=True)
+    em_analise_obs = Column(Text, nullable=True)
     problema_galpao = Column(String, nullable=True)
     # Como o reverso terminou (ver RESULTADOS_REVERSO no router): liberado_venda,
     # negociacao_ml, negociacao_ressarcido, negociacao_sem_ressarcimento, descartado.

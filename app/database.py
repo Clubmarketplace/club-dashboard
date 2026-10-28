@@ -100,6 +100,11 @@ _COLUNAS_ADICIONAIS = {
         # 26/10: Reverso (tipo "reverso") -- ver app/models.py.
         "estado_chegada": "VARCHAR",
         "avaliacao_galpao": "VARCHAR",
+        "motivo_reverso": "VARCHAR",
+        "detalhe_envio": "VARCHAR",
+        "em_analise_em": "TIMESTAMP",
+        "em_analise_por": "VARCHAR",
+        "em_analise_obs": "TEXT",
         "problema_galpao": "VARCHAR",
         "resultado_reverso": "VARCHAR",
         "liberado_por": "VARCHAR",
