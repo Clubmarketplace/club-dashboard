@@ -392,17 +392,24 @@ def buscar_claim(access_token: str, claim_id: str) -> dict:
     return _get(f"/post-purchase/v1/claims/{claim_id}", access_token, "buscar a reclamação")
 
 
-def enviar_mensagem_pos_venda(access_token: str, pack_id: str, seller_id: str, texto: str) -> dict:
+def enviar_mensagem_pos_venda(access_token: str, pack_id: str, seller_id: str, texto: str, comprador_id: str | None = None) -> dict:
     """
     Envia uma mensagem de pós-venda pro comprador, dentro da conversa
     do pacote (pack) do pedido -- endpoint diferente do de responder
     pergunta de pré-venda (que é vinculado ao item, não ao pedido).
+
+    (28/10) O Mercado Livre pede quem envia (`from`) e quem recebe (`to`):
+    `comprador_id` é o user_id do comprador (vem da própria conversa). Para o
+    comprador, a mensagem aparece como resposta normal do vendedor no chat do ML.
     """
+    corpo = {"text": texto}
+    if comprador_id:
+        corpo = {"from": {"user_id": str(seller_id)}, "to": {"user_id": str(comprador_id)}, "text": texto}
     try:
         resposta = httpx.post(
             f"{ML_API_BASE_URL}/messages/packs/{pack_id}/sellers/{seller_id}?tag=post_sale",
             headers={"Authorization": f"Bearer {access_token}"},
-            json={"text": texto},
+            json=corpo,
             timeout=15,
         )
     except httpx.RequestError as exc:
@@ -410,6 +417,55 @@ def enviar_mensagem_pos_venda(access_token: str, pack_id: str, seller_id: str, t
     if resposta.status_code not in (200, 201):
         raise MLApiError(f"Mercado Livre recusou a mensagem (status {resposta.status_code}): {resposta.text}")
     return resposta.json()
+
+
+def buscar_conversa_pos_venda(access_token: str, pack_id: str, seller_id: str) -> dict:
+    """
+    Histórico de uma conversa de pós-venda (todas as mensagens do pacote), SEM marcar
+    como lida (`mark_as_read=false`) -- o seller ainda vai ver como nova no app do ML.
+    """
+    return _get(
+        f"/messages/packs/{pack_id}/sellers/{seller_id}?tag=post_sale&mark_as_read=false&limit=50",
+        access_token,
+        "buscar a conversa de pós-venda",
+    )
+
+
+def listar_pedidos_para_conversas(access_token: str, seller_id: str, dias: int = 10, paginas_max: int = 6) -> list[dict]:
+    """
+    Pedidos dos últimos `dias` dias (mais novos primeiro), já com o que a tela de conversas
+    precisa: pack da conversa, comprador, produto e SKU. Uma consulta traz 50 pedidos.
+    Pedido sem pack_id usa o próprio id do pedido como pack (regra do ML).
+    """
+    desde = (datetime.utcnow() - timedelta(days=dias)).strftime("%Y-%m-%dT%H:%M:%S.000-00:00")
+    saida, offset, limite = [], 0, 50
+    for _ in range(paginas_max):
+        pagina = _get(
+            f"/orders/search?seller={seller_id}&order.date_created.from={desde}"
+            f"&sort=date_desc&offset={offset}&limit={limite}",
+            access_token,
+            "listar pedidos para as conversas de pós-venda",
+        )
+        resultados = pagina.get("results") or []
+        for o in resultados:
+            if not o.get("id"):
+                continue
+            itens = o.get("order_items") or []
+            item = (itens[0].get("item") if itens else None) or {}
+            comprador = o.get("buyer") or {}
+            saida.append({
+                "order_id": str(o["id"]),
+                "pack_id": str(o.get("pack_id") or o["id"]),
+                "comprador_id": str(comprador.get("id")) if comprador.get("id") else None,
+                "comprador_nome": comprador.get("nickname"),
+                "produto_titulo": item.get("title"),
+                "sku": item.get("seller_sku") or item.get("seller_custom_field"),
+            })
+        total = (pagina.get("paging") or {}).get("total", 0)
+        offset += limite
+        if not resultados or offset >= total:
+            break
+    return saida
 
 
 def enviar_resposta_claim(access_token: str, claim_id: str, texto: str) -> dict:

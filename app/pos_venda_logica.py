@@ -24,6 +24,18 @@ def eh_pedido_cancelamento(texto: str) -> bool:
     return any(palavra in texto_lower for palavra in PALAVRAS_CANCELAMENTO)
 
 
+def criar_pedido_cancelamento(db, conta_id: int, order_id: str | None, sku: str | None, texto: str) -> PedidoCancelamento:
+    """Abre o pedido de cancelamento na fila própria (a conversa continua na fila de pós-venda também)."""
+    pedido = PedidoCancelamento(
+        conta_id=conta_id, order_id=order_id, sku=sku, texto_pedido=texto,
+        resposta_sugerida=gerar_sugestao_cancelamento(texto), status="pendente",
+    )
+    db.add(pedido)
+    db.commit()
+    db.refresh(pedido)
+    return pedido
+
+
 def processar_mensagem_pos_venda(db, conta_id: int, ml_recurso_id: str, tipo: str, texto: str, sku: str | None = None, pack_id: str | None = None, order_id: str | None = None) -> dict:
     """
     tipo: "mensagem" (topic messages) ou "reclamacao" (topic claims).

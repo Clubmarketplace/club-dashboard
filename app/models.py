@@ -92,6 +92,10 @@ class Conta(Base):
     # conseguir autorizar/usar a adesão via API.
     cmx_client_id = Column(String, nullable=True)
     cmx_client_secret = Column(Text, nullable=True)
+    # (28/10) Quando o Mercado Livre recusou o token desta conta (ex.: invalid_grant:
+    # precisa reconectar). Limpa sozinho na próxima chamada que der certo. O pós-venda
+    # usa isso pra avisar "reconectar conta" em vez de falhar em silêncio.
+    auth_erro_em = Column(DateTime, nullable=True)
 
     devolucoes = relationship("Devolucao", back_populates="conta")
     acoes = relationship("AcaoRegistrada", back_populates="conta")
@@ -275,6 +279,20 @@ class MensagemPosVenda(Base):
     resposta_enviada = Column(Text, nullable=True)
     recebida_em = Column(DateTime, default=datetime.utcnow)
     respondida_em = Column(DateTime, nullable=True)
+
+    # (28/10) Conversa de pós-venda no painel do seller e da equipe. Uma linha
+    # = uma conversa (pack) esperando resposta; chegando mensagem nova do
+    # comprador na mesma conversa, a linha é atualizada em vez de duplicada.
+    comprador_nome = Column(String, nullable=True)
+    produto_titulo = Column(String, nullable=True)
+    # TRAVA "em atendimento": quem abriu primeiro segura; o outro só vê. Solta
+    # sozinha depois de ATENDIMENTO_EXPIRA_MIN sem resposta (ver pos_venda_conversas.py).
+    em_atendimento_por_id = Column(Integer, nullable=True)
+    em_atendimento_por = Column(String, nullable=True)
+    em_atendimento_em = Column(DateTime, nullable=True)
+    # Quem respondeu e por onde: "seller" | "equipe" (pelo nosso sistema) | "ml" (direto no Mercado Livre).
+    respondida_por = Column(String, nullable=True)
+    respondida_origem = Column(String, nullable=True)
 
     conta = relationship("Conta")
 

@@ -63,6 +63,16 @@ _COLUNAS_ADICIONAIS = {
         # aqui pra não depender de variável de ambiente global.
         "cmx_client_id": "VARCHAR",
         "cmx_client_secret": "TEXT",
+        "auth_erro_em": "TIMESTAMP",
+    },
+    "mensagens_pos_venda": {
+        "comprador_nome": "VARCHAR",
+        "produto_titulo": "VARCHAR",
+        "em_atendimento_por_id": "INTEGER",
+        "em_atendimento_por": "VARCHAR",
+        "em_atendimento_em": "TIMESTAMP",
+        "respondida_por": "VARCHAR",
+        "respondida_origem": "VARCHAR",
     },
     "perguntas": {
         "skus_anuncio": "VARCHAR",

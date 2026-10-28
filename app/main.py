@@ -11,7 +11,7 @@ from app.contas_util import chave_conta
 from sqlalchemy.orm import defer
 from app.fotos_armazenamento import listar_fotos, obter_bytes, solicitacao_da_foto
 from app.routers.solicitacoes_cancelamento import n_fotos_sql, PROBLEMAS_GALPAO, MOTIVOS_REVERSO, DETALHES_ENVIO_ERRADO, ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, conversas_pos_venda as conversas_pos_venda_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -102,6 +102,23 @@ async def _iniciar_vigia_perguntas() -> None:
     from app.vigia_perguntas import loop_vigia_perguntas
     app.state.tarefa_vigia_perguntas = asyncio.create_task(loop_vigia_perguntas())
     logging.getLogger(__name__).info("Vigia da fila de pré-venda iniciado.")
+
+
+# --- Tarefa em segundo plano: conversas de pós-venda (28/10). Busca as mensagens dos
+# últimos 10 dias de todas as contas (ao subir e a cada 6 h) e, entre as varreduras,
+# confere se alguém respondeu direto no Mercado Livre. Desliga com POSVENDA_SYNC_ATIVA=0.
+@app.on_event("startup")
+async def _iniciar_conversas_pos_venda() -> None:
+    import asyncio
+    import logging
+    import os
+
+    if os.getenv("POSVENDA_SYNC_ATIVA", "1").strip() in ("0", "false", "nao", "não"):
+        logging.getLogger(__name__).info("Busca das conversas de pós-venda DESLIGADA pela variável de ambiente.")
+        return
+    from app.pos_venda_conversas import loop_pos_venda
+    app.state.tarefa_pos_venda = asyncio.create_task(loop_pos_venda())
+    logging.getLogger(__name__).info("Busca das conversas de pós-venda iniciada.")
 
 
 # --- Tarefa em segundo plano: leitura da reputação (termômetro) de todas as
@@ -415,6 +432,7 @@ async def exigir_login(request: Request, call_next):
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/dashboard",
         "/meus-cancelamentos", "/meus-cancelamentos/fotos", "/meus-cancelamentos/foto", "/logout",
+        "/minhas-mensagens",  # mensagens pós-venda da própria conta (28/10)
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
         # "Cadastro", dentro de "Minhas solicitações" -- pedir cadastro de produto novo (15/10).
@@ -436,6 +454,7 @@ async def exigir_login(request: Request, call_next):
 
     _seller_liberado = (
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
+        or caminho.startswith("/api/meu-pos-venda/")  # conversas de pós-venda: o servidor confere a conta em cada rota
         or caminho.startswith("/api/painel/custos/")
         or caminho.startswith("/api/painel/taxas")
         or caminho.startswith("/api/painel/vendas")
@@ -463,6 +482,8 @@ app.include_router(auth_ml.router)
 app.include_router(webhook_ml.router)
 app.include_router(pre_venda.router)
 app.include_router(manuais.router)
+app.include_router(conversas_pos_venda_rotas.router_seller)  # conversas de pós-venda: seller (28/10)
+app.include_router(conversas_pos_venda_rotas.router_equipe)  # conversas de pós-venda: equipe (28/10)
 app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
@@ -655,6 +676,17 @@ def pagina_manuais(request: Request):
 @app.get("/pos-venda", response_class=HTMLResponse)
 def pagina_pos_venda(request: Request):
     return templates.TemplateResponse(request=request, name="pos-venda.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/minhas-mensagens", response_class=HTMLResponse)
+def pagina_minhas_mensagens(request: Request):
+    """Mensagens pós-venda dos compradores da conta do seller (28/10): ele lê a conversa e responde aqui."""
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+    return templates.TemplateResponse(
+        request=request, name="minhas-mensagens.html",
+        context={"usuario": usuario, "papel_logado": usuario.papel if usuario else None},
+    )
 
 
 @app.get("/cancelamentos", response_class=HTMLResponse)
