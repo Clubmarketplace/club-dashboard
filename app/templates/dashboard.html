@@ -382,8 +382,8 @@
               <p class="sub">Produtos que voltaram para o galpão</p>
               <div class="adm-setor-destaque" id="rev-card-recebidos">--</div>
               <div class="nota" style="margin:2px 0 10px; color:var(--cmx-texto-suave); font-size:12px;">recebidos hoje</div>
-              <div class="adm-setor-linha"><span>Voltaram ao estoque (hoje)</span><span class="r" id="rev-card-voltaram">--</span></div>
-              <div class="adm-setor-linha"><span>Não voltaram ao estoque (hoje)</span><span class="r" id="rev-card-nao">--</span></div>
+              <div class="adm-setor-linha"><span>No estoque (hoje)</span><span class="r" id="rev-card-voltaram">--</span></div>
+              <div class="adm-setor-linha"><span>Sem condição de venda (hoje)</span><span class="r" id="rev-card-nao">--</span></div>
               <div class="adm-setor-linha"><span>Aguardando a equipe (fila agora)</span><span class="r" id="rev-card-fila">--</span></div>
               <div class="adm-setor-linha"><span>Tempo médio até decidir (hoje)</span><span class="r" id="rev-card-tempo">--</span></div>
               <div class="adm-setor-aviso" id="rev-card-parados" style="display:none; color:#a83232; font-weight:600;"></div>
@@ -1118,7 +1118,7 @@
             av.textContent = f.parados ? "⚠ " + f.parados + " parado(s) há mais de " + f.dias_parado + " dias" : "";
           }
           if (el("rev-card-nota-sup")) {   // card do supervisor (resumido)
-            el("rev-card-nota-sup").textContent = f.aguardando + " aguardando a equipe" + (f.parados ? " · ⚠ " + f.parados + " parado(s)" : "") + " · " + h.voltaram + " voltaram ao estoque";
+            el("rev-card-nota-sup").textContent = f.aguardando + " aguardando a equipe" + (f.parados ? " · ⚠ " + f.parados + " parado(s)" : "") + " · " + h.voltaram + " no estoque";
           }
         } catch (e) {
           console.error("Card de reversos:", e);

@@ -126,7 +126,7 @@
         </div>
         <div class="cartao-rev">
           <h2>{{ "Registrar chegada do reverso" if modo_galpao else "Novo aviso de reverso" }}</h2>
-          <p class="sub">{% if modo_galpao %}Conta, nº da venda/pedido, SKU, avaliação e 1 a 5 fotos são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
+          <p class="sub">{% if modo_galpao %}Conta, nº da venda/pedido, SKU, motivo, avaliação e 1 a 5 fotos são obrigatórios. O reverso já aparece no painel da equipe e no painel do seller; quem libera para o estoque é a equipe, não o galpão. Acompanhe em <a href="/solicitacoes-galpao">Acompanhar solicitações</a>.{% else %}A equipe do Club recebe o aviso e você acompanha o andamento em Minhas solicitações.{% endif %}</p>
 
           <div class="grade">
             {% if modo_galpao %}
@@ -190,6 +190,18 @@
               {% endif %}
             </div>
             {% if modo_galpao %}
+            <div class="grade">
+              <div class="campo"><label class="rot">Motivo do reverso (obrigatório)</label>
+                <select class="f-motivo-rev">
+                  <option value="">Selecione…</option>
+                  {% for chave, nome in MOTIVOS_REVERSO.items() %}<option value="{{ chave }}">{{ nome }}</option>{% endfor %}
+                </select></div>
+              <div class="campo sub-envio" style="display:none"><label class="rot">O que foi enviado errado (obrigatório)</label>
+                <select class="f-detalhe-envio">
+                  <option value="">Selecione…</option>
+                  {% for chave, nome in DETALHES_ENVIO_ERRADO.items() %}<option value="{{ chave }}">{{ nome }}{{ " (ex.: pediu 127V, foi 220V)" if chave == "voltagem" else "" }}</option>{% endfor %}
+                </select></div>
+            </div>
             <div class="campo bloco-aval">
               <label class="rot">Avaliação do galpão (obrigatória)</label>
               <div class="aval">
@@ -213,7 +225,7 @@
             </div>
             {% endif %}
             <div class="campo" style="margin-bottom:14px">
-              <label class="rot f-obs-rot">{{ "Observação (obrigatória se quebrado)" if modo_galpao else "Observação / problema deste item (opcional)" }}</label>
+              <label class="rot f-obs-rot">{{ "Observação (obrigatória se quebrado ou envio errado)" if modo_galpao else "Observação / problema deste item (opcional)" }}</label>
               <textarea class="f-obs" placeholder="{{ 'Ex.: embalagem violada, cabo quebrado' if modo_galpao else 'Conte o que precisar que a equipe saiba' }}"></textarea>
             </div>
             <label class="rot">Fotos {{ "do produto (obrigatório, de 1 a 5)" if modo_galpao else "(opcional, mas ajudam a equipe)" }}</label>
@@ -350,9 +362,16 @@
           el.querySelectorAll("[data-aval]").forEach(x => x.setAttribute("aria-pressed", x === b));
           el.querySelector(".sub-bom").style.display = c.aval === "bom" ? "" : "none";
           el.querySelector(".sub-quebrado").style.display = c.aval === "quebrado" ? "" : "none";
-          el.querySelector(".f-obs-rot").textContent = c.aval === "quebrado" ? "Observação (obrigatória)" : "Observação (opcional)";
+          el.querySelector(".f-obs-rot").textContent = (c.aval === "quebrado" || el.querySelector(".f-motivo-rev").value === "envio_errado") ? "Observação (obrigatória)" : "Observação (opcional)";
           atualizarTrava();
         }));
+        el.querySelector(".f-motivo-rev").addEventListener("change", (e) => {
+          const envio = e.target.value === "envio_errado";
+          el.querySelector(".sub-envio").style.display = envio ? "" : "none";
+          if (!envio) el.querySelector(".f-detalhe-envio").value = "";
+          el.querySelector(".f-obs").placeholder = envio ? "Ex.: pedido 127V, enviado 220V" : "Ex.: embalagem violada, cabo quebrado";
+          el.querySelector(".f-obs-rot").textContent = c.aval === "quebrado" || envio ? "Observação (obrigatória)" : "Observação (opcional)";
+        });
         ["input", "change"].forEach(ev => el.addEventListener(ev, atualizarTrava));
       }
       el.querySelector(".item-remover").addEventListener("click", () => {
@@ -415,10 +434,16 @@
         const p = cartoes.length > 1 ? `item ${i + 1}: ` : "";
         const q = (s) => c.el.querySelector(s);
         if (!q(".f-produto").value.trim()) f.push(p + "SKU");
+        const mot = q(".f-motivo-rev").value;
+        if (!mot) f.push(p + "motivo do reverso");
+        if (mot === "envio_errado") {
+          if (!q(".f-detalhe-envio").value) f.push(p + "o que foi enviado errado");
+          if (!q(".f-obs").value.trim()) f.push(p + "observação (o que foi pedido e o que foi enviado)");
+        }
         if (!c.aval) f.push(p + "avaliação (boas condições ou quebrado)");
         if (c.aval === "quebrado") {
           if (!q(".f-problema").value) f.push(p + "qual é o problema");
-          if (!q(".f-obs").value.trim()) f.push(p + "observação");
+          if (!q(".f-obs").value.trim() && mot !== "envio_errado") f.push(p + "observação");
         }
         if (!c.fotos.filter(Boolean).length) f.push(p + "pelo menos 1 foto");
       });
@@ -471,6 +496,8 @@
         // Mesmo número de venda em todos os itens; produto/problema/fotos são de cada item.
         const item = { numero_venda: venda, produto: produto || null, fotos_base64: lista.length ? lista : null };
         if (MODO_GALPAO) {
+          item.motivo_reverso = q(".f-motivo-rev").value;
+          if (item.motivo_reverso === "envio_errado") item.detalhe_envio = q(".f-detalhe-envio").value;
           item.avaliacao = c.aval;
           if (c.aval === "quebrado") item.problema = q(".f-problema").value;
           // condições que o galpão marcou (todas as chaves: marcada = true)

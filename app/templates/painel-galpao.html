@@ -130,9 +130,9 @@
 
         <div class="grupo-titulo"><i style="background:var(--rev)"></i> Reversos</div>
         <div class="cartoes">
-          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-total">—</div><div class="rotulo">Recebidos</div></div>
-          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div></div>
-          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="r-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc.</div></div>
+          <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-total">—</div><div class="rotulo">Retornaram</div></div>
+          <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-volt">—</div><div class="rotulo">No estoque</div><div class="sub">a equipe liberou para venda</div></div>
+          <div class="cartao" style="--cor:var(--nao)"><div class="valor" id="r-nao">—</div><div class="rotulo">Sem condição de venda</div><div class="sub">avariado, faltando peça etc.</div></div>
           <div class="cartao" style="--cor:var(--aguarda)"><div class="valor" id="r-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">ainda sem decisão</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="r-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="r-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub">do recebimento à decisão</div></div>
@@ -210,8 +210,8 @@
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
           // Cancelamentos numa coluna; reversos em outra, empilhados por situação (stack = coluna)
           { label: "Cancelamentos", data: d.por_dia.map(x => x.cancelamentos), backgroundColor: COR.canc, stack: "canc", borderRadius: 4 },
-          { label: "Reversos: voltaram ao estoque", data: d.por_dia.map(x => x.rev_voltou), backgroundColor: COR.voltou, stack: "rev" },
-          { label: "Reversos: não voltaram ao estoque", data: d.por_dia.map(x => x.rev_nao_voltou), backgroundColor: COR.nao, stack: "rev" },
+          { label: "Reversos: no estoque", data: d.por_dia.map(x => x.rev_voltou), backgroundColor: COR.voltou, stack: "rev" },
+          { label: "Reversos: sem condição de venda", data: d.por_dia.map(x => x.rev_nao_voltou), backgroundColor: COR.nao, stack: "rev" },
           { label: "Reversos: aguardando a equipe", data: d.por_dia.map(x => x.rev_aguardando), backgroundColor: COR.aguarda, stack: "rev" },
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },

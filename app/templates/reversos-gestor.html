@@ -187,10 +187,10 @@
 
         <div class="grupo-titulo"><i style="background:var(--rev)"></i> No período <span style="font-weight:400; text-transform:none; letter-spacing:0">(clique num cartão para ver quais são)</span></div>
         <div class="cartoes">
-          <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Recebidos</div><div class="sub" id="k-rec-sub"></div><div class="var" id="v-rec"></div></div>
-          <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">Voltaram ao estoque</div><div class="sub">a equipe liberou para venda</div><div class="var" id="v-volt"></div></div>
+          <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Retornaram</div><div class="sub" id="k-rec-sub"></div><div class="var" id="v-rec"></div></div>
+          <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">No estoque</div><div class="sub">a equipe liberou para venda</div><div class="var" id="v-volt"></div></div>
           <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Foram para garantia</div><div class="sub">a equipe emite a nota</div><div class="var" id="v-gar"></div></div>
-          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Não voltaram ao estoque</div><div class="sub">avariado, faltando peça etc. (fora garantia)</div><div class="var" id="v-nao"></div></div>
+          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Sem condição de venda</div><div class="sub">avariado, faltando peça etc. (fora garantia)</div><div class="var" id="v-nao"></div></div>
           <div class="cartao clicavel" data-grupo="aguardando" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub" id="k-tempo-sub">do recebimento à decisão</div></div>
@@ -339,9 +339,9 @@
       graficoDia = new Chart($("g-dia"), {
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
-          { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
+          { label: "No estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
           { label: "Foram para garantia", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
-          { label: "Não voltaram ao estoque", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
+          { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
           { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
@@ -449,10 +449,11 @@
       if (sel.dia) p.set("dia", sel.dia);
       if (sel.conta) p.set("conta", sel.conta);
       if (sel.sku) p.set("sku", sel.sku);
+      if (sel.motivo_reverso) p.set("motivo_reverso", sel.motivo_reverso);
       return p;
     }
     function marcarSelecionado() {
-      document.querySelectorAll(".cartao.clicavel").forEach(c => c.classList.toggle("sel", !!sel && c.dataset.grupo === sel.grupo && !sel.situacao && !sel.dia && !sel.conta && !sel.sku));
+      document.querySelectorAll(".cartao.clicavel").forEach(c => c.classList.toggle("sel", !!sel && c.dataset.grupo === sel.grupo && !sel.situacao && !sel.dia && !sel.conta && !sel.sku && !sel.motivo_reverso));
     }
     function abrirLista(novo, rolar = true) { sel = novo; pagDet = 1; marcarSelecionado(); carregarLista(rolar); }
     function fecharLista() { sel = null; $("detalhe").hidden = true; marcarSelecionado(); }
@@ -491,6 +492,7 @@
       if (sel.dia) chips.push(`<button type="button" class="chip" data-rem="dia">Dia: ${dataBRano(sel.dia)} ✕</button>`);
       if (sel.conta) chips.push(`<button type="button" class="chip" data-rem="conta">Conta: ${esc(sel.conta)} ✕</button>`);
       if (sel.sku) chips.push(`<button type="button" class="chip" data-rem="sku">SKU: ${sel.sku === "__sem__" ? "sem SKU informado" : esc(sel.sku)} ✕</button>`);
+      if (sel.motivo_reverso) chips.push(`<button type="button" class="chip" data-rem="motivo_reverso">Motivo do reverso: ${esc(((s0 => (s0.find(m => m.chave === sel.motivo_reverso) || {}).nome)(d.resumo.por_motivo_reverso || [])) || sel.motivo_reverso)} ✕</button>`);
       $("det-filtros").innerHTML = chips.join("");
 
       // resumo do grupo inteiro (não só da página)
@@ -505,6 +507,8 @@
         ${s.por_galpao.map(g => `<div class="lin"><span>${esc(g.nome)}</span><b>${g.quantidade}</b></div>`).join("")}</div>`;
       const blocoMotivo = `<div class="bloco"><h3>Situação / motivo</h3><div class="rolagem">${s.por_motivo.map(m =>
         `<button type="button" class="lin" data-f="situacao" data-v="${esc(m.chave)}"><span><i style="display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:6px;background:${COR_RESULTADO[m.chave] || "#9aa5b1"}"></i>${esc(m.nome)}</span><b>${m.quantidade}</b></button>`).join("")}</div></div>`;
+      const blocoMotRev = (s.por_motivo_reverso || []).length ? `<div class="bloco"><h3>Motivo do reverso</h3><div class="rolagem">${s.por_motivo_reverso.map(m =>
+        `<button type="button" class="lin" data-f="motivo_reverso" data-v="${esc(m.chave)}"><span>${m.chave === "envio_errado" ? "📦 " : ""}${esc(m.nome)}</span><b>${m.quantidade}</b></button>`).join("")}</div></div>` : "";
       const blocoConta = `<div class="bloco"><h3>Contas</h3><div class="rolagem">${s.contas.map(c =>
         `<button type="button" class="lin" data-f="conta" data-v="${esc(c.conta)}"><span>${esc(c.conta)}</span><b>${c.quantidade}</b></button>`).join("")}</div>
         ${s.total_contas > s.contas.length ? `<div class="nota">${s.contas.length} primeiras de ${s.total_contas}; o Excel traz todas.</div>` : ""}</div>`;
@@ -513,7 +517,7 @@
         ${s.total_dias > s.dias.length ? `<div class="nota">${s.dias.length} dias mais recentes de ${s.total_dias}; o Excel traz todos.</div>` : ""}</div>`;
       const blocoQuem = s.quem_decidiu.length ? `<div class="bloco"><h3>Quem decidiu</h3><div class="rolagem">${s.quem_decidiu.map(q =>
         `<div class="lin"><span>${esc(q.nome)}</span><b>${q.quantidade}</b></div>`).join("")}</div></div>` : "";
-      $("det-resumo").innerHTML = d.total ? blocoResumo + blocoMotivo + blocoConta + blocoDia + blocoQuem : "";
+      $("det-resumo").innerHTML = d.total ? blocoResumo + blocoMotivo + blocoMotRev + blocoConta + blocoDia + blocoQuem : "";
 
       // linhas da tabela
       const linha = (x) => {
@@ -528,8 +532,8 @@
           <td>${esc(x.conta)}<span class="peq">${esc(x.plataforma)}</span></td>
           <td class="prod">${esc(x.produto || "—")}${x.sku ? `<span class="peq">SKU: ${esc(x.sku)}</span>` : ""}</td>
           <td>${esc(x.numero_venda || "—")}</td>
-          <td><span class="selo" style="background:${cor}">${esc(x.situacao_nome)}</span>${x.observacao ? `<span class="peq">${esc(x.observacao)}</span>` : ""}</td>
-          <td>${esc(x.aspecto || "—")}</td>
+          <td><span class="selo" style="background:${cor}">${esc(x.situacao_nome)}</span>${x.em_analise ? '<span class="peq" style="color:#3730a3;font-weight:600">🔎 Em análise pela equipe</span>' : ""}${x.observacao ? `<span class="peq">${esc(x.observacao)}</span>` : ""}</td>
+          <td>${x.motivo_reverso_nome ? `<b>${esc(x.motivo_reverso_nome)}</b><span class="peq">${esc(x.aspecto || "")}</span>` : esc(x.aspecto || "—")}</td>
           <td>${decisao}</td>
           <td>${tempoTxt}</td>
           <td>${esc(x.galpao_nome)}<span class="peq">${x.origem === "Seller" ? "avisado pelo seller" : "por " + esc(x.registrado_por || "—")}</span></td></tr>`;

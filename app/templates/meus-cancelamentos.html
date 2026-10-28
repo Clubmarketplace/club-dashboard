@@ -150,6 +150,7 @@
               {% if reverso %}
               <div class="rev-detalhe">
                 {% if s.origem == "logistica" %}Retorno recebido no {{ GALPOES.get(s.galpao, "galpão") }}{% if s.solicitado_por %} por {{ s.solicitado_por }}{% endif %}, {{ s.criado_em | hora_br }}.{% else %}Você avisou este reverso.{% endif %}
+                {% if s.motivo_reverso %}<br>Motivo do reverso: {{ MOTIVOS_REVERSO.get(s.motivo_reverso, s.motivo_reverso) }}{% if s.detalhe_envio %} ({{ DETALHES_ENVIO_ERRADO.get(s.detalhe_envio, s.detalhe_envio) }}){% endif %}.{% endif %}
                 {% if s.estado_chegada %}<br>Aspecto ao chegar: {{ ESTADOS_CHEGADA.get(s.estado_chegada, s.estado_chegada) }}.{% endif %}
               </div>
               {% if s.n_fotos_tmp %}<details class="rev-fotos" data-id="{{ s.id }}"><summary>Ver fotos ({{ s.n_fotos_tmp }})</summary><div class="rev-fotos-corpo"></div></details>{% endif %}
@@ -159,25 +160,27 @@
               {% if reverso %}
                 {% if s.confirmado_por %}
                   {% if s.resultado_reverso == "liberado_venda" %}
-                  <span class="status-confirmado">✓ Voltou para o estoque · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  <span class="status-confirmado">✓ Retornou: no estoque · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% elif s.resultado_reverso == "garantia" %}
-                  <span class="status-confirmado" style="color:#b45309">🛡 Garantia · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  <span class="status-confirmado" style="color:#b45309">🛡 Retornou: garantia · conferido por {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% else %}
-                  <span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Não voltou para o estoque") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
+                  <span class="status-pendente" style="color:#9b1c1c">✗ {{ RESULTADOS_REVERSO.get(s.resultado_reverso, "Retornou: sem condição de venda") }} · {{ s.confirmado_por }}{% if s.confirmado_em %}, {{ s.confirmado_em | hora_br }}{% endif %}</span>
                   {% endif %}
 
                   {% if s.protocolo %}<div class="rev-detalhe">Protocolo: <b>{{ s.protocolo }}</b></div>{% endif %}
                   {% if s.observacao_resultado %}<div class="rev-detalhe">{{ s.observacao_resultado }}</div>{% endif %}
                 {% elif s.em_atendimento_por_id %}
                 <span class="status-pendente">Em tratamento por {{ s.em_atendimento_por }}</span>
+                {% elif s.em_analise_em %}
+                <span class="status-pendente" style="color:#3730a3">🔎 Retornou · em análise pela equipe</span>
                 {% elif s.origem == "logistica" %}
-                <span class="status-pendente">Recebido no galpão, aguardando a equipe conferir</span>
+                <span class="status-pendente">Retornou ao galpão, aguardando a equipe conferir</span>
                 {% else %}
                 <span class="status-pendente">Aguardando a equipe</span>
                 {% endif %}
                 {# condições que o galpão marcou ao registrar (aparecem em qualquer fase) #}
                 {% set itens_ck = s.checklist_json | checklist_itens %}
-                {% if itens_ck %}<div class="rev-detalhe">Condições informadas pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
+                {% if itens_ck and s.avaliacao_galpao != "quebrado" %}<div class="rev-detalhe">Condições informadas pelo galpão:{% for i in itens_ck %}<br>{{ '✓' if i.ok else '✗' }} {{ i.nome }}{% endfor %}</div>{% endif %}
               {% elif s.confirmado_por %}
               <span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }} por {{ s.confirmado_por }}</span>
               {% if s.protocolo %}<div style="font-size:12px; color:var(--cmx-texto-suave); margin-top:3px;">Protocolo: <b>{{ s.protocolo }}</b></div>

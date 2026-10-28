@@ -369,7 +369,7 @@ async function carregarDashboard() {
       const partes = [];
       if (rev.liberados_venda) partes.push(rev.liberados_venda + " voltou(aram) para o estoque");
       if (rev.garantias) partes.push(rev.garantias + " foi(ram) para garantia");
-      if (rev.nao_voltaram) partes.push(rev.nao_voltaram + " não voltou(aram) (veja o motivo em Minhas solicitações)");
+      if (rev.nao_voltaram) partes.push(rev.nao_voltaram + " sem condição de venda (veja o motivo em Minhas solicitações)");
       if (rev.em_andamento) partes.push(rev.em_andamento + " em andamento (veja em Minhas solicitações)");
       document.getElementById("club-reverso-sub").textContent = partes.join(" · ");
     } else {
