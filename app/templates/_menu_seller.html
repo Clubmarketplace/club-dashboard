@@ -68,10 +68,12 @@
     (function () {
       fetch("/api/meu-pos-venda/resumo", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
         var b = document.getElementById("menu-msgs-badge");
-        if (j && j.aguardando && b) {
-          b.textContent = j.aguardando; b.style.display = "inline-block";
+        // (29/10) O número soma mensagens aguardando + reclamações que precisam do seller.
+        var total = j ? (j.aguardando || 0) + (j.reclamacoes || 0) : 0;
+        if (total && b) {
+          b.textContent = total; b.style.display = "inline-block";
           // O número também vai para o título da aba do navegador: "(3) Dashboard".
-          if (document.title.indexOf("(") !== 0) document.title = "(" + j.aguardando + ") " + document.title;
+          if (document.title.indexOf("(") !== 0) document.title = "(" + total + ") " + document.title;
         }
       }).catch(function () {});
     })();
