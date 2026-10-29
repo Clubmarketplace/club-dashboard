@@ -51,10 +51,42 @@ PRECOS_USD_POR_MTOK = {
 }
 PRECO_BUSCA_WEB_USD = 0.01  # US$ 10 por 1.000 buscas
 
+# Modelos com preço em DUAS faixas, por tamanho do prompt de CADA chamada:
+#   (prefixo do nome do modelo, (entrada, saída) até o limiar, (entrada, saída) acima do limiar)
+# Casa por PREFIXO para pegar também nomes com data (ex.: "claude-haiku-5-5-2026...").
+# Haiku 5.5: US$ 0,10 / 0,50 até 100 mil tokens no prompt; US$ 0,50 / 2,50 acima disso
+# (a faixa mais cara vale pra chamada INTEIRA). Preços conferidos com o Console em 29/10/2026
+# (o custo diário do Haiku 5.5 bateu com esta tabela) -- reconferir se a Anthropic mudar.
+PRECOS_POR_PREFIXO = [
+    ("claude-haiku-5-5", (0.10, 0.50), (0.50, 2.50)),
+]
+LIMIAR_PROMPT_LONGO_TOKENS = 100_000
 
-def _preco_modelo(modelo: str) -> tuple[float, float]:
+# A partir deste instante a tabela de preços acima é a confiável. O ajuste automático
+# (credito_calibracao) aprendido ANTES disso foi medido com o Haiku 5.5 cobrado como se
+# fosse Sonnet (modelo desconhecido -> "o mais caro"), então não vale: usa 1.0 até a
+# próxima conferência de saldo, que já calibra com a tabela certa.
+TABELA_PRECOS_CONFIAVEL_DESDE = datetime(2026, 10, 29, 19, 0, tzinfo=timezone.utc)
+
+
+def fator_vigente(config: dict) -> float:
+    """Ajuste automático da estimativa a usar AGORA (1.0 se foi aprendido com a tabela antiga)."""
+    conferido_em = interpretar_data(config.get("credito_saldo_em"))
+    if conferido_em is None or conferido_em < TABELA_PRECOS_CONFIAVEL_DESDE:
+        return 1.0
+    try:
+        return float(config.get("credito_calibracao") or 1.0)
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def _preco_modelo(modelo: str, tokens_entrada: int = 0) -> tuple[float, float]:
+    """(preço de entrada, preço de saída) por milhão de tokens para ESTA chamada."""
     if modelo in PRECOS_USD_POR_MTOK:
         return PRECOS_USD_POR_MTOK[modelo]
+    for prefixo, preco_normal, preco_longo in PRECOS_POR_PREFIXO:
+        if modelo.startswith(prefixo):
+            return preco_longo if tokens_entrada > LIMIAR_PROMPT_LONGO_TOKENS else preco_normal
     # Modelo não cadastrado na tabela (nome novo/diferente): usa o mais caro
     # conhecido como estimativa -- melhor superestimar o gasto do que esconder.
     logger.warning("Preço desconhecido para o modelo %r -- usando a tabela mais cara como estimativa", modelo)
@@ -115,7 +147,8 @@ def _estimativa_local_usd(inicio: datetime, fim: datetime | None = None) -> floa
         for linha in linhas:
             if not linha.modelo:
                 continue  # evento de antes do termômetro existir -- sem como estimar
-            preco_entrada, preco_saida = _preco_modelo(linha.modelo)
+            # tokens_entrada desta chamada decide a faixa de preço (prompt curto x longo)
+            preco_entrada, preco_saida = _preco_modelo(linha.modelo, linha.tokens_entrada or 0)
             total += (linha.tokens_entrada or 0) / 1_000_000 * preco_entrada
             total += (linha.tokens_saida or 0) / 1_000_000 * preco_saida
             total += (linha.buscas_web or 0) * PRECO_BUSCA_WEB_USD
@@ -211,7 +244,7 @@ def nova_conferencia(config: dict, saldo_novo: float, agora: datetime | None = N
     Suaviza (média com o fator anterior) e limita entre FATOR_MIN e FATOR_MAX.
     """
     agora = agora or datetime.now(timezone.utc)
-    fator = float(config.get("credito_calibracao") or 1.0)
+    fator = fator_vigente(config)  # ignora ajuste aprendido com a tabela de preços antiga
     saldo_anterior = float(config.get("credito_saldo_usd") or 0.0)
     em_anterior = interpretar_data(config.get("credito_saldo_em"))
 
