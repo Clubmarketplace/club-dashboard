@@ -468,6 +468,48 @@ def listar_pedidos_para_conversas(access_token: str, seller_id: str, dias: int =
     return saida
 
 
+# ---------------------------------------------------------------------------
+# Reclamações / mediações (29/10) -- SÓ LEITURA. O formato exato dos campos ainda será
+# conferido com uma conta real: tudo aqui lê com .get() e nada quebra se um campo faltar.
+# ---------------------------------------------------------------------------
+def buscar_reclamacoes(access_token: str, seller_id: str, status: str, offset: int = 0, limite: int = 50) -> dict:
+    """
+    Reclamações em que a conta é a VENDEDORA (respondent), mais recentemente atualizadas primeiro.
+    `status`: "opened" ou "closed". A documentação cita duas grafias do filtro de jogador
+    (players.role/players.user_id e player_role/player_user_id): tenta a primeira e, se o ML
+    recusar com 400, a segunda.
+    """
+    base = f"/post-purchase/v1/claims/search?status={status}&sort=last_updated:desc&offset={offset}&limit={limite}"
+    formas = (
+        f"&players.role=respondent&players.user_id={seller_id}",
+        f"&player_role=respondent&player_user_id={seller_id}",
+    )
+    ultimo = None
+    for filtro in formas:
+        try:
+            return _get(base + filtro, access_token, "listar as reclamações")
+        except MLApiError as exc:
+            ultimo = exc
+            if "status 400" not in str(exc):
+                raise
+    raise ultimo
+
+
+def buscar_detalhe_reclamacao(access_token: str, claim_id: str) -> dict:
+    """Título, descrição, prazo e quem deve agir (seller/comprador/mediador) -- como a tela do ML mostra."""
+    return _get(f"/post-purchase/v1/claims/{claim_id}/detail", access_token, "buscar o detalhe da reclamação")
+
+
+def buscar_afeta_reputacao(access_token: str, claim_id: str) -> dict:
+    """{'affects_reputation': affected | not_affected | not_applies, 'has_incentive': bool, 'due_date': ...}"""
+    return _get(f"/post-purchase/v1/claims/{claim_id}/affects-reputation", access_token, "ver se a reclamação afeta a reputação")
+
+
+def buscar_motivo_reclamacao(access_token: str, reason_id: str) -> dict:
+    """Texto do motivo (ex.: PDD9939 -> nome/detalhe)."""
+    return _get(f"/post-purchase/v1/claims/reasons/{reason_id}", access_token, "buscar o motivo da reclamação")
+
+
 def enviar_resposta_claim(access_token: str, claim_id: str, texto: str) -> dict:
     """Envia uma resposta dentro de uma reclamação/devolução (tópico 'claims')."""
     try:

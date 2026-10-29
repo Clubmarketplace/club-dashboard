@@ -485,6 +485,7 @@ app.include_router(pre_venda.router)
 app.include_router(manuais.router)
 app.include_router(conversas_pos_venda_rotas.router_seller)  # conversas de pós-venda: seller (28/10)
 app.include_router(conversas_pos_venda_rotas.router_equipe)  # conversas de pós-venda: equipe (28/10)
+app.include_router(conversas_pos_venda_rotas.router_gestao)  # gestão por conta: admin/supervisor (28/10)
 app.include_router(pos_venda.router)
 app.include_router(cancelamentos.router)
 app.include_router(eventos_webhook.router)
@@ -687,6 +688,15 @@ def pagina_manuais(request: Request):
 @app.get("/pos-venda", response_class=HTMLResponse)
 def pagina_pos_venda(request: Request):
     return templates.TemplateResponse(request=request, name="pos-venda.html", context={"usuario_logado": _usuario_logado(request)})
+
+
+@app.get("/pos-venda/gestao", response_class=HTMLResponse)
+def pagina_pos_venda_gestao(request: Request):
+    """Gestão por conta do pós-venda (28/10): só admin e supervisor (o atendente não passa)."""
+    usuario = _usuario_logado(request)
+    if not usuario or usuario.papel not in ("admin", "supervisor"):
+        return RedirectResponse("/", status_code=303)
+    return templates.TemplateResponse(request=request, name="pos-venda-gestao.html", context={"usuario_logado": usuario})
 
 
 @app.get("/minhas-mensagens", response_class=HTMLResponse)

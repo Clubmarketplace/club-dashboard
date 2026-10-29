@@ -297,6 +297,52 @@ class MensagemPosVenda(Base):
     conta = relationship("Conta")
 
 
+class ReclamacaoPosVenda(Base):
+    """
+    Reclamação / mediação / devolução de pós-venda (tópico 'claims' do Mercado Livre) -- a
+    aba "Reclamações" do painel do seller e da equipe (29/10). Uma linha por reclamação.
+
+    SÓ LEITURA nesta versão: guardamos o que o ML mostra (motivo, etapa, se afeta a reputação,
+    quem precisa agir) e abrimos a reclamação no ML. `dados_brutos` guarda o JSON como o ML mandou,
+    para ajustar o agrupamento sem perder nada se algum motivo vier diferente do esperado.
+
+    GANCHO PARA A IA (desligada por enquanto): `categoria` e `resposta_sugerida` ficam vazias
+    ou preenchidas por regra simples; ligar a IA depois = preencher essas duas colunas em
+    app/pos_venda_reclamacoes.py (funções classificar/sugerir), sem mexer em tela nem banco.
+    """
+
+    __tablename__ = "reclamacoes_pos_venda"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta_id = Column(Integer, ForeignKey("contas.id"), nullable=False, index=True)
+    claim_id = Column(String, unique=True, index=True, nullable=False)
+    order_id = Column(String, nullable=True)
+    tipo = Column(String, nullable=True)          # mediations | returns | cancel_purchase | ...
+    etapa = Column(String, nullable=True)         # claim | dispute | recontact | none
+    status_ml = Column(String, nullable=True)     # opened | closed
+    motivo_id = Column(String, nullable=True)     # ex.: PDD9939
+    motivo_texto = Column(String, nullable=True)  # texto como o ML mostra (ex.: "Produto danificado")
+    titulo = Column(String, nullable=True)        # título da reclamação no ML (se a API devolver)
+    descricao = Column(Text, nullable=True)
+    acao_responsavel = Column(String, nullable=True)  # seller | buyer | mediator
+    afeta_reputacao = Column(String, nullable=True)   # affected | not_affected | not_applies
+    prazo_em = Column(DateTime, nullable=True)        # prazo do seller (UTC)
+    pode_responder = Column(Boolean, nullable=False, default=False)  # ML liberou "enviar mensagem" p/ o seller
+    precisa_acao = Column(Boolean, nullable=False, default=False)    # aberta e com ação pendente do seller
+    comprador_nome = Column(String, nullable=True)
+    produto_titulo = Column(String, nullable=True)
+    sku = Column(String, nullable=True)
+    resolucao = Column(String, nullable=True)
+    criada_ml_em = Column(DateTime, nullable=True)
+    atualizada_ml_em = Column(DateTime, nullable=True)
+    sincronizada_em = Column(DateTime, default=datetime.utcnow)
+    categoria = Column(String, nullable=True)         # gancho (regra hoje, IA depois)
+    resposta_sugerida = Column(Text, nullable=True)   # gancho da IA -- nunca enviada sozinha
+    dados_brutos = Column(Text, nullable=True)
+
+    conta = relationship("Conta")
+
+
 class PedidoCancelamento(Base):
     """
     Pedido de cancelamento identificado dentro de uma mensagem ou
