@@ -57,6 +57,15 @@ STATUS_ABERTA = "fila_humana"
 INICIO_PADRAO = "2026-11-02"
 
 
+def conta_liberada(apelido: str) -> bool:
+    """
+    Fase de teste: POSVENDA_CONTAS=Velasco (ou "Velasco,Outra") limita a busca e o aviso do Mercado Livre
+    a essas contas -- as demais nem são consultadas e nenhum seller delas vê nada. Vazio = todas as contas.
+    """
+    lista = [chave_conta(x) for x in os.getenv("POSVENDA_CONTAS", "").split(",") if x.strip()]
+    return not lista or chave_conta(apelido) in lista
+
+
 def inicio_utc() -> datetime:
     try:
         d = datetime.strptime(os.getenv("POSVENDA_INICIO", INICIO_PADRAO).strip(), "%Y-%m-%d")
@@ -228,6 +237,9 @@ def processar_webhook_mensagem(db, conta: Conta, message_id: str) -> dict:
     from app.ml_client import buscar_mensagem, buscar_pedido
     from app.pos_venda_logica import criar_pedido_cancelamento, eh_pedido_cancelamento
 
+    if not conta_liberada(conta.apelido):
+        return {"status": "conta_fora_do_teste", "conta": conta.apelido}
+
     token = garantir_token_valido(conta, db)
     dados = buscar_mensagem(token, message_id)
     m = ((dados.get("messages") or [None])[0] if isinstance(dados.get("messages"), list) else None) or dados
@@ -321,6 +333,8 @@ def sincronizar_todas(dias: int = JANELA_DIAS, anteriores: bool = False) -> list
     with SessionLocal() as db:
         contas = db.query(Conta).filter(Conta.ativa.is_(True), Conta.inativa_em.is_(None), Conta.access_token.isnot(None)).all()
         for conta in contas:
+            if not conta_liberada(conta.apelido):
+                continue
             try:
                 resultados.append(sincronizar_conta(conta, db, dias=dias, anteriores=anteriores))
             except Exception:
@@ -347,7 +361,7 @@ def conferir_abertas() -> int:
         tokens: dict[int, str | None] = {}
         for item in abertas:
             conta = item.conta
-            if conta is None:
+            if conta is None or not conta_liberada(conta.apelido):
                 continue
             if conta.id not in tokens:
                 try:
@@ -391,6 +405,11 @@ async def loop_pos_venda() -> None:
                 pass  # ainda não é a data de início: não gasta consulta nenhuma
             elif agora >= proxima_varredura:
                 await asyncio.to_thread(sincronizar_todas)
+                try:  # reclamações (29/10): mesma cadência; erro aqui não derruba o loop das mensagens
+                    from app.pos_venda_reclamacoes import sincronizar_todas as sincronizar_reclamacoes
+                    await asyncio.to_thread(sincronizar_reclamacoes)
+                except Exception:
+                    logger.exception("Erro na varredura de reclamações")
                 proxima_varredura = time.time() + varredura_seg
             else:
                 await asyncio.to_thread(conferir_abertas)
@@ -518,6 +537,10 @@ def responder(db, item: MensagemPosVenda, usuario, texto: str) -> None:
     except MLApiError as exc:
         _voltar_para_fila()
         logger.warning("Pós-venda: ML recusou a resposta da conversa %s: %s", item.pack_id, exc)
+        # (28/10) Venda com reclamação aberta: o ML bloqueia a mensagem comum (blocked_by_claim).
+        if "blocked_by_claim" in str(exc):
+            raise RespostaRecusada(409, "Esta venda tem uma reclamação aberta no Mercado Livre, e por isso a mensagem comum fica bloqueada. "
+                                        "A resposta precisa ser feita pela reclamação (aba Reclamações) ou direto no Mercado Livre. A mensagem continua na fila.")
         raise RespostaRecusada(502, f"O Mercado Livre não aceitou a mensagem: {exc}")
 
     db.execute(
