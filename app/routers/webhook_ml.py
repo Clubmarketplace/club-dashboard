@@ -354,6 +354,8 @@ async def _processar_mensagem(payload: dict, db: Session) -> dict:
     from app.pos_venda_conversas import processar_webhook_mensagem
     try:
         novo = processar_webhook_mensagem(db, conta, message_id)
+        if novo.get("status") == "conta_fora_do_teste":
+            return novo   # fase de teste (POSVENDA_CONTAS): conta ainda não liberada, ignora sem erro
         if novo.get("status") != "sem_pack":
             return novo
         logger.info("Aviso de mensagem sem pack (id=%s) -- usando o fluxo antigo.", message_id)
@@ -387,6 +389,17 @@ async def _processar_claim(payload: dict, db: Session) -> dict:
     conta = db.query(Conta).filter(Conta.ml_user_id == ml_user_id).first()
     if conta is None or not conta.access_token:
         return {"status": "conta_nao_conectada", "ml_user_id": ml_user_id}
+
+    # (29/10) Aba "Reclamações" do painel: guarda/atualiza a reclamação (só leitura). Nas contas da fase de
+    # teste (POSVENDA_CONTAS) ela substitui a fila antiga; nas demais, o fluxo antigo continua como estava.
+    from app.pos_venda_reclamacoes import processar_webhook_claim
+    from app.pos_venda_conversas import conta_liberada
+    if conta_liberada(conta.apelido):
+        try:
+            return processar_webhook_claim(db, conta, claim_id)
+        except (MLAuthError, MLApiError) as exc:
+            logger.warning("Reclamações: não consegui ler a reclamação %s: %s", claim_id, exc)
+            return {"status": "erro_ml", "detalhe": str(exc)}
 
     ja_existe = db.query(MensagemPosVenda).filter(MensagemPosVenda.ml_recurso_id == claim_id).first()
     if ja_existe:

@@ -277,7 +277,8 @@ def resumo_dashboard(usuario=Depends(_seller_logado), db: Session = Depends(get_
         mais_antiga_h = None
         if pend and pend[0].recebida_em:
             mais_antiga_h = round((datetime.utcnow() - pend[0].recebida_em).total_seconds() / 3600, 1)
-        return {"aguardando": len(pend), "mais_antiga_horas": mais_antiga_h}
+        from app.pos_venda_reclamacoes import contar_precisam_acao
+        return {"aguardando": len(pend), "mais_antiga_horas": mais_antiga_h, "reclamacoes": contar_precisam_acao(db, [conta.id])}
 
     return {
         "conta": conta.apelido,
