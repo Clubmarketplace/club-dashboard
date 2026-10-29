@@ -88,9 +88,11 @@
             <select id="gp-dias" aria-label="Período">
               <option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="10" selected>Últimos 10 dias</option>
             </select>
-            <button type="button" id="gp-atualizar">↻ Atualizar</button>
+            <button type="button" id="gp-atualizar" title="Recarrega os números do nosso sistema">↻ Atualizar</button>
+            <button type="button" id="gp-buscar" title="Vai ao Mercado Livre buscar as mensagens e reclamações novas agora">⬇ Buscar no Mercado Livre agora</button>
             <span class="gp-nota" id="gp-info"></span>
           </div>
+          <div class="gp-aviso" id="gp-busca" hidden></div>
           <div class="gp-cards" id="gp-cards"></div>
           <div class="gp-tabwrap">
             <table class="gp-tab">
@@ -115,7 +117,9 @@
     function classeEspera(min) { return min == null ? "cinza" : (min >= 240 ? "verm" : (min >= 60 ? "amb" : "verde")); }
     function dias() { return document.getElementById("gp-dias").value; }
 
-    function carregar() {
+    function carregar(visivel) {
+      var bAt = document.getElementById("gp-atualizar");
+      if (visivel === true) { bAt.disabled = true; bAt.textContent = "Atualizando…"; }
       fetch("/api/pos-venda/gestao?dias=" + dias(), { credentials: "same-origin" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
         var t = d.totais;
         cards.innerHTML =
@@ -138,8 +142,34 @@
         }).join("");
         if (aberta) carregarMensagens(aberta);
         info.textContent = "Atualizado às " + d.gerado_em.hora + " · a tela se atualiza sozinha a cada minuto · o sistema confere o Mercado Livre a cada " + d.verificacao.conferir_min + " min (mensagem nova chega na hora pelo aviso do ML)";
-      }).catch(function () { corpo.innerHTML = '<tr><td colspan="9" class="gp-nota">Não consegui carregar agora. Tente atualizar.</td></tr>'; });
+      }).catch(function () { corpo.innerHTML = '<tr><td colspan="9" class="gp-nota">Não consegui carregar agora. Tente atualizar.</td></tr>'; })
+        .then(function () { bAt.disabled = false; bAt.textContent = "↻ Atualizar"; });
     }
+
+    // ---- busca no Mercado Livre agora (28/10) ----
+    var caixaBusca = document.getElementById("gp-busca"), botBusca = document.getElementById("gp-buscar"), tempo = null;
+    function avisoBusca(html, erro) { caixaBusca.hidden = false; caixaBusca.className = "gp-aviso" + (erro ? " erro" : ""); caixaBusca.innerHTML = html; }
+    function acompanharBusca(inicio) {
+      clearTimeout(tempo);
+      fetch("/api/pos-venda/gestao/busca-status", { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (v) {
+        if (v.rodando && Date.now() - inicio < 600000) {
+          avisoBusca("Buscando no Mercado Livre… " + Math.round((Date.now() - inicio) / 1000) + " s (com muitas contas pode levar alguns minutos). Pode continuar usando a tela.");
+          tempo = setTimeout(function () { acompanharBusca(inicio); }, 3000); return;
+        }
+        botBusca.disabled = false; botBusca.textContent = "⬇ Buscar no Mercado Livre agora";
+        var u = v.ultimo || {};
+        var rec = (u.contas_reconectar || []).length ? " Contas para reconectar: <b>" + esc(u.contas_reconectar.join(", ")) + "</b>." : "";
+        avisoBusca("Busca concluída: <b>" + (u.criadas || 0) + "</b> mensagem(ns) nova(s) e <b>" + (u.reclamacoes || 0) + "</b> reclamação(ões) novas ou atualizadas." + rec);
+        carregar();
+      }).catch(function () { botBusca.disabled = false; botBusca.textContent = "⬇ Buscar no Mercado Livre agora"; avisoBusca("Não consegui acompanhar a busca. Clique em Atualizar daqui a pouco.", true); });
+    }
+    botBusca.addEventListener("click", function () {
+      botBusca.disabled = true; botBusca.textContent = "Buscando…";
+      api("/api/pos-venda/gestao/buscar-agora", { method: "POST" }).then(function (d) {
+        avisoBusca(d.status === "ja_rodando" ? "Já tem uma busca rodando. Acompanhando…" : "Busca iniciada no Mercado Livre…");
+        acompanharBusca(Date.now());
+      }).catch(function (err) { botBusca.disabled = false; botBusca.textContent = "⬇ Buscar no Mercado Livre agora"; avisoBusca(esc(err.message), true); });
+    });
 
     function carregarMensagens(conta) {
       fetch("/api/pos-venda/gestao/mensagens?conta=" + encodeURIComponent(conta) + "&dias=" + dias(), { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
@@ -215,8 +245,8 @@
       aberta = aberta === tr.getAttribute("data-conta") ? null : tr.getAttribute("data-conta");
       carregar();
     });
-    document.getElementById("gp-dias").addEventListener("change", carregar);
-    document.getElementById("gp-atualizar").addEventListener("click", carregar);
+    document.getElementById("gp-dias").addEventListener("change", function () { carregar(true); });
+    document.getElementById("gp-atualizar").addEventListener("click", function () { carregar(true); });
     setInterval(function () { if (document.visibilityState === "visible" && !corpo.querySelector(".gp-resp textarea")) carregar(); }, 60000);  // não apaga o que está sendo escrito
     carregar();
   })();
