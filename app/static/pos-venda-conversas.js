@@ -3,7 +3,8 @@
  *   <div id="pv-app" data-base="/api/meu-pos-venda" data-modo="seller"></div>
  *   <div id="pv-app" data-base="/api/pos-venda/conversas" data-modo="equipe"></div>
  *
- * Abas: "Aguardando" (lista + conversa + resposta) e "Histórico e relatório"
+ * Abas: "Aguardando" (lista + conversa + resposta), "Reclamações" (29/10: reclamações e mediações do ML, só
+ * leitura -- motivo, estado, se afeta a reputação, botão para abrir no ML) e "Histórico e relatório"
  * (data, dia, hora, o que o comprador disse, quem respondeu e o quê; números do período; Excel).
  * Nada é enviado sozinho: a sugestão da IA só preenche o campo, quem decide e clica é a pessoa.
  * Regras do Mercado Livre (350 caracteres, sem link nem dado pessoal) são avisadas aqui E conferidas no servidor.
@@ -13,7 +14,8 @@
   if (!raiz) return;
   var BASE = raiz.dataset.base, EQUIPE = raiz.dataset.modo === "equipe";
   var LIMITE = 350, SEG_ATUALIZA = 30;
-  var estado = { itens: [], respondidas: [], selId: null, aba: "aguardando", dias: 10, conta: "", contasReconectar: [], varredura: null, inicio: "", iniciado: true };
+  var estado = { itens: [], respondidas: [], selId: null, aba: "aguardando", dias: 10, conta: "", contasReconectar: [], varredura: null, inicio: "", iniciado: true,
+    rec: { itens: [], motivos: [], contagem: { acao: 0, andamento: 0, finalizada: 0 } }, recGrupo: "acao", recMotivo: "" };
   var atual = null; // conversa aberta: {item, sugestao, podeResponder}
 
   function esc(t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -75,8 +77,15 @@
     '.pv-tab th{text-align:left;font-size:11px;color:#6b7280;padding:8px;border-bottom:1px solid #e5e7eb;background:#fafbfc}' +
     '.pv-tab td{padding:8px;border-bottom:1px solid #f0f1f3;vertical-align:top}' +
     '.pv-rolagem{overflow-x:auto}' +
+    '.pv-chip{min-height:36px;padding:0 14px;border-radius:99px;border:1px solid #9ca3af;background:#fff;color:#111827;font-size:13px;font-family:inherit;cursor:pointer}' +
+    '.pv-chip.ativa{background:#111827;color:#fff;border-color:#111827}' +
+    '.pv-rec{background:#fff;border:1px solid #e5e7eb;border-radius:12px;margin-top:10px;overflow:hidden}' +
+    '.pv-rec-topo{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;background:#f3f4f6;padding:8px 12px;font-size:13px}' +
+    '.pv-rec-corpo{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;align-items:center;padding:12px}' +
+    '.pv-link{display:inline-flex;align-items:center;min-height:44px;padding:0 16px;border-radius:10px;background:#111827;color:#fff;font-weight:700;font-size:14px;text-decoration:none;box-sizing:border-box}' +
     '</style>' +
     '<div class="pv-abas"><button type="button" class="pv-aba ativa" data-aba="aguardando">Aguardando <span id="pv-n"></span></button>' +
+    '<button type="button" class="pv-aba" data-aba="reclamacoes">Reclamações <span id="pv-nr"></span></button>' +
     '<button type="button" class="pv-aba" data-aba="historico">Histórico e relatório</button></div>' +
     '<div id="pv-aviso-geral"></div><div id="pv-corpo"></div>';
   var corpo = document.getElementById("pv-corpo"), avisoGeral = document.getElementById("pv-aviso-geral");
@@ -95,6 +104,15 @@
     var d = await api("/lista" + qs);
     estado.itens = d.itens; estado.respondidas = d.respondidas; estado.contasReconectar = d.contas_reconectar || []; estado.varredura = d.varredura || null; estado.inicio = d.inicio; estado.iniciado = d.iniciado;
     var n = document.getElementById("pv-n"); if (n) n.textContent = d.itens.length ? "(" + d.itens.length + ")" : "";
+    var ni = document.getElementById("pv-inicio-nota"); if (ni && d.inicio) ni.textContent = "a partir de " + d.inicio;  // (28/10) data real da variável POSVENDA_INICIO
+  }
+
+  async function carregarReclamacoes() {
+    var qs = EQUIPE && estado.conta ? "?conta=" + encodeURIComponent(estado.conta) : "";
+    var d = await api("/reclamacoes" + qs);
+    estado.rec = d;
+    if (EQUIPE && d.contas_reconectar) { d.contas_reconectar.forEach(function (c) { if (estado.contasReconectar.indexOf(c) < 0) estado.contasReconectar.push(c); }); }
+    var n = document.getElementById("pv-nr"); if (n) n.textContent = d.contagem.acao ? "(" + d.contagem.acao + ")" : "";
   }
 
   function liberarAtual() {
@@ -111,11 +129,55 @@
     if (EQUIPE && estado.contasReconectar.length) {
       avisoGeral.innerHTML = '<div class="pv-aviso" style="background:#fff4e0;color:#7a3e00;margin-bottom:10px"><b>Reconectar conta:</b> ' + estado.contasReconectar.map(esc).join(", ") + ' precisa(m) ser reconectada(s) ao Mercado Livre para responder.</div>';
     }
+    try { await carregarReclamacoes(); } catch (e) { /* a aba de reclamações avisa quando for aberta */ }
     if (estado.aba === "aguardando") { desenharLista(); }
+    else if (estado.aba === "reclamacoes") { desenharReclamacoes(); }
   }
 
   // ------------------------------------------------------------ aba Aguardando
-  function desenhar() { if (estado.aba === "aguardando") desenharAguardando(); else desenharHistorico(); }
+  function desenhar() { if (estado.aba === "aguardando") desenharAguardando(); else if (estado.aba === "reclamacoes") desenharReclamacoes(); else desenharHistorico(); }
+
+  // ------------------------------------------------------------ aba Reclamações (só leitura)
+  function desenharReclamacoes() {
+    var rec = estado.rec, G = [["acao", "Precisam da sua ação"], ["andamento", "Em andamento"], ["finalizada", "Finalizadas"]];
+    var seletor = "";
+    if (EQUIPE) {
+      var contas = {}; rec.itens.forEach(function (i) { contas[i.conta] = 1; });
+      seletor = '<select id="pv-rconta" aria-label="Conta" style="min-height:40px;border:1px solid #d1d5db;border-radius:8px;padding:0 8px;font-family:inherit"><option value="">Todas as contas</option>' +
+        Object.keys(contas).sort().map(function (c) { return '<option' + (c === estado.conta ? " selected" : "") + ">" + esc(c) + "</option>"; }).join("") + '</select>';
+    }
+    var grupos = G.map(function (g) { return '<button type="button" class="pv-chip' + (estado.recGrupo === g[0] ? " ativa" : "") + '" data-g="' + g[0] + '">' + g[1] + " (" + (rec.contagem[g[0]] || 0) + ")</button>"; }).join("");
+    var doGrupo = rec.itens.filter(function (i) { return i.grupo === estado.recGrupo; });
+    var motivos = {}; doGrupo.forEach(function (i) { motivos[i.motivo] = (motivos[i.motivo] || 0) + 1; });
+    var chips = Object.keys(motivos).length > 1 ? '<button type="button" class="pv-chip' + (!estado.recMotivo ? " ativa" : "") + '" data-m="">Todos</button>' +
+      Object.keys(motivos).sort(function (a, b) { return motivos[b] - motivos[a]; }).map(function (m) { return '<button type="button" class="pv-chip' + (estado.recMotivo === m ? " ativa" : "") + '" data-m="' + esc(m) + '">' + esc(m) + " (" + motivos[m] + ")</button>"; }).join("") : "";
+    var itens = doGrupo.filter(function (i) { return !estado.recMotivo || i.motivo === estado.recMotivo; });
+    var cartoes = itens.map(function (i) {
+      var cor = i.afeta_reputacao === "affected" ? "#b91c1c" : "#6b7280";
+      return '<div class="pv-rec"><div class="pv-rec-topo"><b>' + esc(i.motivo) + '</b><span style="color:' + cor + ';font-weight:' + (i.afeta_reputacao === "affected" ? 700 : 400) + '">' + esc(i.afeta_texto) + '</span></div>' +
+        '<div class="pv-rec-corpo"><div style="min-width:0;flex:1 1 260px">' +
+        '<div style="font-size:12.5px;color:#6b7280">' + (EQUIPE ? esc(i.conta) + " · " : "") + esc(i.tipo) + (i.pedido ? " · pedido " + esc(i.pedido) : "") + '</div>' +
+        '<div style="font-weight:700;font-size:14px;margin-top:2px">' + esc(i.produto || "Produto") + '</div>' +
+        '<div style="font-size:13px;color:#374151;margin-top:2px">Comprador: ' + esc(i.comprador) + '</div>' +
+        '<div style="font-size:14px;font-weight:700;margin-top:6px;color:' + (i.grupo === "acao" ? "#b45309" : "#111827") + '">' + esc(i.titulo || i.estado) + '</div>' +
+        (i.titulo && i.titulo !== i.estado ? '<div style="font-size:12.5px;color:#6b7280">' + esc(i.estado) + '</div>' : "") +
+        (i.descricao ? '<div style="font-size:13px;color:#6b7280;margin-top:2px">' + esc(i.descricao) + '</div>' : "") +
+        (i.grupo === "finalizada" && i.resolucao ? '<div style="font-size:13px;color:#14532d;margin-top:2px">' + esc(i.resolucao) + '</div>' : "") +
+        (i.prazo ? '<div style="font-size:12.5px;color:#b45309;margin-top:2px">Prazo: ' + esc(i.prazo.data) + ' ' + esc(i.prazo.hora) + '</div>' : "") +
+        '<div style="font-size:11.5px;color:#9ca3af;margin-top:4px">Atualizada em ' + esc(i.atualizada.data) + ' ' + esc(i.atualizada.hora) + '</div></div>' +
+        '<a class="pv-link" href="' + esc(i.link_ml) + '" target="_blank" rel="noopener">Abrir no Mercado Livre</a></div></div>';
+    }).join("");
+    var vazio = !rec.itens.length ? "Nenhuma reclamação ou mediação nos últimos " + (rec.janela_dias || 10) + " dias." : "Nada nesta lista.";
+    corpo.innerHTML = '<div class="pv-card"><div class="pv-linha" style="gap:8px;margin-bottom:8px"><b>Reclamações e mediações</b>' + seletor + '</div>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' + grupos + '</div>' +
+      (chips ? '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">' + chips + '</div>' : "") +
+      '<div class="pv-aviso" style="background:#eef2ff;color:#3730a3;margin:10px 0 0">Por enquanto a resposta é dada no Mercado Livre: o botão abre a venda no painel do vendedor. Mostramos as abertas e as finalizadas nos últimos ' + (rec.janela_dias || 10) + ' dias.</div>' +
+      (cartoes || '<p style="color:#6b7280;font-size:13.5px;text-align:center;padding:22px">' + vazio + '</p>') + '</div>';
+    corpo.querySelectorAll("[data-g]").forEach(function (b) { b.addEventListener("click", function () { estado.recGrupo = b.dataset.g; estado.recMotivo = ""; desenharReclamacoes(); }); });
+    corpo.querySelectorAll("[data-m]").forEach(function (b) { b.addEventListener("click", function () { estado.recMotivo = b.dataset.m; desenharReclamacoes(); }); });
+    var sel = document.getElementById("pv-rconta");
+    if (sel) sel.addEventListener("change", function (e) { estado.conta = e.target.value; atualizar(); });
+  }
 
   function desenharAguardando() {
     var filtro = "";
@@ -235,13 +297,19 @@
   }
 
   // ------------------------------------------------------------ aba Histórico e relatório
+  function blocoReclamacoes(r) {
+    if (!r) return "";
+    var num = function (v, rot) { return '<div class="pv-num"><b>' + v + '</b><span>' + rot + '</span></div>'; };
+    return '<h3 style="font-size:14px;margin:14px 0 6px">Reclamações e mediações</h3><div class="pv-cards">' + num(r.total, "no período") + num(r.precisam_acao, "precisam da sua ação") + num(r.abertas, "abertas") + num(r.finalizadas, "finalizadas") + num(r.afetam_reputacao, "afetam a reputação") + '</div>' +
+      (r.por_motivo.length ? '<div class="pv-rolagem"><table class="pv-tab"><tr><th>Motivo</th><th>Total</th><th>Abertas</th></tr>' + r.por_motivo.map(function (m) { return "<tr><td>" + esc(m.motivo) + "</td><td>" + m.total + "</td><td>" + m.abertas + "</td></tr>"; }).join("") + "</table></div>" : '<p style="font-size:13px;color:#6b7280">Nenhuma reclamação nesse período.</p>');
+  }
+
   async function desenharHistorico() {
     corpo.innerHTML = '<p style="color:#6b7280">Carregando…</p>';
     var conta = EQUIPE && estado.conta ? "&conta=" + encodeURIComponent(estado.conta) : "";
     var d;
     try { d = await api("/relatorio?dias=" + estado.dias + conta); } catch (e) { corpo.innerHTML = '<div class="pv-aviso" style="background:#fdeceb;color:#8a1f14">' + esc(e.message) + '</div>'; return; }
     var r = d.resumo;
-    var opcoes = [7, 10, 30, 90].map(function (n) { return '<option value="' + n + '"' + (n === estado.dias ? " selected" : "") + '>Últimos ' + n + ' dias</option>'; }).join("");
     var num = function (v, rot) { return '<div class="pv-num"><b>' + v + '</b><span>' + rot + '</span></div>'; };
     var porConta = EQUIPE && r.por_conta.length ? '<h3 style="font-size:14px;margin:14px 0 6px">Por conta</h3><div class="pv-rolagem"><table class="pv-tab"><tr><th>Conta</th><th>Recebidas</th><th>Pelo sistema</th><th>Direto no ML</th><th>Aguardando</th></tr>' +
       r.por_conta.map(function (c) { return "<tr><td>" + esc(c.conta) + "</td><td>" + c.recebidas + "</td><td>" + c.pelo_sistema + "</td><td>" + c.no_ml + "</td><td>" + c.aguardando + "</td></tr>"; }).join("") + "</table></div>" : "";
@@ -255,17 +323,16 @@
         "<td style='min-width:200px'>" + esc(i.resposta) + "</td></tr>";
     }).join("");
     corpo.innerHTML =
-      '<div class="pv-card"><div class="pv-linha" style="gap:8px"><select id="pv-dias" aria-label="Período" style="min-height:40px;border:1px solid #d1d5db;border-radius:8px;padding:0 8px;font:inherit">' + opcoes + '</select>' +
+      '<div class="pv-card"><div class="pv-linha" style="gap:8px"><b style="font-size:14px">Últimos 10 dias</b>' +
       '<a class="pv-btn2" style="display:inline-flex;align-items:center;text-decoration:none" href="' + BASE + '/relatorio/excel?dias=' + estado.dias + conta + '">⬇ Baixar relatório (Excel)</a></div>' +
       '<div class="pv-cards">' + num(r.recebidas, "mensagens recebidas") + num(r.pelo_sistema, "respondidas pelo nosso sistema") + num(r.direto_no_ml, "respondidas direto no ML") + num(r.aguardando, "aguardando resposta") +
-      num(r.pct_pelo_sistema == null ? "—" : r.pct_pelo_sistema + "%", "intermediado pelo sistema") + num(minutosTxt(r.tempo_medio_min), "tempo médio de resposta") + '</div>' + porConta +
+      num(r.pct_pelo_sistema == null ? "—" : r.pct_pelo_sistema + "%", "intermediado pelo sistema") + num(minutosTxt(r.tempo_medio_min), "tempo médio de resposta") + '</div>' + porConta + blocoReclamacoes(d.reclamacoes) +
       '<h3 style="font-size:14px;margin:14px 0 6px">Histórico</h3><div class="pv-rolagem"><table class="pv-tab"><tr><th>Chegou</th>' + (EQUIPE ? "<th>Conta</th>" : "") + '<th>Comprador</th><th>Mensagem</th><th>Respondida</th><th>Por quem</th><th>Resposta enviada</th></tr>' +
       (linhas || '<tr><td colspan="7" style="text-align:center;color:#6b7280;padding:18px">Nenhuma mensagem nesse período.</td></tr>') + '</table></div>' +
       (d.itens.length >= 500 ? '<p style="font-size:12px;color:#6b7280">Mostrando as 500 mais recentes; o Excel traz a mesma lista.</p>' : "") + '</div>';
-    document.getElementById("pv-dias").addEventListener("change", function (e) { estado.dias = parseInt(e.target.value, 10); desenharHistorico(); });
   }
 
   // ------------------------------------------------------------ início
   atualizar().then(function () { desenhar(); });
-  setInterval(function () { if (document.visibilityState === "visible" && estado.aba === "aguardando") atualizar(); }, SEG_ATUALIZA * 1000);
+  setInterval(function () { if (document.visibilityState === "visible" && estado.aba !== "historico") atualizar(); }, SEG_ATUALIZA * 1000);
 })();
