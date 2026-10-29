@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Gestão do pós-venda</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      {% if usuario_logado %}
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario_logado.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario_logado.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario_logado.papel }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+      {% endif %}      <header class="cmx-topbar">
+        <div>
+          <h1>Gestão por conta — Pós-venda</h1>
+          <p class="cmx-subtitulo">O que está chegando em cada conta, o que está parado e quem respondeu. O seller responde pelo painel dele; a gestão acompanha e, se precisar, também pode responder.</p>
+        </div>
+      </header>
+
+      <main>
+        <style>
+          .gp-barra { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-bottom:14px; }
+          .gp-barra select, .gp-barra button { font:inherit; font-size:13.5px; padding:8px 12px; border-radius:10px; border:1px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); cursor:pointer; }
+          .gp-nota { font-size:12.5px; color:var(--cmx-texto-suave); }
+          .gp-cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px; }
+          .gp-card { background:var(--cmx-papel); border:1px solid var(--cmx-borda); border-radius:14px; padding:14px 16px; border-top:3px solid var(--cmx-marinho); }
+          .gp-card .n { font-size:26px; font-weight:700; line-height:1.1; }
+          .gp-card .r { font-size:12.5px; color:var(--cmx-texto-suave); margin-top:4px; }
+          .gp-card.alerta { border-top-color:#c1502e; } .gp-card.ok { border-top-color:#2f6f4f; } .gp-card.atencao { border-top-color:#d98e2f; }
+          .gp-tab { width:100%; border-collapse:collapse; font-size:13.5px; }
+          .gp-tab th { text-align:left; font-size:12px; color:var(--cmx-texto-suave); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--cmx-borda); white-space:nowrap; }
+          .gp-tab td { padding:10px; border-bottom:1px solid var(--cmx-borda); vertical-align:middle; }
+          .gp-tab tr.conta { cursor:pointer; } .gp-tab tr.conta:hover { background:rgba(100,116,139,.08); }
+          .gp-tab td.num { text-align:center; font-variant-numeric:tabular-nums; }
+          .gp-pill { display:inline-block; padding:2px 9px; border-radius:999px; font-size:12px; font-weight:600; }
+          .gp-pill.verm { background:var(--cmx-rust-fundo); color:var(--cmx-rust); } .gp-pill.amb { background:var(--cmx-ambar-fundo); color:var(--cmx-ambar); } .gp-pill.verde { background:var(--cmx-verde-fundo); color:var(--cmx-verde); } .gp-pill.cinza { background:rgba(100,116,139,.15); color:var(--cmx-texto-suave); }
+          .gp-det td { background:rgba(100,116,139,.05); padding:0 10px 14px; }
+          .gp-msg { padding:10px 12px; margin-top:8px; background:var(--cmx-papel); border:1px solid var(--cmx-borda); border-radius:10px; }
+          .gp-msg .t { font-size:12px; color:var(--cmx-texto-suave); margin-bottom:3px; }
+          .gp-msg .r { margin-top:6px; padding-left:10px; border-left:3px solid var(--cmx-verde); font-size:13px; color:var(--cmx-texto-suave); }
+          .gp-tabwrap { overflow-x:auto; }
+          .gp-ver { font:inherit; font-size:12.5px; padding:4px 10px; margin-top:8px; border-radius:8px; border:1px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); cursor:pointer; }
+          .gp-conv { margin-top:10px; padding-top:10px; border-top:1px dashed var(--cmx-borda); }
+          .gp-bal { max-width:85%; padding:8px 11px; border-radius:12px; margin:6px 0; font-size:13.5px; white-space:pre-wrap; word-break:break-word; }
+          .gp-bal small { display:block; font-size:11.5px; color:var(--cmx-texto-suave); margin-top:3px; }
+          .gp-bal.comprador { background:rgba(100,116,139,.14); } .gp-bal.vendedor { background:rgba(59,130,246,.16); margin-left:auto; } .gp-bal.aviso { background:var(--cmx-ambar-fundo); max-width:100%; }
+          .gp-aviso { padding:8px 11px; border-radius:10px; font-size:13px; margin:8px 0; background:var(--cmx-ambar-fundo); color:var(--cmx-texto); }
+          .gp-aviso.erro { background:var(--cmx-rust-fundo); }
+          .gp-resp textarea { width:100%; min-height:84px; box-sizing:border-box; font:inherit; font-size:14px; padding:10px; border-radius:10px; border:1px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); }
+          .gp-resp .linha { display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; }
+          .gp-resp button, .gp-conv .gp-bt { font:inherit; font-size:13.5px; padding:8px 14px; border-radius:10px; border:1px solid var(--cmx-borda); background:var(--cmx-papel); color:var(--cmx-texto); cursor:pointer; }
+          .gp-resp button.env { background:var(--cmx-marinho); color:#fff; border-color:var(--cmx-marinho); font-weight:600; }
+          .gp-resp button:disabled { opacity:.5; cursor:default; }
+        </style>
+
+        <section class="cmx-tabela-secao" style="margin-top:0;">
+          <div class="gp-barra">
+            <select id="gp-dias" aria-label="Período">
+              <option value="1">Hoje</option><option value="3">Últimos 3 dias</option><option value="10" selected>Últimos 10 dias</option>
+            </select>
+            <button type="button" id="gp-atualizar">↻ Atualizar</button>
+            <span class="gp-nota" id="gp-info"></span>
+          </div>
+          <div class="gp-cards" id="gp-cards"></div>
+          <div class="gp-tabwrap">
+            <table class="gp-tab">
+              <thead><tr>
+                <th>Conta</th><th>Recebidas</th><th>Aguardando</th><th>Mais antiga esperando</th>
+                <th>Resp. seller</th><th>Resp. equipe</th><th>Direto no ML</th><th>Tempo médio</th><th>Reclamações</th>
+              </tr></thead>
+              <tbody id="gp-corpo"><tr><td colspan="9" class="gp-nota">Carregando…</td></tr></tbody>
+            </table>
+          </div>
+          <p class="gp-nota" style="margin-top:10px;">Clique numa conta para ver as mensagens dela. "Respondida direto no ML" = alguém respondeu fora do nosso sistema.</p>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script>
+  (function () {
+    var corpo = document.getElementById("gp-corpo"), cards = document.getElementById("gp-cards"), info = document.getElementById("gp-info"), aberta = null;
+    function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+    function dur(min) { if (min == null) return "—"; if (min < 60) return min + " min"; var h = Math.floor(min / 60); if (h < 24) return h + " h " + (min % 60) + " min"; return Math.floor(h / 24) + " d " + (h % 24) + " h"; }
+    function classeEspera(min) { return min == null ? "cinza" : (min >= 240 ? "verm" : (min >= 60 ? "amb" : "verde")); }
+    function dias() { return document.getElementById("gp-dias").value; }
+
+    function carregar() {
+      fetch("/api/pos-venda/gestao?dias=" + dias(), { credentials: "same-origin" }).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); }).then(function (d) {
+        var t = d.totais;
+        cards.innerHTML =
+          '<div class="gp-card' + (t.aguardando ? " alerta" : " ok") + '"><div class="n">' + t.aguardando + '</div><div class="r">Aguardando resposta</div></div>' +
+          '<div class="gp-card' + (t.mais_antiga_min >= 240 ? " alerta" : (t.mais_antiga_min >= 60 ? " atencao" : "")) + '"><div class="n">' + dur(t.mais_antiga_min) + '</div><div class="r">Mensagem parada há mais tempo</div></div>' +
+          '<div class="gp-card"><div class="n">' + t.recebidas + '</div><div class="r">Mensagens recebidas (' + d.dias + (d.dias === 1 ? " dia" : " dias") + ')</div></div>' +
+          '<div class="gp-card"><div class="n">' + dur(t.tempo_medio_min) + '</div><div class="r">Tempo médio de resposta (pelo sistema)</div></div>' +
+          '<div class="gp-card' + (t.reclamacoes_acao ? " atencao" : "") + '"><div class="n">' + t.reclamacoes_acao + '</div><div class="r">Reclamações esperando o seller</div></div>' +
+          '<div class="gp-card"><div class="n">' + t.contas + '</div><div class="r">Contas acompanhadas</div></div>';
+        if (!d.contas.length) { corpo.innerHTML = '<tr><td colspan="9" class="gp-nota">Nenhuma conta liberada no pós-venda ainda.</td></tr>'; return; }
+        corpo.innerHTML = d.contas.map(function (c) {
+          var tr = '<tr class="conta" data-conta="' + esc(c.conta) + '"><td><b>' + esc(c.conta) + '</b>' + (c.reconectar ? ' <span class="gp-pill verm" title="O Mercado Livre pediu para reconectar esta conta">reconectar</span>' : "") + '</td>' +
+            '<td class="num">' + c.recebidas + '</td>' +
+            '<td class="num">' + (c.aguardando ? '<span class="gp-pill ' + classeEspera(c.mais_antiga_min) + '">' + c.aguardando + '</span>' : '<span class="gp-pill verde">0</span>') + '</td>' +
+            '<td class="num">' + (c.aguardando ? dur(c.mais_antiga_min) : "—") + '</td>' +
+            '<td class="num">' + c.pelo_seller + '</td><td class="num">' + c.pela_equipe + '</td><td class="num">' + c.direto_no_ml + '</td>' +
+            '<td class="num">' + dur(c.tempo_medio_min) + '</td>' +
+            '<td class="num">' + (c.reclamacoes_acao ? '<span class="gp-pill amb">' + c.reclamacoes_acao + '</span>' : "0") + '</td></tr>';
+          return tr + (aberta === c.conta ? '<tr class="gp-det" data-det="' + esc(c.conta) + '"><td colspan="9"><div class="gp-nota" style="padding-top:10px">Carregando mensagens…</div></td></tr>' : "");
+        }).join("");
+        if (aberta) carregarMensagens(aberta);
+        info.textContent = "Atualizado às " + d.gerado_em.hora + " · a tela se atualiza sozinha a cada minuto · o sistema confere o Mercado Livre a cada " + d.verificacao.conferir_min + " min (mensagem nova chega na hora pelo aviso do ML)";
+      }).catch(function () { corpo.innerHTML = '<tr><td colspan="9" class="gp-nota">Não consegui carregar agora. Tente atualizar.</td></tr>'; });
+    }
+
+    function carregarMensagens(conta) {
+      fetch("/api/pos-venda/gestao/mensagens?conta=" + encodeURIComponent(conta) + "&dias=" + dias(), { credentials: "same-origin" }).then(function (r) { return r.json(); }).then(function (d) {
+        var linha = corpo.querySelector('tr[data-det="' + (window.CSS && CSS.escape ? CSS.escape(conta) : conta) + '"]'); if (!linha) return;
+        var html = d.itens.length ? d.itens.map(function (m) {
+          var aguardando = m.status === "Aguardando resposta";
+          return '<div class="gp-msg"><div class="t">' + esc(m.recebida.data) + " " + esc(m.recebida.hora) + " · " + esc(m.comprador || "Comprador") + (m.pedido ? " · pedido " + esc(m.pedido) : "") + (m.produto ? " · " + esc(m.produto) : "") +
+            ' · <span class="gp-pill ' + (aguardando ? "amb" : "verde") + '">' + esc(m.status) + "</span></div><div>“" + esc(m.mensagem) + "”</div>" +
+            (aguardando ? "" : '<div class="r">' + (m.resposta ? esc(m.resposta) : "(respondida direto no Mercado Livre)") + '<div class="t">' + esc(m.origem) + (m.respondida_por ? " · " + esc(m.respondida_por) : "") + (m.tempo_min != null ? " · em " + dur(m.tempo_min) : "") + "</div></div>") +
+            '<button type="button" class="gp-ver" data-id="' + m.id + '">Ver conversa</button><div class="gp-conv" id="gp-conv-' + m.id + '" hidden></div></div>';
+        }).join("") : '<div class="gp-nota" style="padding-top:10px">Nenhuma mensagem nesse período.</div>';
+        linha.firstElementChild.innerHTML = html + (d.total > d.itens.length ? '<div class="gp-nota" style="padding-top:8px">Mostrando as ' + d.itens.length + " mais recentes de " + d.total + ".</div>" : "");
+      });
+    }
+
+    // ---- conversa completa + resposta (28/10) ----
+    function api(url, opc) { return fetch(url, Object.assign({ credentials: "same-origin" }, opc || {})).then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok) { var e = new Error(j.detail || ("Erro " + r.status)); e.status = r.status; throw e; } return j; }); }); }
+    function hora(iso) { if (!iso) return ""; var d = new Date(iso); return isNaN(d) ? "" : d.toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }); }
+
+    function abrirConversa(id) {
+      var box = document.getElementById("gp-conv-" + id); if (!box) return;
+      box.hidden = false; box.innerHTML = '<div class="gp-nota">Lendo a conversa no Mercado Livre…</div>';
+      api("/api/pos-venda/gestao/conversa/" + id).then(function (d) {
+        var html = d.conversa.map(function (m) {
+          var cls = m.de === "vendedor" ? "vendedor" : (m.de === "aviso" ? "aviso" : "comprador");
+          var quem = m.de === "vendedor" ? "Vendedor" : (m.de === "aviso" ? "Aviso" : "Comprador");
+          return '<div class="gp-bal ' + cls + '">' + esc(m.texto) + '<small>' + quem + (m.quando ? " · " + hora(m.quando) : "") + "</small></div>";
+        }).join("");
+        var it = d.item;
+        if (!d.aguardando) html += '<div class="gp-aviso">Esta conversa já está respondida.</div>';
+        else if (it.em_atendimento_por && !it.em_atendimento_eu) html += '<div class="gp-aviso">Em atendimento por <b>' + esc(it.em_atendimento_por) + '</b>. Você só acompanha por enquanto.</div>';
+        html += '<div class="gp-resp" data-id="' + id + '">' +
+          (d.pode_responder ? '<button type="button" class="gp-bt" data-acao="responder">Responder</button> ' : "") +
+          '<button type="button" class="gp-bt" data-acao="atualizar">↻ Atualizar conversa</button> <button type="button" class="gp-bt" data-acao="fechar">Fechar</button></div>';
+        box.innerHTML = html; box.dataset.limite = d.limite_caracteres;
+      }).catch(function (err) { box.innerHTML = '<div class="gp-aviso erro">' + esc(err.message) + "</div>"; });
+    }
+
+    function mostrarCampo(id, box) {
+      var r = box.querySelector(".gp-resp"); var lim = parseInt(box.dataset.limite || "350", 10);
+      r.innerHTML = '<textarea maxlength="' + lim + '" placeholder="Escreva ao comprador"></textarea>' +
+        '<div class="linha"><button type="button" class="env" data-acao="enviar" disabled>Enviar pelo Mercado Livre</button><button type="button" data-acao="cancelar">Cancelar</button><span class="gp-nota"><span class="gp-cont">0</span>/' + lim + ' · a resposta vai direto ao comprador</span></div><div class="gp-erro"></div>';
+      var ta = r.querySelector("textarea"), bt = r.querySelector(".env");
+      ta.addEventListener("input", function () { r.querySelector(".gp-cont").textContent = ta.value.length; bt.disabled = !ta.value.trim(); });
+      ta.focus();
+    }
+
+    corpo.addEventListener("click", function (e) {
+      var ver = e.target.closest(".gp-ver");
+      if (ver) { abrirConversa(ver.getAttribute("data-id")); return; }
+      var ac = e.target.closest("[data-acao]");
+      if (ac) {
+        var r = ac.closest(".gp-resp"), box = ac.closest(".gp-conv"), id = r.getAttribute("data-id"), a = ac.getAttribute("data-acao");
+        if (a === "atualizar") { abrirConversa(id); return; }
+        if (a === "fechar" || a === "cancelar") {
+          var tinha = !!r.querySelector("textarea");
+          (tinha ? api("/api/pos-venda/conversas/" + id + "/liberar", { method: "POST" }).catch(function () {}) : Promise.resolve()).then(function () { if (a === "fechar") { box.hidden = true; box.innerHTML = ""; } else abrirConversa(id); });
+          return;
+        }
+        if (a === "responder") {
+          ac.disabled = true;
+          api("/api/pos-venda/gestao/conversa/" + id + "/responder-agora", { method: "POST" }).then(function () { mostrarCampo(id, box); }).catch(function (err) { ac.disabled = false; r.insertAdjacentHTML("beforebegin", '<div class="gp-aviso erro">' + esc(err.message) + "</div>"); });
+          return;
+        }
+        if (a === "enviar") {
+          var ta = r.querySelector("textarea"), er = r.querySelector(".gp-erro"); ac.disabled = true; ac.textContent = "Enviando…"; er.innerHTML = "";
+          api("/api/pos-venda/conversas/" + id + "/responder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: ta.value }) })
+            .then(function () { carregar(); }).catch(function (err) { ac.disabled = false; ac.textContent = "Enviar pelo Mercado Livre"; er.innerHTML = '<div class="gp-aviso erro">' + esc(err.message) + "</div>"; });
+          return;
+        }
+      }
+      var tr = e.target.closest("tr.conta"); if (!tr) return;
+      aberta = aberta === tr.getAttribute("data-conta") ? null : tr.getAttribute("data-conta");
+      carregar();
+    });
+    document.getElementById("gp-dias").addEventListener("change", carregar);
+    document.getElementById("gp-atualizar").addEventListener("click", carregar);
+    setInterval(function () { if (document.visibilityState === "visible" && !corpo.querySelector(".gp-resp textarea")) carregar(); }, 60000);  // não apaga o que está sendo escrito
+    carregar();
+  })();
+  </script>
+  <script src="/static/menu-celular.js?v=1"></script>
+</body>
+</html>
