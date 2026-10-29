@@ -72,7 +72,7 @@ def _credito(config: dict) -> dict:
         bruto = uso_ia_custo.gasto_desde_usd(conferido_em)
         if not bruto["disponivel"]:
             return {"modo": "saldo", "disponivel": False, "erro": bruto["erro"]}
-        fator = float(config.get("credito_calibracao") or 1.0)
+        fator = uso_ia_custo.fator_vigente(config)  # 1.0 se o ajuste foi aprendido com a tabela de preços antiga
         gasto = round(bruto["gasto_usd"] * fator, 2)
         resta = round(max(saldo - gasto, 0.0), 2)
         horas = max((datetime.now(timezone.utc) - conferido_em).total_seconds() / 3600.0, 0.0)
