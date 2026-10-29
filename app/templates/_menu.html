@@ -26,6 +26,8 @@
   {%- set ativo = (_caminho == href) or (href != "/" and _caminho.startswith(href ~ "/")) -%}
   {#- "Produtos para cadastro" não fica marcado quando a tela aberta é a de Produtividade (que é irmã dela, não filha) -#}
   {%- if href == "/cadastro" and _caminho.startswith("/cadastro/produtividade") %}{% set ativo = false %}{% endif -%}
+  {#- idem: "Mensagens dos pedidos" não fica marcado na Gestão por conta (28/10) -#}
+  {%- if href == "/pos-venda" and _caminho.startswith("/pos-venda/gestao") %}{% set ativo = false %}{% endif -%}
   <a class="cmx-nav-item cmx-nav-subitem{% if ativo %} cmx-nav-item--ativo{% endif %}" href="{{ href }}"
      {%- if nova_aba %} target="_blank" rel="noopener"{% endif %}{% if ativo %} aria-current="page"{% endif %}>
     {%- if ativo %}<span class="cmx-nav-dot"></span> {% endif %}{{ rotulo }}
@@ -85,13 +87,14 @@
 
   {% call grupo("pos-venda", "Pós-venda", ["/pos-venda", "/devolucoes", "/cancelamentos"]) %}
     {{ item("/pos-venda", "Mensagens dos pedidos") }}
+    {% if _papel in ("admin", "supervisor") %}{{ item("/pos-venda/gestao", "Gestão por conta") }}{% endif %}
     {% if not _restrito %}
       {{ item("/devolucoes", "Devoluções") }}
       {{ item("/cancelamentos", "Cancelamentos") }}
     {% endif %}
   {% endcall %}
 
-  {% call grupo("solicitacoes", "Solicitações cancelamentos", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos", "/produtividade-cancelamento"]) %}
+  {% call grupo("solicitacoes", "Solicitações cancelamentos e reversos", ["/solicitar-cancelamento", "/solicitacoes-painel", "/relatorio-cancelamentos", "/produtividade-cancelamento"]) %}
     {{ item("/solicitar-cancelamento", "Nova solicitação") }}
     {{ item("/solicitacoes-painel", "Solicitações") }}
     {{ item("/relatorio-cancelamentos", "Relatório de cancelamentos") }}
@@ -109,7 +112,7 @@
   {% endif %}
 
   {% if _eh_setor_cancelamento %}
-    {% call grupo("solicitacoes", "Solicitações cancelamentos", ["/solicitar-cancelamento", "/solicitacoes-painel"] + (["/relatorio-cancelamentos", "/produtividade-cancelamento"] if _eh_gerente else [])) %}
+    {% call grupo("solicitacoes", "Solicitações cancelamentos e reversos", ["/solicitar-cancelamento", "/solicitacoes-painel"] + (["/relatorio-cancelamentos", "/produtividade-cancelamento"] if _eh_gerente else [])) %}
       {{ item("/solicitar-cancelamento", "Nova solicitação") }}
       {{ item("/solicitacoes-painel", "Solicitações") }}
       {% if _eh_gerente %}
