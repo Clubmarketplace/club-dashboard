@@ -465,3 +465,17 @@ def gestao_habilitar_resposta(item_id: int, request: Request, db: Session = Depe
         db.refresh(item)
         raise HTTPException(status_code=409, detail=f"Em atendimento por {item.em_atendimento_por or 'outra pessoa'}. Você só acompanha por enquanto.")
     return {"status": "ok"}
+
+
+@router_gestao.get("/busca-status")
+def gestao_busca_status(request: Request, db: Session = Depends(get_db)):
+    """Estado da busca no Mercado Livre (rodando? e o resultado da última), para a barra da Gestão acompanhar."""
+    _usuario_gestor(request, db)
+    return dict(_varredura)
+
+
+@router_gestao.post("/buscar-agora")
+def gestao_buscar_agora(request: Request, db: Session = Depends(get_db)):
+    """Mesma busca do botão da equipe (↻ Atualizar agora), liberada ao gestor: puxa do Mercado Livre agora."""
+    _usuario_gestor(request, db)
+    return equipe_sincronizar(request, False, db)
