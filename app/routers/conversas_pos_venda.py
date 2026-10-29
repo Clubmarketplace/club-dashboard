@@ -9,6 +9,7 @@ banco: respondeu numa, some da outra. A conta do seller é sempre a do login -- 
 servidor confere em toda rota, nunca a tela.
 """
 import io
+import os
 import threading
 from datetime import datetime, timedelta
 
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app import auth
 from app import pos_venda_conversas as pv
+from app import pos_venda_reclamacoes as pvr
 from app.database import get_db
 from app.models import MensagemPosVenda
 
@@ -120,9 +122,11 @@ def _responder(db: Session, usuario, item: MensagemPosVenda, texto: str) -> dict
 
 
 def _relatorio(db: Session, contas_ids: list[int] | None, dias: int, conta: str | None = None) -> dict:
-    dias = max(1, min(int(dias or 30), 90))
+    # (27/10) Só os últimos 10 dias: o que é mais antigo é descartado do relatório (decisão do Washington).
+    dias = pv.JANELA_DIAS
     linhas = pv.linhas_do_relatorio(db, contas_ids, dias, conta)
-    return {"dias": dias, "resumo": pv.resumo_do_relatorio(linhas), "itens": [pv.item_do_historico(i) for i in linhas[:500]]}
+    return {"dias": dias, "resumo": pv.resumo_do_relatorio(linhas), "itens": [pv.item_do_historico(i) for i in linhas[:500]],
+            "reclamacoes": pvr.resumo_do_relatorio(db, contas_ids, conta)}
 
 
 def _excel(dados: dict, titulo: str, quem: str, com_conta: bool) -> StreamingResponse:
@@ -160,6 +164,20 @@ def _excel(dados: dict, titulo: str, quem: str, com_conta: bool) -> StreamingRes
                   i["tempo_min"] if i["tempo_min"] is not None else ""])
     for n, larg in enumerate((11, 9, 7, 18, 18, 18, 34, 50, 18, 12, 9, 18, 24, 50, 10), start=1):
         h.column_dimensions[h.cell(row=1, column=n).column_letter].width = larg
+    rec = dados.get("reclamacoes") or {"itens": [], "por_motivo": [], "total": 0}
+    c = wb.create_sheet("Reclamações")
+    c.append(["Reclamações e mediações (abertas + finalizadas nos últimos 10 dias)", rec["total"]])
+    c.append([])
+    c.append(["POR MOTIVO", "Total", "Abertas"])
+    for m in rec["por_motivo"]:
+        c.append([m["motivo"], m["total"], m["abertas"]])
+    c.append([])
+    c.append(["Atualizada em", "Hora", "Conta", "Comprador", "Pedido", "Produto", "Tipo", "Motivo", "Situação", "Afeta reputação", "Prazo", "Resolução"])
+    for i in rec["itens"]:
+        c.append([i["atualizada"]["data"], i["atualizada"]["hora"], i["conta"], i["comprador"], i["pedido"], i["produto"], i["tipo"], i["motivo"],
+                  i["estado"], i["afeta_texto"], (i["prazo"] or {}).get("data", ""), i["resolucao"]])
+    for n, larg in enumerate((34, 8, 18, 18, 18, 34, 14, 30, 28, 24, 12, 30), start=1):
+        c.column_dimensions[c.cell(row=1, column=n).column_letter].width = larg
     buf = io.BytesIO()
     wb.save(buf)
     buf.seek(0)
@@ -194,7 +212,14 @@ def seller_resumo(request: Request, db: Session = Depends(get_db)):
     n = db.query(MensagemPosVenda).filter(
         MensagemPosVenda.tipo == "mensagem", MensagemPosVenda.status.in_((pv.STATUS_ABERTA, "enviando")), MensagemPosVenda.conta_id.in_(ids or [0])
     ).count()
-    return {"aguardando": n}
+    return {"aguardando": n, "reclamacoes": pvr.contar_precisam_acao(db, ids)}
+
+
+@router_seller.get("/reclamacoes")
+def seller_reclamacoes(request: Request, db: Session = Depends(get_db)):
+    """Reclamações e mediações da conta do seller (só leitura): abertas + finalizadas dos últimos 10 dias."""
+    u = _usuario_seller(request, db)
+    return pvr.lista_para_tela(db, pv.contas_ids_do_seller(db, u))
 
 
 @router_seller.post("/{item_id}/abrir")
@@ -239,6 +264,14 @@ def equipe_lista(request: Request, conta: str | None = None, db: Session = Depen
     u = _usuario_equipe(request, db)
     dados = _lista(db, u, None, conta)
     dados["varredura"] = dict(_varredura)
+    dados["contas_reconectar"] = sorted({i["conta"] for i in dados["itens"] if i["conta_reconectar"]})
+    return dados
+
+
+@router_equipe.get("/reclamacoes")
+def equipe_reclamacoes(request: Request, conta: str | None = None, db: Session = Depends(get_db)):
+    _usuario_equipe(request, db)
+    dados = pvr.lista_para_tela(db, None, conta)
     dados["contas_reconectar"] = sorted({i["conta"] for i in dados["itens"] if i["conta_reconectar"]})
     return dados
 
@@ -288,13 +321,147 @@ def equipe_sincronizar(request: Request, anteriores: bool = False, db: Session =
     def _rodar():
         try:
             resultados = pv.sincronizar_todas(anteriores=anteriores)
+            try:  # reclamações (29/10): erro aqui não pode estragar a busca das mensagens
+                recl = pvr.sincronizar_todas()
+            except Exception:
+                recl = []
             _varredura["ultimo"] = {
                 "em": datetime.utcnow().isoformat() + "Z",
                 "criadas": sum(r["criadas"] for r in resultados),
-                "contas_reconectar": [r["conta"] for r in resultados if r["erro"] == "reconectar"],
+                "reclamacoes": sum(r["criadas"] + r["atualizadas"] for r in recl),
+                "contas_reconectar": sorted({r["conta"] for r in resultados + recl if r["erro"] == "reconectar"}),
             }
         finally:
             _varredura["rodando"] = False
 
     threading.Thread(target=_rodar, daemon=True).start()
     return {"status": "iniciada"}
+
+
+# ---------------------------------------------------------------------------
+# Gestão por conta (28/10) -- visão do supervisor: o que está chegando em cada
+# conta, o que está parado e quem respondeu. Só leitura; quem responde continua
+# sendo o seller (ou a equipe, nas telas de sempre).
+# ---------------------------------------------------------------------------
+router_gestao = APIRouter(prefix="/api/pos-venda/gestao", tags=["pós-venda: gestão por conta"])
+
+
+def _usuario_gestor(request: Request, db: Session):
+    u = _logado(request, db)
+    if u.papel not in ("admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Acesso restrito")
+    return u
+
+
+def _dias_gestao(dias: int) -> int:
+    return max(1, min(int(dias or pv.JANELA_DIAS), pv.JANELA_DIAS))
+
+
+@router_gestao.get("")
+def gestao_resumo(request: Request, dias: int = 10, db: Session = Depends(get_db)):
+    """Uma linha por conta liberada: recebidas, aguardando, mais antiga esperando, quem respondeu, tempo médio."""
+    from app.models import Conta, ReclamacaoPosVenda
+    _usuario_gestor(request, db)
+    dias = _dias_gestao(dias)
+    agora = datetime.utcnow()
+
+    # Contas (pelo apelido: pode haver duplicatas do mesmo nome) que fazem parte do pós-venda agora.
+    contas = [c for c in db.query(Conta).filter(Conta.inativa_em.is_(None)).all() if pv.conta_liberada(c.apelido)]
+    por_apelido: dict[str, list] = {}
+    for c in contas:
+        por_apelido.setdefault(c.apelido, []).append(c)
+
+    linhas = pv.linhas_do_relatorio(db, None, dias)
+    por_conta_linhas: dict[str, list] = {}
+    for i in linhas:
+        por_conta_linhas.setdefault(i.conta.apelido if i.conta else "—", []).append(i)
+
+    # Reclamações abertas que esperam ação, por conta.
+    recl = {}
+    for r in db.query(ReclamacaoPosVenda).filter(ReclamacaoPosVenda.status_ml == "opened", ReclamacaoPosVenda.precisa_acao.is_(True)).all():
+        ap = r.conta.apelido if getattr(r, "conta", None) else None
+        if ap:
+            recl[ap] = recl.get(ap, 0) + 1
+
+    saida = []
+    for apelido in sorted(set(por_apelido) | set(por_conta_linhas), key=str.lower):
+        ls = por_conta_linhas.get(apelido, [])
+        r = pv.resumo_do_relatorio(ls)
+        espera = [(agora - i.recebida_em).total_seconds() / 60 for i in ls if i.status in (pv.STATUS_ABERTA, "enviando") and i.recebida_em]
+        grupo_contas = por_apelido.get(apelido, [])
+        saida.append({
+            "conta": apelido,
+            "recebidas": r["recebidas"],
+            "aguardando": r["aguardando"],
+            "mais_antiga_min": round(max(espera)) if espera else None,
+            "pelo_seller": r["pelo_sistema_seller"],
+            "pela_equipe": r["pelo_sistema_equipe"],
+            "direto_no_ml": r["direto_no_ml"],
+            "tempo_medio_min": r["tempo_medio_min"],
+            "pct_pelo_sistema": r["pct_pelo_sistema"],
+            "reclamacoes_acao": recl.get(apelido, 0),
+            "reconectar": any(c.auth_erro_em for c in grupo_contas),
+        })
+    # Quem tem mais mensagem parada há mais tempo aparece primeiro.
+    saida.sort(key=lambda x: (-(x["aguardando"] > 0), -(x["mais_antiga_min"] or 0), x["conta"].lower()))
+    total = pv.resumo_do_relatorio(linhas)
+    return {
+        "dias": dias,
+        "contas": saida,
+        "totais": {
+            "contas": len(saida),
+            "recebidas": total["recebidas"],
+            "aguardando": total["aguardando"],
+            "mais_antiga_min": max((c["mais_antiga_min"] or 0 for c in saida), default=0) or None,
+            "reclamacoes_acao": sum(c["reclamacoes_acao"] for c in saida),
+            "tempo_medio_min": total["tempo_medio_min"],
+            "pct_pelo_sistema": total["pct_pelo_sistema"],
+        },
+        "verificacao": {"conferir_min": max(2, int(os.getenv("POSVENDA_CONFERIR_MIN", "10") or 10)), "tela_seg": 30},
+        "gerado_em": pv.quando_texto(agora),
+    }
+
+
+@router_gestao.get("/mensagens")
+def gestao_mensagens(request: Request, conta: str, dias: int = 10, db: Session = Depends(get_db)):
+    """As mensagens de UMA conta (o que o comprador disse, se foi respondida, por quem e em quanto tempo)."""
+    _usuario_gestor(request, db)
+    linhas = pv.linhas_do_relatorio(db, None, _dias_gestao(dias), conta)
+    return {"conta": conta, "itens": [pv.item_do_historico(i) for i in linhas[:200]], "total": len(linhas)}
+
+
+@router_gestao.get("/conversa/{item_id}")
+def gestao_conversa(item_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Conversa completa lida do Mercado Livre na hora, SÓ PARA VER: não segura a trava, então o seller
+    continua podendo responder. `pode_responder` = ainda está aguardando e ninguém mais está atendendo.
+    """
+    u = _usuario_gestor(request, db)
+    item = _item(db, item_id, None)
+    conversa = _conversa_ou_erro(db, item)
+    aguardando = item.status == pv.STATUS_ABERTA
+    # Alguém respondeu direto no ML: fecha a linha (mesma regra de quando a conversa é aberta nas outras telas).
+    if aguardando and conversa and conversa[-1]["de"] == "vendedor":
+        pv._fechar_externamente(db, item.conta_id, item.pack_id, None)
+        db.refresh(item)
+        aguardando = False
+    tela = pv.para_tela(item, u.id)
+    livre = aguardando and (not tela["em_atendimento_por"] or tela["em_atendimento_eu"])
+    return {"item": tela, "conversa": conversa, "aguardando": aguardando, "pode_responder": bool(livre and item.pack_id),
+            "limite_caracteres": pv.LIMITE_CARACTERES}
+
+
+@router_gestao.post("/conversa/{item_id}/responder-agora")
+def gestao_habilitar_resposta(item_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    O gestor decidiu responder: segura a trava (SEM tomar de quem já está atendendo). Se o seller já estiver
+    respondendo, devolve 409 dizendo quem é -- a gestão só acompanha. O envio em si é o /responder de sempre.
+    """
+    u = _usuario_gestor(request, db)
+    item = _item(db, item_id, None)
+    if item.status != pv.STATUS_ABERTA:
+        raise HTTPException(status_code=409, detail="Essa mensagem já foi respondida.")
+    if not pv.assumir(db, item.id, u):
+        db.refresh(item)
+        raise HTTPException(status_code=409, detail=f"Em atendimento por {item.em_atendimento_por or 'outra pessoa'}. Você só acompanha por enquanto.")
+    return {"status": "ok"}
