@@ -308,7 +308,7 @@
         <details class="painel" id="sec-garantias">
           <summary>Lista das garantias, com custo e fotos <span class="sub-sum" id="gar-info"></span></summary>
           <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima; a conta é a escolhida no resumo.</div>
-          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
+          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
           <div id="sel-bar" hidden></div>
           <div class="tabela-rolagem"><table>
             <thead><tr><th>Fábrica</th><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th><th>Fotos</th></tr></thead>
@@ -800,14 +800,20 @@
 
         // ranking: um gráfico só, clicável
         const porValor = metricaRank === "valor", chave = porValor ? "custo_garantia" : "garantias";
-        const top = contas.filter(x => x[chave] > 0).sort((a, b) => b[chave] - a[chave]).slice(0, 7);
+        // 31/10: nos dois modos aparecem as 10 contas com garantia. Por valor: as com custo primeiro; as sem custo
+        // aparecem com a barra vazia e "sem custo" (nunca inventa valor).
+        const top = contas.filter(x => x.garantias > 0)
+          .sort((a, b) => porValor ? (b.custo_garantia - a.custo_garantia) || (b.garantias - a.garantias) : (b.garantias - a.garantias) || (b.custo_garantia - a.custo_garantia))
+          .slice(0, 10);
         const max = Math.max(1, ...top.map(x => x[chave]));
+        const rotuloVal = (x) => !porValor ? x.garantias + (x.garantias === 1 ? " garantia" : " garantias")
+          : (x.custo_garantia > 0 ? brl(x.custo_garantia) + (x.sem_custo ? ` + ${x.sem_custo} sem custo` : "") : `sem custo · ${x.garantias} garantia${x.garantias === 1 ? "" : "s"}`);
         $("rg-rank").innerHTML = top.length
-          ? top.map(x => `<button type="button" class="rank-linha" data-conta="${esc(x.conta)}"><span class="rank-nome">${esc(x.conta)}</span><span class="rank-trilho"><i style="width:${Math.max(3, Math.round(x[chave] * 100 / max))}%"></i></span><span class="rank-val">${porValor ? brl(x.custo_garantia) : x.garantias + (x.garantias === 1 ? " garantia" : " garantias")}</span></button>`).join("")
-          : `<div class="vazio">${porValor ? "Nenhuma garantia com custo cadastrado neste período." : "Nenhuma garantia neste período."}</div>`;
+          ? top.map(x => `<button type="button" class="rank-linha" data-conta="${esc(x.conta)}"><span class="rank-nome">${esc(x.conta)}</span><span class="rank-trilho"><i style="width:${x[chave] > 0 ? Math.max(3, Math.round(x[chave] * 100 / max)) : 0}%"></i></span><span class="rank-val" style="${porValor && x.custo_garantia <= 0 ? "color:#a83232;font-weight:600" : ""}">${rotuloVal(x)}</span></button>`).join("")
+          : '<div class="vazio">Nenhuma garantia neste período.</div>';
         const av = $("rg-aviso");
         av.hidden = !(tot.sem_custo > 0);
-        if (tot.sem_custo > 0) av.textContent = `${tot.sem_custo} garantia${tot.sem_custo === 1 ? "" : "s"} sem custo cadastrado ficam de fora do valor. Cadastre o custo em Custos para fechar a conta.`;
+        if (tot.sem_custo > 0) av.textContent = `${tot.sem_custo} garantia${tot.sem_custo === 1 ? "" : "s"} sem custo cadastrado ficam de fora do valor. Abra a Lista das garantias para ver o motivo de cada uma (SKU diferente do cadastro, conta sem custos etc.).`;
         document.querySelectorAll("#rg-metrica button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === metricaRank));
       } else {
         // conta escolhida: para onde foram os retornos
@@ -838,6 +844,16 @@
     });
     // "Ver fotos": só busca quando clica (nunca na lista) e reaproveita as fotos que já existem no sistema.
     $("t-gar").addEventListener("click", async (e) => {
+      const man = e.target.closest(".btn-custo-man");
+      if (man) {
+        const v = window.prompt("Custo desta garantia (R$). Fica marcado como informado manualmente e NÃO altera o cadastro de custos do seller:");
+        if (v == null || !String(v).trim()) return;
+        const n = numBR(v);
+        if (!(n > 0)) { alert("Informe um valor maior que zero."); return; }
+        try { await post(`/api/reversos-gestor/garantias/${man.dataset.id}/custo`, { custo: n }); carregarGarantias(); }
+        catch (err) { alert(err.message || "Não consegui salvar o custo."); }
+        return;
+      }
       const b = e.target.closest(".btn-fotos"); if (!b) return;
       const id = Number(b.dataset.id), linha = document.getElementById("fotos-" + id); if (!linha) return;
       const abrir = linha.hidden; linha.hidden = !abrir;
@@ -1060,6 +1076,22 @@
       finally { $("dlg-salvar").disabled = false; }
     });
 
+    // Custo gravado no reverso: mostra de onde veio (cadastro da conta ou informado à mão) e o produto do cadastro p/ conferir.
+    function celulaCusto(i) {
+      const peq = (txt, cor) => `<div class="peq" style="font-weight:400;max-width:280px;margin-left:auto;text-align:right;white-space:normal${cor ? ";color:" + cor : ""}">${txt}</div>`;
+      if (i.custo != null) {
+        const manual = i.custo_origem === "manual";
+        return `<span style="font-weight:600">${brl(i.custo)}</span>`
+          + (manual ? peq(`informado manualmente${i.custo_por ? " por " + esc(i.custo_por) : ""}${i.custo_em ? " em " + esc(i.custo_em) : ""}`, "#8a5a00")
+                    : peq(`do cadastro da conta${i.custo_produto ? ": " + esc(i.custo_produto) : ""}`))
+          + (manual && !i.remessa ? `<button type="button" class="btn btn-custo-man" data-id="${i.id}" style="padding:2px 8px;margin-top:4px">corrigir</button>` : "");
+      }
+      return `<span style="color:#a83232;font-weight:600">sem custo</span>`
+        + (i.custo_motivo ? peq(esc(i.custo_motivo)) : "")
+        + (PODE_CUSTO_MANUAL && !i.remessa ? `<button type="button" class="btn btn-custo-man" data-id="${i.id}" style="padding:2px 8px;margin-top:4px">informar custo</button>` : "");
+    }
+    const PODE_CUSTO_MANUAL = true;   // a tela inteira já é só admin/supervisor (o servidor confere de novo)
+
     function desenharGarantias(d) {
       garUltimo = d; desenharPorConta(d.por_conta); desenharResumoGestor();
       $("gar-info").textContent = `${dataBRano(d.periodo.de)} a ${dataBRano(d.periodo.ate)} · ${garConta || "todas as contas"}`;
@@ -1067,7 +1099,8 @@
         ? `<span class="selo-rem ${i.remessa.status === "analise" ? "" : "ok-enc"}" title="${esc(i.remessa.fabrica)}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>`
         : (garConta ? `<label style="display:flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" class="chk-env" data-id="${i.id}" ${selecionadas.has(i.id) ? "checked" : ""} /> enviar</label>` : '<span style="color:var(--cmx-texto-suave)">no galpão</span>');
       $("t-gar").innerHTML = d.itens.length
-        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td><td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td>
+        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n">${celulaCusto(i)}</td>
+            <td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td>
             <td><button type="button" class="btn btn-fotos" data-id="${i.id}" aria-expanded="${fotosAbertas.has(i.id)}" style="padding:6px 10px">${fotosAbertas.has(i.id) ? "Ocultar fotos" : "Ver fotos"}</button></td></tr>
             <tr id="fotos-${i.id}" ${fotosAbertas.has(i.id) ? "" : "hidden"}><td colspan="9" style="background:#f7f9fb"><div class="gar-fotos-caixa">${fotosCache[i.id] || ""}</div></td></tr>`).join("")
         : '<tr><td colspan="9" class="vazio">Nenhuma garantia nesta conta e período.</td></tr>';
@@ -1077,6 +1110,16 @@
       atualizarBarraSelecao();
       $("gar-nota").textContent = d.total_itens > d.itens.length ? `Mostrando as ${d.itens.length} mais recentes de ${d.total_itens}. O Excel traz todas.` : "";
     }
+    $("gar-fixar").addEventListener("click", async () => {
+      const b = $("gar-fixar"); b.disabled = true;
+      try {
+        const p = params(); if (garConta) p.set("conta", garConta);
+        const r = await chamar("/api/reversos-gestor/garantias/fixar-custos?" + p.toString(), { method: "POST" });
+        alert(`${r.gravadas} garantia(s) com custo gravado. ${r.sem_custo} continuam sem custo (SKU não encontrado no cadastro da conta).`);
+        carregarGarantias();
+      } catch (err) { alert(err.message || "Não consegui fixar os custos agora."); }
+      finally { b.disabled = false; }
+    });
     async function carregarGarantias() {
       const minha = ++vezGar; const p = params(); if (garConta) p.set("conta", garConta);
       $("gar-excel").href = "/api/reversos-gestor/garantias/excel?" + p.toString();
