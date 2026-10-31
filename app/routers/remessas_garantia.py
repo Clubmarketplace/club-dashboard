@@ -269,6 +269,8 @@ def criar(dados: RemessaEntrada, request: Request, db: Session = Depends(get_db)
     emissao = _parse_data(dados.data_emissao, "data de emissão", obrigatoria=False)
     if envio > _hoje_br() + timedelta(days=1):
         raise HTTPException(status_code=422, detail="A data de envio não pode estar no futuro.")
+    if emissao and emissao > envio:
+        raise HTTPException(status_code=422, detail="A data de emissão da nota não pode ser depois da data de envio.")
     manuais = {i.id: i.custo for i in dados.itens}
     ids = list(dict.fromkeys(i.id for i in dados.itens))
     if not ids:
