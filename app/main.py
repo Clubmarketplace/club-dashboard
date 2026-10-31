@@ -434,7 +434,7 @@ async def exigir_login(request: Request, call_next):
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/dashboard",
         "/meus-cancelamentos", "/meus-cancelamentos/fotos", "/meus-cancelamentos/foto", "/logout",
-        "/meus-reversos", "/api/meus-reversos/painel", "/api/meus-reversos/garantias", "/api/meus-reversos/reversos", "/api/meus-reversos/skus",  # painel de reversos da própria conta (31/10)
+        "/meus-reversos", "/api/meus-reversos/painel", "/api/meus-reversos/garantias", "/api/meus-reversos/reversos", "/api/meus-reversos/skus", "/api/meus-reversos/dinheiro-parado",  # painel de reversos da própria conta (31/10)
         "/minhas-mensagens",  # mensagens pós-venda da própria conta (28/10)
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
