@@ -703,7 +703,7 @@ MAX_ITENS_GARANTIA_TELA = 300   # a tela mostra os mais recentes; o Excel traz t
 
 
 import re as _re
-from difflib import get_close_matches as _parecidos
+from difflib import get_close_matches as _parecidos, SequenceMatcher as _SM
 
 
 def _norm_sku(sku: str) -> str:
@@ -1177,6 +1177,37 @@ def _sku_que_falha(s: SolicitacaoCancelamento, custos) -> Optional[dict]:
     return None
 
 
+def _ratio(a: str, b: str) -> float:
+    return _SM(None, a, b).ratio()
+
+
+def _candidatos_conferencia(custos, chave: str, sku: str, fortes: list) -> list:
+    """Opções para a pessoa conferir (só exibição, nunca aplicadas sozinhas): primeiro os parecidos 'fortes' (regra exata de
+    pistas) e depois outros SKUs do cadastro da MESMA conta que contêm o código digitado, começam igual ou são parecidos."""
+    cat = custos._contas.get(chave) or {}
+    base = cat.get("custos") or {}
+    alvo = _norm_sku(sku)
+    pontos = {}
+    if alvo:
+        for c in base:
+            if c in fortes:
+                continue
+            n = _norm_sku(c)
+            if not n:
+                continue
+            ini = 0
+            while ini < min(len(n), len(alvo)) and n[ini] == alvo[ini]:
+                ini += 1
+            razao = _ratio(alvo, n)
+            if (len(alvo) >= 3 and (alvo in n or n in alvo)) or ini >= 4 or razao >= 0.6:
+                pontos[c] = (alvo in n or n in alvo, ini, razao)
+    extras = sorted(pontos, key=lambda c: (not pontos[c][0], -pontos[c][1], -pontos[c][2], c))[:6]
+    saida = []
+    for c in list(fortes) + extras:
+        saida.append({"sku": c, "nome": (cat.get("nomes") or {}).get(c, ""), "custo": base.get(c), "forte": c in fortes})
+    return saida
+
+
 @router.get("/conferencia-sku")
 def conferencia_sku(request: Request, db: Session = Depends(get_db)):
     """Grupos (conta + SKU digitado) das garantias sem custo, com os SKUs parecidos do cadastro da conta. Só leitura."""
@@ -1198,14 +1229,90 @@ def conferencia_sku(request: Request, db: Session = Depends(get_db)):
             g["de"] = min(g.get("de", dia), dia); g["ate"] = max(g.get("ate", dia), dia)
     saida = []
     for (chave, _sku), g in grupos.items():
-        conta = custos._contas.get(chave) or {}
-        g["candidatos"] = [{"sku": c, "nome": (conta.get("nomes") or {}).get(c, ""), "custo": (conta.get("custos") or {}).get(c)}
-                           for c in g.pop("parecidos")]
+        fortes = g.pop("parecidos")
+        g["candidatos"] = _candidatos_conferencia(custos, chave, g["sku_digitado"], fortes)
         g["qtd"] = len(g["ids"]); g["vendas"] = g["vendas"][:8]; g.pop("ids")
-        g["sugestao_unica"] = len(g["candidatos"]) == 1
+        g["sugestao_unica"] = len(fortes) == 1
         saida.append(g)
     saida.sort(key=lambda g: (g["conta"].upper(), -g["qtd"], g["sku_digitado"]))
     return {"total_garantias": len(linhas), "so_fixar_custo": sem_motivo_sku, "grupos": saida}
+
+
+@router.get("/conferencia-sku/excel")
+def conferencia_sku_excel(request: Request, db: Session = Depends(get_db)):
+    """Excel para a equipe conferir (31/10): uma aba 'Por conta e SKU' (grupos, sem repetição), uma aba 'Todos os reversos'
+    (um por linha, ordenado por conta) e uma aba por conta com o cadastro de Custos dela (SKU, produto, custo) para consulta.
+    Só leitura."""
+    usuario_gestor_reversos(request, db)
+    from openpyxl.styles import Font
+    linhas = _garantias_sem_custo(db)
+    custos = _custos_dos_reversos(db, linhas)
+    wb = Workbook()
+    aba_g = wb.active; aba_g.title = "Por conta e SKU"
+    aba_t = wb.create_sheet("Todos os reversos")
+    cab = ["Conta", "SKU digitado no reverso", "SKU sugerido (cadastro da conta)", "Produto do cadastro", "Custo (R$)",
+           "Outras opções parecidas", "Reversos", "Período", "Vendas", "SKU correto (preencher)"]
+    aba_g.append(cab)
+    aba_t.append(["Conta", "Recebido em", "Nº da venda", "SKU digitado no reverso", "Motivo do 'sem custo'", "SKU sugerido (cadastro da conta)",
+                  "Produto do cadastro", "Custo (R$)"])
+    grupos = {}
+    for s in sorted(linhas, key=lambda x: ((x.conta or "").upper(), _chave_sku(x), x.criado_em or datetime.min)):
+        f = _sku_que_falha(s, custos)
+        chave = s.conta_chave or (s.conta or "").lower()
+        cat = custos._contas.get(chave) or {}
+        cands = (f or {}).get("parecidos") or []
+        unico = cands[0] if len(cands) == 1 else None
+        nome = (cat.get("nomes") or {}).get(unico, "") if unico else ""
+        custo = (cat.get("custos") or {}).get(unico) if unico else None
+        aba_t.append([s.conta or "—", _hora_br(s.criado_em), s.numero_venda or "", _chave_sku(s) if _skus_do_reverso(s) else "(sem SKU)",
+                      (f or {}).get("motivo") or "SKU existe no cadastro: use 'Fixar custos das garantias antigas'",
+                      unico or (" | ".join(cands) if cands else "sem sugestão"), nome, custo if custo is not None else ""])
+        if f is None:
+            continue
+        g = grupos.setdefault((chave, f["sku"]), {"conta": s.conta or "—", "sku": f["sku"], "cands": cands, "cat": cat, "n": 0, "vendas": [], "dias": [],
+                                                  "amplos": _candidatos_conferencia(custos, chave, f["sku"], cands)})
+        g["n"] += 1; g["vendas"].append(s.numero_venda or "")
+        if s.criado_em:
+            g["dias"].append(_dia_br(s).isoformat())
+    for g in sorted(grupos.values(), key=lambda x: (x["conta"].upper(), -x["n"], x["sku"])):
+        cands, cat = g["cands"], g["cat"]
+        unico = cands[0] if len(cands) == 1 else None
+        outras = " | ".join(f"{x['sku']} ({x['nome']}) R$ {x['custo']:.2f}" for x in g["amplos"] if x["sku"] != unico)
+        dias = sorted(g["dias"])
+        per = "" if not dias else (_br_data(dias[0]) if dias[0] == dias[-1] else f"{_br_data(dias[0])} a {_br_data(dias[-1])}")
+        aba_g.append([g["conta"], g["sku"], unico or ("ver opções ao lado" if g["amplos"] else "sem sugestão"),
+                      (cat.get("nomes") or {}).get(unico, "") if unico else "",
+                      (cat.get("custos") or {}).get(unico, "") if unico else "", outras, g["n"], per, ", ".join(g["vendas"][:15]), ""])
+    for aba, larg in ((aba_g, (22, 26, 30, 36, 12, 60, 10, 22, 50, 28)), (aba_t, (22, 18, 20, 26, 60, 30, 36, 12))):
+        for n, w in enumerate(larg, start=1):
+            aba.column_dimensions[aba.cell(row=1, column=n).column_letter].width = w
+        for c in aba[1]:
+            c.font = Font(bold=True)
+        aba.freeze_panes = "A2"
+    usados = set()
+    for chave, cat in custos._contas.items():
+        if not cat.get("achada") or not cat.get("custos"):
+            continue
+        nome = "Cadastro " + (next((s.conta for s in linhas if (s.conta_chave or (s.conta or "").lower()) == chave), chave) or chave)
+        nome = "".join(ch for ch in nome if ch not in "[]:*?/\\")[:31]
+        while nome in usados:
+            nome = nome[:28] + "_" + str(len(usados))
+        usados.add(nome)
+        aba = wb.create_sheet(nome)
+        aba.append(["SKU", "Produto", "Custo (R$)"])
+        for sku in sorted(cat["custos"]):
+            aba.append([sku, (cat.get("nomes") or {}).get(sku, ""), cat["custos"][sku]])
+        for col, w in zip("ABC", (30, 50, 12)):
+            aba.column_dimensions[col].width = w
+        aba["A1"].font = aba["B1"].font = aba["C1"].font = Font(bold=True)
+        aba.freeze_panes = "A2"
+    buffer = io.BytesIO(); wb.save(buffer); buffer.seek(0)
+    return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                             headers={"Content-Disposition": f'attachment; filename="conferencia_sku_{datetime.now(FUSO_BR).strftime("%Y%m%d_%H%M")}.xlsx"'})
+
+
+def _br_data(iso: str) -> str:
+    return f"{iso[8:10]}/{iso[5:7]}/{iso[0:4]}"
 
 
 class AplicarSkuItem(BaseModel):
