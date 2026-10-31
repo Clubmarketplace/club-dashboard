@@ -312,7 +312,7 @@
           <div id="rg-conta-det" hidden>
             <div class="painel">
               <h2 id="rg-destino-tit">Para onde foram os retornos</h2>
-              <div class="destino-barra" id="rg-destino" role="img" aria-label="Destino dos retornos da conta"></div>
+              <div class="destino-barra" id="rg-destino" role="group" aria-label="Destino dos retornos da conta"></div>
               <div class="legenda" id="rg-destino-leg"></div>
             </div>
             <button type="button" class="btn" id="rg-voltar">← Voltar ao resumo geral</button>
@@ -322,7 +322,7 @@
         <details class="painel" id="sec-garantias">
           <summary>Lista das garantias, com custo e fotos <span class="sub-sum" id="gar-info"></span></summary>
           <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima; a conta é a escolhida no resumo.</div>
-          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
+          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-conf" title="Ferramenta temporária: confere as garantias sem custo e sugere o SKU certo do cadastro da conta">Conferência de SKUs</button> <button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
           <div id="sel-bar" hidden></div>
           <div class="tabela-rolagem"><table>
             <thead><tr><th>Fábrica</th><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th><th>Fotos</th></tr></thead>
@@ -440,6 +440,33 @@
       </main>
     </div>
   </div>
+  <dialog id="dlg-conf" aria-labelledby="dlg-conf-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(980px,96vw)">
+    <h2 id="dlg-conf-tit" style="margin:0 0 4px;font-size:17px">Conferência de SKUs das garantias sem custo</h2>
+    <div class="peq" id="conf-info">Carregando…</div>
+    <div class="peq" style="margin:6px 0">O sistema só sugere (SKUs parecidos do cadastro da PRÓPRIA conta). Confira o produto e o custo de cada sugestão e marque o que está certo. Nada é aplicado sem você confirmar. Garantias que já estão numa remessa para a fábrica (mesmo SKU em períodos diferentes) <b>não entram aqui nem mudam</b>: ficam com o SKU e o custo que foram enviados.</div>
+    <div style="max-height:55vh;overflow:auto;border:1px solid var(--cmx-borda);border-radius:8px"><table style="width:100%">
+      <thead><tr><th></th><th>Conta</th><th>SKU digitado</th><th class="n">Reversos</th><th>Período</th><th>Vendas</th><th>SKU correto (cadastro da conta)</th></tr></thead>
+      <tbody id="conf-corpo"></tbody></table></div>
+    <div id="conf-msg" style="font-size:13px;min-height:18px;margin-top:8px"></div>
+    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">
+      <button type="button" class="btn" id="conf-unicas">Marcar todas as sugestões únicas</button>
+      <span><button type="button" class="btn" id="conf-fechar">Fechar</button>
+      <button type="button" class="btn" id="conf-aplicar" style="background:#1f2d3d;color:#fff">Aplicar marcadas</button></span>
+    </div>
+  </dialog>
+  <dialog id="dlg-sku" aria-labelledby="dlg-sku-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(540px,94vw)">
+    <h2 id="dlg-sku-tit" style="margin:0 0 4px;font-size:17px">Corrigir SKU</h2>
+    <div class="peq" id="dlg-sku-atual"></div>
+    <div id="dlg-sku-pistas" style="display:flex;flex-wrap:wrap;gap:6px;margin:6px 0"></div>
+    <input type="text" id="dlg-sku-q" placeholder="Digite parte do SKU ou do nome do produto" autocomplete="off" style="width:100%;box-sizing:border-box;padding:9px 10px;border:1.5px solid var(--cmx-borda);border-radius:8px;margin:8px 0" />
+    <div id="dlg-sku-lista" style="max-height:220px;overflow:auto;border:1px solid var(--cmx-borda);border-radius:8px"></div>
+    <div id="dlg-sku-erro" style="font-size:12.5px;min-height:16px;margin-top:6px"></div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+      <button type="button" class="btn" id="dlg-sku-cancelar">Cancelar</button>
+      <button type="button" class="btn" id="dlg-sku-salvar" style="background:#1f2d3d;color:#fff" disabled>Salvar SKU</button>
+    </div>
+    <div class="peq" style="margin-top:8px">Só aparecem SKUs do cadastro de Custos da conta do reverso. Fica registrado quem corrigiu, quando, e o SKU antes e depois.</div>
+  </dialog>
   <dialog id="dlg-remessa" aria-labelledby="dlg-titulo">
     <form id="form-remessa" method="dialog" autocomplete="off">
       <h2 id="dlg-titulo">Enviar garantias para a fábrica</h2>
@@ -686,7 +713,7 @@
         return `<tr>
           <td><b>${esc(hora[0])}</b><span class="peq">${esc(hora[1] || "")}</span></td>
           <td>${esc(x.conta)}<span class="peq">${esc(x.plataforma)}</span></td>
-          <td class="prod">${esc(x.produto || "—")}${x.sku ? `<span class="peq">SKU: ${esc(x.sku)}</span>` : ""}</td>
+          <td class="prod">${esc(x.produto || "—")}${(x.sku_atual || x.sku) ? `<span class="peq">SKU: ${esc(x.sku_atual || x.sku)}</span>` : ""}${infoSkuCorrigido(x)}${botaoSku(x)}</td>
           <td>${esc(x.numero_venda || "—")}</td>
           <td><span class="selo" style="background:${cor}">${esc(x.situacao_nome)}</span>${x.em_analise ? '<span class="peq" style="color:#3730a3;font-weight:600">🔎 Em análise pela equipe</span>' : ""}${x.observacao ? `<span class="peq">${esc(x.observacao)}</span>` : ""}</td>
           <td>${x.motivo_reverso_nome ? `<b>${esc(x.motivo_reverso_nome)}</b><span class="peq">${esc(x.aspecto || "")}</span>` : esc(x.aspecto || "—")}</td>
@@ -840,12 +867,15 @@
         document.querySelectorAll("#rg-metrica button").forEach(b => b.setAttribute("aria-pressed", b.dataset.m === metricaRank));
       } else {
         // conta escolhida: para onde foram os retornos
-        const outros = Math.max(0, A.ret - A.vol - A.gar);
-        const fatias = [["No estoque", A.vol, COR.voltou], ["Garantia", A.gar, COR.garantia], ["Outros (sem condição ou aguardando)", outros, COR.nao]].filter(f => f[1] > 0);
+        // Cada fatia é clicável: abre a lista daqueles reversos (da conta escolhida). "Outros" foi separado em
+        // "sem condição de venda" e "aguardando a equipe" para ficar claro o que são.
+        const nao = c ? c.nao_voltaram || 0 : 0, agu = c ? c.aguardando || 0 : 0;
+        const fatias = [["No estoque", A.vol, COR.voltou, "voltaram"], ["Foram para garantia", A.gar, COR.garantia, "garantias"],
+                        ["Sem condição de venda", nao, COR.nao, "nao_voltaram"], ["Aguardando a equipe", agu, COR.aguarda, "aguardando"]].filter(f => f[1] > 0);
         $("rg-destino-tit").textContent = `Para onde foram os ${A.ret} retorno${A.ret === 1 ? "" : "s"} de ${garConta}`;
-        $("rg-destino").innerHTML = fatias.map(f => `<div style="flex:${f[1]} 1 0;background:${f[2]}" title="${esc(f[0])}: ${f[1]}"></div>`).join("");
+        $("rg-destino").innerHTML = fatias.map(f => `<div class="rg-link" data-abrir="${f[3]}" role="button" tabindex="0" style="flex:${f[1]} 1 0;background:${f[2]};cursor:pointer" title="${esc(f[0])}: ${f[1]} · clique para ver"></div>`).join("");
         $("rg-destino-leg").innerHTML = fatias.length
-          ? fatias.map(f => `<span><i style="background:${f[2]}"></i>${esc(f[0])}: <b>${f[1]}</b></span>`).join("")
+          ? fatias.map(f => `<span class="rg-link" data-abrir="${f[3]}" role="button" tabindex="0" style="cursor:pointer"><i style="background:${f[2]}"></i>${esc(f[0])}: <b>${f[1]}</b></span>`).join("")
           : '<div class="vazio" style="padding:8px">Nenhum reverso desta conta neste período.</div>';
       }
     }
@@ -1134,13 +1164,97 @@
       finally { $("dlg-salvar").disabled = false; }
     });
 
+    // ---- Conferência de SKUs (ferramenta temporária) ----
+    let confGrupos = [];
+    async function abrirConferencia() {
+      $("conf-msg").textContent = ""; $("conf-corpo").innerHTML = ""; $("conf-info").textContent = "Carregando…";
+      if (!$("dlg-conf").open) $("dlg-conf").showModal();
+      try {
+        const r = await fetch("/api/reversos-gestor/conferencia-sku", { cache: "no-store" });
+        if (!r.ok) throw new Error("erro " + r.status);
+        const d = await r.json(); confGrupos = d.grupos || [];
+        $("conf-info").textContent = `${d.total_garantias} garantia(s) sem custo e fora de remessa · ${confGrupos.length} grupo(s) de SKU digitado${d.so_fixar_custo ? ` · ${d.so_fixar_custo} já têm SKU certo (use "Fixar custos das garantias antigas")` : ""}`;
+        $("conf-corpo").innerHTML = confGrupos.length ? confGrupos.map((g, n) => {
+          const opc = g.candidatos.length ? g.candidatos.map(c => `<label style="display:block;white-space:normal"><input type="radio" name="conf-${n}" value="${esc(c.sku)}" ${g.sugestao_unica ? "checked" : ""} /> <b>${esc(c.sku)}</b> ${esc(c.nome)} · ${brl(c.custo)}</label>`).join("")
+            : '<span class="peq">Sem sugestão. Use "Corrigir SKU" na Lista das garantias para escolher no cadastro, ou informe o custo.</span>';
+          return `<tr data-n="${n}"><td><input type="checkbox" class="conf-chk" data-n="${n}" ${g.candidatos.length ? "" : "disabled"} /></td><td>${esc(g.conta)}</td><td><b>${esc(g.sku_digitado)}</b></td><td class="n">${g.qtd}</td><td class="peq">${g.de ? (g.de === g.ate ? dataBRano(g.de) : dataBRano(g.de) + " a " + dataBRano(g.ate)) : "—"}</td><td class="peq">${g.vendas.map(esc).join(", ")}</td><td>${opc}</td></tr>`;
+        }).join("") : '<tr><td colspan="7" class="vazio">Nenhuma garantia sem custo por SKU diferente. 🎉</td></tr>';
+      } catch (e) { $("conf-info").textContent = "Não consegui carregar agora. Tente de novo."; }
+    }
+    $("gar-conf").addEventListener("click", abrirConferencia);
+    $("conf-fechar").addEventListener("click", () => $("dlg-conf").close());
+    $("conf-unicas").addEventListener("click", () => document.querySelectorAll(".conf-chk").forEach(c => { if (confGrupos[+c.dataset.n].sugestao_unica) c.checked = true; }));
+    $("conf-corpo").addEventListener("change", (e) => { const r = e.target.closest('input[type=radio]'); if (r) { const c = document.querySelector(`.conf-chk[data-n="${r.name.slice(5)}"]`); if (c) c.checked = true; } });
+    $("conf-aplicar").addEventListener("click", async () => {
+      const itens = [];
+      document.querySelectorAll(".conf-chk:checked").forEach(c => {
+        const g = confGrupos[+c.dataset.n], r = document.querySelector(`input[name="conf-${c.dataset.n}"]:checked`);
+        if (r) itens.push({ conta_chave: g.conta_chave, sku_antigo: g.sku_digitado, sku_novo: r.value });
+      });
+      if (!itens.length) { $("conf-msg").style.color = "#a83232"; $("conf-msg").textContent = "Marque ao menos um grupo e escolha o SKU correto."; return; }
+      if (!window.confirm(`Aplicar a correção em ${itens.length} grupo(s)? Fica registrado com o seu nome.`)) return;
+      $("conf-aplicar").disabled = true;
+      try {
+        const j = await post("/api/reversos-gestor/conferencia-sku/aplicar", { itens });
+        $("conf-msg").style.color = j.falhas.length ? "#8a4b00" : "#1f6b45";
+        $("conf-msg").textContent = `${j.corrigidos} reverso(s) corrigido(s)${j.falhas.length ? ` · ${j.falhas.length} não puderam ser corrigidos (${j.falhas.slice(0, 3).map(f => f.venda + ": " + f.erro).join("; ")})` : ""}.`;
+        carregarGarantias(); await abrirConferenciaSemFechar();
+      } catch (err) { $("conf-msg").style.color = "#a83232"; $("conf-msg").textContent = err.message || "Não consegui aplicar."; }
+      finally { $("conf-aplicar").disabled = false; }
+    });
+    async function abrirConferenciaSemFechar() { const m = $("conf-msg").textContent, c = $("conf-msg").style.color; await abrirConferencia(); $("conf-msg").textContent = m; $("conf-msg").style.color = c; }
+
+    // ---- Corrigir SKU (admin/supervisor): só SKUs do cadastro da conta do reverso; registra quem fez ----
+    function infoSkuCorrigido(i) {
+      return i.sku_corrigido_por ? `<span class="peq" style="color:#4d5965">corrigido por ${esc(i.sku_corrigido_por)}${i.sku_corrigido_papel ? " (" + esc(i.sku_corrigido_papel) + ")" : ""}${i.sku_corrigido_em ? " em " + esc(i.sku_corrigido_em) : ""}${i.sku_original ? " · era " + esc(i.sku_original) : ""}</span>` : "";
+    }
+    const itensSku = {};
+    function botaoSku(i) {
+      if (i.remessa) return "";
+      itensSku[i.id] = i;
+      return `<button type="button" class="btn btn-sku" data-id="${i.id}" style="padding:2px 8px;margin-top:4px">Corrigir SKU</button>`;
+    }
+    let skuAlvo = null, skuEscolhido = "", skuTimer = null;
+    async function listarSkus(q) {
+      const r = await fetch("/api/reversos-gestor/skus-conta?conta=" + encodeURIComponent(skuAlvo.conta || "") + "&q=" + encodeURIComponent(q || ""), { cache: "no-store" });
+      const j = await r.json();
+      $("dlg-sku-lista").innerHTML = (j.itens || []).length ? j.itens.map(x => `<button type="button" data-sku="${esc(x.sku)}" aria-pressed="${x.sku === skuEscolhido}" style="display:flex;width:100%;gap:8px;text-align:left;border:none;border-bottom:1px solid var(--cmx-borda);background:${x.sku === skuEscolhido ? "#e8f1fb" : "#fff"};padding:8px 10px;cursor:pointer"><b style="min-width:110px">${esc(x.sku)}</b><span>${esc(x.nome)}</span><span style="margin-left:auto">${brl(x.custo)}</span></button>`).join("")
+        : `<div class="vazio">${j.conta_achada ? "Nenhum SKU do cadastro com esse texto." : "Não achei o cadastro de Custos dessa conta."}</div>`;
+    }
+    function abrirSku(i) {
+      skuAlvo = i; skuEscolhido = ""; $("dlg-sku-salvar").disabled = true; $("dlg-sku-erro").textContent = ""; $("dlg-sku-q").value = "";
+      $("dlg-sku-atual").innerHTML = `Conta <b>${esc(i.conta)}</b> · SKU atual: <b>${esc(i.sku_atual || i.sku || "(sem SKU)")}</b> · venda ${esc(i.numero_venda || "—")}`;
+      $("dlg-sku-pistas").innerHTML = (i.parecidos || []).length ? '<span class="peq">Parecidos no cadastro:</span> ' + i.parecidos.map(s => `<button type="button" class="btn" data-sku="${esc(s)}" style="padding:2px 9px">${esc(s)}</button>`).join("") : "";
+      $("dlg-sku").showModal(); listarSkus("").catch(() => {});
+    }
+    function escolherSku(sku) {
+      skuEscolhido = sku; $("dlg-sku-salvar").disabled = !sku;
+      $("dlg-sku-erro").style.color = "#1f6b45"; $("dlg-sku-erro").textContent = sku ? "Vai trocar para: " + sku : "";
+      listarSkus($("dlg-sku-q").value).catch(() => {});
+    }
+    $("dlg-sku-q").addEventListener("input", () => { clearTimeout(skuTimer); skuTimer = setTimeout(() => listarSkus($("dlg-sku-q").value).catch(() => {}), 250); });
+    $("dlg-sku-lista").addEventListener("click", (e) => { const b = e.target.closest("button[data-sku]"); if (b) escolherSku(b.dataset.sku); });
+    $("dlg-sku-pistas").addEventListener("click", (e) => { const b = e.target.closest("button[data-sku]"); if (b) { $("dlg-sku-q").value = b.dataset.sku; escolherSku(b.dataset.sku); } });
+    $("dlg-sku-cancelar").addEventListener("click", () => $("dlg-sku").close());
+    $("dlg-sku-salvar").addEventListener("click", async () => {
+      if (!skuAlvo || !skuEscolhido) return;
+      $("dlg-sku-salvar").disabled = true;
+      try {
+        await post(`/api/reversos-gestor/reversos/${skuAlvo.id}/sku`, { sku_novo: skuEscolhido });
+        $("dlg-sku").close(); carregarGarantias(); if (sel) carregarLista(false);
+      } catch (err) { $("dlg-sku-erro").style.color = "#a83232"; $("dlg-sku-erro").textContent = err.message || "Não consegui salvar."; $("dlg-sku-salvar").disabled = false; }
+    });
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest(".btn-sku"); if (b && itensSku[b.dataset.id]) abrirSku(itensSku[b.dataset.id]);
+    });
+
     // Custo gravado no reverso: mostra de onde veio (cadastro da conta ou informado à mão) e o produto do cadastro p/ conferir.
     function celulaCusto(i) {
       const peq = (txt, cor) => `<div class="peq" style="font-weight:400;max-width:280px;margin-left:auto;text-align:right;white-space:normal${cor ? ";color:" + cor : ""}">${txt}</div>`;
       if (i.custo != null) {
         const manual = i.custo_origem === "manual";
         return `<span style="font-weight:600">${brl(i.custo)}</span>`
-          + (manual ? peq(`informado manualmente${i.custo_por ? " por " + esc(i.custo_por) : ""}${i.custo_em ? " em " + esc(i.custo_em) : ""}`, "#8a5a00")
+          + (manual ? peq(`informado manualmente${i.custo_por ? " por " + esc(i.custo_por) : ""}${i.custo_papel ? " (" + esc(i.custo_papel) + ")" : ""}${i.custo_em ? " em " + esc(i.custo_em) : ""}`, "#8a5a00")
                     : peq(`do cadastro da conta${i.custo_produto ? ": " + esc(i.custo_produto) : ""}`))
           + (manual && !i.remessa ? `<button type="button" class="btn btn-custo-man" data-id="${i.id}" style="padding:2px 8px;margin-top:4px">corrigir</button>` : "");
       }
@@ -1157,7 +1271,7 @@
         ? `<span class="selo-rem ${i.remessa.status === "analise" ? "" : "ok-enc"}" title="${esc(i.remessa.fabrica)}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>`
         : (garConta ? `<label style="display:flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" class="chk-env" data-id="${i.id}" ${selecionadas.has(i.id) ? "checked" : ""} /> enviar</label>` : '<span style="color:var(--cmx-texto-suave)">no galpão</span>');
       $("t-gar").innerHTML = d.itens.length
-        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n">${celulaCusto(i)}</td>
+        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b>${infoSkuCorrigido(i)}${botaoSku(i)}</td><td>${esc(i.produto)}</td><td class="n">${celulaCusto(i)}</td>
             <td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td>
             <td><button type="button" class="btn btn-fotos" data-id="${i.id}" aria-expanded="${fotosAbertas.has(i.id)}" style="padding:6px 10px">${fotosAbertas.has(i.id) ? "Ocultar fotos" : "Ver fotos"}</button></td></tr>
             <tr id="fotos-${i.id}" ${fotosAbertas.has(i.id) ? "" : "hidden"}><td colspan="9" style="background:#f7f9fb"><div class="gar-fotos-caixa">${fotosCache[i.id] || ""}</div></td></tr>`).join("")

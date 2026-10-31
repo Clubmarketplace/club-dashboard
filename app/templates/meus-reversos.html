@@ -48,6 +48,23 @@
     .selo.vm { background:#fbe4e1; color:#a83232; } .selo.en { background:#eceff2; color:#4d5965; }
     .aviso-custo { font-size:12.5px; color:#8a4b00; background:#fff3d6; border-radius:8px; padding:8px 12px; margin-bottom:14px; }
     .btn { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:8px; padding:5px 10px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+    .abas { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+    .abas button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:99px; padding:5px 13px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+    .abas button[aria-pressed="true"] { background:#1f2d3d; color:#fff; border-color:#1f2d3d; }
+    .acoes { display:flex; flex-wrap:wrap; gap:5px; }
+    .corrigido { display:block; font-size:11px; color:#4d5965; margin-top:2px; }
+    dialog { border:none; border-radius:14px; padding:20px 22px; width:min(520px,94vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
+    dialog::backdrop { background:rgba(20,30,40,.45); }
+    dialog h3 { margin:0 0 4px; font-size:16px; }
+    dialog input[type=text], dialog input[type=number] { width:100%; box-sizing:border-box; padding:9px 10px; border:1.5px solid var(--cmx-borda); border-radius:8px; font:inherit; margin:8px 0; }
+    .lista-sku { max-height:220px; overflow:auto; border:1px solid var(--cmx-borda); border-radius:8px; }
+    .lista-sku button { display:flex; width:100%; gap:8px; text-align:left; border:none; background:#fff; padding:8px 10px; font:inherit; font-size:13px; cursor:pointer; border-bottom:1px solid var(--cmx-borda); }
+    .lista-sku button:hover, .lista-sku button[aria-pressed="true"] { background:#e8f1fb; }
+    .lista-sku b { min-width:110px; } .lista-sku span.c { margin-left:auto; font-variant-numeric:tabular-nums; }
+    .chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0; }
+    .chips button { border:1.5px solid #8a4b00; background:#fff3d6; color:#8a4b00; border-radius:99px; padding:3px 10px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+    .dlg-erro { color:#a83232; font-size:12.5px; min-height:16px; }
+    .dlg-botoes { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
     .gar-fotos-caixa { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0; font-size:13px; color:var(--cmx-texto-suave); }
     .gar-fotos-caixa img { height:96px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; }
   </style>
@@ -122,12 +139,36 @@
     </div>
 
     <div class="painel">
-      <h2>Minhas garantias <span class="peq" id="gar-info"></span></h2>
+      <h2>Meus reversos <span class="peq" id="gar-info"></span></h2>
+      <div class="abas" id="abas" role="group" aria-label="Situação do reverso">
+        <button type="button" data-s="todos" aria-pressed="true">Todos <span class="peq" data-c="todos"></span></button>
+        <button type="button" data-s="garantia" aria-pressed="false">Em garantia <span class="peq" data-c="garantia"></span></button>
+        <button type="button" data-s="voltou" aria-pressed="false">Voltaram ao estoque <span class="peq" data-c="voltou"></span></button>
+        <button type="button" data-s="outros" aria-pressed="false">Outros <span class="peq" data-c="outros"></span></button>
+        <button type="button" data-s="aguardando" aria-pressed="false">Aguardando a equipe <span class="peq" data-c="aguardando"></span></button>
+      </div>
       <div class="tabela-rolagem"><table>
-        <thead><tr><th>Recebido em</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Fábrica</th><th>Fotos</th></tr></thead>
-        <tbody id="t-gar"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+        <thead><tr><th>Recebido em</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th>Situação</th><th class="n">Custo</th><th>Fábrica</th><th>Ações</th></tr></thead>
+        <tbody id="t-gar"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
       </table></div>
+      <div class="peq" style="margin-top:8px">Se o SKU foi digitado errado, use "Corrigir SKU": você escolhe o SKU certo do seu cadastro de Custos e o custo é buscado de novo. Tudo fica registrado (quem fez, quando, antes e depois).</div>
     </div>
+    <dialog id="dlg-sku">
+      <h3>Corrigir SKU</h3>
+      <div class="peq" id="dlg-sku-atual"></div>
+      <div class="chips" id="dlg-sku-pistas"></div>
+      <input type="text" id="dlg-sku-q" placeholder="Digite parte do SKU ou do nome do produto" autocomplete="off" />
+      <div class="lista-sku" id="dlg-sku-lista"></div>
+      <div class="dlg-erro" id="dlg-sku-erro"></div>
+      <div class="dlg-botoes"><button type="button" class="btn" id="dlg-sku-cancelar">Cancelar</button><button type="button" class="btn" id="dlg-sku-salvar" style="background:#1f2d3d;color:#fff" disabled>Salvar SKU</button></div>
+    </dialog>
+    <dialog id="dlg-custo">
+      <h3>Ajustar custo do reverso</h3>
+      <div class="peq" id="dlg-custo-info"></div>
+      <input type="number" id="dlg-custo-v" min="0.01" step="0.01" placeholder="Custo em R$" />
+      <div class="dlg-erro" id="dlg-custo-erro"></div>
+      <div class="dlg-botoes"><button type="button" class="btn" id="dlg-custo-cancelar">Cancelar</button><button type="button" class="btn" id="dlg-custo-salvar" style="background:#1f2d3d;color:#fff">Salvar custo</button></div>
+    </dialog>
   </main>
     </div>
   </div>
@@ -224,10 +265,12 @@
       if (!r.ok) throw new Error("erro " + r.status);
       return r.json();
     }
+    let aba = "todos";
     async function carregar() {
-      const minha = ++vez, p = paramsPeriodo().toString();
+      const minha = ++vez, p = paramsPeriodo();
+      const pr = new URLSearchParams(p); pr.set("situacao", aba);
       try {
-        const [d, g] = await Promise.all([ler("/api/meus-reversos/painel?" + p), ler("/api/meus-reversos/garantias?" + p)]);
+        const [d, g] = await Promise.all([ler("/api/meus-reversos/painel?" + p.toString()), ler("/api/meus-reversos/reversos?" + pr.toString())]);
         if (minha !== vez) return;
         desenhar(d); desenharGarantias(g);
       } catch (e) {
@@ -236,15 +279,94 @@
       }
     }
     const fotosCache = {};
-    function desenharGarantias(g) {
-      $("gar-info").textContent = g.total > g.itens.length ? `· mostrando ${g.itens.length} de ${g.total}` : `· ${g.total}`;
-      $("t-gar").innerHTML = g.itens.length ? g.itens.map(i => `<tr><td>${esc(i.recebido_em)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td>`
-        + `<td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td>`
-        + `<td>${i.remessa ? `<span class="selo ${i.remessa.status === "analise" ? "am" : "en"}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>` : '<span class="peq">no galpão</span>'}</td>`
-        + `<td><button type="button" class="btn btn-fotos" data-id="${i.id}">Ver fotos</button></td></tr>`
-        + `<tr id="fotos-${i.id}" hidden><td colspan="7" style="background:#f7f9fb"><div class="gar-fotos-caixa"></div></td></tr>`).join("")
-        : '<tr><td colspan="7" class="vazio">Nenhuma garantia neste período.</td></tr>';
+    const PAPEL = { admin: "admin", supervisor: "supervisor", seller: "seller", suporte: "suporte" };
+    let itensPorId = {};
+    function quem(por, papel, em) { return por ? `${esc(por)}${papel ? " (" + esc(PAPEL[papel] || papel) + ")" : ""}${em ? " em " + esc(em) : ""}` : ""; }
+    function celulaCusto(i) {
+      if (i.grupo !== "garantia") return '<span class="peq">—</span>';
+      if (i.custo == null) return '<span style="color:#a83232;font-weight:600">sem custo</span>' + (i.custo_motivo ? `<span class="corrigido" style="color:#a83232">${esc(i.custo_motivo)}</span>` : "");
+      const man = i.custo_origem === "manual";
+      return `<b>${brl(i.custo)}</b>` + (man ? `<span class="corrigido">informado por ${quem(i.custo_por, i.custo_papel, i.custo_em)}</span>` : "");
     }
+    function desenharGarantias(g) {
+      const c = g.contagem || {};
+      document.querySelectorAll("#abas [data-c]").forEach(x => x.textContent = "· " + (c[x.dataset.c] ?? 0));
+      document.querySelectorAll("#abas button").forEach(x => x.setAttribute("aria-pressed", x.dataset.s === aba));
+      $("gar-info").textContent = g.total > g.itens.length ? `· mostrando ${g.itens.length} de ${g.total}` : `· ${g.total}`;
+      itensPorId = {}; g.itens.forEach(i => itensPorId[i.id] = i);
+      const corCls = { garantia: "am", voltou: "ok", outros: "en", aguardando: "en" };
+      $("t-gar").innerHTML = g.itens.length ? g.itens.map(i => `<tr><td>${esc(i.recebido_em)}</td><td>${esc(i.numero_venda)}</td>`
+        + `<td><b>${esc(i.sku || "—")}</b>${i.sku_corrigido_por ? `<span class="corrigido">corrigido por ${quem(i.sku_corrigido_por, i.sku_corrigido_papel, i.sku_corrigido_em)}${i.sku_original ? " · era " + esc(i.sku_original) : ""}</span>` : ""}</td>`
+        + `<td>${esc(i.produto)}</td><td><span class="selo ${corCls[i.grupo] || "en"}">${esc(i.situacao)}</span></td>`
+        + `<td class="n">${celulaCusto(i)}</td>`
+        + `<td>${i.grupo !== "garantia" ? '<span class="peq">—</span>' : i.remessa ? `<span class="selo ${i.remessa.status === "analise" ? "am" : "en"}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>` : '<span class="peq">no galpão</span>'}</td>`
+        + `<td><div class="acoes">`
+        + (i.editavel ? `<button type="button" class="btn btn-sku" data-id="${i.id}">Corrigir SKU</button>` : "")
+        + (i.editavel && i.grupo === "garantia" ? `<button type="button" class="btn btn-custo" data-id="${i.id}">${i.custo == null ? "Informar custo" : "Ajustar custo"}</button>` : "")
+        + `<button type="button" class="btn btn-fotos" data-id="${i.id}">Ver fotos</button></div></td></tr>`
+        + `<tr id="fotos-${i.id}" hidden><td colspan="8" style="background:#f7f9fb"><div class="gar-fotos-caixa"></div></td></tr>`).join("")
+        : '<tr><td colspan="8" class="vazio">Nenhum reverso nesta situação, neste período.</td></tr>';
+    }
+    $("abas").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; aba = b.dataset.s; carregar(); });
+
+    // ---- Corrigir SKU (só SKUs do cadastro de Custos da própria conta) ----
+    let skuAlvo = null, skuEscolhido = "", skuTimer = null;
+    async function enviar(url, corpo) {
+      const r = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(corpo) });
+      let j = {}; try { j = await r.json(); } catch (e) {}
+      if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Não consegui salvar (erro " + r.status + ").");
+      return j;
+    }
+    async function listarSkus(q) {
+      const j = await ler("/api/meus-reversos/skus?q=" + encodeURIComponent(q || ""));
+      $("dlg-sku-lista").innerHTML = (j.itens || []).length ? j.itens.map(x => `<button type="button" data-sku="${esc(x.sku)}"><b>${esc(x.sku)}</b><span>${esc(x.nome)}</span><span class="c">${brl(x.custo)}</span></button>`).join("")
+        : `<div class="vazio">${j.conta_achada ? "Nenhum SKU do seu cadastro com esse texto." : "Não achei o cadastro de Custos da sua conta."}</div>`;
+      $("dlg-sku-lista").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.sku === skuEscolhido));
+    }
+    function abrirSku(i) {
+      skuAlvo = i; skuEscolhido = ""; $("dlg-sku-salvar").disabled = true; $("dlg-sku-erro").textContent = ""; $("dlg-sku-q").value = "";
+      $("dlg-sku-atual").innerHTML = `SKU atual: <b>${esc(i.sku || "(sem SKU)")}</b> · venda ${esc(i.numero_venda || "—")}`;
+      $("dlg-sku-pistas").innerHTML = (i.parecidos || []).length ? '<span class="peq">Parecidos no seu cadastro:</span> ' + i.parecidos.map(s => `<button type="button" data-sku="${esc(s)}">${esc(s)}</button>`).join("") : "";
+      $("dlg-sku").showModal(); listarSkus("").catch(() => {});
+    }
+    function escolherSku(sku) {
+      skuEscolhido = sku; $("dlg-sku-salvar").disabled = !sku;
+      $("dlg-sku-lista").querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.dataset.sku === sku));
+      $("dlg-sku-erro").textContent = sku ? "Vai trocar para: " + sku : "";
+      $("dlg-sku-erro").style.color = "#1f6b45";
+    }
+    $("dlg-sku-q").addEventListener("input", () => { clearTimeout(skuTimer); skuTimer = setTimeout(() => listarSkus($("dlg-sku-q").value).catch(() => {}), 250); });
+    $("dlg-sku-lista").addEventListener("click", (e) => { const b = e.target.closest("button[data-sku]"); if (b) escolherSku(b.dataset.sku); });
+    $("dlg-sku-pistas").addEventListener("click", (e) => { const b = e.target.closest("button[data-sku]"); if (b) { $("dlg-sku-q").value = b.dataset.sku; listarSkus(b.dataset.sku).then(() => escolherSku(b.dataset.sku)); } });
+    $("dlg-sku-cancelar").addEventListener("click", () => $("dlg-sku").close());
+    $("dlg-sku-salvar").addEventListener("click", async () => {
+      if (!skuAlvo || !skuEscolhido) return;
+      $("dlg-sku-salvar").disabled = true;
+      try {
+        await enviar("/api/meus-reversos/reversos/" + skuAlvo.id + "/sku", { sku_novo: skuEscolhido });
+        $("dlg-sku").close(); carregar();
+      } catch (err) { $("dlg-sku-erro").style.color = "#a83232"; $("dlg-sku-erro").textContent = err.message; $("dlg-sku-salvar").disabled = false; }
+    });
+
+    // ---- Ajustar custo (fica marcado como manual, com quem fez) ----
+    let custoAlvo = null;
+    function abrirCusto(i) {
+      custoAlvo = i; $("dlg-custo-erro").textContent = ""; $("dlg-custo-v").value = i.custo != null ? Number(i.custo).toFixed(2) : "";
+      $("dlg-custo-info").innerHTML = `SKU <b>${esc(i.sku || "—")}</b> · custo atual: ${i.custo == null ? "sem custo" : brl(i.custo)}. Fica registrado quem ajustou e quando. Não muda o seu cadastro de Custos.`;
+      $("dlg-custo").showModal();
+    }
+    $("dlg-custo-cancelar").addEventListener("click", () => $("dlg-custo").close());
+    $("dlg-custo-salvar").addEventListener("click", async () => {
+      const v = parseFloat($("dlg-custo-v").value);
+      if (!(v > 0)) { $("dlg-custo-erro").textContent = "Informe um custo maior que zero."; return; }
+      try { await enviar("/api/meus-reversos/garantias/" + custoAlvo.id + "/custo", { custo: v }); $("dlg-custo").close(); carregar(); }
+      catch (err) { $("dlg-custo-erro").textContent = err.message; }
+    });
+    $("t-gar").addEventListener("click", (e) => {
+      const s = e.target.closest(".btn-sku"), c = e.target.closest(".btn-custo");
+      if (s && itensPorId[s.dataset.id]) abrirSku(itensPorId[s.dataset.id]);
+      if (c && itensPorId[c.dataset.id]) abrirCusto(itensPorId[c.dataset.id]);
+    });
     // Fotos só quando clica (mesma rota do painel "Minhas solicitações": só fotos da própria conta)
     $("t-gar").addEventListener("click", async (e) => {
       const b = e.target.closest(".btn-fotos"); if (!b) return;
