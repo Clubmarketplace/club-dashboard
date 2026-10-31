@@ -57,9 +57,30 @@
   {% endif %}
 
   {{ item("/taxas", "💲 Taxas") }}
-  {{ item("/meus-cancelamentos", "Minhas solicitações") }}
+  {# (31/10) Minhas solicitações: a bolinha laranja mostra cancelamentos do galpão/equipe que esperam o ACEITE do seller.
+     No dashboard o clique na bolinha abre a janela de decisão; nas outras páginas leva para Minhas solicitações. #}
+  <a class="cmx-nav-item{% if _caminho == '/meus-cancelamentos' %} cmx-nav-item--ativo{% endif %}" href="/meus-cancelamentos"{% if _caminho == '/meus-cancelamentos' %} aria-current="page"{% endif %}>
+    {%- if _caminho == '/meus-cancelamentos' %}<span class="cmx-nav-dot"></span> {% endif %}Minhas solicitações
+    <span id="menu-aceites-badge" title="Cancelamentos aguardando o seu aceite" style="display:none; margin-left:6px; background:#e0892f; color:#fff; border-radius:999px; font-size:11px; font-weight:700; padding:1px 7px;"></span>
+  </a>
   {{ item("/meus-reversos", "Meus reversos") }}
-  {{ item("/solicitar-cancelamento", "Nova solicitação") }}
+  {# (31/10) Nova solicitação: a bolinha mostra cancelamentos pedidos pelo galpão/equipe que esperam o ACEITE do seller. #}
+  <a class="cmx-nav-item{% if _caminho == '/solicitar-cancelamento' %} cmx-nav-item--ativo{% endif %}" href="/solicitar-cancelamento"{% if _caminho == '/solicitar-cancelamento' %} aria-current="page"{% endif %}>
+    {%- if _caminho == '/solicitar-cancelamento' %}<span class="cmx-nav-dot"></span> {% endif %}Nova solicitação
+  </a>
+  <script>
+    (function () {
+      function atualizar() {
+        fetch("/api/meus-aceites/resumo", { cache: "no-store" }).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          var b = document.getElementById("menu-aceites-badge"); if (!b || !j) return;
+          if (j.aguardando > 0) { b.textContent = j.aguardando; b.style.display = "inline-block"; } else { b.style.display = "none"; }
+        }).catch(function () {});
+      }
+      window.atualizarBadgeAceites = atualizar; atualizar(); setInterval(atualizar, 60000);
+      var bd = document.getElementById("menu-aceites-badge");
+      if (bd) bd.addEventListener("click", function (e) { if (window.abrirAceites) { e.preventDefault(); e.stopPropagation(); window.abrirAceites(); } });
+    })();
+  </script>
   {# (28/10) Mensagens pós-venda dos compradores: a bolinha com número aparece só se houver aguardando. #}
   <a class="cmx-nav-item{% if _caminho == '/minhas-mensagens' %} cmx-nav-item--ativo{% endif %}" href="/minhas-mensagens"{% if _caminho == '/minhas-mensagens' %} aria-current="page"{% endif %}>
     {%- if _caminho == '/minhas-mensagens' %}<span class="cmx-nav-dot"></span> {% endif %}Mensagens pós

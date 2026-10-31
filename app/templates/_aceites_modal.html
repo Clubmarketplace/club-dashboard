@@ -1,0 +1,93 @@
+{# Janela "Cancelamentos aguardando o seu aceite" (31/10): abre por cima do dashboard, sem trocar de página.
+   Usa as mesmas rotas de _aceites_seller.html (/api/meus-aceites). Expõe window.abrirAceites().
+   Ao decidir o último pedido a janela fecha sozinha; o evento "aceites:mudou" avisa faixa e menu. #}
+<style>
+  #dlg-aceites { border:0; border-radius:16px; padding:0; width:min(560px, calc(100vw - 24px)); box-shadow:0 24px 60px rgba(15,23,42,.25); color:#0f172a; }
+  #dlg-aceites::backdrop { background:rgba(15,23,42,.38); }
+  #dlg-aceites .da-corpo { padding:20px 22px 18px; max-height:80vh; overflow:auto; }
+  #dlg-aceites .da-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; }
+  #dlg-aceites h2 { margin:0; font-size:16px; font-weight:600; }
+  #dlg-aceites .da-sub { margin:4px 0 14px; font-size:13px; color:#64748b; }
+  #dlg-aceites .da-x { border:0; background:none; font-size:18px; color:#94a3b8; cursor:pointer; line-height:1; padding:4px; }
+  #dlg-aceites .da-card { border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-bottom:10px; }
+  #dlg-aceites .da-prod { font-weight:600; font-size:14px; }
+  #dlg-aceites .da-peq { color:#64748b; font-size:12.5px; margin-top:3px; }
+  #dlg-aceites .da-motivo { margin-top:8px; font-size:13px; background:#f6f7f9; border-radius:8px; padding:7px 10px; }
+  #dlg-aceites .da-acoes { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; align-items:center; margin-top:10px; }
+  #dlg-aceites button.da-b { font:inherit; font-size:13px; font-weight:600; border-radius:8px; padding:8px 14px; cursor:pointer; min-height:36px; border:1px solid #d1d5db; background:#fff; color:#475569; }
+  #dlg-aceites button.da-b.ok { background:#1f9d63; border-color:#1f9d63; color:#fff; }
+  #dlg-aceites button.da-b.no { color:#9b1c1c; border-color:#e5c0c0; }
+  #dlg-aceites button.da-b:disabled { opacity:.5; cursor:not-allowed; }
+  #dlg-aceites input { font:inherit; font-size:13.5px; padding:8px 10px; border:1px solid #d1d5db; border-radius:8px; flex:1 1 200px; min-width:0; }
+  #dlg-aceites .da-erro { color:#9b1c1c; font-size:12.5px; margin-top:6px; text-align:right; }
+</style>
+<dialog id="dlg-aceites" aria-labelledby="da-titulo">
+  <div class="da-corpo">
+    <div class="da-topo"><div><h2 id="da-titulo">Cancelamentos aguardando o seu aceite</h2>
+      <p class="da-sub">O galpão ou a equipe pediu o cancelamento. O atendimento só começa depois que você <b>aceitar</b>.</p></div>
+      <button type="button" class="da-x" id="da-fechar" aria-label="Fechar">✕</button></div>
+    <div id="da-lista"></div>
+  </div>
+</dialog>
+<script>
+(function () {
+  var dlg = document.getElementById("dlg-aceites"); if (!dlg || !dlg.showModal) return;
+  var lista = document.getElementById("da-lista");
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var pode = false;
+  function tempo(h) { return h == null ? "" : h < 1 ? "há menos de 1 h" : h < 24 ? "há " + Math.floor(h) + " h" : "há " + Math.floor(h / 24) + " dia(s)"; }
+  function avisar() {
+    document.dispatchEvent(new Event("aceites:mudou"));
+    if (window.atualizarBadgeAceites) window.atualizarBadgeAceites();
+  }
+  function desenhar(d) {
+    pode = !!d.pode_decidir;
+    var ag = d.aguardando || [];
+    if (!ag.length) { if (dlg.open) dlg.close(); return; }          // decidiu o último: fecha sozinha
+    document.getElementById("da-titulo").textContent = ag.length === 1 ? "1 cancelamento aguardando o seu aceite" : ag.length + " cancelamentos aguardando o seu aceite";
+    lista.innerHTML = ag.map(function (s) {
+      var nome = s.produto || ("Venda " + (s.numero_venda || ""));
+      return '<div class="da-card" data-id="' + s.id + '"><div class="da-prod">' + esc(nome) + '</div>' +
+        '<div class="da-peq">Venda ' + esc(s.numero_venda) + (s.plataforma_nome ? " · " + esc(s.plataforma_nome) : "") + (s.sku ? " · " + esc(s.sku) : "") + '</div>' +
+        '<div class="da-peq">Pedido por ' + esc(s.origem) + (s.pedido_por ? " (" + esc(s.pedido_por) + ")" : "") + (s.horas_esperando != null ? " · " + tempo(s.horas_esperando) : "") + '</div>' +
+        '<div class="da-motivo">Motivo: ' + esc(s.motivo) + '</div>' +
+        '<div class="da-acoes"><button type="button" class="da-b no" data-a="recusar" ' + (pode ? "" : "disabled") + '>Recusar</button>' +
+        '<button type="button" class="da-b ok" data-a="aceitar" ' + (pode ? "" : "disabled") + '>Aceitar</button></div>' +
+        '<div class="da-erro" hidden></div></div>';
+    }).join("");
+  }
+  async function carregar() {
+    try {
+      var r = await fetch("/api/meus-aceites", { cache: "no-store" }); if (!r.ok) return;
+      desenhar(await r.json()); avisar();
+    } catch (e) { console.error(e); }
+  }
+  async function enviar(id, acao, corpo) {
+    var r = await fetch("/api/meus-aceites/" + id + "/" + acao, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : "{}" });
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Não consegui registrar agora (erro " + r.status + ").");
+  }
+  lista.addEventListener("click", async function (e) {
+    var b = e.target.closest("button[data-a]"); if (!b) return;
+    var card = b.closest(".da-card"), id = card.dataset.id, erro = card.querySelector(".da-erro"), a = b.dataset.a; erro.hidden = true;
+    try {
+      if (a === "aceitar") { b.disabled = true; await enviar(id, "aceitar"); await carregar(); return; }
+      if (a === "recusar") {
+        var area = card.querySelector(".da-acoes");
+        area.innerHTML = '<input type="text" maxlength="300" placeholder="Motivo da recusa (ex.: já despachei)" aria-label="Motivo da recusa" />' +
+          '<button type="button" class="da-b" data-a="voltar">Voltar</button><button type="button" class="da-b no" data-a="confirmar-recusa">Confirmar recusa</button>';
+        area.querySelector("input").focus(); return;
+      }
+      if (a === "voltar") { carregar(); return; }
+      if (a === "confirmar-recusa") {
+        var motivo = card.querySelector("input").value.trim();
+        if (motivo.length < 3) { erro.hidden = false; erro.textContent = "Escreva o motivo da recusa."; return; }
+        b.disabled = true; await enviar(id, "recusar", { motivo: motivo }); await carregar();
+      }
+    } catch (err) { erro.hidden = false; erro.textContent = err.message; b.disabled = false; }
+  });
+  document.getElementById("da-fechar").addEventListener("click", function () { dlg.close(); });
+  dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });   // clique fora fecha
+  window.abrirAceites = function () { dlg.showModal(); carregar(); };
+})();
+</script>
