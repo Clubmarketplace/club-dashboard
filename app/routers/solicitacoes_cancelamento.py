@@ -836,6 +836,40 @@ def listar_opcoes():
     }
 
 
+@router.get("/skus")
+def sugerir_skus(request: Request, conta: str = "", q: str = "", db: Session = Depends(get_db)):
+    """
+    Sugestões de SKU para o campo "SKU do produto" do reverso (31/10): SKUs do cadastro de Custos da PRÓPRIA conta
+    escolhida (nunca de outra), com o nome do produto para a pessoa conferir. NÃO devolve custo (o galpão não vê valores).
+    Só leitura. `exato` diz se o texto digitado é igual a um SKU do cadastro (ignora maiúscula/minúscula e espaços das pontas);
+    é isso que decide o aviso amarelo da tela. Perfis: galpão, admin e supervisor.
+    """
+    from app.contas_util import achar_conta_por_nome
+    from app.models import CustoSku
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel not in ("logistica", "admin", "supervisor"):
+        raise HTTPException(status_code=403, detail="Sem permissão.")
+    resposta = {"conta_achada": False, "total_cadastrados": 0, "exato": False, "itens": []}
+    conta_db = achar_conta_por_nome(db, conta) if (conta or "").strip() else None
+    if conta_db is None:
+        return resposta
+    resposta["conta_achada"] = True
+    todos = db.query(CustoSku.sku, CustoSku.nome_produto).filter(CustoSku.conta_id == conta_db.id).all()
+    resposta["total_cadastrados"] = len(todos)
+    alvo = limpar_espacos(q or "").upper()
+    if not alvo:
+        return resposta
+    resposta["exato"] = any((s or "").strip().upper() == alvo for s, _n in todos)
+    if len(alvo) < 2:
+        return resposta
+    achados = [(s.strip(), (n or "").strip()) for s, n in todos if s and alvo in s.upper()]
+    achados.sort(key=lambda x: (not x[0].upper().startswith(alvo), x[0].upper()))
+    resposta["itens"] = [{"sku": s, "nome": n} for s, n in achados[:20]]
+    return resposta
+
+
 @router.get("/contas")
 def listar_contas(request: Request, db: Session = Depends(get_db)):
     """Lista de contas conhecidas pro campo "Conta" (com busca) e pros filtros."""
