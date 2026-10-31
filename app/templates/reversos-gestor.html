@@ -60,6 +60,15 @@
 
     #dlg-rel-rem { width:min(980px, 96vw); max-height:92vh; border:none; border-radius:14px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.25); }
     #dlg-rel-rem::backdrop { background:rgba(15,23,32,.45); }
+    #rem-enviar .tabela-env { width:100%; border-collapse:collapse; font-size:13px; }
+    #rem-enviar .tabela-env th, #rem-enviar .tabela-env td { padding:7px 8px; border-bottom:1px solid var(--cmx-borda); text-align:left; vertical-align:top; }
+    #rem-enviar .tabela-env td.n, #rem-enviar .tabela-env th.n { text-align:right; }
+    #rem-enviar .tabela-env tr.marcada td { background:#f3eefb; }
+    #rem-enviar .tabela-env .nome { color:var(--cmx-texto-suave); font-size:12px; max-width:320px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+    #rem-enviar .barra-env { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin:0 0 10px; position:sticky; top:0; background:#fff; padding:6px 0; z-index:1; }
+    #rem-enviar .qtd-grande { font-size:26px; font-weight:800; color:#5b3fa0; line-height:1; }
+    #rem-enviar .chips-conta { display:flex; flex-wrap:wrap; gap:8px; }
+    #rem-enviar .chips-conta button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:99px; padding:6px 12px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
     .dlg-rel-topo { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; font-size:17px; }
     /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
     .so-impressao { display:none; }
@@ -264,6 +273,12 @@
           <!-- v33 (31/10): o quadro das remessas saiu da tela geral; abre pelo botão "Relatório de remessas para a fábrica" -->
           <dialog id="dlg-rel-rem" aria-labelledby="rem-titulo">
             <div class="dlg-rel-topo"><b>Relatório de remessas para a fábrica</b><button type="button" class="btn" id="rel-fechar">Fechar ✕</button></div>
+            <!-- v34 (31/10): lista TODAS as garantias ainda no galpão e deixa marcar as que vão nesta nota -->
+            <div class="painel" id="rem-enviar" style="border-left:6px solid #b45309; margin:0 0 14px">
+              <div class="rank-topo"><h2 style="font-size:15px;margin:0">Para enviar à fábrica <span class="peq" id="rem-env-qtd"></span></h2>
+                <div class="rg-conta"><label for="rem-conta">Conta</label><select id="rem-conta" class="filtro"></select></div></div>
+              <div id="rem-env-corpo"><div class="vazio">Carregando…</div></div>
+            </div>
             <div class="painel" id="rel-grafico" style="margin:0 0 14px">
               <h2 style="font-size:15px;margin:0 0 10px">Valor enviado por conta</h2>
               <div class="caixa-grafico" style="height:300px"><canvas id="g-rem-conta" role="img" aria-label="Valor enviado à fábrica por conta e situação"></canvas></div>
@@ -280,7 +295,7 @@
               </div>
             </div>
             <div id="rem-lista"><div class="vazio">Carregando…</div></div>
-            <div class="nota-tab">Para enviar garantias à fábrica, escolha a conta, marque as garantias na <b>Lista das garantias</b> e clique em <b>Enviar para a fábrica</b>. A remessa fica <b>em análise</b> até você registrar a resposta; ao <b>encerrar</b>, o que não foi recuperado vira <b>prejuízo</b>. Passou de 15 dias: amarelo. Passou de 30: vermelho.</div>
+            <div class="nota-tab">Para enviar garantias à fábrica, escolha a conta em <b>Para enviar à fábrica</b> (no topo), marque as garantias que vão juntas e clique em <b>Enviar marcadas para a fábrica</b>. A remessa fica <b>em análise</b> até você registrar a resposta; ao <b>encerrar</b>, o que não foi recuperado vira <b>prejuízo</b>. Passou de 15 dias: amarelo. Passou de 30: vermelho.</div>
             <div style="margin-top:10px"><a class="btn" id="rem-excel" href="#">⬇ Baixar Excel das remessas</a></div>
           </div>
 
@@ -477,10 +492,12 @@
         <label>Fábrica / marca<input id="dlg-fabrica" list="dlg-fabricas" maxlength="80" required /></label>
         <datalist id="dlg-fabricas"></datalist>
         <label>Nº da nota fiscal (emitida no outro sistema)<input id="dlg-nota" maxlength="40" required /></label>
+        <label>Data de emissão da nota<input id="dlg-emissao" type="date" required /></label>
         <label>Data de envio<input id="dlg-envio" type="date" required /></label>
+        <label>Registrado por<input id="dlg-quem" value="{{ usuario_logado.nome_exibicao }}" readonly style="background:#f1f4f7" /></label>
         <label style="grid-column:1/-1">Observação (opcional)<textarea id="dlg-obs" rows="2" maxlength="500"></textarea></label>
       </div>
-      <div class="dlg-itens"><table class="tab-det"><thead><tr><th>Nº da venda</th><th>SKU</th><th class="n">Custo (R$)</th></tr></thead><tbody id="dlg-itens"></tbody></table></div>
+      <div class="dlg-itens"><table class="tab-det"><thead><tr><th>Nº da venda</th><th>Tipo</th><th>SKU</th><th class="n">Custo (R$)</th></tr></thead><tbody id="dlg-itens"></tbody></table></div>
       <div id="dlg-total" style="font-size:15px"></div>
       <div class="erro" id="dlg-erro" role="alert"></div>
       <div class="dlg-acoes">
@@ -777,7 +794,7 @@
       selecionadas.clear();
       if (garConta) $("sec-garantias").open = true;
       carregarGarantias(); carregarRemessas(true);
-      $("resumo-gestor").scrollIntoView({ behavior: "smooth", block: "start" });
+      if (!$("dlg-rel-rem").open) $("resumo-gestor").scrollIntoView({ behavior: "smooth", block: "start" });   // com a janela de remessas aberta não rola a tela de fundo
     }
     function detalharConta(nome) { selecionarConta(nome); }
     // Tabela "todas as contas" (dentro de "Ver todas as contas")
@@ -1015,7 +1032,7 @@
           : '<span class="selo-rem">Cancelada</span>';
         const res = enc ? `Recuperado <b>${brl(r.recuperado)}</b>${r.perdido > 0 ? ` · Perdido <b style="color:#a83232">${brl(r.perdido)}</b>` : ""}` : (analise ? "Aguardando a fábrica" : "");
         return `<div class="rem" data-id="${r.id}"><div class="rem-linha">
-          <div><b>${esc(r.fabrica)} · nota ${esc(r.nota_numero)}</b><div class="peq">${esc(r.conta)} · enviada em ${dataBRiso(r.data_envio)}${r.enviado_por ? " por " + esc(r.enviado_por) : ""}</div></div>
+          <div><b>${esc(r.fabrica)} · nota ${esc(r.nota_numero)}</b><div class="peq">${esc(r.conta)} · ${r.data_emissao ? "emitida em " + dataBRiso(r.data_emissao) + " · " : ""}enviada em ${dataBRiso(r.data_envio)}${r.enviado_por ? " por " + esc(r.enviado_por) : ""}</div></div>
           <div>${r.qtd_itens} iten${r.qtd_itens === 1 ? "" : "s"} · <b>${brl(r.valor_total)}</b></div>
           <div>${selo}</div><div class="peq" style="font-size:13px">${res}</div>
           <div><button type="button" class="btn" data-rem-abrir="${r.id}" aria-expanded="${remAbertas.has(r.id)}">${remAbertas.has(r.id) ? "Fechar" : analise ? "Registrar resposta" : "Abrir"}</button></div>
@@ -1034,7 +1051,7 @@
         const itens = `<div class="tabela-rolagem"><table class="tab-det"><thead><tr><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th></tr></thead><tbody>${
           d.itens.map(i => `<tr><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n">${brl(i.custo)}${i.custo_informado ? ' <span class="peq" title="Custo digitado na hora do envio (não estava na base de Custos)">informado</span>' : ""}</td></tr>`).join("")
           || '<tr><td colspan="4" class="vazio">Sem itens.</td></tr>'}</tbody></table></div>`;
-        const info = `<div class="peq" style="margin-top:6px">Nota ${esc(d.nota_numero)}· enviada em ${dataBRiso(d.data_envio)}${d.observacao_envio ? " · " + esc(d.observacao_envio) : ""}</div>`;
+        const info = `<div class="peq" style="margin-top:6px">Nota ${esc(d.nota_numero)}${d.data_emissao ? " · emitida em " + dataBRiso(d.data_emissao) : ""} · enviada em ${dataBRiso(d.data_envio)}${d.enviado_por ? " por " + esc(d.enviado_por) : ""}${d.observacao_envio ? " · " + esc(d.observacao_envio) : ""}</div>`;
         let acao = "";
         if (analise) {
           acao = `<h3 style="font-size:13px;margin:14px 0 0">Registrar a resposta da fábrica</h3>
@@ -1128,13 +1145,73 @@
       else if (e.target.closest("#sel-limpar")) { selecionadas.clear(); desenharGarantias(garUltimo); }
       else if (e.target.closest("#sel-enviar")) abrirJanelaEnvio();
     });
+    // ---- v34: painel "Para enviar à fábrica" dentro da janela de remessas (usa a mesma seleção `selecionadas`) ----
+    function resumoMarcadas() {
+      const itens = (garUltimo && garUltimo.itens) || [];
+      const sel = itens.filter(i => !i.remessa && selecionadas.has(i.id));
+      return { sel, valor: sel.reduce((s, i) => s + (i.custo || 0), 0), semCusto: sel.some(i => i.custo == null) };
+    }
+    function textoBarraEnvio() {
+      const r = resumoMarcadas(), livres = ((garUltimo && garUltimo.itens) || []).filter(i => !i.remessa);
+      return `<span class="qtd-grande">${r.sel.length}</span><span><b>marcada${r.sel.length === 1 ? "" : "s"}</b> de ${livres.length} · ${brl(r.valor)}${r.semCusto ? " (+ itens sem custo)" : ""}</span>`
+        + `<button type="button" class="btn" id="rem-env-todas">${r.sel.length === livres.length && livres.length ? "Desmarcar todas" : "Marcar todas"}</button>`
+        + `<button type="button" class="btn pri" id="rem-env-enviar" style="background:#5b3fa0;border-color:#5b3fa0" ${r.sel.length ? "" : "disabled"}>Enviar marcadas para a fábrica</button>`;
+    }
+    function desenharPainelEnvio() {
+      if (!$("rem-enviar") || !garUltimo) return;
+      const contas = (garUltimo.por_conta && garUltimo.por_conta.contas) || [];
+      const comLivres = contas.map(c => ({ conta: c.conta, livres: (c.garantias || 0) - (c.enviadas || 0) })).filter(c => c.livres > 0)
+        .sort((a, b) => b.livres - a.livres || a.conta.localeCompare(b.conta, "pt-BR"));
+      const sel = $("rem-conta");
+      const nomes = contas.map(c => c.conta).sort((a, b) => a.localeCompare(b, "pt-BR"));
+      sel.innerHTML = '<option value="">Escolha a conta…</option>' + nomes.map(n => `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+      sel.value = garConta;
+      const corpo = $("rem-env-corpo");
+      if (!garConta) {
+        $("rem-env-qtd").textContent = "";
+        corpo.innerHTML = comLivres.length
+          ? `<div class="peq" style="margin-bottom:8px">Uma nota é de uma conta só. Escolha a conta para ver e marcar as garantias que estão no galpão:</div><div class="chips-conta">`
+            + comLivres.map(c => `<button type="button" data-conta="${esc(c.conta)}">${esc(c.conta)} · <b>${c.livres}</b></button>`).join("") + `</div>`
+          : '<div class="vazio">Nenhuma garantia esperando envio neste período.</div>';
+        return;
+      }
+      const livres = (garUltimo.itens || []).filter(i => !i.remessa);
+      $("rem-env-qtd").textContent = `· ${livres.length} no galpão`;
+      if (!livres.length) { corpo.innerHTML = '<div class="vazio">Nenhuma garantia no galpão para enviar nesta conta e período. Tudo já foi enviado.</div>'; return; }
+      corpo.innerHTML = `<div class="barra-env" id="rem-env-barra">${textoBarraEnvio()}</div>`
+        + `<div style="overflow-x:auto"><table class="tabela-env"><thead><tr><th></th><th>Tipo</th><th>SKU e produto</th><th>Nº da venda</th><th>Recebido</th><th class="n">Custo</th></tr></thead><tbody>`
+        + livres.map(i => `<tr class="${selecionadas.has(i.id) ? "marcada" : ""}" data-id="${i.id}"><td><input type="checkbox" class="chk-env2" data-id="${i.id}" aria-label="Marcar venda ${esc(i.numero_venda)}" ${selecionadas.has(i.id) ? "checked" : ""} /></td>`
+          + `<td><span style="font-weight:600;color:${i.tipo_chave === "garantia" ? "#8a4b00" : "#a83232"}">${esc(i.tipo || "—")}</span></td>`
+          + `<td><b>${esc(i.sku || "—")}</b><div class="nome" title="${esc(i.produto)}">${esc(i.produto)}</div></td><td>${esc(i.numero_venda)}</td><td class="nowrap">${esc(i.recebido_em)}</td>`
+          + `<td class="n">${i.custo == null ? '<span style="color:#a83232;font-weight:600">sem custo</span>' : `<b>${brl(i.custo)}</b>`}</td></tr>`).join("")
+        + `</tbody></table></div>`;
+    }
+    function atualizarPainelEnvio() { const b = $("rem-env-barra"); if (b) b.innerHTML = textoBarraEnvio(); atualizarBarraSelecao(); }
+    $("rem-conta").addEventListener("change", () => selecionarConta($("rem-conta").value));
+    $("rem-env-corpo").addEventListener("click", (e) => {
+      const c = e.target.closest("button[data-conta]");
+      if (c) { selecionarConta(c.dataset.conta); return; }
+      if (e.target.closest("#rem-env-todas")) {
+        const livres = ((garUltimo && garUltimo.itens) || []).filter(i => !i.remessa), todas = livres.every(i => selecionadas.has(i.id));
+        livres.forEach(i => todas ? selecionadas.delete(i.id) : selecionadas.add(i.id));
+        desenharPainelEnvio(); atualizarBarraSelecao();
+      } else if (e.target.closest("#rem-env-enviar")) abrirJanelaEnvio();
+    });
+    $("rem-env-corpo").addEventListener("change", (e) => {
+      const c = e.target.closest(".chk-env2"); if (!c) return;
+      if (c.checked) selecionadas.add(+c.dataset.id); else selecionadas.delete(+c.dataset.id);
+      const tr = c.closest("tr"); if (tr) tr.classList.toggle("marcada", c.checked);
+      atualizarPainelEnvio();
+    });
+    $("dlg-rel-rem").addEventListener("close", () => { if (garUltimo) desenharGarantias(garUltimo); });   // a lista de baixo reflete o que foi marcado aqui
+
     function abrirJanelaEnvio() {
       const itens = ((garUltimo && garUltimo.itens) || []).filter(i => selecionadas.has(i.id));
       if (!itens.length) return;
       $("dlg-resumo").textContent = `${itens.length} garantia${itens.length === 1 ? "" : "s"} da conta ${garConta}. Uma nota é de uma conta só.`;
       $("dlg-fabricas").innerHTML = fabricasConhecidas.map(f => `<option value="${esc(f)}">`).join("");
-      $("dlg-envio").value = hojeBR(); $("dlg-fabrica").value = ""; $("dlg-nota").value = ""; $("dlg-obs").value = "";
-      $("dlg-itens").innerHTML = itens.map(i => `<tr data-id="${i.id}"><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td class="n">${i.custo == null
+      $("dlg-envio").value = hojeBR(); $("dlg-emissao").value = hojeBR(); $("dlg-fabrica").value = ""; $("dlg-nota").value = ""; $("dlg-obs").value = "";
+      $("dlg-itens").innerHTML = itens.map(i => `<tr data-id="${i.id}"><td>${esc(i.numero_venda)}</td><td>${esc(i.tipo || "—")}</td><td><b>${esc(i.sku || "—")}</b></td><td class="n">${i.custo == null
         ? `<input class="dlg-custo" inputmode="decimal" placeholder="informe" aria-label="Custo da venda ${esc(i.numero_venda)}" /><div class="peq">não está na base de Custos</div>` : brl(i.custo)}</td></tr>`).join("");
       $("dlg-erro").style.display = "none";
       recalcularTotalEnvio();
@@ -1157,7 +1234,7 @@
       const erro = $("dlg-erro"); erro.style.display = "none";
       $("dlg-salvar").disabled = true;
       try {
-        await post("/api/reversos-gestor/remessas", { fabrica: $("dlg-fabrica").value, nota_numero: $("dlg-nota").value, data_envio: $("dlg-envio").value,
+        await post("/api/reversos-gestor/remessas", { fabrica: $("dlg-fabrica").value, nota_numero: $("dlg-nota").value, data_envio: $("dlg-envio").value, data_emissao: $("dlg-emissao").value,
                                                       observacao: $("dlg-obs").value, itens });
         selecionadas.clear(); $("dlg-remessa").close(); remFiltro = "analise"; remAbertas.clear();
         carregarGarantias(); carregarRemessas(true);
@@ -1279,6 +1356,7 @@
       const idsLista = new Set(d.itens.filter(i => !i.remessa).map(i => i.id));
       [...selecionadas].forEach(id => { if (!idsLista.has(id)) selecionadas.delete(id); });
       atualizarBarraSelecao();
+      desenharPainelEnvio();
       $("gar-nota").textContent = d.total_itens > d.itens.length ? `Mostrando as ${d.itens.length} mais recentes de ${d.total_itens}. O Excel traz todas.` : "";
     }
     $("gar-fixar").addEventListener("click", async () => {

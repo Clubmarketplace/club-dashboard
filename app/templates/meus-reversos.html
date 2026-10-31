@@ -53,7 +53,13 @@
     .abas { display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
     .abas button { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:99px; padding:5px 13px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
     .abas button[aria-pressed="true"] { background:#1f2d3d; color:#fff; border-color:#1f2d3d; }
-    .acoes { display:flex; flex-wrap:wrap; gap:5px; }
+    .acoes { display:flex; flex-wrap:wrap; gap:4px; }
+    /* 31/10: tabela "Meus reversos" mais compacta: sem rolagem lateral, produto não empilha palavra por palavra */
+    #t-gar td { font-size:13px; }
+    #t-gar .acoes .btn { padding:3px 8px; font-size:12px; white-space:nowrap; }
+    .cel-prod { min-width:190px; max-width:340px; }
+    .cel-prod .nome { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; color:var(--cmx-texto-suave); font-size:12.5px; line-height:1.3; margin-top:2px; }
+    .cel-data { white-space:nowrap; } .cel-data .peq { display:block; margin-top:2px; }
     .corrigido { display:block; font-size:11px; color:#4d5965; margin-top:2px; }
     dialog { border:none; border-radius:14px; padding:20px 22px; width:min(520px,94vw); box-shadow:0 10px 40px rgba(0,0,0,.25); }
     dialog::backdrop { background:rgba(20,30,40,.45); }
@@ -159,8 +165,8 @@
         <button type="button" data-s="aguardando" aria-pressed="false">Aguardando a equipe <span class="peq" data-c="aguardando"></span></button>
       </div>
       <div class="tabela-rolagem"><table>
-        <thead><tr><th>Recebido em</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th>Situação</th><th class="n">Custo</th><th>Fábrica</th><th>Ações</th></tr></thead>
-        <tbody id="t-gar"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+        <thead><tr><th>Recebido / Venda</th><th>SKU e produto</th><th>Situação</th><th class="n">Custo</th><th>Fábrica</th><th>Ações</th></tr></thead>
+        <tbody id="t-gar"><tr><td colspan="6" class="vazio">Carregando…</td></tr></tbody>
       </table></div>
       <div class="peq" style="margin-top:8px">Se o SKU foi digitado errado, use "Corrigir SKU": você escolhe o SKU certo do seu cadastro de Custos e o custo é buscado de novo. Tudo fica registrado (quem fez, quando, antes e depois).</div>
     </div>
@@ -318,17 +324,17 @@
       $("gar-info").textContent = g.total > g.itens.length ? `· mostrando ${g.itens.length} de ${g.total}` : `· ${g.total}`;
       itensPorId = {}; g.itens.forEach(i => itensPorId[i.id] = i);
       const corCls = { garantia: "am", voltou: "ok", outros: "en", aguardando: "en" };
-      $("t-gar").innerHTML = g.itens.length ? g.itens.map(i => `<tr><td>${esc(i.recebido_em)}</td><td>${esc(i.numero_venda)}</td>`
-        + `<td><b>${esc(i.sku || "—")}</b>${i.sku_corrigido_por ? `<span class="corrigido">corrigido por ${quem(i.sku_corrigido_por, i.sku_corrigido_papel, i.sku_corrigido_em)}${i.sku_original ? " · era " + esc(i.sku_original) : ""}</span>` : ""}</td>`
-        + `<td>${esc(i.produto)}</td><td><span class="selo ${corCls[i.grupo] || "en"}">${esc(i.situacao)}</span></td>`
+      $("t-gar").innerHTML = g.itens.length ? g.itens.map(i => `<tr><td class="cel-data">${esc(i.recebido_em)}<span class="peq">${esc(i.numero_venda)}</span></td>`
+        + `<td class="cel-prod"><b>${esc(i.sku || "—")}</b>${i.sku_corrigido_por ? `<span class="corrigido">corrigido por ${quem(i.sku_corrigido_por, i.sku_corrigido_papel, i.sku_corrigido_em)}${i.sku_original ? " · era " + esc(i.sku_original) : ""}</span>` : ""}<div class="nome" title="${esc(i.produto)}">${esc(i.produto)}</div></td>`
+        + `<td><span class="selo ${corCls[i.grupo] || "en"}">${esc(i.situacao)}</span></td>`
         + `<td class="n">${celulaCusto(i)}</td>`
         + `<td>${i.grupo !== "garantia" ? '<span class="peq">—</span>' : i.remessa ? `<span class="selo ${i.remessa.status === "analise" ? "am" : "en"}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>` : '<span class="peq">no galpão</span>'}</td>`
         + `<td><div class="acoes">`
         + (i.editavel ? `<button type="button" class="btn btn-sku" data-id="${i.id}">Corrigir SKU</button>` : "")
         + (i.editavel && i.grupo === "garantia" ? `<button type="button" class="btn btn-custo" data-id="${i.id}">${i.custo == null ? "Informar custo" : "Ajustar custo"}</button>` : "")
         + `<button type="button" class="btn btn-fotos" data-id="${i.id}">Ver fotos</button></div></td></tr>`
-        + `<tr id="fotos-${i.id}" hidden><td colspan="8" style="background:#f7f9fb"><div class="gar-fotos-caixa"></div></td></tr>`).join("")
-        : '<tr><td colspan="8" class="vazio">Nenhum reverso nesta situação, neste período.</td></tr>';
+        + `<tr id="fotos-${i.id}" hidden><td colspan="6" style="background:#f7f9fb"><div class="gar-fotos-caixa"></div></td></tr>`).join("")
+        : '<tr><td colspan="6" class="vazio">Nenhum reverso nesta situação, neste período.</td></tr>';
     }
     $("abas").addEventListener("click", (e) => { const b = e.target.closest("button"); if (!b) return; aba = b.dataset.s; carregar(); });
 
