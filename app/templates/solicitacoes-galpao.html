@@ -168,6 +168,8 @@
             : (s.em_analise ? `<span class="status-pendente" style="color:#3730a3">🔎 Em análise pela equipe</span>` : s.em_atendimento_por ? `<span class="status-pendente">Em conferência · ${escaparHtml(s.em_atendimento_por)}</span>` : '<span class="status-pendente">Aguardando a equipe conferir</span>'))
         : s.confirmado_por
         ? `<span class="status-confirmado">✓ Resolvido · cancelado por ${escaparHtml(s.confirmado_por)}</span>${s.protocolo ? `<div class="quem">Protocolo: ${escaparHtml(s.protocolo)}</div>` : (s.protocolo === "" ? `<div class="quem">Cancelado pelo painel do ML</div>` : "")}`
+        : s.aceite_status === "aguardando" ? '<span class="status-pendente" style="color:#8a4f00">⏳ Aguardando o seller aceitar</span><div class="quem">O cancelamento só segue depois do aceite do seller (ou da autorização de um supervisor/admin)</div>'
+        : s.aceite_status === "recusado" ? `<span class="status-pendente" style="color:#9b1c1c">✗ Recusado pelo seller</span><div class="quem">${escaparHtml(s.aceite_por || "")}${s.aceite_motivo ? " · " + escaparHtml(s.aceite_motivo) : ""}</div>`
         : '<span class="status-pendente">Pendente</span>';
       return `<tr${reverso ? ' style="box-shadow:inset 4px 0 0 #0f766e; background:#f0faf8"' : ""}>
         <td class="nowrap">${formatarData(s.criado_em)}${reverso ? '<div><span class="badge" style="background:#d1f0eb;color:#0b5d56">Reverso</span></div>' : ""}</td>
