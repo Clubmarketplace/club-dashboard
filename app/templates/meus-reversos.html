@@ -9,6 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/dashboard.css?v=7" />
   <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/vendor/html2canvas.min.js"></script>
+  <script src="/static/dinheiro-parado.js?v=1"></script>
   <style>
     :root { --voltou:#2f9e63; --gar:#b45309; --galpao:#8896a5; --fab:#6f52b8; --rec:#2f9e63; --perd:#c24141; --cred:#2e86c1; --troca:#17a2a2; }
     main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
@@ -65,6 +67,7 @@
     .chips button { border:1.5px solid #8a4b00; background:#fff3d6; color:#8a4b00; border-radius:99px; padding:3px 10px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
     .dlg-erro { color:#a83232; font-size:12.5px; min-height:16px; }
     .dlg-botoes { display:flex; justify-content:flex-end; gap:8px; margin-top:12px; }
+    @media print { body * { visibility:hidden } #painel-dp, #painel-dp * { visibility:visible } #painel-dp { position:absolute; left:0; top:0; width:100%; border:none } #painel-dp .btn { display:none } }
     .gar-fotos-caixa { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0; font-size:13px; color:var(--cmx-texto-suave); }
     .gar-fotos-caixa img { height:96px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; }
   </style>
@@ -107,6 +110,14 @@
         </div>
       </header>
   <main>
+    <div class="painel" id="painel-dp">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+        <h2 style="margin:0">Dinheiro parado no seu estoque <span class="peq" style="font-weight:400">· posição de agora</span></h2>
+        <span><button type="button" class="btn" id="dp-png">⬇ Baixar imagem (PNG)</button> <button type="button" class="btn" id="dp-print">🖨 Imprimir / PDF</button></span></div>
+      <div id="dp-corpo" style="border-radius:10px;overflow:hidden"><div class="vazio">Carregando…</div></div>
+      <div class="peq" id="dp-msg" style="margin-top:6px"></div>
+      <div class="peq" style="margin-top:6px">Garantia e quebrado no galpão, mais o que já foi à fábrica e aguarda solução. Valor = custo do cadastro de Custos da sua conta. "Em análise pela equipe" ainda não foi decidido e não entra no parado.</div>
+    </div>
     <div class="barra">
       <div class="periodos" id="periodos" role="group" aria-label="Período">
         <button type="button" data-d="1" aria-pressed="false">Hoje</button>
@@ -142,7 +153,7 @@
       <h2>Meus reversos <span class="peq" id="gar-info"></span></h2>
       <div class="abas" id="abas" role="group" aria-label="Situação do reverso">
         <button type="button" data-s="todos" aria-pressed="true">Todos <span class="peq" data-c="todos"></span></button>
-        <button type="button" data-s="garantia" aria-pressed="false">Em garantia <span class="peq" data-c="garantia"></span></button>
+        <button type="button" data-s="garantia" aria-pressed="false">Para a fábrica <span class="peq" data-c="garantia"></span></button>
         <button type="button" data-s="voltou" aria-pressed="false">Voltaram ao estoque <span class="peq" data-c="voltou"></span></button>
         <button type="button" data-s="outros" aria-pressed="false">Outros <span class="peq" data-c="outros"></span></button>
         <button type="button" data-s="aguardando" aria-pressed="false">Aguardando a equipe <span class="peq" data-c="aguardando"></span></button>
@@ -210,8 +221,8 @@
       $("cartoes").innerHTML =
         cartao("#0f766e", c.retornaram, "Retornaram", "no período")
         + cartao("var(--voltou)", c.voltaram, "Voltaram ao estoque", pct(c.pct_voltaram) + " dos retornos")
-        + cartao("var(--gar)", c.garantias, "Foram para garantia", pct(c.pct_garantias) + " dos retornos")
-        + cartao("var(--gar)", brl(c.valor_garantia), "Valor total em garantia", "custo dos produtos em garantia", true)
+        + cartao("var(--gar)", c.garantias, "Foram para a fábrica", pct(c.pct_garantias) + " dos retornos · " + (c.fab_garantia || 0) + " garantia · " + (c.fab_sem_condicao || 0) + " sem condição")
+        + cartao("var(--gar)", brl(c.valor_garantia), "Valor total para a fábrica", "custo dos produtos (garantia + sem condição)", true)
         + cartao("var(--galpao)", brl(c.parado_valor), "Parado no galpão", c.parado_qtd + " garantia" + (c.parado_qtd === 1 ? "" : "s") + " ainda não enviada" + (c.parado_qtd === 1 ? "" : "s"), true)
         + cartao("var(--fab)", brl(c.enviado_valor), "Enviado para a fábrica", nItens(c.enviado_itens) + " · " + pct(c.pct_enviado) + " do valor em garantia", true)
         + cartao("var(--fab)", brl(v.em_analise.valor), "Em análise na fábrica", v.em_analise.remessas + " remessa" + (v.em_analise.remessas === 1 ? "" : "s") + " · " + nItens(v.em_analise.itens), true)
@@ -223,7 +234,7 @@
         plugins: { legend: { position: "bottom" } } });
       nova("g-dia", "bar", { labels: d.por_dia.map(x => dCurto(x.data)), datasets: [
         { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: "#2f9e63" },
-        { label: "Foram para garantia", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: "#b45309" },
+        { label: "Foram para a fábrica", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: "#b45309" },
         { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: "#c24141" },
         { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: "#d98e2f" } ] }, opBase(true));
       const res = d.resultado;
@@ -393,6 +404,21 @@
       dias = +b.dataset.d; document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
       carregar();
     });
+    // ---- Dinheiro parado (31/10) ----
+    let dpNome = "conta";
+    async function carregarDp() {
+      try {
+        const d = await ler("/api/meus-reversos/dinheiro-parado");
+        dpNome = d.conta || "conta";
+        DinheiroParado.relatorio($("dp-corpo"), d.resumo, d.conta, d.gerado_em);
+      } catch (e) { console.error(e); $("dp-corpo").innerHTML = '<div class="vazio">Não consegui carregar agora. Tente de novo em instantes.</div>'; }
+    }
+    $("dp-png").addEventListener("click", async () => {
+      try { await DinheiroParado.baixarPng($("dp-corpo").firstElementChild, "dinheiro-parado-" + dpNome.toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png"); }
+      catch (e) { $("dp-msg").textContent = "Não consegui gerar a imagem: " + (e.message || ""); }
+    });
+    $("dp-print").addEventListener("click", () => window.print());
+    carregarDp(); setInterval(carregarDp, 60000);
     carregar();
   </script>
 </body>

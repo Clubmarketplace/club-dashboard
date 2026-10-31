@@ -9,6 +9,8 @@
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/dashboard.css?v=7" />
   <script src="/static/vendor/chart.umd.min.js"></script>
+  <script src="/static/vendor/html2canvas.min.js"></script>
+  <script src="/static/dinheiro-parado.js?v=1"></script>
   <style>
     :root {
       --canc:#5b6773; --rev:#0f766e; --voltou:#2f9e63; --nao:#c24141; --aguarda:#d98e2f; --gar:#b45309;
@@ -285,6 +287,13 @@
           </dialog>
 
           <div id="rg-geral">
+            <div class="painel" id="painel-dp">
+              <div class="rank-topo"><h2>Dinheiro parado no estoque, por conta <span class="peq" style="font-weight:400">sem poder vender · agora</span></h2>
+                <span class="peq" id="dp-total"></span></div>
+              <div class="peq" style="margin:-4px 0 8px">Garantia e quebrado no galpão + o que já foi à fábrica e aguarda solução (custo do cadastro da conta). Clique numa barra para abrir o relatório da conta.</div>
+              <div style="position:relative;height:200px"><canvas id="g-dp" role="img" aria-label="Dinheiro parado por conta"></canvas></div>
+              <div class="peq" id="dp-vazio" hidden style="padding:14px;text-align:center">Nenhum dinheiro parado no momento.</div>
+            </div>
             <div class="grupo-titulo">O que chama atenção</div>
             <div class="destaques" id="rg-destaques"></div>
             <div class="painel">
@@ -315,13 +324,13 @@
               <div class="destino-barra" id="rg-destino" role="group" aria-label="Destino dos retornos da conta"></div>
               <div class="legenda" id="rg-destino-leg"></div>
             </div>
-            <button type="button" class="btn" id="rg-voltar">← Voltar ao resumo geral</button>
+            <button type="button" class="btn" id="rg-voltar">← Voltar ao resumo geral</button> <button type="button" class="btn" id="rg-rel-conta">📊 Relatório visual desta conta</button>
           </div>
         </section>
 
         <details class="painel" id="sec-garantias">
           <summary>Lista das garantias, com custo e fotos <span class="sub-sum" id="gar-info"></span></summary>
-          <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima; a conta é a escolhida no resumo.</div>
+          <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia ou sem condição de venda (os dois vão para a fábrica; a coluna SKU mostra o tipo), com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima; a conta é a escolhida no resumo.</div>
           <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
           <div id="sel-bar" hidden></div>
           <div class="tabela-rolagem"><table>
@@ -344,7 +353,7 @@
         <div class="cartoes">
           <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Retornaram</div><div class="sub" id="k-rec-sub"></div><div class="var" id="v-rec"></div></div>
           <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">No estoque</div><div class="sub">a equipe liberou para venda</div><div class="var" id="v-volt"></div></div>
-          <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Foram para garantia</div><div class="sub">a equipe emite a nota</div><div class="var" id="v-gar"></div></div>
+          <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Foram para a fábrica</div><div class="sub">garantia + sem condição de venda</div><div class="var" id="v-gar"></div></div>
           <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Sem condição de venda</div><div class="sub">avariado, faltando peça etc. (fora garantia)</div><div class="var" id="v-nao"></div></div>
           <div class="cartao clicavel" data-grupo="aguardando" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
@@ -440,6 +449,13 @@
       </main>
     </div>
   </div>
+  <dialog id="dlg-dp" aria-labelledby="dp-tit" style="border:none;border-radius:14px;padding:0;width:min(1000px,96vw);max-height:92vh">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:12px 16px;border-bottom:1px solid var(--cmx-borda)">
+      <b id="dp-tit">Relatório da conta</b>
+      <span><button type="button" class="btn" id="dp-png">⬇ Baixar imagem (PNG)</button> <button type="button" class="btn" id="dp-print">🖨 Imprimir / PDF</button> <button type="button" class="btn" id="dp-fechar">Fechar</button></span></div>
+    <div id="dp-corpo" style="overflow:auto;max-height:80vh"></div>
+    <div class="peq" id="dp-msg" style="padding:6px 16px"></div>
+  </dialog>
   <dialog id="dlg-sku" aria-labelledby="dlg-sku-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(540px,94vw)">
     <h2 id="dlg-sku-tit" style="margin:0 0 4px;font-size:17px">Corrigir SKU</h2>
     <div class="peq" id="dlg-sku-atual"></div>
@@ -507,7 +523,7 @@
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
           { label: "No estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
-          { label: "Foram para garantia", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
+          { label: "Foram para a fábrica", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
           { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
           { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
         ] },
@@ -789,8 +805,8 @@
 
       const c = garConta ? contas.find(x => x.conta === garConta) : null;
       const A = garConta
-        ? { ret: c ? c.retornaram : 0, vol: c ? c.voltaram : 0, gar: c ? c.garantias : 0, custo: c ? c.custo_garantia : 0, sem: c ? c.sem_custo : 0 }
-        : { ret: tot.retornaram || 0, vol: tot.voltaram || 0, gar: tot.garantias || 0, custo: tot.custo_garantia || 0, sem: tot.sem_custo || 0 };
+        ? { ret: c ? c.retornaram : 0, vol: c ? c.voltaram : 0, gar: c ? c.garantias : 0, fg: c ? (c.fab_garantia || 0) : 0, fs: c ? (c.fab_sem_condicao || 0) : 0, custo: c ? c.custo_garantia : 0, sem: c ? c.sem_custo : 0 }
+        : { ret: tot.retornaram || 0, vol: tot.voltaram || 0, gar: tot.garantias || 0, fg: tot.fab_garantia || 0, fs: tot.fab_sem_condicao || 0, custo: tot.custo_garantia || 0, sem: tot.sem_custo || 0 };
       const pct = (a, b) => b > 0 ? Math.round(a * 100 / b) + "%" : "—";
       $("rg-titulo").textContent = garConta ? "Resumo de " + garConta : "Em resumo";
 
@@ -811,8 +827,8 @@
       $("rg-numeros").innerHTML =
         cartaoRg('data-abrir="recebidos"', "var(--rev)", "Retornaram", A.ret, "no período · clique para ver")
         + cartaoRg('data-abrir="voltaram"', "var(--voltou)", "Voltaram ao estoque", A.vol, pct(A.vol, A.ret) + " dos retornos", "", "color:#1f6b45")
-        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Foram para garantia", A.gar, pct(A.gar, A.ret) + " dos retornos", "", "color:#8a4b00")
-        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total em garantia", brl(A.custo), "custo dos produtos em garantia", semCusto, din + ";color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Foram para a fábrica", A.gar, pct(A.gar, A.ret) + " dos retornos · " + A.fg + " garantia · " + A.fs + " sem condição de venda", "", "color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total para a fábrica", brl(A.custo), "custo dos produtos (garantia + sem condição)", semCusto, din + ";color:#8a4b00")
         + cartaoRg('data-abrir="garantias"', "#8896a5", "Parado no galpão", brl(parValor), plural(parQtd, "garantia ainda não enviada", "garantias ainda não enviadas"), "", din)
         + cartaoRg('data-rem="todas"', "#7c5cbf", "Enviado para a fábrica", brl(custoEnv), plural(env, "item", "itens") + (A.custo > 0 ? " · " + pct(custoEnv, A.custo) + " do valor em garantia" : ""), "", din + ";color:#5b3fa0")
         + cartaoRg('data-rem="analise"', "#7c5cbf", "Em análise na fábrica", ag ? brl(ag.valor) : "—", ag ? plural(ag.remessas, "remessa", "remessas") + " · " + plural(ag.itens, "item", "itens") : "", "", din + ";color:#5b3fa0")
@@ -856,7 +872,7 @@
         // Cada fatia é clicável: abre a lista daqueles reversos (da conta escolhida). "Outros" foi separado em
         // "sem condição de venda" e "aguardando a equipe" para ficar claro o que são.
         const nao = c ? c.nao_voltaram || 0 : 0, agu = c ? c.aguardando || 0 : 0;
-        const fatias = [["No estoque", A.vol, COR.voltou, "voltaram"], ["Foram para garantia", A.gar, COR.garantia, "garantias"],
+        const fatias = [["No estoque", A.vol, COR.voltou, "voltaram"], ["Foram para a fábrica", A.gar, COR.garantia, "garantias"],
                         ["Sem condição de venda", nao, COR.nao, "nao_voltaram"], ["Aguardando a equipe", agu, COR.aguarda, "aguardando"]].filter(f => f[1] > 0);
         $("rg-destino-tit").textContent = `Para onde foram os ${A.ret} retorno${A.ret === 1 ? "" : "s"} de ${garConta}`;
         $("rg-destino").innerHTML = fatias.map(f => `<div class="rg-link" data-abrir="${f[3]}" role="button" tabindex="0" style="flex:${f[1]} 1 0;background:${f[2]};cursor:pointer" title="${esc(f[0])}: ${f[1]} · clique para ver"></div>`).join("");
@@ -1150,6 +1166,43 @@
       finally { $("dlg-salvar").disabled = false; }
     });
 
+    // ---- Dinheiro parado (31/10): gráfico por conta + relatório visual da conta ----
+    let dpConta = null;
+    async function carregarDinheiroParado() {
+      try {
+        const r = await fetch("/api/reversos-gestor/dinheiro-parado", { cache: "no-store" });
+        if (!r.ok) throw new Error("erro " + r.status);
+        const d = await r.json(), tot = d.total || {};
+        $("dp-total").innerHTML = `<b style="font-size:15px;color:#8a4b00">${brl(tot.parado_total || 0)}</b> parado · ${brl(tot.galpao_valor || 0)} no galpão · ${brl(tot.fabrica_valor || 0)} na fábrica`;
+        const visiveis = (d.contas || []).filter(c => c.parado_total > 0 || c.galpao_sem_custo > 0);
+        $("g-dp").parentElement.hidden = !visiveis.length; $("dp-vazio").hidden = !!visiveis.length;
+        if (visiveis.length) DinheiroParado.graficoContas($("g-dp"), d.contas, (chave, nome) => abrirRelatorioDp(chave, nome));
+      } catch (e) { console.error(e); $("dp-total").textContent = "Não consegui carregar agora."; }
+    }
+    async function abrirRelatorioDp(chave, nome) {
+      if (!chave) return;
+      $("dp-msg").textContent = ""; $("dp-tit").textContent = "Relatório · " + (nome || chave);
+      $("dp-corpo").innerHTML = '<div class="vazio" style="padding:30px">Carregando…</div>';
+      if (!$("dlg-dp").open) $("dlg-dp").showModal();
+      try {
+        const r = await fetch("/api/reversos-gestor/dinheiro-parado?conta=" + encodeURIComponent(chave), { cache: "no-store" });
+        if (!r.ok) throw new Error("erro " + r.status);
+        const d = await r.json(); dpConta = nome || chave;
+        DinheiroParado.relatorio($("dp-corpo"), (d.contas || [])[0], nome || chave, d.gerado_em);
+      } catch (e) { $("dp-corpo").innerHTML = '<div class="vazio" style="padding:30px">Não consegui carregar o relatório agora.</div>'; }
+    }
+    $("dp-fechar").addEventListener("click", () => $("dlg-dp").close());
+    $("dp-png").addEventListener("click", async () => {
+      try { await DinheiroParado.baixarPng($("dp-corpo").firstElementChild, "dinheiro-parado-" + String(dpConta || "conta").toLowerCase().replace(/[^a-z0-9]+/g, "-") + ".png"); }
+      catch (e) { $("dp-msg").textContent = "Não consegui gerar a imagem: " + (e.message || ""); }
+    });
+    $("dp-print").addEventListener("click", () => {
+      const w = window.open("", "_blank"); if (!w) { $("dp-msg").textContent = "Permita pop-ups para imprimir."; return; }
+      w.document.write("<html><head><title>Relatório</title></head><body style='margin:0'>" + $("dp-corpo").innerHTML.replace(/<canvas[^>]*><\/canvas>/, "") + "</body></html>"); w.document.close(); w.focus(); setTimeout(() => w.print(), 300);
+    });
+    $("rg-rel-conta").addEventListener("click", () => { const o = $("rg-conta"); abrirRelatorioDp((garConta || "").toLowerCase(), garConta); });
+    carregarDinheiroParado(); setInterval(carregarDinheiroParado, 60000);
+
     // ---- Corrigir SKU (admin/supervisor): só SKUs do cadastro da conta do reverso; registra quem fez ----
     function infoSkuCorrigido(i) {
       return i.sku_corrigido_por ? `<span class="peq" style="color:#4d5965">corrigido por ${esc(i.sku_corrigido_por)}${i.sku_corrigido_papel ? " (" + esc(i.sku_corrigido_papel) + ")" : ""}${i.sku_corrigido_em ? " em " + esc(i.sku_corrigido_em) : ""}${i.sku_original ? " · era " + esc(i.sku_original) : ""}</span>` : "";
@@ -1217,7 +1270,7 @@
         ? `<span class="selo-rem ${i.remessa.status === "analise" ? "" : "ok-enc"}" title="${esc(i.remessa.fabrica)}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>`
         : (garConta ? `<label style="display:flex;align-items:center;gap:6px;min-height:32px"><input type="checkbox" class="chk-env" data-id="${i.id}" ${selecionadas.has(i.id) ? "checked" : ""} /> enviar</label>` : '<span style="color:var(--cmx-texto-suave)">no galpão</span>');
       $("t-gar").innerHTML = d.itens.length
-        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b>${infoSkuCorrigido(i)}${botaoSku(i)}</td><td>${esc(i.produto)}</td><td class="n">${celulaCusto(i)}</td>
+        ? d.itens.map(i => `<tr><td>${celulaFabrica(i)}</td><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b>${i.tipo ? `<span class="peq" style="font-weight:600;color:${i.tipo_chave === "garantia" ? "#8a4b00" : "#a83232"}">${esc(i.tipo)}</span>` : ""}${i.observacao ? `<span class="peq">${esc(i.observacao)}</span>` : ""}${infoSkuCorrigido(i)}${botaoSku(i)}</td><td>${esc(i.produto)}</td><td class="n">${celulaCusto(i)}</td>
             <td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td>
             <td><button type="button" class="btn btn-fotos" data-id="${i.id}" aria-expanded="${fotosAbertas.has(i.id)}" style="padding:6px 10px">${fotosAbertas.has(i.id) ? "Ocultar fotos" : "Ver fotos"}</button></td></tr>
             <tr id="fotos-${i.id}" ${fotosAbertas.has(i.id) ? "" : "hidden"}><td colspan="9" style="background:#f7f9fb"><div class="gar-fotos-caixa">${fotosCache[i.id] || ""}</div></td></tr>`).join("")
