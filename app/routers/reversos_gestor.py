@@ -163,8 +163,8 @@ GARANTIA = "garantia"
 # Não entram: "negociacao_ml" (ainda com o ML) e "descartado" (não segue para a fábrica). Ajustar aqui se mudar.
 SITUACOES_FABRICA = (GARANTIA, "avariado", "faltando_peca", "diferente", "outro")
 TIPOS_FABRICA = {
-    GARANTIA: "Garantia (defeito de fábrica)",
-    "avariado": "Sem condição: avariado",
+    GARANTIA: "Sem condição: defeito de fábrica",
+    "avariado": "Sem condição: avariado ou quebrado",
     "faltando_peca": "Sem condição: faltando peça/acessório",
     "diferente": "Sem condição: produto diferente do enviado",
     "outro": "Sem condição: outro motivo",

@@ -96,9 +96,9 @@ RESULTADO_GARANTIA = "garantia"
 RESULTADOS_REVERSO = {
     # 27/10 (v31): o produto JÁ RETORNOU ao galpão; o que muda é o destino dele.
     RESULTADO_VOLTOU: "Retornou: no estoque",
-    RESULTADO_GARANTIA: "Retornou: garantia",
+    RESULTADO_GARANTIA: "Retornou: sem condição de venda (defeito de fábrica)",   # 31/10: mesmo grupo "sem condição", tipo = defeito
     # --- Sem condição de venda (motivo obrigatório) ---
-    "avariado": "Retornou: sem condição de venda (avariado)",
+    "avariado": "Retornou: sem condição de venda (avariado ou quebrado)",
     "faltando_peca": "Retornou: sem condição de venda (faltando peça ou acessório)",
     "negociacao_ml": "Retornou: sem condição de venda (em negociação com o ML)",
     "descartado": "Retornou: sem condição de venda (descartado)",
