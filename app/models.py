@@ -513,6 +513,16 @@ class SolicitacaoCancelamento(Base):
     resultado_reverso = Column(String, nullable=True, index=True)
     # Liberação PELO GALPÃO (checklist completo): quem, quando e o checklist
     # marcado (JSON {"caixa":true,...}). Nulo = não foi liberado pelo galpão.
+    # --- Aceite do seller (31/10) ---
+    # Pedido de CANCELAMENTO que NÃO veio do próprio seller (galpão, logística, equipe/supervisor)
+    # nasce "aguardando": o operador só pode assumir/confirmar depois que o seller ACEITAR.
+    # Nulo = não exige aceite (pedido do seller, link público, reverso e registros antigos).
+    aceite_status = Column(String, nullable=True, index=True)   # aguardando | aceito | recusado
+    aceite_por = Column(String, nullable=True)                  # nome de quem aceitou/recusou
+    aceite_por_id = Column(Integer, nullable=True)
+    aceite_papel = Column(String, nullable=True)                # seller | admin | supervisor (quem decidiu)
+    aceite_em = Column(DateTime, nullable=True)
+    aceite_motivo = Column(String, nullable=True)               # motivo da recusa
     liberado_por = Column(String, nullable=True)
     liberado_em = Column(DateTime, nullable=True)
     checklist_json = Column(Text, nullable=True)

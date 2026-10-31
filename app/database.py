@@ -85,6 +85,12 @@ _COLUNAS_ADICIONAIS = {
         "fonte_detalhe": "VARCHAR",
     },
     "solicitacoes_cancelamento": {
+        "aceite_status": "VARCHAR",
+        "aceite_por": "VARCHAR",
+        "aceite_por_id": "INTEGER",
+        "aceite_papel": "VARCHAR",
+        "aceite_em": "TIMESTAMP",
+        "aceite_motivo": "VARCHAR",
         "origem": "VARCHAR",
         "solicitado_por": "VARCHAR",
         "galpao": "INTEGER",
