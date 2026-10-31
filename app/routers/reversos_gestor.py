@@ -761,19 +761,22 @@ def _garantias_selecionadas(db: Session, conta: Optional[str], dias, de, ate, ga
     return linhas, contas, d1, d2, reversos, todas
 
 
-def montar_por_conta(reversos, custos: dict) -> dict:
+def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
     """
     Relação por conta (30/10, função pura): para cada conta com reverso no período, quantos
     retornaram, quantos foram para o estoque, quantos para garantia e o VALOR (custo) das
     garantias. O custo vem de `custos` ({(conta_chave, SKU): custo}, base de Custos da própria
     conta). Garantia sem custo cadastrado NÃO entra no valor: conta em `sem_custo` (nunca
     inventa número). Ordena pelo maior valor em garantia.
+    31/10: `em_remessa` = ids dos reversos que já foram numa remessa para a fábrica. Para cada conta
+    `enviadas`/`custo_enviado` contam só esses; o "parado no galpão" é a diferença (garantias - enviadas).
     """
+    em_remessa = em_remessa or set()
     contas: dict = {}
     for s in reversos:
         chave = s.conta_chave or (s.conta or "").lower()
         c = contas.setdefault(chave, {"conta": s.conta or "—", "retornaram": 0, "voltaram": 0, "garantias": 0,
-                                      "custo_garantia": 0.0, "sem_custo": 0})
+                                      "custo_garantia": 0.0, "sem_custo": 0, "enviadas": 0, "custo_enviado": 0.0})
         c["retornaram"] += 1
         situacao = _situacao_reverso(s)
         if situacao == "voltou":
@@ -785,13 +788,19 @@ def montar_por_conta(reversos, custos: dict) -> dict:
                 c["sem_custo"] += 1
             else:
                 c["custo_garantia"] += custo
+            if s.id in em_remessa:
+                c["enviadas"] += 1
+                if custo is not None:
+                    c["custo_enviado"] += custo
     linhas = sorted(contas.values(), key=lambda c: (-c["custo_garantia"], -c["garantias"], c["conta"].lower()))
     for c in linhas:
         c["custo_garantia"] = round(c["custo_garantia"], 2)
+        c["custo_enviado"] = round(c["custo_enviado"], 2)
     total = {
         "retornaram": sum(c["retornaram"] for c in linhas), "voltaram": sum(c["voltaram"] for c in linhas),
         "garantias": sum(c["garantias"] for c in linhas), "sem_custo": sum(c["sem_custo"] for c in linhas),
         "custo_garantia": round(sum(c["custo_garantia"] for c in linhas), 2),
+        "enviadas": sum(c["enviadas"] for c in linhas), "custo_enviado": round(sum(c["custo_enviado"] for c in linhas), 2),
     }
     return {"contas": linhas, "total": total}
 
@@ -816,9 +825,13 @@ def garantias(request: Request, conta: Optional[str] = None, dias: Optional[int]
     linhas, contas, d1, d2, reversos, todas = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
     custos = _custos_dos_reversos(db, todas)            # custos de TODAS as garantias (relação por conta + detalhe)
     r = montar_garantias(linhas, custos)
-    r["por_conta"] = montar_por_conta(reversos, custos)  # independe do filtro de conta escolhido
+    from app.routers.remessas_garantia import remessas_dos_reversos   # import tardio: o módulo de remessas importa este
+    no_envio = remessas_dos_reversos(db, [s.id for s in todas])        # {id do reverso: dados da remessa}
+    r["por_conta"] = montar_por_conta(reversos, custos, set(no_envio))  # independe do filtro de conta escolhido
     r["total_itens"] = len(r["itens"])
     r["itens"] = r["itens"][:MAX_ITENS_GARANTIA_TELA]
+    for i in r["itens"]:
+        i["remessa"] = no_envio.get(i["id"])
     return {"periodo": {"de": d1.isoformat(), "ate": d2.isoformat()}, "conta": conta or None, "contas": contas, **r}
 
 
