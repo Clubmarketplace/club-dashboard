@@ -59,6 +59,9 @@ PERIODOS_VALIDOS = (1, 7, 15, 30)   # "Hoje", 7, 15 e 30 dias (+ De/Até livre)
 MAX_DIAS_INTERVALO = 366            # no máximo ~1 ano por consulta
 DIAS_PARADO = 3                     # reverso aguardando há mais que isso = "parado" (alerta)
 TOP_CONTAS = 15
+# 30/10: filtro "Tudo até a data". A tela manda de=INICIO_REVERSOS (começo do módulo de reversos);
+# esse "de" específico não esbarra no limite de 1 ano por consulta, mesmo depois de passar um ano.
+INICIO_REVERSOS = date(2026, 10, 1)
 
 
 # ---------------------------------------------------------------------------
@@ -85,7 +88,7 @@ def _intervalo(dias: Optional[int], de: Optional[str], ate: Optional[str]) -> tu
             raise HTTPException(status_code=422, detail="Datas no formato AAAA-MM-DD.")
         if data_ate < data_de:
             raise HTTPException(status_code=422, detail="A data final não pode ser antes da inicial.")
-        if (data_ate - data_de).days > MAX_DIAS_INTERVALO:
+        if data_de != INICIO_REVERSOS and (data_ate - data_de).days > MAX_DIAS_INTERVALO:
             raise HTTPException(status_code=422, detail="Escolha no máximo 1 ano de intervalo.")
         return data_de, data_ate
     dias = 7 if dias is None else dias
@@ -745,7 +748,8 @@ def _item_garantia(s: SolicitacaoCancelamento, custos: dict) -> dict:
 def _garantias_selecionadas(db: Session, conta: Optional[str], dias, de, ate, galpao):
     _checar_galpao(galpao)
     d1, d2 = _intervalo(dias, de, ate)
-    todas = [s for s in _reversos_do_periodo(db, d1, d2, galpao) if _situacao_reverso(s) == GARANTIA]
+    reversos = _reversos_do_periodo(db, d1, d2, galpao)     # todos do período (base da relação por conta)
+    todas = [s for s in reversos if _situacao_reverso(s) == GARANTIA]
     # Lista de contas (com quantas garantias cada uma) NÃO depende do filtro de conta escolhido
     por_conta = Counter(s.conta or "—" for s in todas)
     contas = [{"conta": n, "quantidade": q} for n, q in sorted(por_conta.items(), key=lambda kv: kv[0].lower())]
@@ -754,7 +758,42 @@ def _garantias_selecionadas(db: Session, conta: Optional[str], dias, de, ate, ga
         q = conta.strip().lower()
         linhas = [s for s in todas if (s.conta_chave or "").lower() == q or (s.conta or "").lower() == q]
     linhas = sorted(linhas, key=lambda s: s.criado_em or datetime.min, reverse=True)
-    return linhas, contas, d1, d2
+    return linhas, contas, d1, d2, reversos, todas
+
+
+def montar_por_conta(reversos, custos: dict) -> dict:
+    """
+    Relação por conta (30/10, função pura): para cada conta com reverso no período, quantos
+    retornaram, quantos foram para o estoque, quantos para garantia e o VALOR (custo) das
+    garantias. O custo vem de `custos` ({(conta_chave, SKU): custo}, base de Custos da própria
+    conta). Garantia sem custo cadastrado NÃO entra no valor: conta em `sem_custo` (nunca
+    inventa número). Ordena pelo maior valor em garantia.
+    """
+    contas: dict = {}
+    for s in reversos:
+        chave = s.conta_chave or (s.conta or "").lower()
+        c = contas.setdefault(chave, {"conta": s.conta or "—", "retornaram": 0, "voltaram": 0, "garantias": 0,
+                                      "custo_garantia": 0.0, "sem_custo": 0})
+        c["retornaram"] += 1
+        situacao = _situacao_reverso(s)
+        if situacao == "voltou":
+            c["voltaram"] += 1
+        elif situacao == GARANTIA:
+            c["garantias"] += 1
+            custo = _item_garantia(s, custos)["custo"]
+            if custo is None:
+                c["sem_custo"] += 1
+            else:
+                c["custo_garantia"] += custo
+    linhas = sorted(contas.values(), key=lambda c: (-c["custo_garantia"], -c["garantias"], c["conta"].lower()))
+    for c in linhas:
+        c["custo_garantia"] = round(c["custo_garantia"], 2)
+    total = {
+        "retornaram": sum(c["retornaram"] for c in linhas), "voltaram": sum(c["voltaram"] for c in linhas),
+        "garantias": sum(c["garantias"] for c in linhas), "sem_custo": sum(c["sem_custo"] for c in linhas),
+        "custo_garantia": round(sum(c["custo_garantia"] for c in linhas), 2),
+    }
+    return {"contas": linhas, "total": total}
 
 
 def montar_garantias(linhas, custos: dict) -> dict:
@@ -774,8 +813,10 @@ def montar_garantias(linhas, custos: dict) -> dict:
 def garantias(request: Request, conta: Optional[str] = None, dias: Optional[int] = None, de: Optional[str] = None,
               ate: Optional[str] = None, galpao: Optional[int] = None, db: Session = Depends(get_db)):
     usuario_gestor_reversos(request, db)
-    linhas, contas, d1, d2 = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
-    r = montar_garantias(linhas, _custos_dos_reversos(db, linhas))
+    linhas, contas, d1, d2, reversos, todas = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
+    custos = _custos_dos_reversos(db, todas)            # custos de TODAS as garantias (relação por conta + detalhe)
+    r = montar_garantias(linhas, custos)
+    r["por_conta"] = montar_por_conta(reversos, custos)  # independe do filtro de conta escolhido
     r["total_itens"] = len(r["itens"])
     r["itens"] = r["itens"][:MAX_ITENS_GARANTIA_TELA]
     return {"periodo": {"de": d1.isoformat(), "ate": d2.isoformat()}, "conta": conta or None, "contas": contas, **r}
@@ -785,8 +826,10 @@ def garantias(request: Request, conta: Optional[str] = None, dias: Optional[int]
 def garantias_excel(request: Request, conta: Optional[str] = None, dias: Optional[int] = None, de: Optional[str] = None,
                     ate: Optional[str] = None, galpao: Optional[int] = None, db: Session = Depends(get_db)):
     usuario = usuario_gestor_reversos(request, db)
-    linhas, _contas, d1, d2 = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
-    r = montar_garantias(linhas, _custos_dos_reversos(db, linhas))
+    linhas, _contas, d1, d2, reversos, todas = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
+    custos = _custos_dos_reversos(db, todas)
+    r = montar_garantias(linhas, custos)
+    pc = montar_por_conta(reversos, custos)
     k = r["kpis"]
     wb = Workbook()
     aba = wb.active
@@ -802,6 +845,15 @@ def garantias_excel(request: Request, conta: Optional[str] = None, dias: Optiona
         aba.append(linha)
     aba.column_dimensions["A"].width = 38
     aba.column_dimensions["B"].width = 26
+
+    aba_c = wb.create_sheet("Por conta")   # 30/10: relação de todas as contas (não depende do filtro de conta)
+    aba_c.append(["Conta", "Retornaram", "No estoque", "Garantias", "Valor em garantia - custo (R$)", "Garantias sem custo"])
+    for c in pc["contas"]:
+        aba_c.append([c["conta"], c["retornaram"], c["voltaram"], c["garantias"], c["custo_garantia"], c["sem_custo"]])
+    t = pc["total"]
+    aba_c.append(["TOTAL GERAL", t["retornaram"], t["voltaram"], t["garantias"], t["custo_garantia"], t["sem_custo"]])
+    for n, larg in enumerate((28, 12, 12, 12, 30, 20), start=1):
+        aba_c.column_dimensions[aba_c.cell(row=1, column=n).column_letter].width = larg
 
     aba_g = wb.create_sheet("Garantias")
     aba_g.append(["Recebido em", "Conta", "Plataforma", "Nº da venda", "SKU", "Produto", "Custo (R$)", "Marcado por",
