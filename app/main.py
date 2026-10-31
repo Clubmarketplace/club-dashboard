@@ -253,6 +253,7 @@ _AREAS = {
             "/solicitar-cancelamento", "/reverso", "/api/solicitacoes-cancelamento",
             "/api/solicitacoes-cancelamento/busca",
             "/api/solicitacoes-cancelamento/contas",
+            "/api/solicitacoes-cancelamento/skus",    # sugestões de SKU do cadastro da conta (reverso, 31/10)
             "/api/solicitacoes-cancelamento/opcoes",
             "/api/solicitacoes-cancelamento/fotos",   # endereços das fotos de um pedido (sob demanda)
             "/api/solicitacoes-cancelamento/foto",    # os bytes de uma foto/miniatura
