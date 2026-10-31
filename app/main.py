@@ -11,7 +11,7 @@ from app.contas_util import chave_conta
 from sqlalchemy.orm import defer
 from app.fotos_armazenamento import listar_fotos, obter_bytes, solicitacao_da_foto
 from app.routers.solicitacoes_cancelamento import n_fotos_sql, PROBLEMAS_GALPAO, MOTIVOS_REVERSO, DETALHES_ENVIO_ERRADO, ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, remessas_garantia as remessas_garantia_rotas, conversas_pos_venda as conversas_pos_venda_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, remessas_garantia as remessas_garantia_rotas, meus_reversos as meus_reversos_rotas, conversas_pos_venda as conversas_pos_venda_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -433,6 +433,7 @@ async def exigir_login(request: Request, call_next):
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/dashboard",
         "/meus-cancelamentos", "/meus-cancelamentos/fotos", "/meus-cancelamentos/foto", "/logout",
+        "/meus-reversos", "/api/meus-reversos/painel", "/api/meus-reversos/garantias",  # painel de reversos da própria conta (31/10)
         "/minhas-mensagens",  # mensagens pós-venda da própria conta (28/10)
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
@@ -503,6 +504,7 @@ app.include_router(admin_painel_rotas.router)  # resumo de vendas de todas as co
 app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel do seller (12/10)
 app.include_router(cadastro_produtos_rotas.router)  # produtos novos das notas do Operador Logístico, pra tela "Cadastro" (13/10)
 app.include_router(painel_galpao_rotas.router)  # números e relatório do galpão (26/10)
+app.include_router(meus_reversos_rotas.router)  # painel do seller com os reversos/garantias da própria conta (31/10)
 app.include_router(remessas_garantia_rotas.router)  # remessas de garantia p/ a fábrica (31/10) -- ANTES do reversos_gestor só por organização
 app.include_router(reversos_gestor_rotas.router)  # tela "Reversos" do gestor -- só admin/supervisor (27/10)
 app.include_router(cadastro_seller_rotas.router)  # "Solicitar cadastro" dentro de "Minhas solicitações" do seller (15/10)
@@ -1045,6 +1047,16 @@ def pagina_reversos_gestao(request: Request):
         if not auth.papel_permite(usuario, ("admin", "supervisor")):
             return RedirectResponse("/", status_code=303)
         return templates.TemplateResponse(request=request, name="reversos-gestor.html", context={"usuario_logado": usuario})
+
+
+@app.get("/meus-reversos", response_class=HTMLResponse)
+def pagina_meus_reversos(request: Request):
+    """Painel do seller: reversos, garantias e remessas à fábrica da conta vinculada a ele (só dela)."""
+    with SessionLocal() as db:
+        usuario = auth.usuario_atual(request, db)
+        if not _eh_painel_seller(usuario):
+            return RedirectResponse("/", status_code=303)
+        return templates.TemplateResponse(request=request, name="meus-reversos.html", context={"usuario": usuario, "papel_logado": usuario.papel})
 
 
 @app.get("/meus-cancelamentos", response_class=HTMLResponse)
