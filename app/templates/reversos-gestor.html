@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Club Marketplace — Reversos</title>
+  <title>Club Marketplace — Gestão de reversos</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
@@ -51,6 +51,9 @@
     .tabela-rolagem { overflow-x:auto; }
     .nota-tab { font-size:12px; color:var(--cmx-texto-suave); margin-top:10px; line-height:1.5; }
     tr.linha-total td { font-weight:700; background:#f3f6f6; border-top:2px solid var(--cmx-borda); }
+    tr.sel-conta td { background:#e8f3f2; }
+    .gar-fotos-caixa { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0; font-size:13px; color:var(--cmx-texto-suave); }
+    .gar-fotos-caixa img { height:96px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; }
     td.verde { color:#1f6b45; } td.verm { color:#a83232; } td.laranja { color:#a86a14; }
 
     /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
@@ -147,7 +150,7 @@
 
       <header class="cmx-topbar">
         <div>
-          <h1>Reversos</h1>
+          <h1>Gestão de reversos</h1>
           <p class="cmx-subtitulo">Tudo sobre os produtos que voltaram: o que chegou, o que voltou ao estoque, o que está parado, quem recebeu e quanto tempo levou</p>
         </div>
       </header>
@@ -159,6 +162,8 @@
             <button type="button" data-d="7" aria-pressed="true">7 dias</button>
             <button type="button" data-d="15" aria-pressed="false">15 dias</button>
             <button type="button" data-d="30" aria-pressed="false">30 dias</button>
+            <!-- 30/10: "Tudo até a data" = desde o início dos reversos até a data do campo "até" (hoje, se vazio) -->
+            <button type="button" id="btn-tudo" aria-pressed="false" title="Desde o início até a data do campo &quot;até&quot; (hoje, se estiver vazio)">Tudo</button>
           </div>
           <label for="f-de" style="position:absolute;left:-9999px">De</label>
           <input type="date" id="f-de" />
@@ -250,7 +255,24 @@
 
         <div class="painel" id="sec-garantias">
           <h2>Garantias <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)" id="gar-info"></span></h2>
-          <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima.</div>
+          <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima (use <b>Tudo</b> para ver desde o início).</div>
+
+          <!-- 30/10: relação de TODAS as contas (não depende do filtro de conta) -->
+          <div class="grade2" style="margin-bottom:14px">
+            <div class="painel" style="margin-bottom:0">
+              <h2>No estoque x garantia, por conta <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)">(quantidade · 15 maiores)</span></h2>
+              <div class="caixa-grafico" id="cx-g-conta-qtd"><canvas id="g-conta-qtd" role="img" aria-label="Gráfico de reversos que voltaram ao estoque e foram para garantia, por conta"></canvas></div>
+            </div>
+            <div class="painel" style="margin-bottom:0">
+              <h2>Valor em garantia, por conta <span style="font-weight:400; font-size:12px; color:var(--cmx-texto-suave)">(custo · 15 maiores)</span></h2>
+              <div class="caixa-grafico" id="cx-g-conta-val"><canvas id="g-conta-val" role="img" aria-label="Gráfico do valor de custo em garantia, por conta"></canvas></div>
+            </div>
+          </div>
+          <div class="tabela-rolagem" style="margin-bottom:6px"><table>
+            <thead><tr><th>Conta</th><th class="n">Retornaram</th><th class="n">No estoque</th><th class="n">Garantias</th><th class="n">Valor em garantia (custo)</th><th class="n">Sem custo</th><th></th></tr></thead>
+            <tbody id="t-por-conta"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+          </table></div>
+          <div class="nota-tab" style="margin:0 0 14px">Valor = custo de cada produto na base de custos da própria conta. Garantia sem custo cadastrado não entra no valor e aparece em "Sem custo". Clique em <b>Detalhar</b> para ver cada reverso da conta.</div>
           <div class="barra" style="margin-bottom:12px">
             <label for="gar-busca" style="position:absolute;left:-9999px">Buscar conta</label>
             <input type="search" id="gar-busca" placeholder="Buscar conta…" autocomplete="off" style="min-height:40px; box-sizing:border-box; padding:0 12px; border:1px solid var(--cmx-borda); border-radius:8px; font:inherit; width:200px" />
@@ -266,8 +288,8 @@
             <div class="cartao" style="--cor:var(--canc)"><div class="valor" id="gar-medio">—</div><div class="rotulo">Custo médio por garantia</div></div>
           </div>
           <div class="tabela-rolagem"><table>
-            <thead><tr><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th></tr></thead>
-            <tbody id="t-gar"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+            <thead><tr><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th><th>Fotos</th></tr></thead>
+            <tbody id="t-gar"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
           </table></div>
           <div class="nota-tab" id="gar-nota"></div>
         </div>
@@ -303,7 +325,7 @@
           <div class="paginacao" id="det-pag"></div>
         </div>
 
-        <div class="nota-tab" style="margin-top:-6px">Esta tela mostra só números e não carrega fotos. Para ver as fotos de um reverso, abra-o em <a href="/solicitacoes-painel">Solicitações</a>.</div>
+        <div class="nota-tab" style="margin-top:-6px">As listas desta tela não carregam fotos (isso travava o sistema). As fotos de uma garantia só são buscadas quando você clica em <b>Ver fotos</b>; para os demais reversos, abra-o em <a href="/solicitacoes-painel">Solicitações</a>.</div>
       </main>
     </div>
   </div>
@@ -593,15 +615,82 @@
       $("gar-conta").innerHTML = `<option value="">Todas as contas (${total})</option>` + vis.map(c => `<option value="${esc(c.conta)}">${esc(c.conta)} (${c.quantidade})</option>`).join("");
       $("gar-conta").value = garConta;
     }
+    // ---------- Relação por conta (30/10): tabela + 2 gráficos; clicar abre o detalhe da conta ----------
+    let graficoContaQtd = null, graficoContaVal = null;
+    const fotosAbertas = new Set(), fotosCache = {};   // fotos abertas sobrevivem à atualização de 1 min
+    function detalharConta(nome) {
+      garConta = nome; carregarGarantias();
+      $("gar-conta").scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    function desenharPorConta(pc) {
+      if (!pc) return;
+      const linhas = pc.contas || [], t = pc.total || {};
+      $("t-por-conta").innerHTML = linhas.length
+        ? linhas.map(c => `<tr class="${c.conta === garConta ? "sel-conta" : ""}"><td><b>${esc(c.conta)}</b></td><td class="n">${c.retornaram}</td><td class="n verde">${c.voltaram}</td><td class="n" style="color:#b45309"><b>${c.garantias}</b></td><td class="n"><b>${brl(c.custo_garantia)}</b></td><td class="n ${c.sem_custo ? "verm" : ""}">${c.sem_custo || "—"}</td><td><button type="button" class="btn" data-detalhar="${esc(c.conta)}" style="padding:6px 12px">Detalhar</button></td></tr>`).join("")
+          + `<tr class="linha-total"><td>TOTAL GERAL</td><td class="n">${t.retornaram || 0}</td><td class="n">${t.voltaram || 0}</td><td class="n">${t.garantias || 0}</td><td class="n">${brl(t.custo_garantia || 0)}</td><td class="n">${t.sem_custo || 0}</td><td></td></tr>`
+        : '<tr><td colspan="7" class="vazio">Nenhum reverso neste período.</td></tr>';
+
+      const altura = (id, n) => { $(id).style.height = Math.max(160, n * 30 + 70) + "px"; };
+      const topQtd = linhas.filter(c => c.voltaram + c.garantias > 0)
+        .sort((a, b) => (b.voltaram + b.garantias) - (a.voltaram + a.garantias)).slice(0, 15);
+      const topVal = linhas.filter(c => c.custo_garantia > 0).slice(0, 15);   // já vem ordenado pelo valor
+      if (graficoContaQtd) graficoContaQtd.destroy();
+      if (graficoContaVal) graficoContaVal.destroy();
+      altura("cx-g-conta-qtd", topQtd.length); altura("cx-g-conta-val", topVal.length);
+      graficoContaQtd = new Chart($("g-conta-qtd"), {
+        type: "bar",
+        data: { labels: topQtd.map(c => c.conta), datasets: [
+          { label: "No estoque", data: topQtd.map(c => c.voltaram), backgroundColor: COR.voltou },
+          { label: "Garantia", data: topQtd.map(c => c.garantias), backgroundColor: COR.garantia } ] },
+        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
+          onClick: (_e, els) => { if (els.length) detalharConta(topQtd[els[0].index].conta); },
+          scales: { x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } }, y: { stacked: true } },
+          plugins: { legend: { position: "bottom" } } }
+      });
+      graficoContaVal = new Chart($("g-conta-val"), {
+        type: "bar",
+        data: { labels: topVal.map(c => c.conta), datasets: [
+          { label: "Valor em garantia (custo)", data: topVal.map(c => c.custo_garantia), backgroundColor: COR.garantia } ] },
+        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
+          onClick: (_e, els) => { if (els.length) detalharConta(topVal[els[0].index].conta); },
+          scales: { x: { beginAtZero: true, ticks: { callback: (v) => brl(v) } } },
+          plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => brl(ctx.parsed.x) } } } }
+      });
+    }
+    $("t-por-conta").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-detalhar]"); if (b) detalharConta(b.dataset.detalhar);
+    });
+    // "Ver fotos": só busca quando clica (nunca na lista) e reaproveita as fotos que já existem no sistema.
+    $("t-gar").addEventListener("click", async (e) => {
+      const b = e.target.closest(".btn-fotos"); if (!b) return;
+      const id = Number(b.dataset.id), linha = document.getElementById("fotos-" + id); if (!linha) return;
+      const abrir = linha.hidden; linha.hidden = !abrir;
+      b.setAttribute("aria-expanded", abrir); b.textContent = abrir ? "Ocultar fotos" : "Ver fotos";
+      if (abrir) fotosAbertas.add(id); else fotosAbertas.delete(id);
+      const caixa = linha.querySelector(".gar-fotos-caixa");
+      if (abrir && !fotosCache[id]) {
+        caixa.textContent = "Carregando fotos…";
+        try {
+          const r = await fetch("/api/solicitacoes-cancelamento/fotos?id=" + encodeURIComponent(id), { cache: "no-store" });
+          if (!r.ok) throw new Error("status " + r.status);
+          const f = await r.json(), grandes = f.fotos || [], minis = f.minis || [];
+          fotosCache[id] = grandes.map((u, n) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img loading="lazy" src="${esc(minis[n] || u)}" alt="Foto ${n + 1} do reverso" /></a>`).join("") || "Sem fotos.";
+          caixa.innerHTML = fotosCache[id];
+        } catch (err) { console.error(err); caixa.textContent = "Não consegui carregar as fotos agora."; }
+      }
+    });
+
     function desenharGarantias(d) {
-      garUltimo = d; opcoesContaGar();
+      garUltimo = d; opcoesContaGar(); desenharPorConta(d.por_conta);
       const k = d.kpis;
       $("gar-qtd").textContent = k.quantidade; $("gar-custo").textContent = brl(k.custo_total);
       $("gar-sem").textContent = k.sem_custo; $("gar-medio").textContent = k.custo_medio == null ? "—" : brl(k.custo_medio);
       $("gar-info").textContent = `${dataBRano(d.periodo.de)} a ${dataBRano(d.periodo.ate)} · ${garConta || "todas as contas"}`;
       $("t-gar").innerHTML = d.itens.length
-        ? d.itens.map(i => `<tr><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td><td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td></tr>`).join("")
-        : '<tr><td colspan="7" class="vazio">Nenhuma garantia nesta conta e período.</td></tr>';
+        ? d.itens.map(i => `<tr><td class="nowrap">${esc(i.recebido_em)}</td><td>${esc(i.conta)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td><td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td><td>${esc(i.marcado_por)}${i.marcado_em ? `<div class="sl-sub" style="font-size:12px;color:var(--cmx-texto-suave)">${esc(i.marcado_em)}</div>` : ""}</td>
+            <td><button type="button" class="btn btn-fotos" data-id="${i.id}" aria-expanded="${fotosAbertas.has(i.id)}" style="padding:6px 10px">${fotosAbertas.has(i.id) ? "Ocultar fotos" : "Ver fotos"}</button></td></tr>
+            <tr id="fotos-${i.id}" ${fotosAbertas.has(i.id) ? "" : "hidden"}><td colspan="8" style="background:#f7f9fb"><div class="gar-fotos-caixa">${fotosCache[i.id] || ""}</div></td></tr>`).join("")
+        : '<tr><td colspan="8" class="vazio">Nenhuma garantia nesta conta e período.</td></tr>';
       $("gar-nota").textContent = d.total_itens > d.itens.length ? `Mostrando as ${d.itens.length} mais recentes de ${d.total_itens}. O Excel traz todas.` : "";
     }
     async function carregarGarantias() {
@@ -611,17 +700,26 @@
         const r = await fetch("/api/reversos-gestor/garantias?" + p.toString(), { cache: "no-store" });
         if (!r.ok) throw new Error("status " + r.status);
         const d = await r.json(); if (minha !== vezGar) return; desenharGarantias(d);
-      } catch (e) { console.error(e); $("t-gar").innerHTML = '<tr><td colspan="7" class="vazio">Não consegui carregar as garantias agora. Tente de novo em instantes.</td></tr>'; }
+      } catch (e) { console.error(e); $("t-gar").innerHTML = '<tr><td colspan="8" class="vazio">Não consegui carregar as garantias agora. Tente de novo em instantes.</td></tr>'; }
     }
     $("gar-conta").addEventListener("change", () => { garConta = $("gar-conta").value; carregarGarantias(); });
     $("gar-busca").addEventListener("input", () => { garBusca = $("gar-busca").value; opcoesContaGar(); });
 
     // Hoje / 7 / 15 / 30 dias
     $("periodos").addEventListener("click", (e) => {
-      const b = e.target.closest("button"); if (!b) return;
+      const b = e.target.closest("button"); if (!b || b.id === "btn-tudo") return;   // "Tudo" tem tratamento próprio (abaixo)
       dias = +b.dataset.d; modoCustom = false; if (sel) delete sel.dia;
       document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
       $("f-de").value = ""; $("f-ate").value = "";
+      carregar();
+    });
+    // 30/10: "Tudo até a data" = do início dos reversos (igual ao INICIO_REVERSOS do servidor) até o campo "até" (hoje, se vazio)
+    const INICIO_REVERSOS = "2026-10-01";
+    $("btn-tudo").addEventListener("click", () => {
+      $("f-de").value = INICIO_REVERSOS;
+      if (!$("f-ate").value) $("f-ate").value = new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+      modoCustom = true; if (sel) delete sel.dia;
+      document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x.id === "btn-tudo"));
       carregar();
     });
     // De / Até (livre)
