@@ -25,7 +25,7 @@ from app.routers.remessas_garantia import (
     STATUS_ANALISE, STATUS_ENCERRADA, _hoje_br, remessa_para_json, remessas_dos_reversos,
 )
 from app.routers.reversos_gestor import (
-    GARANTIA, CorrigirSkuBody, CustoManualBody, _base, _custos_dos_reversos, _intervalo, _item_garantia,
+    GARANTIA, CorrigirSkuBody, montar_dinheiro_parado, _tipo_fabrica, _vai_fabrica, CustoManualBody, _base, _custos_dos_reversos, _intervalo, _item_garantia,
     corrigir_sku_reverso, gravar_custo_manual, montar_por_conta, montar_resumo_gestor, skus_da_conta,
 )
 from app.routers.solicitacoes_cancelamento import FUSO_BR, _limites_utc_produtividade
@@ -89,7 +89,7 @@ def painel(request: Request, dias: Optional[int] = None, de: Optional[str] = Non
     aguardando_agora = base.filter(SolicitacaoCancelamento.confirmado_por.is_(None)).all()
     resumo = montar_resumo_gestor(reversos, d1, d2, aguardando_agora)
 
-    garantias = [s for s in reversos if _situacao_reverso(s) == GARANTIA]
+    garantias = [s for s in reversos if _vai_fabrica(s)]
     custos = _custos_dos_reversos(db, garantias)
     no_envio = remessas_dos_reversos(db, [s.id for s in garantias])
     conta = (montar_por_conta(reversos, custos, set(no_envio))["contas"] or [None])[0] or \
@@ -119,6 +119,7 @@ def painel(request: Request, dias: Optional[int] = None, de: Optional[str] = Non
             "enviado_itens": conta["enviadas"], "enviado_valor": conta["custo_enviado"],
             "pct_enviado": _pct(conta["custo_enviado"], conta["custo_garantia"]),
             "aguardando_equipe": resumo["kpis"]["aguardando"],
+            "fab_garantia": conta.get("fab_garantia", 0), "fab_sem_condicao": conta.get("fab_sem_condicao", 0),
         },
         "valores": valores,
         "por_dia": resumo["por_dia"],
@@ -138,7 +139,7 @@ def minhas_garantias(request: Request, dias: Optional[int] = None, de: Optional[
     linhas = (_base(db).filter(SolicitacaoCancelamento.conta_chave == chave,
                                SolicitacaoCancelamento.criado_em >= inicio, SolicitacaoCancelamento.criado_em < fim)
               .order_by(SolicitacaoCancelamento.criado_em.desc()).all())
-    linhas = [s for s in linhas if _situacao_reverso(s) == GARANTIA]
+    linhas = [s for s in linhas if _vai_fabrica(s)]
     custos = _custos_dos_reversos(db, linhas)
     no_envio = remessas_dos_reversos(db, [s.id for s in linhas])
     itens = []
@@ -173,8 +174,10 @@ def meus_reversos(request: Request, situacao: str = "todos", dias: Optional[int]
               .order_by(SolicitacaoCancelamento.criado_em.desc()).all())
 
     def grupo(s):
+        if _vai_fabrica(s):
+            return "garantia"          # garantia + sem condição de venda (vão para a fábrica); o tipo aparece em "tipo"
         sit = _situacao_reverso(s)
-        return sit if sit in ("garantia", "voltou", "aguardando") else "outros"
+        return sit if sit in ("voltou", "aguardando") else "outros"
 
     contagem = {"todos": len(linhas), "garantia": 0, "voltou": 0, "outros": 0, "aguardando": 0}
     for s in linhas:
@@ -184,7 +187,7 @@ def meus_reversos(request: Request, situacao: str = "todos", dias: Optional[int]
     total = len(linhas)
     linhas = linhas[:500]
     custos = _custos_dos_reversos(db, linhas)
-    no_envio = remessas_dos_reversos(db, [s.id for s in linhas if _situacao_reverso(s) == GARANTIA])
+    no_envio = remessas_dos_reversos(db, [s.id for s in linhas if _vai_fabrica(s)])
     itens = []
     for s in linhas:
         i = _item_garantia(s, custos)
@@ -192,7 +195,7 @@ def meus_reversos(request: Request, situacao: str = "todos", dias: Optional[int]
         remessa = no_envio.get(s.id)
         itens.append({
             "id": s.id, "recebido_em": i["recebido_em"], "numero_venda": i["numero_venda"], "sku": i["sku"],
-            "produto": i["produto"] or i.get("custo_produto") or "", "grupo": g,
+            "produto": i["produto"] or i.get("custo_produto") or "", "grupo": g, "tipo": _tipo_fabrica(s),
             "situacao": _nome_situacao(_situacao_reverso(s)), "observacao": i["observacao"],
             "custo": i["custo"] if g == "garantia" else None, "custo_origem": i["custo_origem"] if g == "garantia" else None,
             "custo_motivo": i["custo_motivo"] if g == "garantia" else None,
@@ -230,3 +233,13 @@ def ajustar_meu_custo(solicitacao_id: int, corpo: CustoManualBody, request: Requ
     r = gravar_custo_manual(db, s, corpo.custo, usuario)
     db.commit()
     return r
+
+
+@router.get("/dinheiro-parado")
+def meu_dinheiro_parado(request: Request, db: Session = Depends(get_db)):
+    """Dinheiro parado (sem poder vender) da PRÓPRIA conta, com a lista de produtos. A conta vem do login."""
+    usuario = usuario_seller(request, db)
+    chave = chave_conta(usuario.conta_vinculada)
+    d = montar_dinheiro_parado(db, chave, com_itens=True)
+    c = d["contas"][0] if d["contas"] else None
+    return {"conta": usuario.conta_vinculada, "gerado_em": d["gerado_em"], "resumo": c, "total": d["total"]}

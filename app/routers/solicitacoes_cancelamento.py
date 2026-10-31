@@ -1254,8 +1254,8 @@ def concluir_reverso(solicitacao_id: int, corpo: ConcluirReversoBody, request: R
         registrar_evento(db, s.id, "assumiu", usuario=usuario,
                          detalhe=(f"no lugar de {atual['em_atendimento_por']}" if atual["em_atendimento_por"] else "ao concluir"))
     _fechar_reverso(s, usuario, resultado, corpo.observacao)
-    if resultado == RESULTADO_GARANTIA:
-        # Grava o custo (cadastro de Custos da conta do reverso). Nunca impede a marcação: se falhar, fica sem custo.
+    if resultado in (RESULTADO_GARANTIA, "avariado", "faltando_peca", "diferente", "outro"):
+        # 31/10: garantia e sem condição de venda vão para a fábrica. Grava o custo (cadastro de Custos da conta do reverso). Nunca impede a marcação: se falhar, fica sem custo.
         try:
             from app.routers.reversos_gestor import fixar_custo_no_reverso
             with db.begin_nested():

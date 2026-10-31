@@ -41,7 +41,7 @@ from app.database import get_db
 from app.models import LogRemessaGarantia, RemessaGarantia, RemessaGarantiaItem, SolicitacaoCancelamento
 from app.routers.painel_galpao import _situacao_reverso
 from app.routers.reversos_gestor import (
-    GARANTIA,
+    GARANTIA, _vai_fabrica,
     _base,
     _custos_dos_reversos,
     _intervalo,
@@ -279,9 +279,9 @@ def criar(dados: RemessaEntrada, request: Request, db: Session = Depends(get_db)
     linhas = _base(db).filter(SolicitacaoCancelamento.id.in_(ids)).all()
     if len(linhas) != len(ids):
         raise HTTPException(status_code=422, detail="Algum reverso escolhido não existe mais. Atualize a tela.")
-    fora = [s for s in linhas if _situacao_reverso(s) != GARANTIA]
+    fora = [s for s in linhas if not _vai_fabrica(s)]
     if fora:
-        raise HTTPException(status_code=422, detail=f"O reverso da venda {fora[0].numero_venda or fora[0].id} não está em garantia.")
+        raise HTTPException(status_code=422, detail=f"O reverso da venda {fora[0].numero_venda or fora[0].id} não está em garantia nem sem condição de venda.")
     chaves = {(s.conta_chave or (s.conta or "").lower()) for s in linhas}
     if len(chaves) != 1:
         raise HTTPException(status_code=422, detail="Uma nota é de uma conta só: escolha garantias de uma única conta.")

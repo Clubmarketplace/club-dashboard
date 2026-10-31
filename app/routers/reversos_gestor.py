@@ -158,6 +158,31 @@ SEM_SKU = "__sem__"   # valor enviado pela tela para "Sem SKU informado"
 # ranking ela aparece separada de "não voltaram". Nas tabelas por galpão/conta e no Excel,
 # "Fora do estoque" = não voltou + garantia (tudo que não foi para o estoque).
 GARANTIA = "garantia"
+# 31/10: garantia E "sem condição de venda" seguem o MESMO caminho (os dois vão para a fábrica). O resultado que a equipe
+# marcou continua guardado em resultado_reverso (é o "tipo": defeito de fábrica x avariado etc.); só o DESTINO é um.
+# Não entram: "negociacao_ml" (ainda com o ML) e "descartado" (não segue para a fábrica). Ajustar aqui se mudar.
+SITUACOES_FABRICA = (GARANTIA, "avariado", "faltando_peca", "diferente", "outro")
+TIPOS_FABRICA = {
+    GARANTIA: "Garantia (defeito de fábrica)",
+    "avariado": "Sem condição: avariado",
+    "faltando_peca": "Sem condição: faltando peça/acessório",
+    "diferente": "Sem condição: produto diferente do enviado",
+    "outro": "Sem condição: outro motivo",
+}
+
+
+def _vai_fabrica(s) -> bool:
+    return _situacao_reverso(s) in SITUACOES_FABRICA
+
+
+def _destino(s) -> str:
+    """Situação para os números do painel: tudo que vai para a fábrica conta como GARANTIA; o resto fica como está."""
+    sit = _situacao_reverso(s)
+    return GARANTIA if sit in SITUACOES_FABRICA else sit
+
+
+def _tipo_fabrica(s) -> str:
+    return TIPOS_FABRICA.get(_situacao_reverso(s), "")
 
 
 def _chave_sku(s: SolicitacaoCancelamento) -> str:
@@ -174,7 +199,7 @@ def montar_ranking_sku(linhas) -> list[dict]:
         grupos[_chave_sku(s)].append(s)
     ranking = []
     for k, rs in grupos.items():
-        c = Counter(_situacao_reverso(s) for s in rs)
+        c = Counter(_destino(s) for s in rs)
         v, a, g = c.get("voltou", 0), c.get("aguardando", 0), c.get(GARANTIA, 0)
         ranking.append({"sku": k, "nome": "Sem SKU informado" if k == SEM_SKU else k,
                         "recebidos": len(rs), "voltaram": v, "aguardando": a, "garantias": g,
@@ -185,7 +210,7 @@ def montar_ranking_sku(linhas) -> list[dict]:
 
 def montar_comparacao(atual: dict, anterior_linhas, de_ant: date, ate_ant: date) -> dict:
     """Período anterior (mesmo tamanho, logo antes) para as setas dos cartões. Função pura."""
-    c = Counter(_situacao_reverso(s) for s in anterior_linhas)
+    c = Counter(_destino(s) for s in anterior_linhas)
     v, a, g = c.get("voltou", 0), c.get("aguardando", 0), c.get(GARANTIA, 0)
     return {"de": de_ant.isoformat(), "ate": ate_ant.isoformat(), "recebidos": len(anterior_linhas),
             "voltaram": v, "garantias": g, "nao_voltaram": len(anterior_linhas) - v - a - g}
@@ -193,10 +218,12 @@ def montar_comparacao(atual: dict, anterior_linhas, de_ant: date, ate_ant: date)
 
 def montar_resumo_gestor(linhas, de: date, ate: date, aguardando_agora, agora_utc: Optional[datetime] = None) -> dict:
     """Números da tela a partir dos reversos do período + a fila de pendentes de agora."""
-    sit = Counter(_situacao_reverso(s) for s in linhas)
-    voltaram = sit.get("voltou", 0)
-    aguardando = sit.get("aguardando", 0)
-    garantias = sit.get(GARANTIA, 0)
+    sit = Counter(_situacao_reverso(s) for s in linhas)      # por motivo (rosca)
+    dest = Counter(_destino(s) for s in linhas)              # por destino (cartões)
+    voltaram = dest.get("voltou", 0)
+    aguardando = dest.get("aguardando", 0)
+    garantias = dest.get(GARANTIA, 0)
+    fabrica_garantia = sit.get(GARANTIA, 0)
     nao_voltaram = len(linhas) - voltaram - aguardando - garantias
     concluidos = voltaram + nao_voltaram + garantias
     avisados_seller = sum(1 for s in linhas if s.origem != "logistica")
@@ -207,7 +234,7 @@ def montar_resumo_gestor(linhas, de: date, ate: date, aguardando_agora, agora_ut
     for s in linhas:
         d = _dia_br(s)
         if d in por_dia:
-            sit_ = _situacao_reverso(s)
+            sit_ = _destino(s)
             por_dia[d]["recebidos"] += 1
             por_dia[d]["voltou" if sit_ == "voltou" else "aguardando" if sit_ == "aguardando" else "garantia" if sit_ == GARANTIA else "nao_voltou"] += 1
 
@@ -218,9 +245,9 @@ def montar_resumo_gestor(linhas, de: date, ate: date, aguardando_agora, agora_ut
 
     # Por galpão (os 3 sempre, + "sem galpão" quando o seller avisou) e total
     def bloco(rs):
-        c = Counter(_situacao_reverso(s) for s in rs)
+        c = Counter(_destino(s) for s in rs)
         v, a = c.get("voltou", 0), c.get("aguardando", 0)
-        n = len(rs) - v - a            # "fora do estoque" = não voltou + garantia
+        n = len(rs) - v - a            # "fora do estoque" = não voltou + fábrica
         return {"recebidos": len(rs), "voltaram": v, "nao_voltaram": n, "aguardando": a, "garantias": c.get(GARANTIA, 0),
                 "pct_voltaram": _pct(v, v + n), "tempo_medio_min": _tempo_medio_min(rs)}
 
@@ -267,6 +294,7 @@ def montar_resumo_gestor(linhas, de: date, ate: date, aguardando_agora, agora_ut
         "periodo": {"de": de.isoformat(), "ate": ate.isoformat(), "dias": (ate - de).days + 1},
         "kpis": {
             **total, "avisados_seller": avisados_seller,
+            "fabrica_garantia": fabrica_garantia, "fabrica_sem_condicao": garantias - fabrica_garantia,
             "fora_estoque": total["nao_voltaram"],     # não voltou + garantia (as tabelas usam este)
             "nao_voltaram": nao_voltaram,              # só os que NÃO voltaram e não são garantia (cartão)
             "tempo_max_min": round(max(tempos)) if tempos else None,
@@ -518,9 +546,9 @@ def _selecionar_lista(db: Session, grupo: str, situacao: Optional[str], dia: Opt
         if grupo == "voltaram":
             linhas = [s for s in linhas if _situacao_reverso(s) == "voltou"]
         elif grupo == "nao_voltaram":
-            linhas = [s for s in linhas if _situacao_reverso(s) not in ("voltou", "aguardando", GARANTIA)]
+            linhas = [s for s in linhas if _destino(s) not in ("voltou", "aguardando", GARANTIA)]
         elif grupo == "garantias":
-            linhas = [s for s in linhas if _situacao_reverso(s) == GARANTIA]
+            linhas = [s for s in linhas if _vai_fabrica(s)]
         elif grupo == "aguardando":
             linhas = [s for s in linhas if _situacao_reverso(s) == "aguardando"]
 
@@ -860,7 +888,7 @@ def fixar_custo_no_reverso(db: Session, s: SolicitacaoCancelamento, usuario_nome
 
 def _erro_reverso_travado(db: Session, s: SolicitacaoCancelamento) -> None:
     from app.routers.remessas_garantia import remessas_dos_reversos
-    if _situacao_reverso(s) == GARANTIA and remessas_dos_reversos(db, [s.id]).get(s.id):
+    if _vai_fabrica(s) and remessas_dos_reversos(db, [s.id]).get(s.id):
         raise HTTPException(status_code=409, detail="Essa garantia já está numa remessa para a fábrica; SKU e custo ficam como foram enviados.")
 
 
@@ -868,7 +896,7 @@ def gravar_custo_manual(db: Session, s: SolicitacaoCancelamento, custo: float, u
     """Custo informado à mão numa garantia (admin, supervisor ou o seller dono da conta). Marcado como manual, com
     quem estava logado, o perfil e quando; NUNCA altera o cadastro de Custos. Não faz commit."""
     from app.models import LogCustoReverso
-    if _situacao_reverso(s) != GARANTIA:
+    if not _vai_fabrica(s):
         raise HTTPException(status_code=404, detail="Garantia não encontrada.")
     _erro_reverso_travado(db, s)
     anterior = s.custo_garantia
@@ -933,7 +961,7 @@ def corrigir_sku_reverso(db: Session, s: SolicitacaoCancelamento, sku_novo: str,
                            sku_anterior=anterior_txt, sku_novo=novo_txt,
                            detalhe=f"Correção de SKU · conta {s.conta or '—'}"))
     custo_novo = None
-    if _situacao_reverso(s) == GARANTIA:
+    if _vai_fabrica(s):
         s.custo_garantia = None; s.custo_garantia_origem = None; s.custo_garantia_por = None
         s.custo_garantia_em = None; s.custo_garantia_sku = None; s.custo_garantia_produto = None
         s.custo_garantia_papel = None
@@ -995,6 +1023,7 @@ def _item_garantia(s: SolicitacaoCancelamento, custos) -> dict:
         "custo_motivo": motivo,                       # por que está sem custo
         "custo_produto": produto,                     # nome do produto no cadastro de Custos (conferência)
         "custo_por": custo_por, "custo_em": custo_em,
+        "tipo": _tipo_fabrica(s), "tipo_chave": _situacao_reverso(s),
         "custo_papel": getattr(s, "custo_garantia_papel", None) or "",
         "parecidos": _parecidos_do_reverso(s, custos) if custo is None else [],
         "sku_original": getattr(s, "sku_original", None) or "",
@@ -1013,7 +1042,7 @@ def _garantias_selecionadas(db: Session, conta: Optional[str], dias, de, ate, ga
     _checar_galpao(galpao)
     d1, d2 = _intervalo(dias, de, ate)
     reversos = _reversos_do_periodo(db, d1, d2, galpao)     # todos do período (base da relação por conta)
-    todas = [s for s in reversos if _situacao_reverso(s) == GARANTIA]
+    todas = [s for s in reversos if _vai_fabrica(s)]
     # Lista de contas (com quantas garantias cada uma) NÃO depende do filtro de conta escolhido
     por_conta = Counter(s.conta or "—" for s in todas)
     contas = [{"conta": n, "quantidade": q} for n, q in sorted(por_conta.items(), key=lambda kv: kv[0].lower())]
@@ -1041,9 +1070,9 @@ def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
         chave = s.conta_chave or (s.conta or "").lower()
         c = contas.setdefault(chave, {"conta": s.conta or "—", "retornaram": 0, "voltaram": 0, "garantias": 0,
                                       "custo_garantia": 0.0, "sem_custo": 0, "enviadas": 0, "custo_enviado": 0.0,
-                                      "nao_voltaram": 0, "aguardando": 0})
+                                      "nao_voltaram": 0, "aguardando": 0, "fab_garantia": 0, "fab_sem_condicao": 0})
         c["retornaram"] += 1
-        situacao = _situacao_reverso(s)
+        situacao = _destino(s)
         if situacao == "voltou":
             c["voltaram"] += 1
         elif situacao == "aguardando":
@@ -1052,6 +1081,7 @@ def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
             c["nao_voltaram"] += 1          # sem condição de venda (avariado, faltando peça etc.)
         elif situacao == GARANTIA:
             c["garantias"] += 1
+            c["fab_garantia" if _situacao_reverso(s) == GARANTIA else "fab_sem_condicao"] += 1
             custo = _item_garantia(s, custos)["custo"]
             if custo is None:
                 c["sem_custo"] += 1
@@ -1071,6 +1101,7 @@ def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
         "custo_garantia": round(sum(c["custo_garantia"] for c in linhas), 2),
         "enviadas": sum(c["enviadas"] for c in linhas), "custo_enviado": round(sum(c["custo_enviado"] for c in linhas), 2),
         "nao_voltaram": sum(c["nao_voltaram"] for c in linhas), "aguardando": sum(c["aguardando"] for c in linhas),
+        "fab_garantia": sum(c["fab_garantia"] for c in linhas), "fab_sem_condicao": sum(c["fab_sem_condicao"] for c in linhas),
     }
     return {"contas": linhas, "total": total}
 
@@ -1122,7 +1153,7 @@ def informar_custo_manual(solicitacao_id: int, corpo: CustoManualBody, request: 
     com quem/quando, e NUNCA altera o cadastro de Custos do seller."""
     usuario = usuario_gestor_reversos(request, db)
     s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
-    if s is None or _situacao_reverso(s) != GARANTIA:
+    if s is None or not _vai_fabrica(s):
         raise HTTPException(status_code=404, detail="Garantia não encontrada.")
     r = gravar_custo_manual(db, s, corpo.custo, usuario)
     db.commit()
@@ -1151,6 +1182,112 @@ def skus_conta_gestor(request: Request, conta: str = "", q: str = "", db: Sessio
     usuario_gestor_reversos(request, db)
     return skus_da_conta(db, conta, q)
 
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Dinheiro parado (31/10): custo de tudo que NÃO pode ser vendido e ainda não foi resolvido -- é um ESTADO de agora
+# (não depende de período). Entra: garantia/quebrado ainda no galpão + o que já foi à fábrica e aguarda solução.
+# Não entra: "em análise pela equipe" (ainda sem decisão: aparece à parte), voltou ao estoque, recuperado, perdido.
+# ---------------------------------------------------------------------------------------------------------------
+def montar_dinheiro_parado(db: Session, chave: Optional[str] = None, com_itens: bool = False) -> dict:
+    from app.models import RemessaGarantia, RemessaGarantiaItem
+    from app.routers.remessas_garantia import STATUS_ANALISE, STATUS_ENCERRADA, remessas_dos_reversos
+    agora = datetime.utcnow()
+    q = _base(db)
+    if chave:
+        q = q.filter(SolicitacaoCancelamento.conta_chave == chave)
+    todas = q.all()
+    fab = [s for s in todas if _vai_fabrica(s)]
+    agu = [s for s in todas if _situacao_reverso(s) == "aguardando"]
+    custos = _custos_dos_reversos(db, fab + agu)
+    no_envio = remessas_dos_reversos(db, [s.id for s in fab]) if fab else {}
+    contas: dict = {}
+
+    def conta_de(k, nome):
+        return contas.setdefault(k, {
+            "conta_chave": k, "conta": nome or "—",
+            "galpao_valor": 0.0, "galpao_qtd": 0, "galpao_garantia": 0, "galpao_quebrado": 0, "galpao_sem_custo": 0,
+            "fabrica_valor": 0.0, "fabrica_qtd": 0, "analise_qtd": 0, "analise_valor": 0.0, "analise_sem_custo": 0,
+            "recuperado": 0.0, "perdido": 0.0, "parado_total": 0.0, "itens": []})
+
+    def dias(s):
+        base = s.confirmado_em or s.criado_em
+        return max((agora - base).days, 0) if base else 0
+
+    for s in fab:
+        if s.id in no_envio:
+            continue                                  # já na fábrica: entra pela remessa, abaixo
+        k = s.conta_chave or (s.conta or "").lower()
+        c = conta_de(k, s.conta)
+        i = _item_garantia(s, custos)
+        c["galpao_qtd"] += 1
+        c["galpao_garantia" if _situacao_reverso(s) == GARANTIA else "galpao_quebrado"] += 1
+        if i["custo"] is None:
+            c["galpao_sem_custo"] += 1
+        else:
+            c["galpao_valor"] += i["custo"]
+        if com_itens:
+            c["itens"].append({"situacao": "galpao", "tipo": i["tipo"], "tipo_chave": i["tipo_chave"], "sku": i["sku"],
+                               "produto": i["produto"] or i.get("custo_produto") or "", "numero_venda": i["numero_venda"],
+                               "custo": i["custo"], "dias": dias(s), "nota": ""})
+    for s in agu:
+        k = s.conta_chave or (s.conta or "").lower()
+        c = conta_de(k, s.conta)
+        r = calcular_custo_exato(s, custos)
+        c["analise_qtd"] += 1
+        if r["custo"] is None:
+            c["analise_sem_custo"] += 1
+        else:
+            c["analise_valor"] += r["custo"]
+
+    rq = db.query(RemessaGarantia).filter(RemessaGarantia.status.in_((STATUS_ANALISE, STATUS_ENCERRADA)))
+    if chave:
+        rq = rq.filter(func.lower(RemessaGarantia.conta_chave) == chave)
+    remessas = rq.all()
+    em_analise = {r.id: r for r in remessas if r.status == STATUS_ANALISE}
+    for r in remessas:
+        k = (r.conta_chave or (r.conta or "")).lower()
+        c = conta_de(k, r.conta)
+        if r.status == STATUS_ANALISE:
+            c["fabrica_valor"] += float(r.valor_total or 0); c["fabrica_qtd"] += int(r.qtd_itens or 0)
+        else:
+            c["recuperado"] += float((r.ressarcido or 0) + (r.credito or 0) + (r.trocado or 0)); c["perdido"] += float(r.perdido or 0)
+    if com_itens and em_analise:
+        itens = db.query(RemessaGarantiaItem).filter(RemessaGarantiaItem.remessa_id.in_(list(em_analise))).all()
+        sol = {s.id: s for s in db.query(SolicitacaoCancelamento).filter(
+            SolicitacaoCancelamento.id.in_([x.solicitacao_id for x in itens])).options(defer(SolicitacaoCancelamento.fotos_base64)).all()}
+        for x in itens:
+            r = em_analise[x.remessa_id]
+            s = sol.get(x.solicitacao_id)
+            c = conta_de((r.conta_chave or (r.conta or "")).lower(), r.conta)
+            c["itens"].append({"situacao": "fabrica", "tipo": _tipo_fabrica(s) if s else "", "tipo_chave": _situacao_reverso(s) if s else "",
+                               "sku": x.sku or "", "produto": x.produto or "", "numero_venda": x.numero_venda or "",
+                               "custo": float(x.custo or 0), "dias": max((agora - r.data_envio).days, 0) if r.data_envio else 0,
+                               "nota": r.nota_numero or ""})
+    linhas = list(contas.values())
+    for c in linhas:
+        for k in ("galpao_valor", "fabrica_valor", "analise_valor", "recuperado", "perdido"):
+            c[k] = round(c[k], 2)
+        c["parado_total"] = round(c["galpao_valor"] + c["fabrica_valor"], 2)
+        c["itens"].sort(key=lambda i: (i["situacao"] != "galpao", -(i["custo"] or 0)))
+        if not com_itens:
+            c.pop("itens")
+    linhas = [c for c in linhas if c["parado_total"] or c["galpao_qtd"] or c["fabrica_qtd"] or c["analise_qtd"] or c["recuperado"] or c["perdido"]]
+    linhas.sort(key=lambda c: (-c["parado_total"], -c["galpao_qtd"], c["conta"].lower()))
+    soma = lambda k: round(sum(c[k] for c in linhas), 2)
+    total = {k: soma(k) for k in ("galpao_valor", "fabrica_valor", "analise_valor", "recuperado", "perdido", "parado_total")}
+    total.update({k: sum(c[k] for c in linhas) for k in ("galpao_qtd", "galpao_garantia", "galpao_quebrado", "galpao_sem_custo",
+                                                          "fabrica_qtd", "analise_qtd", "analise_sem_custo")})
+    return {"contas": linhas, "total": total, "gerado_em": _hora_br(agora)}
+
+
+@router.get("/dinheiro-parado")
+def dinheiro_parado(request: Request, conta: Optional[str] = None, db: Session = Depends(get_db)):
+    """Dinheiro parado de todas as contas (ou de uma: `conta` = chave; aí vem a lista de produtos). Só leitura."""
+    usuario_gestor_reversos(request, db)
+    from app.contas_util import chave_conta
+    chave = chave_conta(conta) if (conta or "").strip() else None      # aceita o nome ou a chave da conta
+    return montar_dinheiro_parado(db, chave, com_itens=bool(chave))
 
 
 @router.post("/garantias/fixar-custos")
@@ -1202,14 +1339,14 @@ def garantias_excel(request: Request, conta: Optional[str] = None, dias: Optiona
 
     aba_g = wb.create_sheet("Garantias")
     aba_g.append(["Recebido em", "Conta", "Plataforma", "Nº da venda", "SKU", "Produto", "Custo (R$)", "Marcado por",
-                  "Marcado em", "Recebido no galpão por", "Observação", "Protocolo", "Origem do custo", "Motivo (sem custo)"])
+                  "Marcado em", "Recebido no galpão por", "Observação", "Protocolo", "Origem do custo", "Motivo (sem custo)", "Tipo"])
     for i in r["itens"]:
         aba_g.append([i["recebido_em"], i["conta"], i["plataforma"], i["numero_venda"], i["sku"], i["produto"],
                       i["custo"] if i["custo"] is not None else "sem custo", i["marcado_por"], i["marcado_em"],
                       i["recebido_por"], i["observacao"], i["protocolo"],
                       {"exato": "cadastro (SKU igual)", "cadastro": "cadastro da conta", "manual": "informado manualmente"}.get(i["custo_origem"] or "", ""),
-                      i["custo_motivo"] or ""])
-    for n, larg in enumerate((17, 22, 14, 20, 18, 36, 12, 18, 17, 20, 34, 18, 30, 60), start=1):
+                      i["custo_motivo"] or "", i["tipo"]])
+    for n, larg in enumerate((17, 22, 14, 20, 18, 36, 12, 18, 17, 20, 34, 18, 30, 60, 40), start=1):
         aba_g.column_dimensions[aba_g.cell(row=1, column=n).column_letter].width = larg
 
     aba_s = wb.create_sheet("Por SKU")   # resumo para a nota: quantas unidades de cada SKU, por conta
