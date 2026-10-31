@@ -18,7 +18,7 @@ mesmo se o Mercado Livre estiver fora do ar).
 import logging
 from datetime import datetime
 
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
 from app.contas_util import chave_conta
@@ -45,7 +45,9 @@ def reivindicar_conclusao(db: Session, solicitacao_id: int, quem: str) -> bool:
     """
     resultado = db.execute(
         update(SolicitacaoCancelamento)
-        .where(SolicitacaoCancelamento.id == solicitacao_id, SolicitacaoCancelamento.confirmado_por.is_(None))
+        .where(SolicitacaoCancelamento.id == solicitacao_id, SolicitacaoCancelamento.confirmado_por.is_(None),
+               # 31/10: pedido que espera o aceite do seller (ou foi recusado) nunca é concluído por ninguém
+               or_(SolicitacaoCancelamento.aceite_status.is_(None), SolicitacaoCancelamento.aceite_status == "aceito"))
         .values(confirmado_por=quem, confirmado_em=datetime.utcnow())
         .execution_options(synchronize_session=False)
     )

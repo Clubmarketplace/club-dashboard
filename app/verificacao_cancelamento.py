@@ -173,6 +173,9 @@ def verificar_pendentes() -> None:
             # Só CANCELAMENTOS (tipo nulo = registro antigo = cancelamento).
             # Reputação não aparece no pedido do ML: é confirmada à mão.
             .filter(or_(SolicitacaoCancelamento.tipo.is_(None), SolicitacaoCancelamento.tipo == "cancelamento"))
+            # 31/10: pedido que ainda espera o aceite do seller (ou foi recusado) não é tratado por ninguém,
+            # nem pela verificação automática.
+            .filter(or_(SolicitacaoCancelamento.aceite_status.is_(None), SolicitacaoCancelamento.aceite_status == "aceito"))
             .all()
         )
         confirmadas = 0
