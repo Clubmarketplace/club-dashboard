@@ -482,6 +482,11 @@ def _item_lista(s: SolicitacaoCancelamento, agora_utc: datetime) -> dict:
         "motivo_reverso": s.motivo_reverso or "",
         "motivo_reverso_nome": _nome_motivo_reverso(s),
         "em_analise": bool(s.em_analise_em and not s.confirmado_por),
+        "sku_atual": _chave_sku(s) if _skus_do_reverso(s) else "",   # SKU que vale (o digitado no galpão ou o do pedido)
+        "sku_original": getattr(s, "sku_original", None) or "",
+        "sku_corrigido_por": getattr(s, "sku_corrigido_por", None) or "",
+        "sku_corrigido_papel": getattr(s, "sku_corrigido_papel", None) or "",
+        "sku_corrigido_em": _hora_br(getattr(s, "sku_corrigido_em", None)),
     }
 
 
@@ -824,7 +829,8 @@ def calcular_custo_exato(s: SolicitacaoCancelamento, custos) -> dict:
 
 
 def fixar_custo_no_reverso(db: Session, s: SolicitacaoCancelamento, usuario_nome: Optional[str] = None,
-                           custos=None, substituir: bool = False) -> bool:
+                           custos=None, substituir: bool = False, papel: Optional[str] = None,
+                           usuario_id: Optional[int] = None) -> bool:
     """
     Grava no reverso o custo da garantia, buscado SÓ no cadastro de Custos da conta do reverso (valor exato).
     Não mexe em custo informado manualmente (nem sobrescreve um já gravado, salvo `substituir`). Sem custo exato = não grava.
@@ -845,9 +851,122 @@ def fixar_custo_no_reverso(db: Session, s: SolicitacaoCancelamento, usuario_nome
     s.custo_garantia_em = datetime.utcnow()
     s.custo_garantia_sku = _chave_sku(s)
     s.custo_garantia_produto = r["produto"] or None
+    s.custo_garantia_papel = papel
     db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=anterior, custo_novo=r["custo"], origem="cadastro",
-                           usuario=usuario_nome, detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
+                           usuario=usuario_nome, usuario_id=usuario_id, papel=papel,
+                           detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
     return True
+
+
+def _erro_reverso_travado(db: Session, s: SolicitacaoCancelamento) -> None:
+    from app.routers.remessas_garantia import remessas_dos_reversos
+    if _situacao_reverso(s) == GARANTIA and remessas_dos_reversos(db, [s.id]).get(s.id):
+        raise HTTPException(status_code=409, detail="Essa garantia já está numa remessa para a fábrica; SKU e custo ficam como foram enviados.")
+
+
+def gravar_custo_manual(db: Session, s: SolicitacaoCancelamento, custo: float, usuario) -> dict:
+    """Custo informado à mão numa garantia (admin, supervisor ou o seller dono da conta). Marcado como manual, com
+    quem estava logado, o perfil e quando; NUNCA altera o cadastro de Custos. Não faz commit."""
+    from app.models import LogCustoReverso
+    if _situacao_reverso(s) != GARANTIA:
+        raise HTTPException(status_code=404, detail="Garantia não encontrada.")
+    _erro_reverso_travado(db, s)
+    anterior = s.custo_garantia
+    s.custo_garantia = custo
+    s.custo_garantia_origem = "manual"
+    s.custo_garantia_por = usuario.nome_exibicao
+    s.custo_garantia_papel = usuario.papel
+    s.custo_garantia_em = datetime.utcnow()
+    s.custo_garantia_sku = _chave_sku(s)
+    db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=anterior, custo_novo=custo, origem="manual",
+                           usuario=usuario.nome_exibicao, usuario_id=usuario.id, papel=usuario.papel,
+                           detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
+    return {"status": "ok", "id": s.id, "custo": custo, "custo_origem": "manual"}
+
+
+def corrigir_sku_reverso(db: Session, s: SolicitacaoCancelamento, sku_novo: str, usuario, sku_antigo: str = "") -> dict:
+    """
+    Corrige o SKU de um reverso para um SKU que EXISTE no cadastro da PRÓPRIA conta (igual, sem aproximação).
+    Guarda o SKU original, quem corrigiu (nome, perfil, id) e quando; se for garantia, o custo é buscado de novo no
+    cadastro (substitui custo anterior, inclusive manual). Garantia já em remessa não muda (409). Não faz commit.
+    """
+    from app.models import LogCustoReverso
+    novo = (sku_novo or "").strip().upper()
+    if not novo:
+        raise HTTPException(status_code=422, detail="Escolha o SKU correto.")
+    _erro_reverso_travado(db, s)
+    custos = _custos_dos_reversos(db, [s])
+    chave = s.conta_chave or (s.conta or "").lower()
+    r = _resolver_sku(custos, chave, novo)
+    if r["custo"] is None:
+        raise HTTPException(status_code=422, detail=f"O SKU {novo} não existe no cadastro de Custos da conta {s.conta or '—'}.")
+    canonico = r.get("sku_cadastro") or novo
+    tokens = _skus_do_reverso(s)
+    antigo = (sku_antigo or "").strip().upper()
+    if not tokens:
+        tokens = [canonico]; idx = 0
+    elif antigo:
+        idx = next((i for i, x in enumerate(tokens) if x.upper() == antigo), None)
+        if idx is None:
+            raise HTTPException(status_code=422, detail="O SKU a corrigir não está neste reverso.")
+    elif len(tokens) == 1:
+        idx = 0
+    else:
+        raise HTTPException(status_code=422, detail="Este reverso tem vários SKUs; diga qual deles corrigir.")
+    anterior_txt = (s.sku or s.produto_titulo or "").strip() or SEM_SKU
+    tokens[idx] = canonico
+    novo_txt = ",".join(tokens)
+    if novo_txt == (s.sku or s.produto_titulo or "").strip():
+        raise HTTPException(status_code=422, detail="Esse já é o SKU do reverso.")
+    if not s.sku_original:
+        s.sku_original = (s.sku or s.produto_titulo or "").strip() or None
+    if (s.sku or "").strip():
+        s.sku = novo_txt
+    else:
+        s.produto_titulo = novo_txt
+    s.sku_corrigido_por = usuario.nome_exibicao
+    s.sku_corrigido_papel = usuario.papel
+    s.sku_corrigido_em = datetime.utcnow()
+    custo_anterior = s.custo_garantia
+    db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=custo_anterior, custo_novo=None, origem="sku",
+                           usuario=usuario.nome_exibicao, usuario_id=usuario.id, papel=usuario.papel,
+                           sku_anterior=anterior_txt, sku_novo=novo_txt,
+                           detalhe=f"Correção de SKU · conta {s.conta or '—'}"))
+    custo_novo = None
+    if _situacao_reverso(s) == GARANTIA:
+        s.custo_garantia = None; s.custo_garantia_origem = None; s.custo_garantia_por = None
+        s.custo_garantia_em = None; s.custo_garantia_sku = None; s.custo_garantia_produto = None
+        s.custo_garantia_papel = None
+        fixar_custo_no_reverso(db, s, usuario.nome_exibicao, custos=_custos_dos_reversos(db, [s]), papel=usuario.papel,
+                               usuario_id=usuario.id)
+        custo_novo = s.custo_garantia
+    return {"status": "ok", "id": s.id, "sku": novo_txt, "sku_anterior": anterior_txt, "custo": custo_novo,
+            "custo_origem": s.custo_garantia_origem}
+
+
+def skus_da_conta(db: Session, conta: str, q: str = "") -> dict:
+    """SKUs do cadastro da conta (com nome e custo) para o seletor de correção. Só leitura."""
+    from app.contas_util import achar_conta_por_nome
+    conta_db = achar_conta_por_nome(db, conta) if (conta or "").strip() else None
+    if conta_db is None:
+        return {"conta_achada": False, "itens": []}
+    alvo = " ".join((q or "").split()).upper()
+    linhas = db.query(CustoSku.sku, CustoSku.nome_produto, CustoSku.custo).filter(CustoSku.conta_id == conta_db.id).all()
+    itens = [(s.strip(), (n or "").strip(), c) for s, n, c in linhas if s and c is not None]
+    if alvo:
+        itens = [x for x in itens if alvo in x[0].upper() or alvo in x[1].upper()]
+    itens.sort(key=lambda x: (not x[0].upper().startswith(alvo), x[0].upper()))
+    return {"conta_achada": True, "itens": [{"sku": a, "nome": b, "custo": c} for a, b, c in itens[:30]]}
+
+
+def _parecidos_do_reverso(s: SolicitacaoCancelamento, custos) -> list:
+    """Pistas (SKUs parecidos do cadastro da própria conta) do primeiro SKU do reverso que não bate. Nunca viram custo."""
+    chave = s.conta_chave or (s.conta or "").lower()
+    for k in _skus_do_reverso(s):
+        r = _resolver_sku(custos, chave, k)
+        if r["custo"] is None:
+            return list(r.get("parecidos") or [])
+    return []
 
 
 def _item_garantia(s: SolicitacaoCancelamento, custos) -> dict:
@@ -876,6 +995,12 @@ def _item_garantia(s: SolicitacaoCancelamento, custos) -> dict:
         "custo_motivo": motivo,                       # por que está sem custo
         "custo_produto": produto,                     # nome do produto no cadastro de Custos (conferência)
         "custo_por": custo_por, "custo_em": custo_em,
+        "custo_papel": getattr(s, "custo_garantia_papel", None) or "",
+        "parecidos": _parecidos_do_reverso(s, custos) if custo is None else [],
+        "sku_original": getattr(s, "sku_original", None) or "",
+        "sku_corrigido_por": getattr(s, "sku_corrigido_por", None) or "",
+        "sku_corrigido_papel": getattr(s, "sku_corrigido_papel", None) or "",
+        "sku_corrigido_em": _hora_br(getattr(s, "sku_corrigido_em", None)),
         "marcado_por": s.confirmado_por or "",
         "marcado_em": _hora_br(s.confirmado_em),
         "recebido_por": s.solicitado_por or "",
@@ -915,11 +1040,16 @@ def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
     for s in reversos:
         chave = s.conta_chave or (s.conta or "").lower()
         c = contas.setdefault(chave, {"conta": s.conta or "—", "retornaram": 0, "voltaram": 0, "garantias": 0,
-                                      "custo_garantia": 0.0, "sem_custo": 0, "enviadas": 0, "custo_enviado": 0.0})
+                                      "custo_garantia": 0.0, "sem_custo": 0, "enviadas": 0, "custo_enviado": 0.0,
+                                      "nao_voltaram": 0, "aguardando": 0})
         c["retornaram"] += 1
         situacao = _situacao_reverso(s)
         if situacao == "voltou":
             c["voltaram"] += 1
+        elif situacao == "aguardando":
+            c["aguardando"] += 1
+        elif situacao != GARANTIA:
+            c["nao_voltaram"] += 1          # sem condição de venda (avariado, faltando peça etc.)
         elif situacao == GARANTIA:
             c["garantias"] += 1
             custo = _item_garantia(s, custos)["custo"]
@@ -940,6 +1070,7 @@ def montar_por_conta(reversos, custos: dict, em_remessa=None) -> dict:
         "garantias": sum(c["garantias"] for c in linhas), "sem_custo": sum(c["sem_custo"] for c in linhas),
         "custo_garantia": round(sum(c["custo_garantia"] for c in linhas), 2),
         "enviadas": sum(c["enviadas"] for c in linhas), "custo_enviado": round(sum(c["custo_enviado"] for c in linhas), 2),
+        "nao_voltaram": sum(c["nao_voltaram"] for c in linhas), "aguardando": sum(c["aguardando"] for c in linhas),
     }
     return {"contas": linhas, "total": total}
 
@@ -989,24 +1120,130 @@ class CustoManualBody(BaseModel):
 def informar_custo_manual(solicitacao_id: int, corpo: CustoManualBody, request: Request, db: Session = Depends(get_db)):
     """Custo informado à mão (só admin/supervisor), quando o SKU não está no cadastro. Fica marcado como manual,
     com quem/quando, e NUNCA altera o cadastro de Custos do seller."""
-    from app.models import LogCustoReverso
     usuario = usuario_gestor_reversos(request, db)
     s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
     if s is None or _situacao_reverso(s) != GARANTIA:
         raise HTTPException(status_code=404, detail="Garantia não encontrada.")
-    from app.routers.remessas_garantia import remessas_dos_reversos
-    if remessas_dos_reversos(db, [s.id]).get(s.id):
-        raise HTTPException(status_code=409, detail="Essa garantia já está numa remessa; o custo dela fica como foi enviado.")
-    anterior = s.custo_garantia
-    s.custo_garantia = corpo.custo
-    s.custo_garantia_origem = "manual"
-    s.custo_garantia_por = usuario.nome_exibicao
-    s.custo_garantia_em = datetime.utcnow()
-    s.custo_garantia_sku = _chave_sku(s)
-    db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=anterior, custo_novo=corpo.custo, origem="manual",
-                           usuario=usuario.nome_exibicao, detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
+    r = gravar_custo_manual(db, s, corpo.custo, usuario)
     db.commit()
-    return {"status": "ok", "id": s.id, "custo": corpo.custo, "custo_origem": "manual"}
+    return r
+
+
+class CorrigirSkuBody(BaseModel):
+    sku_novo: str
+    sku_antigo: str = ""
+
+
+@router.post("/reversos/{solicitacao_id}/sku")
+def corrigir_sku_gestor(solicitacao_id: int, corpo: CorrigirSkuBody, request: Request, db: Session = Depends(get_db)):
+    """Corrige o SKU de qualquer reverso (admin/supervisor) para um SKU do cadastro da conta dele; fica registrado."""
+    usuario = usuario_gestor_reversos(request, db)
+    s = _base(db).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if s is None:
+        raise HTTPException(status_code=404, detail="Reverso não encontrado.")
+    r = corrigir_sku_reverso(db, s, corpo.sku_novo, usuario, corpo.sku_antigo)
+    db.commit()
+    return r
+
+
+@router.get("/skus-conta")
+def skus_conta_gestor(request: Request, conta: str = "", q: str = "", db: Session = Depends(get_db)):
+    usuario_gestor_reversos(request, db)
+    return skus_da_conta(db, conta, q)
+
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Conferência de SKUs (31/10) -- ferramenta TEMPORÁRIA para limpar as garantias que ficaram "sem custo" porque o SKU
+# digitado difere do cadastro. O sistema só SUGERE (SKUs parecidos da PRÓPRIA conta); quem decide é a pessoa, e cada
+# aplicação passa pelo mesmo corrigir_sku_reverso (exato, com log de quem fez). Pode ser removida depois.
+# ---------------------------------------------------------------------------------------------------------------
+def _garantias_sem_custo(db: Session):
+    """Garantias (não excluídas) sem custo gravado e fora de remessa, de todas as contas e datas."""
+    from app.routers.remessas_garantia import remessas_dos_reversos
+    todas = [s for s in _base(db).order_by(SolicitacaoCancelamento.criado_em.desc()).all()
+             if _situacao_reverso(s) == GARANTIA and s.custo_garantia is None]
+    em_remessa = remessas_dos_reversos(db, [s.id for s in todas]) if todas else {}
+    return [s for s in todas if not em_remessa.get(s.id)]
+
+
+def _sku_que_falha(s: SolicitacaoCancelamento, custos) -> Optional[dict]:
+    """Primeiro SKU do reverso que não existe igual no cadastro da conta (com as pistas), ou None se todos existem."""
+    chave = s.conta_chave or (s.conta or "").lower()
+    for k in _skus_do_reverso(s):
+        r = _resolver_sku(custos, chave, k)
+        if r["custo"] is None:
+            return {"sku": k, "parecidos": list(r.get("parecidos") or []), "motivo": r.get("motivo")}
+    return None
+
+
+@router.get("/conferencia-sku")
+def conferencia_sku(request: Request, db: Session = Depends(get_db)):
+    """Grupos (conta + SKU digitado) das garantias sem custo, com os SKUs parecidos do cadastro da conta. Só leitura."""
+    usuario_gestor_reversos(request, db)
+    linhas = _garantias_sem_custo(db)
+    custos = _custos_dos_reversos(db, linhas)
+    grupos, sem_motivo_sku = {}, 0
+    for s in linhas:
+        f = _sku_que_falha(s, custos)
+        if f is None:
+            sem_motivo_sku += 1     # todos os SKUs existem: é só "Fixar custos"
+            continue
+        chave = s.conta_chave or (s.conta or "").lower()
+        g = grupos.setdefault((chave, f["sku"]), {"conta": s.conta or "—", "conta_chave": chave, "sku_digitado": f["sku"],
+                                                  "parecidos": f["parecidos"], "motivo": f["motivo"], "vendas": [], "ids": []})
+        g["ids"].append(s.id); g["vendas"].append(s.numero_venda or "")
+        dia = _dia_br(s).isoformat() if s.criado_em else None
+        if dia:
+            g["de"] = min(g.get("de", dia), dia); g["ate"] = max(g.get("ate", dia), dia)
+    saida = []
+    for (chave, _sku), g in grupos.items():
+        conta = custos._contas.get(chave) or {}
+        g["candidatos"] = [{"sku": c, "nome": (conta.get("nomes") or {}).get(c, ""), "custo": (conta.get("custos") or {}).get(c)}
+                           for c in g.pop("parecidos")]
+        g["qtd"] = len(g["ids"]); g["vendas"] = g["vendas"][:8]; g.pop("ids")
+        g["sugestao_unica"] = len(g["candidatos"]) == 1
+        saida.append(g)
+    saida.sort(key=lambda g: (g["conta"].upper(), -g["qtd"], g["sku_digitado"]))
+    return {"total_garantias": len(linhas), "so_fixar_custo": sem_motivo_sku, "grupos": saida}
+
+
+class AplicarSkuItem(BaseModel):
+    conta_chave: str
+    sku_antigo: str
+    sku_novo: str
+
+
+class AplicarSkuBody(BaseModel):
+    itens: list[AplicarSkuItem]
+
+
+@router.post("/conferencia-sku/aplicar")
+def conferencia_sku_aplicar(corpo: AplicarSkuBody, request: Request, db: Session = Depends(get_db)):
+    """Aplica os SKUs escolhidos a TODAS as garantias sem custo do grupo (conta + SKU digitado). Cada reverso é
+    corrigido pelo mesmo caminho exato do 'Corrigir SKU' (log de quem fez); um que falhar não derruba os outros."""
+    usuario = usuario_gestor_reversos(request, db)
+    if len(corpo.itens) > 500:
+        raise HTTPException(status_code=422, detail="Itens demais de uma vez.")
+    linhas = _garantias_sem_custo(db)
+    custos = _custos_dos_reversos(db, linhas)
+    corrigidos, falhas = 0, []
+    for it in corpo.itens:
+        antigo = it.sku_antigo.strip().upper()
+        for s in linhas:
+            if (s.conta_chave or (s.conta or "").lower()) != it.conta_chave:
+                continue
+            f = _sku_que_falha(s, custos)
+            if not f or f["sku"] != antigo:
+                continue
+            try:
+                with db.begin_nested():
+                    corrigir_sku_reverso(db, s, it.sku_novo, usuario, antigo)
+                corrigidos += 1
+            except HTTPException as e:
+                falhas.append({"id": s.id, "venda": s.numero_venda or "", "erro": e.detail})
+    db.commit()
+    return {"status": "ok", "corrigidos": corrigidos, "falhas": falhas}
 
 
 @router.post("/garantias/fixar-custos")

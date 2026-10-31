@@ -20,12 +20,13 @@ from app import auth
 from app.contas_util import chave_conta
 from app.database import get_db
 from app.models import RemessaGarantia
-from app.routers.painel_galpao import _situacao_reverso
+from app.routers.painel_galpao import _nome_situacao, _situacao_reverso
 from app.routers.remessas_garantia import (
     STATUS_ANALISE, STATUS_ENCERRADA, _hoje_br, remessa_para_json, remessas_dos_reversos,
 )
 from app.routers.reversos_gestor import (
-    GARANTIA, _base, _custos_dos_reversos, _intervalo, _item_garantia, montar_por_conta, montar_resumo_gestor,
+    GARANTIA, CorrigirSkuBody, CustoManualBody, _base, _custos_dos_reversos, _intervalo, _item_garantia,
+    corrigir_sku_reverso, gravar_custo_manual, montar_por_conta, montar_resumo_gestor, skus_da_conta,
 )
 from app.routers.solicitacoes_cancelamento import FUSO_BR, _limites_utc_produtividade
 from app.models import SolicitacaoCancelamento
@@ -147,3 +148,85 @@ def minhas_garantias(request: Request, dias: Optional[int] = None, de: Optional[
                       "produto": i["produto"] or i.get("custo_produto") or "", "custo": i["custo"],
                       "remessa": no_envio.get(s.id)})
     return {"total": len(linhas), "itens": itens}
+
+
+def _reverso_da_conta(db: Session, usuario, solicitacao_id: int) -> SolicitacaoCancelamento:
+    """Reverso pedido pelo seller: só se for da conta dele (senão 404, sem revelar que existe)."""
+    s = (_base(db).filter(SolicitacaoCancelamento.id == solicitacao_id,
+                          SolicitacaoCancelamento.conta_chave == chave_conta(usuario.conta_vinculada)).first())
+    if s is None:
+        raise HTTPException(status_code=404, detail="Reverso não encontrado.")
+    return s
+
+
+@router.get("/reversos")
+def meus_reversos(request: Request, situacao: str = "todos", dias: Optional[int] = None, de: Optional[str] = None,
+                  ate: Optional[str] = None, db: Session = Depends(get_db)):
+    """Todos os reversos da própria conta no período (garantia, voltou ao estoque, outros, aguardando), com SKU, custo
+    e quem ajustou. `situacao`: todos | garantia | voltou | outros | aguardando. Só leitura."""
+    usuario = usuario_seller(request, db)
+    chave = chave_conta(usuario.conta_vinculada)
+    d1, d2 = _intervalo(dias, de, ate)
+    inicio, fim = _limites_utc_produtividade(d1, d2)
+    linhas = (_base(db).filter(SolicitacaoCancelamento.conta_chave == chave,
+                               SolicitacaoCancelamento.criado_em >= inicio, SolicitacaoCancelamento.criado_em < fim)
+              .order_by(SolicitacaoCancelamento.criado_em.desc()).all())
+
+    def grupo(s):
+        sit = _situacao_reverso(s)
+        return sit if sit in ("garantia", "voltou", "aguardando") else "outros"
+
+    contagem = {"todos": len(linhas), "garantia": 0, "voltou": 0, "outros": 0, "aguardando": 0}
+    for s in linhas:
+        contagem[grupo(s)] += 1
+    if situacao in ("garantia", "voltou", "outros", "aguardando"):
+        linhas = [s for s in linhas if grupo(s) == situacao]
+    total = len(linhas)
+    linhas = linhas[:500]
+    custos = _custos_dos_reversos(db, linhas)
+    no_envio = remessas_dos_reversos(db, [s.id for s in linhas if _situacao_reverso(s) == GARANTIA])
+    itens = []
+    for s in linhas:
+        i = _item_garantia(s, custos)
+        g = grupo(s)
+        remessa = no_envio.get(s.id)
+        itens.append({
+            "id": s.id, "recebido_em": i["recebido_em"], "numero_venda": i["numero_venda"], "sku": i["sku"],
+            "produto": i["produto"] or i.get("custo_produto") or "", "grupo": g,
+            "situacao": _nome_situacao(_situacao_reverso(s)), "observacao": i["observacao"],
+            "custo": i["custo"] if g == "garantia" else None, "custo_origem": i["custo_origem"] if g == "garantia" else None,
+            "custo_motivo": i["custo_motivo"] if g == "garantia" else None,
+            "custo_por": i["custo_por"], "custo_papel": i["custo_papel"], "custo_em": i["custo_em"],
+            "parecidos": i["parecidos"] if g == "garantia" else [],
+            "sku_original": i["sku_original"], "sku_corrigido_por": i["sku_corrigido_por"],
+            "sku_corrigido_papel": i["sku_corrigido_papel"], "sku_corrigido_em": i["sku_corrigido_em"],
+            "remessa": remessa, "editavel": not remessa and g != "aguardando",
+        })
+    return {"conta": usuario.conta_vinculada, "contagem": contagem, "total": total, "itens": itens}
+
+
+@router.get("/skus")
+def meus_skus(request: Request, q: str = "", db: Session = Depends(get_db)):
+    """SKUs do cadastro de Custos da PRÓPRIA conta (para o seller escolher o SKU correto)."""
+    usuario = usuario_seller(request, db)
+    return skus_da_conta(db, usuario.conta_vinculada, q)
+
+
+@router.post("/reversos/{solicitacao_id}/sku")
+def corrigir_meu_sku(solicitacao_id: int, corpo: CorrigirSkuBody, request: Request, db: Session = Depends(get_db)):
+    usuario = usuario_seller(request, db)
+    s = _reverso_da_conta(db, usuario, solicitacao_id)
+    if _situacao_reverso(s) == "aguardando":
+        raise HTTPException(status_code=409, detail="Esse reverso ainda aguarda a equipe do galpão.")
+    r = corrigir_sku_reverso(db, s, corpo.sku_novo, usuario, corpo.sku_antigo)
+    db.commit()
+    return r
+
+
+@router.post("/garantias/{solicitacao_id}/custo")
+def ajustar_meu_custo(solicitacao_id: int, corpo: CustoManualBody, request: Request, db: Session = Depends(get_db)):
+    usuario = usuario_seller(request, db)
+    s = _reverso_da_conta(db, usuario, solicitacao_id)
+    r = gravar_custo_manual(db, s, corpo.custo, usuario)
+    db.commit()
+    return r
