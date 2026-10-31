@@ -56,6 +56,9 @@
     .gar-fotos-caixa img { height:96px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; }
     td.verde { color:#1f6b45; } td.verm { color:#a83232; } td.laranja { color:#a86a14; }
 
+    #dlg-rel-rem { width:min(980px, 96vw); max-height:92vh; border:none; border-radius:14px; padding:18px; box-shadow:0 12px 40px rgba(0,0,0,.25); }
+    #dlg-rel-rem::backdrop { background:rgba(15,23,32,.45); }
+    .dlg-rel-topo { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:12px; font-size:17px; }
     /* Imprimir / salvar em PDF: só o conteúdo, sem menu e sem botões */
     .so-impressao { display:none; }
 
@@ -240,6 +243,7 @@
           </select>
           <span class="espaco"></span>
           <a class="btn pri" id="baixar" href="#">⬇ Baixar relatório (Excel)</a>
+          <button type="button" class="btn" id="abrir-rel-rem" style="border-color:#7c5cbf;color:#5b3fa0">Relatório de remessas para a fábrica</button>
           <button type="button" class="btn" id="imprimir">🖨 Imprimir / PDF</button>
         </div>
         <div class="erro" id="erro"></div>
@@ -255,8 +259,16 @@
           </div>
           <div class="cartoes" id="rg-numeros" style="margin-bottom:18px"><div class="vazio" style="grid-column:1/-1">Carregando…</div></div>
 
+          <!-- v33 (31/10): o quadro das remessas saiu da tela geral; abre pelo botão "Relatório de remessas para a fábrica" -->
+          <dialog id="dlg-rel-rem" aria-labelledby="rem-titulo">
+            <div class="dlg-rel-topo"><b>Relatório de remessas para a fábrica</b><button type="button" class="btn" id="rel-fechar">Fechar ✕</button></div>
+            <div class="painel" id="rel-grafico" style="margin:0 0 14px">
+              <h2 style="font-size:15px;margin:0 0 10px">Valor enviado por conta</h2>
+              <div class="caixa-grafico" style="height:300px"><canvas id="g-rem-conta" role="img" aria-label="Valor enviado à fábrica por conta e situação"></canvas></div>
+              <div class="nota-tab" id="rel-resumo-txt"></div>
+            </div>
           <!-- v32: remessas enviadas para a fábrica (nota, resposta, prejuízo) -->
-          <div class="painel" id="rg-remessas" style="border-left:6px solid #7c5cbf">
+          <div class="painel" id="rg-remessas" style="border-left:6px solid #7c5cbf; margin:0">
             <div class="rank-topo">
               <h2 id="rem-titulo">Enviado para a fábrica</h2>
               <div class="periodos" id="rem-filtro" role="group" aria-label="Situação das remessas">
@@ -269,6 +281,8 @@
             <div class="nota-tab">Para enviar garantias à fábrica, escolha a conta, marque as garantias na <b>Lista das garantias</b> e clique em <b>Enviar para a fábrica</b>. A remessa fica <b>em análise</b> até você registrar a resposta; ao <b>encerrar</b>, o que não foi recuperado vira <b>prejuízo</b>. Passou de 15 dias: amarelo. Passou de 30: vermelho.</div>
             <div style="margin-top:10px"><a class="btn" id="rem-excel" href="#">⬇ Baixar Excel das remessas</a></div>
           </div>
+
+          </dialog>
 
           <div id="rg-geral">
             <div class="grupo-titulo">O que chama atenção</div>
@@ -767,21 +781,30 @@
       const pct = (a, b) => b > 0 ? Math.round(a * 100 / b) + "%" : "—";
       $("rg-titulo").textContent = garConta ? "Resumo de " + garConta : "Em resumo";
 
-      // Cartões: Retornaram | Voltaram | Parado no galpão | Na fábrica (aguardando) | Perdido (prejuízo).
-      // "Parado no galpão" = garantias que AINDA NÃO foram numa remessa; as enviadas passam para o cartão da fábrica.
+      // Cartões (31/10): Retornaram | Voltaram | Garantia (qtd e %) | Valor total em garantia | Parado no galpão |
+      // Enviado para a fábrica | Em análise na fábrica | Recuperado | Perdido.
+      // "Parado no galpão" = garantias que AINDA NÃO foram numa remessa. "Em análise" = tudo que aguarda a fábrica AGORA
+      // (não depende do período). Recuperado/Perdido = remessas encerradas no período.
       const env = garConta ? (c ? c.enviadas || 0 : 0) : (tot.enviadas || 0);
       const custoEnv = garConta ? (c ? c.custo_enviado || 0 : 0) : (tot.custo_enviado || 0);
       const parQtd = A.gar - env, parValor = Math.max(0, A.custo - custoEnv);
-      const alertaSem = A.sem > 0 ? `<div class="rg-alerta">${A.sem} sem custo cadastrado (fora do valor)</div>` : "";
       const ag = remResumo ? remResumo.aguardando : null, pp = remResumo ? remResumo.periodo : null;
-      const corFab = ag && ag.faixa === "critico" ? "#a83232" : ag && ag.faixa === "atencao" ? "#8a4b00" : "#5b3fa0";
-      const alertaFab = ag && ag.criticas ? `<div class="rg-alerta">${ag.criticas} há mais de 30 dias</div>` : (ag && ag.atencao ? `<div class="rg-alerta" style="background:#fff3d6;color:#8a4b00">${ag.atencao} há mais de 15 dias</div>` : "");
+      const plural = (n, um, varios) => n + " " + (n === 1 ? um : varios);
+      const respondido = pp ? pp.enviado : 0;
+      const semCusto = A.sem > 0 ? `<div class="rg-alerta">${A.sem} sem custo cadastrado (fora do valor)</div>` : "";
+      const cartaoRg = (attr, cor, rotulo, valor, sub, extra, estilo) =>
+        `<div class="cartao rg-c rg-link" ${attr} style="--cor:${cor}" tabindex="0" role="button"><div class="rotulo">${rotulo}</div><div class="valor" style="${estilo || ""}">${valor}</div><div class="sub">${sub}</div>${extra || ""}</div>`;
+      const din = "font-size:26px";
       $("rg-numeros").innerHTML =
-        `<div class="cartao rg-c rg-link" data-abrir="recebidos" style="--cor:var(--rev)" tabindex="0" role="button"><div class="rotulo">Retornaram</div><div class="valor">${A.ret}</div><div class="sub">no período · clique para ver</div></div>`
-        + `<div class="cartao rg-c rg-link" data-abrir="voltaram" style="--cor:var(--voltou)" tabindex="0" role="button"><div class="rotulo">Voltaram ao estoque</div><div class="valor" style="color:#1f6b45">${A.vol}</div><div class="sub">${pct(A.vol, A.ret)} dos retornos</div></div>`
-        + `<div class="cartao rg-c rg-link" data-abrir="garantias" style="--cor:var(--gar)" tabindex="0" role="button"><div class="rotulo">Em garantia (parado no galpão)</div><div class="valor" style="color:#8a4b00;font-size:30px">${brl(parValor)}</div><div class="sub">${parQtd} garantia${parQtd === 1 ? "" : "s"} · custo dos produtos${env ? ` · ${env} já enviada${env === 1 ? "" : "s"} à fábrica` : ""}</div>${alertaSem}</div>`
-        + `<div class="cartao rg-c rg-link" data-rem="analise" style="--cor:#7c5cbf" tabindex="0" role="button"><div class="rotulo">Na fábrica, aguardando</div><div class="valor" style="font-size:30px;color:${corFab}">${ag ? brl(ag.valor) : "—"}</div><div class="sub">${ag ? `${ag.itens} iten${ag.itens === 1 ? "" : "s"} · ${ag.remessas} remessa${ag.remessas === 1 ? "" : "s"}${ag.mais_antiga_dias != null ? ` · a mais antiga há ${ag.mais_antiga_dias} dia${ag.mais_antiga_dias === 1 ? "" : "s"}` : ""}` : "carregando…"}</div>${alertaFab}</div>`
-        + `<div class="cartao rg-c rg-link" data-rem="encerrada" style="--cor:var(--nao)" tabindex="0" role="button"><div class="rotulo">Perdido (prejuízo)</div><div class="valor" style="font-size:30px;color:${pp && pp.perdido > 0 ? "#a83232" : "inherit"}">${pp ? brl(pp.perdido) : "—"}</div><div class="sub">${pp ? `recuperado ${brl(pp.recuperado)} de ${brl(pp.enviado)} enviados · ${pp.remessas} remessa${pp.remessas === 1 ? "" : "s"} encerrada${pp.remessas === 1 ? "" : "s"} no período` : "carregando…"}</div></div>`;
+        cartaoRg('data-abrir="recebidos"', "var(--rev)", "Retornaram", A.ret, "no período · clique para ver")
+        + cartaoRg('data-abrir="voltaram"', "var(--voltou)", "Voltaram ao estoque", A.vol, pct(A.vol, A.ret) + " dos retornos", "", "color:#1f6b45")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Foram para garantia", A.gar, pct(A.gar, A.ret) + " dos retornos", "", "color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total em garantia", brl(A.custo), "custo dos produtos em garantia", semCusto, din + ";color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "#8896a5", "Parado no galpão", brl(parValor), plural(parQtd, "garantia ainda não enviada", "garantias ainda não enviadas"), "", din)
+        + cartaoRg('data-rem="todas"', "#7c5cbf", "Enviado para a fábrica", brl(custoEnv), plural(env, "item", "itens") + " · " + pct(custoEnv, A.custo) + " do valor em garantia", "", din + ";color:#5b3fa0")
+        + cartaoRg('data-rem="analise"', "#7c5cbf", "Em análise na fábrica", ag ? brl(ag.valor) : "—", ag ? plural(ag.remessas, "remessa", "remessas") + " · " + plural(ag.itens, "item", "itens") : "", "", din + ";color:#5b3fa0")
+        + cartaoRg('data-rem="encerrada"', "var(--voltou)", "Recuperado pela fábrica", pp ? brl(pp.recuperado) : "—", respondido > 0 ? pct(pp.recuperado, respondido) + " do que a fábrica respondeu" : "nenhuma resposta no período", "", din + ";color:#1f6b45")
+        + cartaoRg('data-rem="encerrada"', "var(--nao)", "Perdido (prejuízo)", pp ? brl(pp.perdido) : "—", respondido > 0 ? pct(pp.perdido, respondido) + " do que a fábrica respondeu" : "nenhuma resposta no período", "", din + ";color:" + (pp && pp.perdido > 0 ? "#a83232" : "inherit"));
 
       $("rg-geral").hidden = !!garConta;
       $("rg-conta-det").hidden = !garConta;
@@ -832,7 +855,7 @@
       if ((el = e.target.closest("#rg-todas"))) { const abre = $("rg-todas-wrap").hidden; $("rg-todas-wrap").hidden = !abre; el.setAttribute("aria-expanded", abre); el.textContent = abre ? "Esconder a tabela de todas as contas" : "Ver todas as contas"; return; }
       if (e.target.closest("#rg-voltar")) return selecionarConta("");
       if ((el = e.target.closest("[data-conta]"))) return selecionarConta(el.dataset.conta);
-      if ((el = e.target.closest("[data-rem]"))) { remFiltro = el.dataset.rem; carregarRemessas(true); $("rg-remessas").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+      if ((el = e.target.closest("[data-rem]"))) { remFiltro = el.dataset.rem; abrirRelatorioRem(); return; }
       if ((el = e.target.closest("[data-abrir]"))) { const n = { grupo: el.dataset.abrir }; if (garConta && n.grupo !== "parados") n.conta = garConta; return abrirLista(n); }
     });
     $("resumo-gestor").addEventListener("keydown", (e) => {
@@ -891,6 +914,41 @@
       return corpo;
     }
     const post = (url, dados) => chamar(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(dados || {}) });
+
+    // ---------- Relatório de remessas para a fábrica (janela) ----------
+    let graficoRemConta = null, vezRel = 0;
+    async function abrirRelatorioRem() {
+      remAbertas.clear();
+      if (!$("dlg-rel-rem").open) $("dlg-rel-rem").showModal();
+      carregarRemessas(true);
+      const minha = ++vezRel, q = new URLSearchParams({ status: "todas" }); if (garConta) q.set("conta", garConta);
+      $("rel-grafico").hidden = !!garConta;      // com uma conta escolhida o gráfico por conta não faz sentido
+      if (garConta) return;
+      try {
+        const ls = await chamar("/api/reversos-gestor/remessas?" + q.toString());
+        if (minha !== vezRel) return;
+        const por = {};
+        ls.remessas.forEach(r => {
+          if (r.status !== "analise" && r.status !== "encerrada") return;
+          const x = por[r.conta] || (por[r.conta] = { a: 0, r: 0, p: 0 });
+          if (r.status === "analise") x.a += r.valor_total; else { x.r += r.recuperado; x.p += r.perdido; }
+        });
+        const nomes = Object.keys(por).sort((a, b) => (por[b].a + por[b].r + por[b].p) - (por[a].a + por[a].r + por[a].p)).slice(0, 12);
+        if (graficoRemConta) graficoRemConta.destroy();
+        graficoRemConta = new Chart($("g-rem-conta"), { type: "bar",
+          data: { labels: nomes, datasets: [
+            { label: "Em análise", data: nomes.map(n => por[n].a), backgroundColor: "#7c5cbf" },
+            { label: "Recuperado", data: nomes.map(n => por[n].r), backgroundColor: "#2f9e63" },
+            { label: "Perdido", data: nomes.map(n => por[n].p), backgroundColor: "#c24141" } ] },
+          options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, animation: false,
+            scales: { x: { stacked: true, ticks: { callback: (v) => "R$ " + v } }, y: { stacked: true, grid: { display: false } } },
+            plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (c) => " " + c.dataset.label + ": " + brl(c.parsed.x) } } } } });
+        $("rel-resumo-txt").textContent = Object.keys(por).length > nomes.length ? `Mostrando as ${nomes.length} contas com maior valor de ${Object.keys(por).length}.` : (nomes.length ? "" : "Nenhuma remessa enviada ainda.");
+      } catch (e) { console.error(e); $("rel-resumo-txt").textContent = "Não consegui montar o gráfico agora."; }
+    }
+    $("abrir-rel-rem").addEventListener("click", abrirRelatorioRem);
+    $("rel-fechar").addEventListener("click", () => $("dlg-rel-rem").close());
+    $("dlg-rel-rem").addEventListener("click", (e) => { if (e.target === $("dlg-rel-rem")) $("dlg-rel-rem").close(); });
 
     async function carregarRemessas(forcarLista) {
       const minha = ++vezRem, p = params(); if (garConta) p.set("conta", garConta);
@@ -1071,7 +1129,7 @@
                                                       observacao: $("dlg-obs").value, itens });
         selecionadas.clear(); $("dlg-remessa").close(); remFiltro = "analise"; remAbertas.clear();
         carregarGarantias(); carregarRemessas(true);
-        $("rg-remessas").scrollIntoView({ behavior: "smooth", block: "start" });
+        abrirRelatorioRem();
       } catch (err) { erro.style.display = "block"; erro.textContent = err.message; }
       finally { $("dlg-salvar").disabled = false; }
     });

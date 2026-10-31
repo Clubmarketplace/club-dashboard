@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Club Marketplace — Meus reversos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lora:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/dashboard.css?v=7" />
+  <script src="/static/vendor/chart.umd.min.js"></script>
+  <style>
+    :root { --voltou:#2f9e63; --gar:#b45309; --galpao:#8896a5; --fab:#6f52b8; --rec:#2f9e63; --perd:#c24141; --cred:#2e86c1; --troca:#17a2a2; }
+    main { max-width:1100px; margin:0 auto; padding:24px 24px 60px; }
+    .barra { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:14px; }
+    .periodos { display:inline-flex; border:1.5px solid var(--cmx-borda); border-radius:10px; overflow:hidden; background:#fff; }
+    .periodos button { border:none; background:#fff; padding:9px 16px; font:inherit; font-size:13.5px; font-weight:600; color:var(--cmx-texto-suave); cursor:pointer; border-right:1px solid var(--cmx-borda); }
+    .periodos button:last-child { border-right:none; }
+    .periodos button[aria-pressed=true] { background:var(--cmx-texto, #17202a); color:#fff; }
+    .periodo-txt { font-size:13px; color:var(--cmx-texto-suave); margin:0 0 16px; }
+    .cartoes { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:18px; }
+    .cartao { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:14px 16px; border-top:4px solid var(--cor, var(--cmx-borda)); min-width:0; }
+    .cartao .valor { font-size:28px; font-weight:700; line-height:1.1; overflow-wrap:anywhere; }
+    .cartao .valor.din { font-size:24px; }
+    .cartao .rotulo { font-size:12.5px; color:var(--cmx-texto-suave); margin-top:4px; }
+    .cartao .sub { font-size:11.5px; color:var(--cmx-texto-suave); margin-top:2px; }
+    .grade2 { display:grid; grid-template-columns:3fr 2fr; gap:14px; margin-bottom:18px; }
+    @media (max-width:860px) { .grade2 { grid-template-columns:1fr; } }
+    .painel { background:#fff; border:1px solid var(--cmx-borda); border-radius:12px; padding:16px 18px; margin-bottom:18px; min-width:0; }
+    .grade2 .painel { margin-bottom:0; }
+    .painel h2 { font-size:15px; margin:0 0 12px; }
+    .caixa-grafico { position:relative; height:260px; }
+    .caixa-rosca { position:relative; height:210px; }
+    .legenda { display:grid; gap:6px; margin-top:10px; font-size:13px; }
+    .legenda div { display:flex; align-items:center; gap:8px; }
+    .legenda i { width:10px; height:10px; border-radius:3px; display:inline-block; flex:none; }
+    .legenda b { margin-left:auto; font-variant-numeric:tabular-nums; }
+    table { width:100%; border-collapse:collapse; font-size:13.5px; }
+    th { text-align:left; font-size:11px; color:var(--cmx-texto-suave); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--cmx-borda); }
+    td { padding:9px 10px; border-bottom:1px solid var(--cmx-borda); vertical-align:top; }
+    td.n, th.n { text-align:right; font-variant-numeric:tabular-nums; }
+    tbody tr:last-child td { border-bottom:none; }
+    .vazio { text-align:center; color:var(--cmx-texto-suave); padding:22px; font-size:13.5px; }
+    .tabela-rolagem { overflow-x:auto; }
+    .peq { font-size:12px; color:var(--cmx-texto-suave); }
+    .selo { display:inline-block; padding:2px 9px; border-radius:99px; font-size:12px; font-weight:600; white-space:nowrap; }
+    .selo.ok { background:#e2f3ea; color:#1f6b45; } .selo.am { background:#fdf3dc; color:#8a4b00; }
+    .selo.vm { background:#fbe4e1; color:#a83232; } .selo.en { background:#eceff2; color:#4d5965; }
+    .aviso-custo { font-size:12.5px; color:#8a4b00; background:#fff3d6; border-radius:8px; padding:8px 12px; margin-bottom:14px; }
+    .btn { border:1.5px solid var(--cmx-borda); background:#fff; border-radius:8px; padding:5px 10px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+    .gar-fotos-caixa { display:flex; flex-wrap:wrap; gap:8px; padding:4px 0; font-size:13px; color:var(--cmx-texto-suave); }
+    .gar-fotos-caixa img { height:96px; border-radius:8px; border:1px solid var(--cmx-borda); display:block; }
+  </style>
+</head>
+<body>
+  <div class="cmx-shell">
+    <aside class="cmx-sidebar">
+      <div class="cmx-marca">
+        <img class="cmx-marca-logo" src="/static/logo.png?v=2" alt="Club Marketplace" style="width:100%; max-width:196px; height:auto; background:#fff; border-radius:8px; padding:10px 12px; display:block;" />
+      </div>
+      {% include "_menu_auto.html" %}
+    </aside>
+
+    <div class="cmx-conteudo">
+      <div class="cmx-menu-usuario">
+        <div class="cmx-menu-usuario-botao" onclick="document.getElementById('cmx-dropdown-usuario').classList.toggle('aberto')">
+          <div class="cmx-menu-usuario-avatar">{{ usuario.nome_exibicao[0]|upper }}</div>
+          <div>
+            <div class="cmx-menu-usuario-nome">{{ usuario.nome_exibicao }}</div>
+            <div class="cmx-menu-usuario-papel">{{ usuario.conta_vinculada }}</div>
+          </div>
+          <span style="font-size:10px; color:var(--cmx-texto-suave);">▾</span>
+        </div>
+        <div class="cmx-menu-usuario-dropdown" id="cmx-dropdown-usuario">
+          <a href="/logout">🚪 Sair</a>
+        </div>
+      </div>
+      <script>
+        document.addEventListener("click", function(e) {
+          var menu = document.querySelector(".cmx-menu-usuario");
+          var dropdown = document.getElementById("cmx-dropdown-usuario");
+          if (menu && dropdown && !menu.contains(e.target)) dropdown.classList.remove("aberto");
+        });
+      </script>
+
+      <header class="cmx-topbar">
+        <div>
+          <h1>Meus reversos</h1>
+          <p class="cmx-subtitulo">Reversos, garantias e o que foi enviado para a fábrica · conta {{ usuario.conta_vinculada }}</p>
+        </div>
+      </header>
+  <main>
+    <div class="barra">
+      <div class="periodos" id="periodos" role="group" aria-label="Período">
+        <button type="button" data-d="1" aria-pressed="false">Hoje</button>
+        <button type="button" data-d="7" aria-pressed="true">7 dias</button>
+        <button type="button" data-d="15" aria-pressed="false">15 dias</button>
+        <button type="button" data-d="30" aria-pressed="false">30 dias</button>
+        <button type="button" data-d="0" aria-pressed="false">Tudo</button>
+      </div>
+    </div>
+    <div class="periodo-txt" id="periodo-txt">Carregando…</div>
+    <div class="aviso-custo" id="aviso" hidden></div>
+    <div class="cartoes" id="cartoes"><div class="vazio" style="grid-column:1/-1">Carregando…</div></div>
+
+    <div class="grade2">
+      <div class="painel"><h2>Reversos por dia</h2><div class="caixa-grafico"><canvas id="g-dia" role="img" aria-label="Reversos por dia e situação"></canvas></div></div>
+      <div class="painel"><h2>O que aconteceu com os reversos</h2><div class="caixa-rosca"><canvas id="g-res" role="img" aria-label="Situação dos reversos"></canvas></div><div class="legenda" id="leg-res"></div></div>
+    </div>
+    <div class="grade2">
+      <div class="painel"><h2>Valor enviado à fábrica por dia</h2><div class="caixa-grafico"><canvas id="g-val" role="img" aria-label="Valor enviado à fábrica por dia"></canvas></div></div>
+      <div class="painel"><h2>Situação do valor enviado</h2><div class="caixa-rosca"><canvas id="g-vrosca" role="img" aria-label="Situação do valor enviado"></canvas></div><div class="legenda" id="leg-val"></div></div>
+    </div>
+
+    <div class="painel">
+      <h2>Minhas remessas para a fábrica</h2>
+      <div class="tabela-rolagem"><table>
+        <thead><tr><th>Nota</th><th>Fábrica</th><th>Enviada em</th><th>Situação</th><th class="n">Itens</th><th class="n">Enviado</th><th class="n">Recuperado</th><th class="n">Perdido</th></tr></thead>
+        <tbody id="t-rem"><tr><td colspan="8" class="vazio">Carregando…</td></tr></tbody>
+      </table></div>
+      <div class="peq" style="margin-top:8px">Clique numa remessa para ver os itens. "Em análise" = a fábrica ainda não respondeu. Quando a fábrica responde, o que não foi recuperado vira prejuízo.</div>
+    </div>
+
+    <div class="painel">
+      <h2>Minhas garantias <span class="peq" id="gar-info"></span></h2>
+      <div class="tabela-rolagem"><table>
+        <thead><tr><th>Recebido em</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Fábrica</th><th>Fotos</th></tr></thead>
+        <tbody id="t-gar"><tr><td colspan="7" class="vazio">Carregando…</td></tr></tbody>
+      </table></div>
+    </div>
+  </main>
+    </div>
+  </div>
+  <script src="/static/menu-celular.js?v=1"></script>
+  <script>
+    "use strict";
+    const $ = (id) => document.getElementById(id);
+    const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    const brl = (v) => Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+    const dBR = (iso) => iso ? iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4) : "";
+    const dCurto = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
+    const nItens = (n) => n + (n === 1 ? " item" : " itens");
+    const pct = (p) => p == null ? "—" : p + "%";
+    const COR_RES = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    const INICIO = "2026-10-01";   // começo do módulo de reversos ("Tudo")
+    let dias = 7, gDia = null, gRes = null, gVal = null, gVr = null, vez = 0, abertas = new Set();
+    const hojeBR = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
+
+    function cartao(cor, valor, rotulo, sub, din) {
+      return `<div class="cartao" style="--cor:${cor}"><div class="valor${din ? " din" : ""}">${valor}</div><div class="rotulo">${rotulo}</div>${sub ? `<div class="sub">${sub}</div>` : ""}</div>`;
+    }
+    function selo(r) {
+      if (r.status === "encerrada") return `<span class="selo en">Encerrada ${dBR(r.data_resposta)}</span>`;
+      const c = r.faixa === "critico" ? "vm" : r.faixa === "atencao" ? "am" : "ok";
+      return `<span class="selo ${c}">Em análise · ${r.dias_em_analise} dia${r.dias_em_analise === 1 ? "" : "s"}</span>`;
+    }
+    function nova(id, tipo, dados, opcoes) {
+      const ant = { g: id === "g-dia" ? gDia : id === "g-res" ? gRes : id === "g-val" ? gVal : gVr };
+      if (ant.g) ant.g.destroy();
+      const g = new Chart($(id), { type: tipo, data: dados, options: opcoes });
+      if (id === "g-dia") gDia = g; else if (id === "g-res") gRes = g; else if (id === "g-val") gVal = g; else gVr = g;
+    }
+
+    function desenhar(d) {
+      const c = d.cartoes, v = d.valores, enc = v.encerradas;
+      $("periodo-txt").textContent = `${dBR(d.periodo.de)} a ${dBR(d.periodo.ate)} (${d.periodo.dias} dia${d.periodo.dias > 1 ? "s" : ""}) · conta ${d.conta}`;
+      $("aviso").hidden = !(c.sem_custo > 0);
+      if (c.sem_custo > 0) $("aviso").textContent = `${c.sem_custo} garantia${c.sem_custo === 1 ? "" : "s"} sem custo cadastrado ficam fora do valor. O custo vem do cadastro de SKU e custos da sua conta.`;
+      $("cartoes").innerHTML =
+        cartao("#0f766e", c.retornaram, "Retornaram", "no período")
+        + cartao("var(--voltou)", c.voltaram, "Voltaram ao estoque", pct(c.pct_voltaram) + " dos retornos")
+        + cartao("var(--gar)", c.garantias, "Foram para garantia", pct(c.pct_garantias) + " dos retornos")
+        + cartao("var(--gar)", brl(c.valor_garantia), "Valor total em garantia", "custo dos produtos em garantia", true)
+        + cartao("var(--galpao)", brl(c.parado_valor), "Parado no galpão", c.parado_qtd + " garantia" + (c.parado_qtd === 1 ? "" : "s") + " ainda não enviada" + (c.parado_qtd === 1 ? "" : "s"), true)
+        + cartao("var(--fab)", brl(c.enviado_valor), "Enviado para a fábrica", nItens(c.enviado_itens) + " · " + pct(c.pct_enviado) + " do valor em garantia", true)
+        + cartao("var(--fab)", brl(v.em_analise.valor), "Em análise na fábrica", v.em_analise.remessas + " remessa" + (v.em_analise.remessas === 1 ? "" : "s") + " · " + nItens(v.em_analise.itens), true)
+        + cartao("var(--rec)", brl(enc.recuperado), "Recuperado pela fábrica", enc.enviado ? pct(enc.pct_recuperado) + " do que a fábrica respondeu" : "nenhuma resposta no período", true)
+        + cartao("var(--perd)", brl(enc.perdido), "Perdido (prejuízo)", enc.enviado ? pct(enc.pct_perdido) + " do que a fábrica respondeu" : "nenhuma resposta no período", true);
+
+      const opBase = (empilhado) => ({ responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
+        scales: { y: { beginAtZero: true, stacked: empilhado, ticks: { precision: 0 } }, x: { stacked: empilhado, grid: { display: false }, ticks: { maxTicksLimit: 16 } } },
+        plugins: { legend: { position: "bottom" } } });
+      nova("g-dia", "bar", { labels: d.por_dia.map(x => dCurto(x.data)), datasets: [
+        { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: "#2f9e63" },
+        { label: "Foram para garantia", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: "#b45309" },
+        { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: "#c24141" },
+        { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: "#d98e2f" } ] }, opBase(true));
+      const res = d.resultado;
+      if (res.length) {
+        nova("g-res", "doughnut", { labels: res.map(x => x.nome), datasets: [{ data: res.map(x => x.quantidade), backgroundColor: res.map(x => COR_RES[x.chave] || "#9aa5b1"), borderWidth: 2, borderColor: "#fff" }] },
+          { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } } });
+        $("leg-res").innerHTML = res.map(x => `<div><i style="background:${COR_RES[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}<b>${x.quantidade}</b></div>`).join("");
+      } else { if (gRes) { gRes.destroy(); gRes = null; } $("leg-res").innerHTML = '<div class="vazio">Nenhum reverso neste período.</div>'; }
+
+      const moeda = Object.assign(opBase(true), { plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (x) => " " + x.dataset.label + ": " + brl(x.parsed.y) } } } });
+      moeda.scales.y.ticks = { callback: (x) => "R$ " + x };
+      nova("g-val", "bar", { labels: v.por_dia.map(x => dCurto(x.data)), datasets: [
+        { label: "Em análise", data: v.por_dia.map(x => x.analise), backgroundColor: "#6f52b8" },
+        { label: "Recuperado", data: v.por_dia.map(x => x.recuperado), backgroundColor: "#2f9e63" },
+        { label: "Perdido", data: v.por_dia.map(x => x.perdido), backgroundColor: "#c24141" } ] }, moeda);
+      const T = [["Em análise", "#6f52b8", v.em_analise.valor], ["Ressarcido", "#2f9e63", enc.ressarcido], ["Crédito", "#2e86c1", enc.credito], ["Troca do produto", "#17a2a2", enc.trocado], ["Perdido", "#c24141", enc.perdido]].filter(x => x[2] > 0);
+      if (T.length) {
+        nova("g-vrosca", "doughnut", { labels: T.map(x => x[0]), datasets: [{ data: T.map(x => x[2]), backgroundColor: T.map(x => x[1]), borderWidth: 2, borderColor: "#fff" }] },
+          { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false }, tooltip: { callbacks: { label: (x) => " " + x.label + ": " + brl(x.parsed) } } } });
+        $("leg-val").innerHTML = T.map(x => `<div><i style="background:${x[1]}"></i>${x[0]}<b>${brl(x[2])}</b></div>`).join("");
+      } else { if (gVr) { gVr.destroy(); gVr = null; } $("leg-val").innerHTML = '<div class="vazio">Nada enviado à fábrica ainda.</div>'; }
+
+      $("t-rem").innerHTML = d.remessas.length ? d.remessas.map(r => {
+        const aberta = abertas.has(r.id), enc_ = r.status === "encerrada";
+        const itens = (r.itens || []).map(i => `<tr><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku)}</b></td><td>${esc(i.produto)}</td><td class="n">${brl(i.custo)}</td></tr>`).join("");
+        return `<tr data-rem="${r.id}" style="cursor:pointer"><td><b>${esc(r.nota_numero)}</b></td><td>${esc(r.fabrica)}</td><td>${dBR(r.data_envio)}</td><td>${selo(r)}</td><td class="n">${r.qtd_itens}</td><td class="n">${brl(r.valor_total)}</td><td class="n">${enc_ ? brl(r.recuperado) : "—"}</td><td class="n">${enc_ ? brl(r.perdido) : "—"}</td></tr>`
+          + `<tr id="rem-${r.id}" ${aberta ? "" : "hidden"}><td colspan="8" style="background:#f7f9fb"><div class="peq">${enc_ ? `Ressarcido ${brl(r.ressarcido)} · crédito ${brl(r.credito)} · troca ${brl(r.trocado)}${r.observacao_resposta ? " · " + esc(r.observacao_resposta) : ""}` : "Aguardando resposta da fábrica."}</div><table><thead><tr><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th></tr></thead><tbody>${itens}</tbody></table></td></tr>`;
+      }).join("") : '<tr><td colspan="8" class="vazio">Nenhuma remessa enviada à fábrica ainda.</td></tr>';
+    }
+
+    function paramsPeriodo() {
+      const p = new URLSearchParams();
+      if (dias === 0) { p.set("de", INICIO); p.set("ate", hojeBR()); } else p.set("dias", dias);
+      return p;
+    }
+    async function ler(url) {
+      const r = await fetch(url, { cache: "no-store" });
+      if (r.status === 401) { location.href = "/login"; throw new Error("sessão expirada"); }
+      if (!r.ok) throw new Error("erro " + r.status);
+      return r.json();
+    }
+    async function carregar() {
+      const minha = ++vez, p = paramsPeriodo().toString();
+      try {
+        const [d, g] = await Promise.all([ler("/api/meus-reversos/painel?" + p), ler("/api/meus-reversos/garantias?" + p)]);
+        if (minha !== vez) return;
+        desenhar(d); desenharGarantias(g);
+      } catch (e) {
+        console.error(e);
+        $("cartoes").innerHTML = '<div class="vazio" style="grid-column:1/-1">Não consegui carregar agora. Tente de novo em instantes.</div>';
+      }
+    }
+    const fotosCache = {};
+    function desenharGarantias(g) {
+      $("gar-info").textContent = g.total > g.itens.length ? `· mostrando ${g.itens.length} de ${g.total}` : `· ${g.total}`;
+      $("t-gar").innerHTML = g.itens.length ? g.itens.map(i => `<tr><td>${esc(i.recebido_em)}</td><td>${esc(i.numero_venda)}</td><td><b>${esc(i.sku || "—")}</b></td><td>${esc(i.produto)}</td>`
+        + `<td class="n" style="${i.custo == null ? "color:#a83232" : "font-weight:600"}">${i.custo == null ? "sem custo" : brl(i.custo)}</td>`
+        + `<td>${i.remessa ? `<span class="selo ${i.remessa.status === "analise" ? "am" : "en"}">Nota ${esc(i.remessa.nota)} · ${i.remessa.status === "analise" ? "em análise" : "encerrada"}</span>` : '<span class="peq">no galpão</span>'}</td>`
+        + `<td><button type="button" class="btn btn-fotos" data-id="${i.id}">Ver fotos</button></td></tr>`
+        + `<tr id="fotos-${i.id}" hidden><td colspan="7" style="background:#f7f9fb"><div class="gar-fotos-caixa"></div></td></tr>`).join("")
+        : '<tr><td colspan="7" class="vazio">Nenhuma garantia neste período.</td></tr>';
+    }
+    // Fotos só quando clica (mesma rota do painel "Minhas solicitações": só fotos da própria conta)
+    $("t-gar").addEventListener("click", async (e) => {
+      const b = e.target.closest(".btn-fotos"); if (!b) return;
+      const id = b.dataset.id, linha = $("fotos-" + id), abrir = linha.hidden; linha.hidden = !abrir; b.textContent = abrir ? "Ocultar fotos" : "Ver fotos";
+      const caixa = linha.querySelector(".gar-fotos-caixa");
+      if (abrir && !fotosCache[id]) {
+        caixa.textContent = "Carregando fotos…";
+        try {
+          const r = await fetch("/meus-cancelamentos/fotos?id=" + encodeURIComponent(id), { cache: "no-store" });
+          const j = await r.json();
+          const fotos = j.fotos || [], minis = j.minis || [];
+          fotosCache[id] = fotos.length ? fotos.map((u, k) => `<a href="${esc(u)}" target="_blank" rel="noopener"><img src="${esc(minis[k] || u)}" alt="Foto do reverso" loading="lazy" /></a>`).join("") : "Sem fotos.";
+        } catch (err) { fotosCache[id] = "Não consegui carregar as fotos agora."; }
+        caixa.innerHTML = fotosCache[id];
+      }
+    });
+    $("t-rem").addEventListener("click", (e) => {
+      const tr = e.target.closest("tr[data-rem]"); if (!tr) return;
+      const id = Number(tr.dataset.rem), linha = $("rem-" + id); if (!linha) return;
+      linha.hidden = !linha.hidden; if (linha.hidden) abertas.delete(id); else abertas.add(id);
+    });
+    $("periodos").addEventListener("click", (e) => {
+      const b = e.target.closest("button"); if (!b) return;
+      dias = +b.dataset.d; document.querySelectorAll("#periodos button").forEach(x => x.setAttribute("aria-pressed", x === b));
+      carregar();
+    });
+    carregar();
+  </script>
+</body>
+</html>
