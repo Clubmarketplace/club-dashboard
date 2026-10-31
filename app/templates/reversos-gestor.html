@@ -445,11 +445,11 @@
     <div class="peq" id="conf-info">Carregando…</div>
     <div class="peq" style="margin:6px 0">O sistema só sugere (SKUs parecidos do cadastro da PRÓPRIA conta). Confira o produto e o custo de cada sugestão e marque o que está certo. Nada é aplicado sem você confirmar. Garantias que já estão numa remessa para a fábrica (mesmo SKU em períodos diferentes) <b>não entram aqui nem mudam</b>: ficam com o SKU e o custo que foram enviados.</div>
     <div style="max-height:55vh;overflow:auto;border:1px solid var(--cmx-borda);border-radius:8px"><table style="width:100%">
-      <thead><tr><th></th><th>Conta</th><th>SKU digitado</th><th class="n">Reversos</th><th>Período</th><th>Vendas</th><th>SKU correto (cadastro da conta)</th></tr></thead>
+      <thead><tr><th></th><th>Conta</th><th>SKU digitado</th><th class="n">Reversos</th><th>Período</th><th>Vendas</th><th>No cadastro da conta (SKU · produto · custo)</th></tr></thead>
       <tbody id="conf-corpo"></tbody></table></div>
     <div id="conf-msg" style="font-size:13px;min-height:18px;margin-top:8px"></div>
     <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <button type="button" class="btn" id="conf-unicas">Marcar todas as sugestões únicas</button>
+      <span><button type="button" class="btn" id="conf-unicas">Marcar todas as sugestões únicas</button> <a class="btn" href="/api/reversos-gestor/conferencia-sku/excel" id="conf-excel">⬇ Baixar Excel da conferência</a></span>
       <span><button type="button" class="btn" id="conf-fechar">Fechar</button>
       <button type="button" class="btn" id="conf-aplicar" style="background:#1f2d3d;color:#fff">Aplicar marcadas</button></span>
     </div>
@@ -1174,10 +1174,13 @@
         if (!r.ok) throw new Error("erro " + r.status);
         const d = await r.json(); confGrupos = d.grupos || [];
         $("conf-info").textContent = `${d.total_garantias} garantia(s) sem custo e fora de remessa · ${confGrupos.length} grupo(s) de SKU digitado${d.so_fixar_custo ? ` · ${d.so_fixar_custo} já têm SKU certo (use "Fixar custos das garantias antigas")` : ""}`;
+        let contaAtual = "";
         $("conf-corpo").innerHTML = confGrupos.length ? confGrupos.map((g, n) => {
-          const opc = g.candidatos.length ? g.candidatos.map(c => `<label style="display:block;white-space:normal"><input type="radio" name="conf-${n}" value="${esc(c.sku)}" ${g.sugestao_unica ? "checked" : ""} /> <b>${esc(c.sku)}</b> ${esc(c.nome)} · ${brl(c.custo)}</label>`).join("")
-            : '<span class="peq">Sem sugestão. Use "Corrigir SKU" na Lista das garantias para escolher no cadastro, ou informe o custo.</span>';
-          return `<tr data-n="${n}"><td><input type="checkbox" class="conf-chk" data-n="${n}" ${g.candidatos.length ? "" : "disabled"} /></td><td>${esc(g.conta)}</td><td><b>${esc(g.sku_digitado)}</b></td><td class="n">${g.qtd}</td><td class="peq">${g.de ? (g.de === g.ate ? dataBRano(g.de) : dataBRano(g.de) + " a " + dataBRano(g.ate)) : "—"}</td><td class="peq">${g.vendas.map(esc).join(", ")}</td><td>${opc}</td></tr>`;
+          const opc = g.candidatos.length ? g.candidatos.map(c => `<label style="display:flex;gap:6px;align-items:baseline;white-space:normal;padding:1px 0${c.forte ? ";font-weight:600" : ""}"><input type="radio" name="conf-${n}" value="${esc(c.sku)}" ${g.sugestao_unica && c.forte ? "checked" : ""} /> <span><b>${esc(c.sku)}</b> ${esc(c.nome)} · <b>${brl(c.custo)}</b>${c.forte ? "" : ' <span class="peq">(aproximado)</span>'}</span></label>`).join("")
+            : '<span class="peq">Nada parecido no cadastro dessa conta. Use "Corrigir SKU" na Lista das garantias, ou informe o custo.</span>';
+          const cab = g.conta !== contaAtual ? `<tr><td colspan="7" style="background:#eef2f6;font-weight:700;padding:8px 10px">${esc(g.conta)}</td></tr>` : "";
+          contaAtual = g.conta;
+          return cab + `<tr data-n="${n}"><td><input type="checkbox" class="conf-chk" data-n="${n}" ${g.candidatos.length ? "" : "disabled"} /></td><td>${esc(g.conta)}</td><td><b>${esc(g.sku_digitado)}</b></td><td class="n">${g.qtd}</td><td class="peq">${g.de ? (g.de === g.ate ? dataBRano(g.de) : dataBRano(g.de) + " a " + dataBRano(g.ate)) : "—"}</td><td class="peq">${g.vendas.map(esc).join(", ")}</td><td>${opc}</td></tr>`;
         }).join("") : '<tr><td colspan="7" class="vazio">Nenhuma garantia sem custo por SKU diferente. 🎉</td></tr>';
       } catch (e) { $("conf-info").textContent = "Não consegui carregar agora. Tente de novo."; }
     }
