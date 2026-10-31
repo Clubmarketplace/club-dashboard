@@ -26,6 +26,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, field_validator
 from openpyxl import Workbook
 from sqlalchemy import func
 from sqlalchemy.orm import Session, defer
@@ -696,25 +697,102 @@ def lista_excel(request: Request, grupo: str = "recebidos", situacao: Optional[s
 MAX_ITENS_GARANTIA_TELA = 300   # a tela mostra os mais recentes; o Excel traz todos
 
 
-def _custos_dos_reversos(db: Session, linhas) -> dict:
-    """{(conta_chave, SKU): custo} só para as contas e SKUs que aparecem nos reversos."""
+import re as _re
+from difflib import get_close_matches as _parecidos
+
+
+def _norm_sku(sku: str) -> str:
+    """SKU só com letras e números, maiúsculo: 'liq200/220' e 'LIQ-200 220' viram 'LIQ200220'."""
+    return _re.sub(r"[^A-Z0-9]", "", (sku or "").upper())
+
+
+class CatalogoCustos:
+    """
+    Custos de uma ou mais contas para achar o custo de cada SKU de reverso (31/10).
+
+    REGRA CENTRAL: o custo é SEMPRE o do cadastro (Custos) da PRÓPRIA conta; nada é procurado em outra conta
+    (mesmo SKU pode custar diferente de uma conta para outra). Nada é gravado: só leitura.
+
+    VALOR EXATO (decisão do Washington, 31/10): o custo só é usado quando o SKU do reverso é IGUAL ao SKU do cadastro
+    da conta (ignora só maiúscula/minúscula e espaços das pontas). SKU parecido NUNCA vira custo: serve apenas de
+    pista no diagnóstico ("SKU não encontrado; parecido no cadastro: X") para a pessoa conferir e corrigir.
+    """
+
+    def __init__(self, contas: dict):
+        # contas: {conta_chave: {"achada": bool, "custos": {SKU_MAIUSCULO: custo}}}
+        self._contas = contas
+        self._indices = {}
+
+    # compatível com o formato antigo {(conta_chave, SKU): custo}
+    def get(self, chave_sku, default=None):
+        custo = self.resolver(chave_sku[0], chave_sku[1])["custo"]
+        return default if custo is None else custo
+
+    def _indice(self, chave):
+        if chave not in self._indices:
+            custos = (self._contas.get(chave) or {}).get("custos") or {}
+            por_norm, por_norm0, lista = {}, {}, []
+            for sku, custo in custos.items():
+                n = _norm_sku(sku); n0 = n.lstrip("0")
+                lista.append((sku, n0, custo))
+                por_norm.setdefault(n, []).append((sku, custo))
+                if n0:
+                    por_norm0.setdefault(n0, []).append((sku, custo))
+            self._indices[chave] = (custos, por_norm, por_norm0, lista)
+        return self._indices[chave]
+
+    def resolver(self, chave: str, sku: str) -> dict:
+        r = {"custo": None, "origem": None, "motivo": None, "sku_cadastro": None, "parecidos": []}
+        conta = self._contas.get(chave)
+        if not conta or not conta.get("achada"):
+            r["motivo"] = "Conta não encontrada em Contas conectadas."
+            return r
+        custos, por_norm, por_norm0, lista = self._indice(chave)
+        if not custos:
+            r["motivo"] = "A conta não tem custos cadastrados."
+            return r
+        u = (sku or "").strip().upper()
+        if u in custos:
+            r.update(custo=custos[u], origem="exato", sku_cadastro=u,
+                     produto=((conta.get("nomes") or {}).get(u) or ""))
+            return r
+        # Não achou igual: NÃO usa nenhum custo. Só procura pistas (SKUs parecidos da própria conta) para explicar.
+        n = _norm_sku(u); n0 = n.lstrip("0")
+        pistas = []
+        if n:
+            pistas += [s for s, _c in por_norm.get(n, [])]
+            if len(n0) >= 3:
+                pistas += [s for s, _c in por_norm0.get(n0, [])]
+        if len(n0) >= 4:
+            pistas += [s for s, n0c, _c in lista if n0c and len(n0c) >= 4 and (n0c.startswith(n0) or n0.startswith(n0c))]
+        if n0 and not pistas:
+            proximos = _parecidos(n0, [x[1] for x in lista if x[1]], n=3, cutoff=0.8)
+            pistas += [s for s, n0c, _c in lista if n0c in proximos]
+        pistas = list(dict.fromkeys(pistas))[:3]
+        r["parecidos"] = pistas
+        r["motivo"] = ("SKU não encontrado no cadastro da conta" +
+                       (f"; parecido no cadastro: {', '.join(f'{s} (R$ {custos[s]:.2f})' for s in pistas)} — confira se é o mesmo produto e corrija o SKU." if pistas else "."))
+        return r
+
+
+def _custos_dos_reversos(db: Session, linhas) -> "CatalogoCustos":
+    """Catálogo de custos das contas que aparecem nos reversos (só leitura; cada conta com o seu cadastro)."""
     from app.contas_util import achar_conta_por_nome
-    ids_conta, skus = {}, set()
+    ids_conta = {}
     for s in linhas:
         chave = s.conta_chave or (s.conta or "").lower()
         if chave not in ids_conta:
             conta = achar_conta_por_nome(db, chave)
             ids_conta[chave] = conta.id if conta else None
-        skus.update(_skus_do_reverso(s))
+    contas = {k: {"achada": i is not None, "custos": {}, "nomes": {}} for k, i in ids_conta.items()}
     validos = {i for i in ids_conta.values() if i}
-    if not validos or not skus:
-        return {}
-    por_id = {i: k for k, i in ids_conta.items() if i}
-    achados = {}
-    for c in (db.query(CustoSku).filter(CustoSku.conta_id.in_(validos), func.upper(CustoSku.sku).in_(skus)).all()):
-        if c.custo is not None:
-            achados[(por_id[c.conta_id], (c.sku or "").strip().upper())] = float(c.custo)
-    return achados
+    if validos:
+        por_id = {i: k for k, i in ids_conta.items() if i}
+        for c in db.query(CustoSku).filter(CustoSku.conta_id.in_(validos)).all():
+            if c.custo is not None and (c.sku or "").strip():
+                contas[por_id[c.conta_id]]["custos"][(c.sku or "").strip().upper()] = float(c.custo)
+                contas[por_id[c.conta_id]]["nomes"][(c.sku or "").strip().upper()] = (getattr(c, "nome_produto", None) or "").strip()
+    return CatalogoCustos(contas)
 
 
 def _skus_do_reverso(s: SolicitacaoCancelamento) -> list[str]:
@@ -722,11 +800,67 @@ def _skus_do_reverso(s: SolicitacaoCancelamento) -> list[str]:
     return [] if chave == SEM_SKU else [x.strip() for x in chave.split(",") if x.strip()]
 
 
-def _item_garantia(s: SolicitacaoCancelamento, custos: dict) -> dict:
+def _resolver_sku(custos, chave: str, sku: str) -> dict:
+    if hasattr(custos, "resolver"):
+        return custos.resolver(chave, sku)
+    v = custos.get((chave, sku))      # formato antigo {(conta, SKU): custo} (testes)
+    return {"custo": v, "origem": "exato" if v is not None else None, "motivo": None, "sku_cadastro": None, "parecidos": []}
+
+
+def calcular_custo_exato(s: SolicitacaoCancelamento, custos) -> dict:
+    """Custo EXATO do reverso no cadastro da PRÓPRIA conta (soma se houver vários SKUs; todos precisam existir)."""
     chave = s.conta_chave or (s.conta or "").lower()
     skus = _skus_do_reverso(s)
-    valores = [custos.get((chave, k)) for k in skus]
-    completo = bool(skus) and all(v is not None for v in valores)
+    res = [_resolver_sku(custos, chave, k) for k in skus]
+    completo = bool(skus) and all(r["custo"] is not None for r in res)
+    falhou = next((r for r in res if r["custo"] is None), None)
+    if not skus:
+        motivo = "Reverso sem SKU informado."
+    else:
+        motivo = (falhou or {}).get("motivo") if not completo else None
+    nomes = [r.get("produto") for r in res if r.get("produto")] if completo else []
+    return {"custo": round(sum(r["custo"] for r in res), 2) if completo else None,
+            "motivo": motivo, "produto": " + ".join(nomes) if nomes else ""}
+
+
+def fixar_custo_no_reverso(db: Session, s: SolicitacaoCancelamento, usuario_nome: Optional[str] = None,
+                           custos=None, substituir: bool = False) -> bool:
+    """
+    Grava no reverso o custo da garantia, buscado SÓ no cadastro de Custos da conta do reverso (valor exato).
+    Não mexe em custo informado manualmente (nem sobrescreve um já gravado, salvo `substituir`). Sem custo exato = não grava.
+    Não faz commit (quem chama decide). True se gravou.
+    """
+    from app.models import LogCustoReverso
+    if s.custo_garantia is not None and (s.custo_garantia_origem == "manual" or not substituir):
+        return False
+    if custos is None:
+        custos = _custos_dos_reversos(db, [s])
+    r = calcular_custo_exato(s, custos)
+    if r["custo"] is None:
+        return False
+    anterior = s.custo_garantia
+    s.custo_garantia = r["custo"]
+    s.custo_garantia_origem = "cadastro"
+    s.custo_garantia_por = usuario_nome
+    s.custo_garantia_em = datetime.utcnow()
+    s.custo_garantia_sku = _chave_sku(s)
+    s.custo_garantia_produto = r["produto"] or None
+    db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=anterior, custo_novo=r["custo"], origem="cadastro",
+                           usuario=usuario_nome, detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
+    return True
+
+
+def _item_garantia(s: SolicitacaoCancelamento, custos) -> dict:
+    gravado = getattr(s, "custo_garantia", None)
+    if gravado is not None:
+        custo, origem, motivo = round(float(gravado), 2), s.custo_garantia_origem or "cadastro", None
+        produto = s.custo_garantia_produto or ""
+        custo_por, custo_em = s.custo_garantia_por or "", _hora_br(s.custo_garantia_em)
+    else:
+        r = calcular_custo_exato(s, custos)
+        custo, motivo, produto = r["custo"], r["motivo"], r["produto"]
+        origem = "exato" if custo is not None else None
+        custo_por, custo_em = "", ""
     return {
         "id": s.id,
         "dia": _dia_br(s).isoformat() if s.criado_em else None,
@@ -734,9 +868,14 @@ def _item_garantia(s: SolicitacaoCancelamento, custos: dict) -> dict:
         "conta": s.conta or "—",
         "plataforma": PLATAFORMAS.get(s.plataforma, s.plataforma or ""),
         "numero_venda": s.numero_venda or "",
-        "sku": _chave_sku(s) if skus else "",
+        "sku": _chave_sku(s) if _skus_do_reverso(s) else "",
         "produto": ((s.produto_titulo or "") if (s.produto_titulo or "").strip().upper() != _chave_sku(s) else ""),
-        "custo": round(sum(valores), 2) if completo else None,
+        "custo": custo,
+        # "cadastro" (gravado do cadastro da conta) | "manual" (informado por admin/supervisor) | "exato" (ainda não gravado) | None
+        "custo_origem": origem,
+        "custo_motivo": motivo,                       # por que está sem custo
+        "custo_produto": produto,                     # nome do produto no cadastro de Custos (conferência)
+        "custo_por": custo_por, "custo_em": custo_em,
         "marcado_por": s.confirmado_por or "",
         "marcado_em": _hora_br(s.confirmado_em),
         "recebido_por": s.solicitado_por or "",
@@ -835,6 +974,55 @@ def garantias(request: Request, conta: Optional[str] = None, dias: Optional[int]
     return {"periodo": {"de": d1.isoformat(), "ate": d2.isoformat()}, "conta": conta or None, "contas": contas, **r}
 
 
+class CustoManualBody(BaseModel):
+    custo: float
+
+    @field_validator("custo")
+    @classmethod
+    def _positivo(cls, v):
+        if v is None or v != v or v <= 0 or v > 1_000_000:
+            raise ValueError("Informe um custo maior que zero.")
+        return round(float(v), 2)
+
+
+@router.post("/garantias/{solicitacao_id}/custo")
+def informar_custo_manual(solicitacao_id: int, corpo: CustoManualBody, request: Request, db: Session = Depends(get_db)):
+    """Custo informado à mão (só admin/supervisor), quando o SKU não está no cadastro. Fica marcado como manual,
+    com quem/quando, e NUNCA altera o cadastro de Custos do seller."""
+    from app.models import LogCustoReverso
+    usuario = usuario_gestor_reversos(request, db)
+    s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if s is None or _situacao_reverso(s) != GARANTIA:
+        raise HTTPException(status_code=404, detail="Garantia não encontrada.")
+    from app.routers.remessas_garantia import remessas_dos_reversos
+    if remessas_dos_reversos(db, [s.id]).get(s.id):
+        raise HTTPException(status_code=409, detail="Essa garantia já está numa remessa; o custo dela fica como foi enviado.")
+    anterior = s.custo_garantia
+    s.custo_garantia = corpo.custo
+    s.custo_garantia_origem = "manual"
+    s.custo_garantia_por = usuario.nome_exibicao
+    s.custo_garantia_em = datetime.utcnow()
+    s.custo_garantia_sku = _chave_sku(s)
+    db.add(LogCustoReverso(solicitacao_id=s.id, custo_anterior=anterior, custo_novo=corpo.custo, origem="manual",
+                           usuario=usuario.nome_exibicao, detalhe=f"SKU {s.custo_garantia_sku} · conta {s.conta or '—'}"))
+    db.commit()
+    return {"status": "ok", "id": s.id, "custo": corpo.custo, "custo_origem": "manual"}
+
+
+@router.post("/garantias/fixar-custos")
+def fixar_custos_antigos(request: Request, conta: Optional[str] = None, dias: Optional[int] = None,
+                         de: Optional[str] = None, ate: Optional[str] = None, galpao: Optional[int] = None,
+                         db: Session = Depends(get_db)):
+    """Grava o custo exato (cadastro da própria conta) nas garantias antigas ainda sem custo gravado."""
+    usuario = usuario_gestor_reversos(request, db)
+    linhas, _contas, _d1, _d2, _rev, todas = _garantias_selecionadas(db, conta, dias, de, ate, galpao)
+    pendentes = [s for s in linhas if s.custo_garantia is None]
+    custos = _custos_dos_reversos(db, pendentes)
+    gravadas = sum(1 for s in pendentes if fixar_custo_no_reverso(db, s, usuario.nome_exibicao, custos))
+    db.commit()
+    return {"status": "ok", "analisadas": len(pendentes), "gravadas": gravadas, "sem_custo": len(pendentes) - gravadas}
+
+
 @router.get("/garantias/excel")
 def garantias_excel(request: Request, conta: Optional[str] = None, dias: Optional[int] = None, de: Optional[str] = None,
                     ate: Optional[str] = None, galpao: Optional[int] = None, db: Session = Depends(get_db)):
@@ -870,12 +1058,14 @@ def garantias_excel(request: Request, conta: Optional[str] = None, dias: Optiona
 
     aba_g = wb.create_sheet("Garantias")
     aba_g.append(["Recebido em", "Conta", "Plataforma", "Nº da venda", "SKU", "Produto", "Custo (R$)", "Marcado por",
-                  "Marcado em", "Recebido no galpão por", "Observação", "Protocolo"])
+                  "Marcado em", "Recebido no galpão por", "Observação", "Protocolo", "Origem do custo", "Motivo (sem custo)"])
     for i in r["itens"]:
         aba_g.append([i["recebido_em"], i["conta"], i["plataforma"], i["numero_venda"], i["sku"], i["produto"],
                       i["custo"] if i["custo"] is not None else "sem custo", i["marcado_por"], i["marcado_em"],
-                      i["recebido_por"], i["observacao"], i["protocolo"]])
-    for n, larg in enumerate((17, 22, 14, 20, 18, 36, 12, 18, 17, 20, 34, 18), start=1):
+                      i["recebido_por"], i["observacao"], i["protocolo"],
+                      {"exato": "cadastro (SKU igual)", "cadastro": "cadastro da conta", "manual": "informado manualmente"}.get(i["custo_origem"] or "", ""),
+                      i["custo_motivo"] or ""])
+    for n, larg in enumerate((17, 22, 14, 20, 18, 36, 12, 18, 17, 20, 34, 18, 30, 60), start=1):
         aba_g.column_dimensions[aba_g.cell(row=1, column=n).column_letter].width = larg
 
     aba_s = wb.create_sheet("Por SKU")   # resumo para a nota: quantas unidades de cada SKU, por conta
