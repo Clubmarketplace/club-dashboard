@@ -1209,10 +1209,16 @@ def _candidatos_conferencia(custos, chave: str, sku: str, fortes: list) -> list:
 
 
 @router.get("/conferencia-sku")
-def conferencia_sku(request: Request, db: Session = Depends(get_db)):
-    """Grupos (conta + SKU digitado) das garantias sem custo, com os SKUs parecidos do cadastro da conta. Só leitura."""
+def conferencia_sku(request: Request, conta: Optional[str] = None, db: Session = Depends(get_db)):
+    """Grupos (conta + SKU digitado) das garantias sem custo, com os SKUs parecidos do cadastro da conta. Só leitura.
+    `conta` (chave da conta) mostra só aquela conta; `contas` lista todas com a quantidade, para o seletor."""
     usuario_gestor_reversos(request, db)
-    linhas = _garantias_sem_custo(db)
+    todas = _garantias_sem_custo(db)
+    por_conta = {}
+    for s in todas:
+        k = s.conta_chave or (s.conta or "").lower()
+        por_conta.setdefault(k, {"conta_chave": k, "conta": s.conta or "—", "qtd": 0})["qtd"] += 1
+    linhas = [s for s in todas if not conta or (s.conta_chave or (s.conta or "").lower()) == conta]
     custos = _custos_dos_reversos(db, linhas)
     grupos, sem_motivo_sku = {}, 0
     for s in linhas:
@@ -1235,17 +1241,18 @@ def conferencia_sku(request: Request, db: Session = Depends(get_db)):
         g["sugestao_unica"] = len(fortes) == 1
         saida.append(g)
     saida.sort(key=lambda g: (g["conta"].upper(), -g["qtd"], g["sku_digitado"]))
-    return {"total_garantias": len(linhas), "so_fixar_custo": sem_motivo_sku, "grupos": saida}
+    return {"total_garantias": len(linhas), "so_fixar_custo": sem_motivo_sku, "grupos": saida,
+            "contas": sorted(por_conta.values(), key=lambda c: c["conta"].upper())}
 
 
 @router.get("/conferencia-sku/excel")
-def conferencia_sku_excel(request: Request, db: Session = Depends(get_db)):
+def conferencia_sku_excel(request: Request, conta: Optional[str] = None, db: Session = Depends(get_db)):
     """Excel para a equipe conferir (31/10): uma aba 'Por conta e SKU' (grupos, sem repetição), uma aba 'Todos os reversos'
     (um por linha, ordenado por conta) e uma aba por conta com o cadastro de Custos dela (SKU, produto, custo) para consulta.
     Só leitura."""
     usuario_gestor_reversos(request, db)
     from openpyxl.styles import Font
-    linhas = _garantias_sem_custo(db)
+    linhas = [s for s in _garantias_sem_custo(db) if not conta or (s.conta_chave or (s.conta or "").lower()) == conta]
     custos = _custos_dos_reversos(db, linhas)
     wb = Workbook()
     aba_g = wb.active; aba_g.title = "Por conta e SKU"
@@ -1308,7 +1315,7 @@ def conferencia_sku_excel(request: Request, db: Session = Depends(get_db)):
         aba.freeze_panes = "A2"
     buffer = io.BytesIO(); wb.save(buffer); buffer.seek(0)
     return StreamingResponse(buffer, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                             headers={"Content-Disposition": f'attachment; filename="conferencia_sku_{datetime.now(FUSO_BR).strftime("%Y%m%d_%H%M")}.xlsx"'})
+                             headers={"Content-Disposition": f'attachment; filename="conferencia_sku_{(conta or "todas").replace(" ", "_")}_{datetime.now(FUSO_BR).strftime("%Y%m%d_%H%M")}.xlsx"'})
 
 
 def _br_data(iso: str) -> str:
