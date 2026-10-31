@@ -1175,3 +1175,79 @@ class ProdutoCadastro(Base):
     # Opcional, por produto -- preenchido na hora de solicitar o cadastro (tela da
     # equipe ou /cadastro-seller), pra quem for cadastrar já abrir a pasta certa.
     link_fotos = Column(String, nullable=True)
+
+
+# =============================================================================
+# 31/10/2026 -- REMESSAS DE GARANTIA PARA A FÁBRICA (Gestão de reversos, etapa 2)
+# =============================================================================
+class RemessaGarantia(Base):
+    """
+    Uma remessa de garantias enviada à fábrica com UMA nota fiscal (de uma só conta).
+
+    Ciclo: 'analise' (enviada, aguardando a fábrica) -> 'encerrada' (a fábrica respondeu: o que foi
+    ressarcido / virou crédito / foi trocado está nos campos abaixo e o RESTANTE é o prejuízo
+    `perdido`, calculado pelo servidor) ou 'cancelada' (lançada por engano; só admin).
+    O registro NUNCA é apagado: é o histórico "nota X foi para a fábrica Y, voltou tanto, perdeu tanto".
+    Toda mudança de estado grava uma linha em LogRemessaGarantia.
+    """
+
+    __tablename__ = "remessas_garantia"
+
+    id = Column(Integer, primary_key=True, index=True)
+    conta = Column(String, nullable=False)                       # nome exibido da conta
+    conta_chave = Column(String, nullable=False, index=True)     # mesma chave usada nos reversos
+    fabrica = Column(String, nullable=False, index=True)
+    nota_numero = Column(String, nullable=False, index=True)
+    data_emissao = Column(DateTime, nullable=True)               # só a data (meia-noite)
+    data_envio = Column(DateTime, nullable=False)                # só a data (meia-noite)
+    observacao_envio = Column(Text, nullable=True)
+    enviado_por = Column(String, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    status = Column(String, nullable=False, default="analise", index=True)   # analise | encerrada | cancelada
+    qtd_itens = Column(Integer, nullable=False, default=0)
+    valor_total = Column(Float, nullable=False, default=0.0)     # soma do custo dos itens (foto do momento do envio)
+
+    # Resposta da fábrica (preenchida ao encerrar)
+    ressarcido = Column(Float, nullable=False, default=0.0)      # dinheiro
+    credito = Column(Float, nullable=False, default=0.0)         # crédito com a fábrica
+    trocado = Column(Float, nullable=False, default=0.0)         # valor (custo) das peças trocadas
+    perdido = Column(Float, nullable=False, default=0.0)         # prejuízo = valor_total - (ressarcido+credito+trocado)
+    data_resposta = Column(DateTime, nullable=True)
+    respondido_por = Column(String, nullable=True)
+    observacao_resposta = Column(Text, nullable=True)
+    encerrada_em = Column(DateTime, nullable=True)               # UTC; base do filtro de período do prejuízo
+
+    itens = relationship("RemessaGarantiaItem", back_populates="remessa", cascade="all, delete-orphan")
+
+
+class RemessaGarantiaItem(Base):
+    """Um reverso (garantia) dentro de uma remessa. Um reverso só pode estar em UMA remessa ativa."""
+
+    __tablename__ = "remessas_garantia_itens"
+    __table_args__ = (UniqueConstraint("solicitacao_id", name="uq_remessa_item_solicitacao"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    remessa_id = Column(Integer, ForeignKey("remessas_garantia.id"), nullable=False, index=True)
+    solicitacao_id = Column(Integer, nullable=False, index=True)  # reverso (solicitacoes_cancelamento.id)
+    conta = Column(String, nullable=True)
+    numero_venda = Column(String, nullable=True)
+    sku = Column(String, nullable=True)
+    produto = Column(String, nullable=True)
+    custo = Column(Float, nullable=False, default=0.0)           # custo usado na remessa (base de custos ou informado)
+    custo_informado = Column(Boolean, nullable=False, default=False)   # True = digitado na hora (não estava na base)
+
+    remessa = relationship("RemessaGarantia", back_populates="itens")
+
+
+class LogRemessaGarantia(Base):
+    """Histórico (só recebe linhas novas, nunca é editado) de tudo que acontece com uma remessa."""
+
+    __tablename__ = "log_remessas_garantia"
+
+    id = Column(Integer, primary_key=True, index=True)
+    remessa_id = Column(Integer, nullable=False, index=True)
+    acao = Column(String, nullable=False)       # criada | encerrada | reaberta | cancelada
+    usuario = Column(String, nullable=True)
+    detalhe = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
