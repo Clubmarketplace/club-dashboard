@@ -442,6 +442,8 @@
   </div>
   <dialog id="dlg-conf" aria-labelledby="dlg-conf-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(980px,96vw)">
     <h2 id="dlg-conf-tit" style="margin:0 0 4px;font-size:17px">Conferência de SKUs das garantias sem custo</h2>
+    <div style="display:flex;gap:8px;align-items:center;margin:6px 0"><label for="conf-conta" style="font-weight:600">Conta:</label>
+      <select id="conf-conta" style="padding:7px 10px;border:1.5px solid var(--cmx-borda);border-radius:8px;min-width:240px"></select></div>
     <div class="peq" id="conf-info">Carregando…</div>
     <div class="peq" style="margin:6px 0">O sistema só sugere (SKUs parecidos do cadastro da PRÓPRIA conta). Confira o produto e o custo de cada sugestão e marque o que está certo. Nada é aplicado sem você confirmar. Garantias que já estão numa remessa para a fábrica (mesmo SKU em períodos diferentes) <b>não entram aqui nem mudam</b>: ficam com o SKU e o custo que foram enviados.</div>
     <div style="max-height:55vh;overflow:auto;border:1px solid var(--cmx-borda);border-radius:8px"><table style="width:100%">
@@ -1166,13 +1168,23 @@
 
     // ---- Conferência de SKUs (ferramenta temporária) ----
     let confGrupos = [];
+    let confConta = null;   // null = ainda não escolheu (abre na primeira conta); "" = todas
     async function abrirConferencia() {
       $("conf-msg").textContent = ""; $("conf-corpo").innerHTML = ""; $("conf-info").textContent = "Carregando…";
       if (!$("dlg-conf").open) $("dlg-conf").showModal();
       try {
-        const r = await fetch("/api/reversos-gestor/conferencia-sku", { cache: "no-store" });
+        const q = confConta ? "?conta=" + encodeURIComponent(confConta) : "";
+        const r = await fetch("/api/reversos-gestor/conferencia-sku" + q, { cache: "no-store" });
         if (!r.ok) throw new Error("erro " + r.status);
-        const d = await r.json(); confGrupos = d.grupos || [];
+        let d = await r.json();
+        if (confConta === null && (d.contas || []).length) {      // primeira abertura: já mostra só a primeira conta
+          confConta = d.contas[0].conta_chave; return abrirConferencia();
+        }
+        if (confConta === null) confConta = "";
+        confGrupos = d.grupos || [];
+        $("conf-conta").innerHTML = '<option value="">Todas as contas</option>' + (d.contas || []).map(c => `<option value="${esc(c.conta_chave)}" ${c.conta_chave === confConta ? "selected" : ""}>${esc(c.conta)} (${c.qtd})</option>`).join("");
+        $("conf-excel").href = "/api/reversos-gestor/conferencia-sku/excel" + (confConta ? "?conta=" + encodeURIComponent(confConta) : "");
+        $("conf-excel").textContent = confConta ? "⬇ Baixar Excel desta conta" : "⬇ Baixar Excel da conferência";
         $("conf-info").textContent = `${d.total_garantias} garantia(s) sem custo e fora de remessa · ${confGrupos.length} grupo(s) de SKU digitado${d.so_fixar_custo ? ` · ${d.so_fixar_custo} já têm SKU certo (use "Fixar custos das garantias antigas")` : ""}`;
         let contaAtual = "";
         $("conf-corpo").innerHTML = confGrupos.length ? confGrupos.map((g, n) => {
@@ -1184,7 +1196,8 @@
         }).join("") : '<tr><td colspan="7" class="vazio">Nenhuma garantia sem custo por SKU diferente. 🎉</td></tr>';
       } catch (e) { $("conf-info").textContent = "Não consegui carregar agora. Tente de novo."; }
     }
-    $("gar-conf").addEventListener("click", abrirConferencia);
+    $("gar-conf").addEventListener("click", () => { confConta = null; abrirConferencia(); });
+    $("conf-conta").addEventListener("change", () => { confConta = $("conf-conta").value; abrirConferencia(); });
     $("conf-fechar").addEventListener("click", () => $("dlg-conf").close());
     $("conf-unicas").addEventListener("click", () => document.querySelectorAll(".conf-chk").forEach(c => { if (confGrupos[+c.dataset.n].sugestao_unica) c.checked = true; }));
     $("conf-corpo").addEventListener("change", (e) => { const r = e.target.closest('input[type=radio]'); if (r) { const c = document.querySelector(`.conf-chk[data-n="${r.name.slice(5)}"]`); if (c) c.checked = true; } });
