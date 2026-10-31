@@ -36,7 +36,8 @@
 (function () {
   const PADRAO = { aba: "todos", conta: "", tipo: "", status: "todos", galpao: "", dias: "30", de: "", ate: "", plataforma: "", origem: "", busca: "" };
   const CAMPOS_FORM = ["conta", "tipo", "status", "galpao", "dias", "de", "ate", "plataforma", "origem"];
-  const NOMES_STATUS = { todos: "Todos", pendente: "Aguardando", confirmado: "Confirmados" };
+  const NOMES_STATUS = { todos: "Todos", pendente: "Aguardando", confirmado: "Confirmados",
+                         aguardando_aceite: "Aguardando aprovação do seller", aceito: "Aceitos pelo seller", recusado: "Recusados pelo seller" };
   const NOMES_PERIODO = { "1": "Hoje", "7": "Últimos 7 dias", "30": "Últimos 30 dias", personalizado: "Datas" };
   // Tipos de solicitação (fonte única no servidor: TIPOS em solicitacoes_cancelamento.py, via /opcoes).
   let TIPOS = [["cancelamento", "Cancelamento"], ["reputacao", "Reputação"]];
@@ -126,7 +127,7 @@
     const url = new URLSearchParams(location.search);
     const aplicado = Object.assign({}, PADRAO);
     Object.keys(PADRAO).forEach((k) => { if (url.get(k) !== null) aplicado[k] = url.get(k); });
-    if (url.get("status") === "confirmado" || url.get("status") === "pendente") aplicado.status = url.get("status");
+    if (NOMES_STATUS[url.get("status")]) aplicado.status = url.get("status");
     if (url.get("aba") === "aguardando") aplicado.status = "pendente";
     if (url.get("aba") === "confirmados") aplicado.status = "confirmado";
     if (!mostrarAtendimento || !ABAS.some((a) => a[0] === aplicado.aba)) aplicado.aba = "todos";
@@ -146,7 +147,7 @@
           <div class="bf2-campo conta"><label for="bf2-conta">Conta</label><select id="bf2-conta" data-f="conta"></select></div>
           ${mostrarTipo ? '<div class="bf2-campo"><label for="bf2-tipo">Tipo</label><select id="bf2-tipo" data-f="tipo"></select></div>' : ""}
           <div class="bf2-campo"><label for="bf2-status">Status</label>
-            <select id="bf2-status" data-f="status">${opcoes([["todos", "Todos"], ["pendente", "Aguardando"], ["confirmado", "Confirmados"]], rascunho.status)}</select></div>
+            <select id="bf2-status" data-f="status">${opcoes([["todos", "Todos"], ["pendente", "Aguardando"], ["confirmado", "Confirmados"], ["aguardando_aceite", "Aguardando aprovação do seller"], ["aceito", "Aceitos pelo seller"], ["recusado", "Recusados pelo seller"]], rascunho.status)}</select></div>
           <div class="bf2-campo"><label for="bf2-galpao">Galpão</label><select id="bf2-galpao" data-f="galpao"></select></div>
           <div class="bf2-campo"><label for="bf2-periodo">Período</label>
             <select id="bf2-periodo" data-f="dias">${opcoes([["1", "Hoje"], ["7", "Últimos 7 dias"], ["30", "Últimos 30 dias"], ["personalizado", "Escolher datas…"]], rascunho.dias)}</select></div>
@@ -207,7 +208,8 @@
       if (!contadores) return "–";
       if (k === "atendimento") return contadores.em_atendimento;
       if (k === "meus") return contadores.meus;
-      return { todos: contadores.total, pendente: contadores.pendentes, confirmado: contadores.confirmados }[aplicado.status];
+      return { todos: contadores.total, pendente: contadores.pendentes, confirmado: contadores.confirmados,
+               aguardando_aceite: contadores.aguardando_aceite, recusado: contadores.recusados, aceito: contadores.aceitos }[aplicado.status];
     }
     function pintarAbas() {
       if (!mostrarAtendimento) return;
@@ -341,6 +343,7 @@
       atualizarContadores(c, atendimento) {
         contadores = {
           total: c.total, pendentes: c.pendentes, confirmados: c.confirmados,
+          aguardando_aceite: c.aguardando_aceite || 0, recusados: c.recusados || 0, aceitos: c.aceitos || 0,
           em_atendimento: atendimento ? atendimento.em_atendimento : 0,
           meus: atendimento ? atendimento.meus : 0,
         };
