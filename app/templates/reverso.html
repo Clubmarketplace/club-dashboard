@@ -44,6 +44,10 @@
     .slot .mais { font-size:26px; line-height:1; color:var(--rev); }
     .slot:disabled { opacity:.5; cursor:not-allowed; }
     .mais-foto { border:1.5px dashed var(--rev); background:var(--rev-fundo); color:var(--rev); border-radius:12px; font:inherit; font-weight:600; font-size:13px; cursor:pointer; min-height:60px; }
+    .aviso-sku { font-size:12.5px; margin-top:6px; padding:6px 10px; border-radius:8px; line-height:1.4; }
+    .aviso-sku.aviso { background:#fff3d6; color:#8a4b00; }
+    .aviso-sku.ok { background:#e2f3ea; color:#1f6b45; }
+    .aviso-sku.info { color:var(--cmx-texto-suave); padding-left:0; }
     .contagem-fotos { font-size:12.5px; color:var(--cmx-texto-suave); margin-bottom:14px; }
     .botao-rev { background:var(--rev); color:#fff; border:none; border-radius:9px; padding:11px 20px; font:inherit; font-weight:600; font-size:14px; cursor:pointer; }
     .botao-rev:disabled { opacity:.5; cursor:not-allowed; }
@@ -349,6 +353,49 @@
         ? `Limite de ${MAX_ITENS} itens por venda atingido.`
         : `Use quando a mesma venda voltou com mais de uma unidade, cada uma com um problema. Até ${MAX_ITENS} itens por venda.`;
     }
+    // ---------- SKU com sugestões do cadastro da conta (31/10) ----------
+    // Ao digitar, aparecem os SKUs cadastrados (Custos) da conta escolhida, com o nome do produto. Escolher da lista grava o SKU
+    // exatamente igual ao do cadastro (o custo da garantia é buscado por ele). Se não existir no cadastro, aparece um aviso amarelo,
+    // mas o galpão ainda consegue salvar (produto novo não pode travar o recebimento). Só leitura; nunca mostra custo.
+    let seqDlSku = 0;
+    function nomeContaEscolhida() {
+      const c = (typeof contas !== "undefined" ? contas : []).find(x => chaveConta(x.nome) === chaveConta($("conta").value));
+      return c ? c.nome : "";
+    }
+    function ligarSugestoesSku(c) {
+      const campo = c.el.querySelector(".f-produto"); if (!campo) return;
+      const dl = document.createElement("datalist"); dl.id = "dl-sku-" + (++seqDlSku);
+      const aviso = document.createElement("div"); aviso.className = "aviso-sku"; aviso.hidden = true; aviso.setAttribute("role", "status");
+      campo.setAttribute("list", dl.id); campo.setAttribute("autocomplete", "off");
+      campo.insertAdjacentElement("afterend", dl); dl.insertAdjacentElement("afterend", aviso);
+      let timer = null, seq = 0;
+      const mostrar = (tipo, texto) => { aviso.hidden = !tipo; aviso.className = "aviso-sku " + (tipo || ""); aviso.textContent = texto || ""; };
+      async function consultar(normalizar) {
+        const minha = ++seq, texto = campo.value.trim(), conta = nomeContaEscolhida();
+        if (!texto) { dl.innerHTML = ""; return mostrar(null); }
+        if (!conta) { dl.innerHTML = ""; return mostrar("info", "Escolha a conta primeiro para ver os SKUs cadastrados dela."); }
+        try {
+          const r = await fetch("/api/solicitacoes-cancelamento/skus?conta=" + encodeURIComponent(conta) + "&q=" + encodeURIComponent(texto), { cache: "no-store" });
+          if (!r.ok) throw new Error("status " + r.status);
+          const d = await r.json();
+          if (minha !== seq) return;                        // resposta velha (a pessoa já digitou mais)
+          dl.innerHTML = (d.itens || []).map(i => `<option value="${esc(i.sku)}">${esc(i.nome)}</option>`).join("");
+          const igual = (d.itens || []).find(i => i.sku.trim().toUpperCase() === texto.toUpperCase());
+          if (d.exato) {
+            if (normalizar && igual && igual.sku !== campo.value) campo.value = igual.sku;   // grava igualzinho ao cadastro
+            return mostrar("ok", "✓ SKU do cadastro" + (igual && igual.nome ? ": " + igual.nome : ""));
+          }
+          if (!d.conta_achada) return mostrar("aviso", "Não encontrei os custos desta conta no sistema. Confira o SKU antes de salvar.");
+          if (!d.total_cadastrados) return mostrar("aviso", "Esta conta ainda não tem custos cadastrados. Confira o SKU antes de salvar.");
+          mostrar("aviso", d.itens && d.itens.length ? "Escolha o SKU certo na lista que aparece ao digitar." : "Este SKU não está nos custos desta conta. Confira antes de salvar.");
+        } catch (e) { console.error(e); mostrar(null); }    // falha de rede: não atrapalha o recebimento
+      }
+      const agendar = (normalizar) => { clearTimeout(timer); timer = setTimeout(() => consultar(normalizar), 250); };
+      campo.addEventListener("input", () => agendar(false));
+      campo.addEventListener("change", () => { clearTimeout(timer); consultar(true); });
+      c.consultarSku = () => agendar(false);
+    }
+
     function adicionarItem() {
       if (cartoes.length >= MAX_ITENS) return null;
       const el = $("tpl-item").content.firstElementChild.cloneNode(true);
@@ -356,6 +403,7 @@
       cartoes.push(c);
       $("itens").appendChild(el);
       c.aval = null;
+      if (MODO_GALPAO) ligarSugestoesSku(c);
       if (MODO_GALPAO) {
         el.querySelectorAll("[data-aval]").forEach(b => b.addEventListener("click", () => {
           c.aval = b.dataset.aval;
@@ -413,6 +461,8 @@
       $("lista-contas").innerHTML = contas.map(c => `<option value="${esc(c.nome)}"></option>`).join("");
     }
     carregarContas();
+    // trocar a conta refaz a conferência do SKU de todos os itens (cada conta tem o seu cadastro)
+    ["input", "change"].forEach(ev => $("conta").addEventListener(ev, () => cartoes.forEach(c => c.consultarSku && c.consultarSku())));
 
     // galpão lembra o último usado neste aparelho
     const CHAVE_GALPAO = "club_galpao_ultimo";

@@ -801,7 +801,7 @@
         + cartaoRg('data-abrir="garantias"', "var(--gar)", "Foram para garantia", A.gar, pct(A.gar, A.ret) + " dos retornos", "", "color:#8a4b00")
         + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total em garantia", brl(A.custo), "custo dos produtos em garantia", semCusto, din + ";color:#8a4b00")
         + cartaoRg('data-abrir="garantias"', "#8896a5", "Parado no galpão", brl(parValor), plural(parQtd, "garantia ainda não enviada", "garantias ainda não enviadas"), "", din)
-        + cartaoRg('data-rem="todas"', "#7c5cbf", "Enviado para a fábrica", brl(custoEnv), plural(env, "item", "itens") + " · " + pct(custoEnv, A.custo) + " do valor em garantia", "", din + ";color:#5b3fa0")
+        + cartaoRg('data-rem="todas"', "#7c5cbf", "Enviado para a fábrica", brl(custoEnv), plural(env, "item", "itens") + (A.custo > 0 ? " · " + pct(custoEnv, A.custo) + " do valor em garantia" : ""), "", din + ";color:#5b3fa0")
         + cartaoRg('data-rem="analise"', "#7c5cbf", "Em análise na fábrica", ag ? brl(ag.valor) : "—", ag ? plural(ag.remessas, "remessa", "remessas") + " · " + plural(ag.itens, "item", "itens") : "", "", din + ";color:#5b3fa0")
         + cartaoRg('data-rem="encerrada"', "var(--voltou)", "Recuperado pela fábrica", pp ? brl(pp.recuperado) : "—", respondido > 0 ? pct(pp.recuperado, respondido) + " do que a fábrica respondeu" : "nenhuma resposta no período", "", din + ";color:#1f6b45")
         + cartaoRg('data-rem="encerrada"', "var(--nao)", "Perdido (prejuízo)", pp ? brl(pp.perdido) : "—", respondido > 0 ? pct(pp.perdido, respondido) + " do que a fábrica respondeu" : "nenhuma resposta no período", "", din + ";color:" + (pp && pp.perdido > 0 ? "#a83232" : "inherit"));
@@ -1083,7 +1083,7 @@
            <button type="button" class="btn pri" id="sel-enviar" style="background:#5b3fa0;border-color:#5b3fa0">Enviar para a fábrica</button>
            <button type="button" class="btn" id="sel-limpar">Limpar</button>`
         : (livres.length ? `<span class="peq" style="font-size:13px">Marque as garantias que vão juntas na mesma nota. </span><button type="button" class="btn" id="sel-todas">Marcar todas as ${livres.length} ainda no galpão</button>`
-                         : '<span class="peq" style="font-size:13px">Todas as garantias desta conta já foram enviadas à fábrica.</span>');
+                         : (itens.length ? '<span class="peq" style="font-size:13px">Todas as garantias desta conta já foram enviadas à fábrica.</span>' : ''));
     }
     $("t-gar").addEventListener("change", (e) => {
       const c = e.target.closest(".chk-env"); if (!c) return;
