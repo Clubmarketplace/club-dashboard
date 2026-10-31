@@ -62,6 +62,27 @@ PLATAFORMAS_VALIDAS = set(PLATAFORMAS)
 GALPOES_VALIDOS = set(GALPOES)
 ORIGENS_VALIDAS = {"seller", "logistica", "equipe", "publico"}
 
+# --- Aceite do seller (31/10) ---
+ACEITE_AGUARDANDO, ACEITE_ACEITO, ACEITE_RECUSADO = "aguardando", "aceito", "recusado"
+
+
+def precisa_aceite(origem: Optional[str], tipo: Optional[str]) -> bool:
+    """Cancelamento pedido por galpão/logística/equipe (supervisor, admin) só segue depois do aceite do seller."""
+    return origem in ("logistica", "equipe") and (tipo or TIPO_PADRAO) == TIPO_PADRAO
+
+
+# Quem pode AUTORIZAR no lugar do seller o cancelamento pedido pelo galpão (31/10).
+PAPEIS_QUE_AUTORIZAM = ("admin", "supervisor")
+
+
+def bloqueio_por_aceite(s) -> Optional[str]:
+    """Mensagem de erro se o operador NÃO pode tratar este pedido por causa do aceite; None se está liberado."""
+    if s.aceite_status == ACEITE_AGUARDANDO:
+        return "Aguardando o seller aceitar este cancelamento. O operador só pode assumir depois do aceite (ou da autorização de um supervisor/admin, no pedido do galpão)."
+    if s.aceite_status == ACEITE_RECUSADO:
+        return "O seller recusou este cancelamento" + (f": {s.aceite_motivo}" if s.aceite_motivo else ".")
+    return None
+
 # Tipos de solicitação. Mesmo fluxo (pedir -> operador resolve -> confirma
 # com protocolo); só muda o que está sendo pedido. A chave é o que fica
 # gravado no banco -- NUNCA mudar uma chave existente, só o nome.
@@ -512,6 +533,14 @@ def _serializar(s: SolicitacaoCancelamento, mapa_contas: Optional[dict] = None,
         "garantia": (s.resultado_reverso == RESULTADO_GARANTIA) if s.resultado_reverso else None,
         "liberado_por": s.liberado_por,
         "liberado_em": s.liberado_em.isoformat() if s.liberado_em else None,
+        # Aceite do seller (31/10): nulo = não exige. Quando "aguardando"/"recusado" o operador não pode tratar.
+        "aceite_status": s.aceite_status,
+        "aceite_por": s.aceite_por,
+        "aceite_papel": s.aceite_papel,
+        "pode_autorizar": s.aceite_status == ACEITE_AGUARDANDO and s.origem == "logistica",   # a tela só oferece o botão a admin/supervisor
+        "aceite_em": s.aceite_em.isoformat() if s.aceite_em else None,
+        "aceite_motivo": s.aceite_motivo,
+        "bloqueado_aceite": bloqueio_por_aceite(s) is not None,
         "checklist": _checklist_de(s),
         "checklist_itens": itens_do_checklist(s.checklist_json),
         "observacao_resultado": s.observacao_resultado,
@@ -742,6 +771,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
                 numero_venda=numero,
                 motivo=(item.motivo or "").strip() or ("Retorno recebido no galpão" if eh_reverso else ""),
                 origem=origem,
+                aceite_status=(ACEITE_AGUARDANDO if precisa_aceite(origem, corpo.tipo) else None),
                 solicitado_por=usuario.nome_exibicao if usuario else None,
                 galpao=galpao,
                 sku=(item.sku if corpo.plataforma != "mercado_livre" else None),
@@ -767,6 +797,7 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
         for s in criadas:
             registrar_evento(db, s.id, "registrou", usuario=usuario, nome=None if usuario else "Link público",
                              detalhe=f"{TIPOS[corpo.tipo]} · {rotulo_origem} · motivo: {s.motivo}"
+                                     + (" · aguardando o aceite do seller" if s.aceite_status == ACEITE_AGUARDANDO else "")
                                      + (f" · aspecto: {ESTADOS_CHEGADA[s.estado_chegada]}" if s.estado_chegada else "")
                                      + (f" · motivo do reverso: {MOTIVOS_REVERSO[s.motivo_reverso]}" if s.motivo_reverso else "")
                                      + (f" ({DETALHES_ENVIO_ERRADO[s.detalhe_envio]})" if s.detalhe_envio else "")
@@ -886,7 +917,7 @@ def listar_contas(request: Request, db: Session = Depends(get_db)):
 def buscar_solicitacoes(
     request: Request,
     db: Session = Depends(get_db),
-    status: str = "pendente",          # pendente | confirmado | todos
+    status: str = "pendente",          # pendente | confirmado | aguardando_aceite | aceito | recusado | todos
     galpao: Optional[int] = None,
     conta: Optional[str] = None,       # nome ou chave -- comparado pela chave
     plataforma: Optional[str] = None,
@@ -969,20 +1000,34 @@ def buscar_solicitacoes(
     # Contadores do "em atendimento" (entre os pendentes, com os filtros acima).
     ativo = and_(SolicitacaoCancelamento.em_atendimento_por_id.isnot(None), SolicitacaoCancelamento.em_atendimento_desde.isnot(None))
     pendentes_q = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None))
+    # 31/10: aceite do seller. "liberado" = o operador pode tratar (não exige aceite, ou já foi aceito).
+    liberado = or_(SolicitacaoCancelamento.aceite_status.is_(None), SolicitacaoCancelamento.aceite_status == ACEITE_ACEITO)
+    n_aguardando_aceite = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None),
+                                          SolicitacaoCancelamento.aceite_status == ACEITE_AGUARDANDO).count()
+    n_recusados = consulta.filter(SolicitacaoCancelamento.aceite_status == ACEITE_RECUSADO).count()
+    n_aceitos = consulta.filter(SolicitacaoCancelamento.aceite_status == ACEITE_ACEITO).count()
     contadores_atendimento = {
-        "livres": pendentes_q.filter(~ativo).count(),
+        "livres": pendentes_q.filter(~ativo, liberado).count(),
         "em_atendimento": pendentes_q.filter(ativo).count(),
         "meus": pendentes_q.filter(ativo, SolicitacaoCancelamento.em_atendimento_por_id == usuario.id).count(),
     }
     if atendimento == "livres":
-        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ~ativo)
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ~ativo, liberado)
     elif atendimento == "em_atendimento":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ativo)
     elif atendimento == "meus":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), ativo, SolicitacaoCancelamento.em_atendimento_por_id == usuario.id)
 
     if status == "pendente":
-        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None))
+        # recusado pelo seller está encerrado: não fica na fila de "Aguardando"
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None),
+                                   or_(SolicitacaoCancelamento.aceite_status.is_(None), SolicitacaoCancelamento.aceite_status != ACEITE_RECUSADO))
+    elif status == "aguardando_aceite":
+        consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.is_(None), SolicitacaoCancelamento.aceite_status == ACEITE_AGUARDANDO)
+    elif status == "aceito":
+        consulta = consulta.filter(SolicitacaoCancelamento.aceite_status == ACEITE_ACEITO)
+    elif status == "recusado":
+        consulta = consulta.filter(SolicitacaoCancelamento.aceite_status == ACEITE_RECUSADO)
     elif status == "confirmado":
         consulta = consulta.filter(SolicitacaoCancelamento.confirmado_por.isnot(None))
 
@@ -1017,14 +1062,16 @@ def buscar_solicitacoes(
     mapa_contas = _mapa_contas_conhecidas(db)
     return {
         "itens": [_serializar(s, mapa_contas, com_fotos=False, n_fotos=n) for s, n in linhas],
-        "contadores": {"total": total, "confirmados": confirmados, "pendentes": total - confirmados},
+        "contadores": {"total": total, "confirmados": confirmados, "pendentes": total - confirmados - n_recusados,
+                       "aguardando_aceite": n_aguardando_aceite, "recusados": n_recusados, "aceitos": n_aceitos},
         "total_filtrado": total_filtrado,
         "pagina": pagina,
         "por_pagina": por_pagina,
         "tem_mais": pagina * por_pagina < total_filtrado,
         "buscando_todo_historico": bool(termo),
         "atendimento": contadores_atendimento,
-        "eu": {"id": usuario.id, "nome": usuario.nome_exibicao},
+        "eu": {"id": usuario.id, "nome": usuario.nome_exibicao, "papel": usuario.papel,
+               "pode_autorizar": usuario.papel in PAPEIS_QUE_AUTORIZAM},
     }
 
 
@@ -1080,6 +1127,8 @@ def confirmar_solicitacao(solicitacao_id: int, corpo: ConfirmarSolicitacaoBody, 
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
+    if bloqueio_por_aceite(solicitacao):
+        raise HTTPException(status_code=409, detail=bloqueio_por_aceite(solicitacao))
     if (solicitacao.tipo or TIPO_PADRAO) == TIPO_REVERSO:
         raise HTTPException(status_code=400, detail="Reverso é concluído com o resultado do tratamento (botão Concluir reverso).")
     if not corpo.sem_protocolo and not corpo.protocolo:
@@ -1293,6 +1342,43 @@ def _operador_que_confirma(request: Request, db: Session):
     return usuario
 
 
+@router.post("/{solicitacao_id}/autorizar")
+def autorizar_no_lugar_do_seller(solicitacao_id: int, request: Request, db: Session = Depends(get_db)):
+    """
+    Admin e supervisor AUTORIZAM o cancelamento pedido pelo GALPÃO sem esperar o seller (31/10).
+    Só vale para pedido da logística que está "aguardando" (o pedido da equipe só o seller libera).
+    Fica registrado como "autorizado por <nome> (<papel>)", separado do aceite do próprio seller.
+    UPDATE condicional: se o seller aceitar/recusar no mesmo instante, só um dos dois vale.
+    """
+    usuario = auth.usuario_atual(request, db)
+    if usuario is None:
+        raise HTTPException(status_code=401, detail="Sessão expirada -- faça login de novo.")
+    if usuario.papel not in PAPEIS_QUE_AUTORIZAM:
+        raise HTTPException(status_code=403, detail="Só admin e supervisor autorizam um cancelamento no lugar do seller.")
+    s = db.query(SolicitacaoCancelamento).filter(SolicitacaoCancelamento.id == solicitacao_id).first()
+    if s is None or s.excluido_em is not None:
+        raise HTTPException(status_code=404, detail="Solicitação não encontrada")
+    if s.aceite_status != ACEITE_AGUARDANDO:
+        raise HTTPException(status_code=409, detail="Este pedido não está aguardando aceite (já foi decidido).")
+    if s.origem != "logistica":
+        raise HTTPException(status_code=403, detail="Só o pedido feito pelo galpão pode ser autorizado pela equipe. Este precisa do aceite do seller.")
+    r = db.execute(
+        update(SolicitacaoCancelamento)
+        .where(SolicitacaoCancelamento.id == solicitacao_id, SolicitacaoCancelamento.aceite_status == ACEITE_AGUARDANDO,
+               SolicitacaoCancelamento.confirmado_por.is_(None))
+        .values(aceite_status=ACEITE_ACEITO, aceite_por=usuario.nome_exibicao, aceite_por_id=usuario.id,
+                aceite_papel=usuario.papel, aceite_em=datetime.utcnow(), aceite_motivo=None)
+        .execution_options(synchronize_session=False))
+    if r.rowcount != 1:
+        db.rollback()
+        raise HTTPException(status_code=409, detail="O seller acabou de decidir este pedido. Atualize a tela.")
+    registrar_evento(db, solicitacao_id, "autorizou", usuario=usuario,
+                     detalhe=f"Cancelamento do galpão autorizado por {usuario.nome_exibicao} ({usuario.papel}) no lugar do seller")
+    db.commit()
+    db.refresh(s)
+    return {"status": "autorizado", "aceite_status": s.aceite_status, "aceite_por": s.aceite_por, "aceite_papel": s.aceite_papel}
+
+
 @router.post("/{solicitacao_id}/assumir")
 def assumir_atendimento(solicitacao_id: int, request: Request, corpo: Optional[AssumirBody] = None, db: Session = Depends(get_db)):
     """
@@ -1310,10 +1396,14 @@ def assumir_atendimento(solicitacao_id: int, request: Request, corpo: Optional[A
     antes_por = antes.em_atendimento_por if antes else None
     antes_por_id = antes.em_atendimento_por_id if antes else None
     antes_ativo = bool(antes and _dados_atendimento(antes)["em_atendimento_por_id"])
+    if antes is not None and bloqueio_por_aceite(antes):
+        raise HTTPException(status_code=409, detail=bloqueio_por_aceite(antes))
 
     condicao = [
         SolicitacaoCancelamento.id == solicitacao_id,
         SolicitacaoCancelamento.confirmado_por.is_(None),
+        # 31/10: confere o aceite também no próprio UPDATE (corrida com a recusa/aceite do seller)
+        or_(SolicitacaoCancelamento.aceite_status.is_(None), SolicitacaoCancelamento.aceite_status == ACEITE_ACEITO),
     ]
     if not forcar:
         condicao.append(or_(
@@ -1520,6 +1610,8 @@ def verificar_status_agora(solicitacao_id: int, request: Request, db: Session = 
         raise HTTPException(status_code=404, detail="Solicitação não encontrada")
     if solicitacao.confirmado_por:
         raise HTTPException(status_code=400, detail="Essa solicitação já foi confirmada antes.")
+    if bloqueio_por_aceite(solicitacao):
+        raise HTTPException(status_code=409, detail=bloqueio_por_aceite(solicitacao))
     if solicitacao.plataforma != "mercado_livre":
         raise HTTPException(status_code=400, detail="Verificação automática só existe pra Mercado Livre.")
     if (solicitacao.tipo or TIPO_PADRAO) != TIPO_PADRAO:
