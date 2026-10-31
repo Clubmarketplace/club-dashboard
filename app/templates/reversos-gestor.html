@@ -322,7 +322,7 @@
         <details class="painel" id="sec-garantias">
           <summary>Lista das garantias, com custo e fotos <span class="sub-sum" id="gar-info"></span></summary>
           <div class="nota-tab" style="margin:-4px 0 10px">Reversos que a equipe marcou como garantia, com o custo de cada produto (cadastro de custos da conta). O período e o galpão são os do filtro lá em cima; a conta é a escolhida no resumo.</div>
-          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-conf" title="Ferramenta temporária: confere as garantias sem custo e sugere o SKU certo do cadastro da conta">Conferência de SKUs</button> <button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
+          <div class="barra" style="margin-bottom:12px"><span class="espaco"></span><button type="button" class="btn" id="gar-fixar" title="Grava o custo exato do cadastro da conta nas garantias antigas que ainda não têm custo gravado">Fixar custos das garantias antigas</button> <a class="btn pri" id="gar-excel" href="#">⬇ Baixar Excel das garantias</a></div>
           <div id="sel-bar" hidden></div>
           <div class="tabela-rolagem"><table>
             <thead><tr><th>Fábrica</th><th>Recebido em</th><th>Conta</th><th>Nº da venda</th><th>SKU</th><th>Produto</th><th class="n">Custo</th><th>Marcado por</th><th>Fotos</th></tr></thead>
@@ -440,22 +440,6 @@
       </main>
     </div>
   </div>
-  <dialog id="dlg-conf" aria-labelledby="dlg-conf-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(980px,96vw)">
-    <h2 id="dlg-conf-tit" style="margin:0 0 4px;font-size:17px">Conferência de SKUs das garantias sem custo</h2>
-    <div style="display:flex;gap:8px;align-items:center;margin:6px 0"><label for="conf-conta" style="font-weight:600">Conta:</label>
-      <select id="conf-conta" style="padding:7px 10px;border:1.5px solid var(--cmx-borda);border-radius:8px;min-width:240px"></select></div>
-    <div class="peq" id="conf-info">Carregando…</div>
-    <div class="peq" style="margin:6px 0">O sistema só sugere (SKUs parecidos do cadastro da PRÓPRIA conta). Confira o produto e o custo de cada sugestão e marque o que está certo. Nada é aplicado sem você confirmar. Garantias que já estão numa remessa para a fábrica (mesmo SKU em períodos diferentes) <b>não entram aqui nem mudam</b>: ficam com o SKU e o custo que foram enviados.</div>
-    <div style="max-height:55vh;overflow:auto;border:1px solid var(--cmx-borda);border-radius:8px"><table style="width:100%">
-      <thead><tr><th></th><th>Conta</th><th>SKU digitado</th><th class="n">Reversos</th><th>Período</th><th>Vendas</th><th>No cadastro da conta (SKU · produto · custo)</th></tr></thead>
-      <tbody id="conf-corpo"></tbody></table></div>
-    <div id="conf-msg" style="font-size:13px;min-height:18px;margin-top:8px"></div>
-    <div style="display:flex;justify-content:space-between;gap:8px;margin-top:10px;flex-wrap:wrap">
-      <span><button type="button" class="btn" id="conf-unicas">Marcar todas as sugestões únicas</button> <a class="btn" href="/api/reversos-gestor/conferencia-sku/excel" id="conf-excel">⬇ Baixar Excel da conferência</a></span>
-      <span><button type="button" class="btn" id="conf-fechar">Fechar</button>
-      <button type="button" class="btn" id="conf-aplicar" style="background:#1f2d3d;color:#fff">Aplicar marcadas</button></span>
-    </div>
-  </dialog>
   <dialog id="dlg-sku" aria-labelledby="dlg-sku-tit" style="border:none;border-radius:14px;padding:20px 22px;width:min(540px,94vw)">
     <h2 id="dlg-sku-tit" style="margin:0 0 4px;font-size:17px">Corrigir SKU</h2>
     <div class="peq" id="dlg-sku-atual"></div>
@@ -1165,60 +1149,6 @@
       } catch (err) { erro.style.display = "block"; erro.textContent = err.message; }
       finally { $("dlg-salvar").disabled = false; }
     });
-
-    // ---- Conferência de SKUs (ferramenta temporária) ----
-    let confGrupos = [];
-    let confConta = null;   // null = ainda não escolheu (abre na primeira conta); "" = todas
-    async function abrirConferencia() {
-      $("conf-msg").textContent = ""; $("conf-corpo").innerHTML = ""; $("conf-info").textContent = "Carregando…";
-      if (!$("dlg-conf").open) $("dlg-conf").showModal();
-      try {
-        const q = confConta ? "?conta=" + encodeURIComponent(confConta) : "";
-        const r = await fetch("/api/reversos-gestor/conferencia-sku" + q, { cache: "no-store" });
-        if (!r.ok) throw new Error("erro " + r.status);
-        let d = await r.json();
-        if (confConta === null && (d.contas || []).length) {      // primeira abertura: já mostra só a primeira conta
-          confConta = d.contas[0].conta_chave; return abrirConferencia();
-        }
-        if (confConta === null) confConta = "";
-        confGrupos = d.grupos || [];
-        $("conf-conta").innerHTML = '<option value="">Todas as contas</option>' + (d.contas || []).map(c => `<option value="${esc(c.conta_chave)}" ${c.conta_chave === confConta ? "selected" : ""}>${esc(c.conta)} (${c.qtd})</option>`).join("");
-        $("conf-excel").href = "/api/reversos-gestor/conferencia-sku/excel" + (confConta ? "?conta=" + encodeURIComponent(confConta) : "");
-        $("conf-excel").textContent = confConta ? "⬇ Baixar Excel desta conta" : "⬇ Baixar Excel da conferência";
-        $("conf-info").textContent = `${d.total_garantias} garantia(s) sem custo e fora de remessa · ${confGrupos.length} grupo(s) de SKU digitado${d.so_fixar_custo ? ` · ${d.so_fixar_custo} já têm SKU certo (use "Fixar custos das garantias antigas")` : ""}`;
-        let contaAtual = "";
-        $("conf-corpo").innerHTML = confGrupos.length ? confGrupos.map((g, n) => {
-          const opc = g.candidatos.length ? g.candidatos.map(c => `<label style="display:flex;gap:6px;align-items:baseline;white-space:normal;padding:1px 0${c.forte ? ";font-weight:600" : ""}"><input type="radio" name="conf-${n}" value="${esc(c.sku)}" ${g.sugestao_unica && c.forte ? "checked" : ""} /> <span><b>${esc(c.sku)}</b> ${esc(c.nome)} · <b>${brl(c.custo)}</b>${c.forte ? "" : ' <span class="peq">(aproximado)</span>'}</span></label>`).join("")
-            : '<span class="peq">Nada parecido no cadastro dessa conta. Use "Corrigir SKU" na Lista das garantias, ou informe o custo.</span>';
-          const cab = g.conta !== contaAtual ? `<tr><td colspan="7" style="background:#eef2f6;font-weight:700;padding:8px 10px">${esc(g.conta)}</td></tr>` : "";
-          contaAtual = g.conta;
-          return cab + `<tr data-n="${n}"><td><input type="checkbox" class="conf-chk" data-n="${n}" ${g.candidatos.length ? "" : "disabled"} /></td><td>${esc(g.conta)}</td><td><b>${esc(g.sku_digitado)}</b></td><td class="n">${g.qtd}</td><td class="peq">${g.de ? (g.de === g.ate ? dataBRano(g.de) : dataBRano(g.de) + " a " + dataBRano(g.ate)) : "—"}</td><td class="peq">${g.vendas.map(esc).join(", ")}</td><td>${opc}</td></tr>`;
-        }).join("") : '<tr><td colspan="7" class="vazio">Nenhuma garantia sem custo por SKU diferente. 🎉</td></tr>';
-      } catch (e) { $("conf-info").textContent = "Não consegui carregar agora. Tente de novo."; }
-    }
-    $("gar-conf").addEventListener("click", () => { confConta = null; abrirConferencia(); });
-    $("conf-conta").addEventListener("change", () => { confConta = $("conf-conta").value; abrirConferencia(); });
-    $("conf-fechar").addEventListener("click", () => $("dlg-conf").close());
-    $("conf-unicas").addEventListener("click", () => document.querySelectorAll(".conf-chk").forEach(c => { if (confGrupos[+c.dataset.n].sugestao_unica) c.checked = true; }));
-    $("conf-corpo").addEventListener("change", (e) => { const r = e.target.closest('input[type=radio]'); if (r) { const c = document.querySelector(`.conf-chk[data-n="${r.name.slice(5)}"]`); if (c) c.checked = true; } });
-    $("conf-aplicar").addEventListener("click", async () => {
-      const itens = [];
-      document.querySelectorAll(".conf-chk:checked").forEach(c => {
-        const g = confGrupos[+c.dataset.n], r = document.querySelector(`input[name="conf-${c.dataset.n}"]:checked`);
-        if (r) itens.push({ conta_chave: g.conta_chave, sku_antigo: g.sku_digitado, sku_novo: r.value });
-      });
-      if (!itens.length) { $("conf-msg").style.color = "#a83232"; $("conf-msg").textContent = "Marque ao menos um grupo e escolha o SKU correto."; return; }
-      if (!window.confirm(`Aplicar a correção em ${itens.length} grupo(s)? Fica registrado com o seu nome.`)) return;
-      $("conf-aplicar").disabled = true;
-      try {
-        const j = await post("/api/reversos-gestor/conferencia-sku/aplicar", { itens });
-        $("conf-msg").style.color = j.falhas.length ? "#8a4b00" : "#1f6b45";
-        $("conf-msg").textContent = `${j.corrigidos} reverso(s) corrigido(s)${j.falhas.length ? ` · ${j.falhas.length} não puderam ser corrigidos (${j.falhas.slice(0, 3).map(f => f.venda + ": " + f.erro).join("; ")})` : ""}.`;
-        carregarGarantias(); await abrirConferenciaSemFechar();
-      } catch (err) { $("conf-msg").style.color = "#a83232"; $("conf-msg").textContent = err.message || "Não consegui aplicar."; }
-      finally { $("conf-aplicar").disabled = false; }
-    });
-    async function abrirConferenciaSemFechar() { const m = $("conf-msg").textContent, c = $("conf-msg").style.color; await abrirConferencia(); $("conf-msg").textContent = m; $("conf-msg").style.color = c; }
 
     // ---- Corrigir SKU (admin/supervisor): só SKUs do cadastro da conta do reverso; registra quem fez ----
     function infoSkuCorrigido(i) {
