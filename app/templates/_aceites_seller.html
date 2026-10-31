@@ -1,0 +1,82 @@
+{# Caixa de ACEITE do seller (31/10): cancelamentos pedidos pelo galpão/equipe. Incluída em "Minhas solicitações" e em "Nova solicitação". #}
+  <!-- 31/10: cancelamentos pedidos pelo galpão/equipe que esperam o ACEITE do seller (o operacional só segue depois) -->
+  <style>
+    #aceites-box { border:2px solid #e0a43a; background:#fff8ea; border-radius:14px; padding:16px 18px; margin:0 0 18px; }
+    #aceites-box h2 { margin:0 0 4px; font-size:17px; color:#8a4f00; }
+    #aceites-box .ac-sub { font-size:13px; color:#6b5a3a; margin:0 0 12px; }
+    #aceites-box .ac-item { background:#fff; border:1px solid #ecd9b0; border-radius:10px; padding:12px 14px; margin-top:10px; display:flex; gap:14px; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; }
+    #aceites-box .ac-info { flex:1 1 280px; min-width:0; font-size:14px; }
+    #aceites-box .ac-info b { font-size:15px; }
+    #aceites-box .ac-peq { font-size:12.5px; color:#5b6776; margin-top:3px; }
+    #aceites-box .ac-acoes { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+    #aceites-box button { font:inherit; font-size:14px; font-weight:700; border-radius:9px; padding:9px 16px; cursor:pointer; border:1.5px solid #c8d0d9; background:#fff; min-height:42px; }
+    #aceites-box button.ok { background:#1f8a58; border-color:#1f8a58; color:#fff; }
+    #aceites-box button.no { color:#9b1c1c; border-color:#e3b3b3; }
+    #aceites-box button:disabled { opacity:.5; cursor:not-allowed; }
+    #aceites-box input { font:inherit; font-size:14px; padding:9px 10px; border:1.5px solid #c8d0d9; border-radius:9px; min-width:220px; }
+    #aceites-box .ac-erro { color:#9b1c1c; font-size:13px; margin-top:6px; }
+    #aceites-box .ac-hist { margin-top:12px; font-size:12.5px; color:#5b6776; }
+  </style>
+  <section id="aceites-box" hidden aria-label="Cancelamentos aguardando o seu aceite">
+    <h2 id="ac-titulo">Cancelamentos aguardando o seu aceite</h2>
+    <p class="ac-sub">O galpão ou a equipe pediu o cancelamento destas vendas. O atendimento só começa depois que você <b>aceitar</b>. Se não for para cancelar, recuse e explique o motivo.</p>
+    <div id="ac-lista"></div>
+    <div class="ac-hist" id="ac-hist"></div>
+  </section>
+  <script>
+  (function () {
+    var box = document.getElementById("aceites-box"); if (!box) return;
+    var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+    var pode = false;
+    function tempo(h) { return h == null ? "" : h < 1 ? "há menos de 1 h" : h < 24 ? "há " + Math.floor(h) + " h" : "há " + Math.floor(h / 24) + " dia(s)"; }
+    function desenhar(d) {
+      pode = !!d.pode_decidir;
+      var ag = d.aguardando || [], dec = d.decididos || [];
+      box.hidden = !ag.length && !dec.length;
+      box.style.display = ag.length ? "" : "none";   // sem pendência a faixa some (o histórico fica no painel de solicitações)
+      document.getElementById("ac-titulo").textContent = ag.length === 1 ? "1 cancelamento aguardando o seu aceite" : ag.length + " cancelamentos aguardando o seu aceite";
+      document.getElementById("ac-lista").innerHTML = ag.map(function (s) {
+        return '<div class="ac-item" data-id="' + s.id + '"><div class="ac-info"><b>Venda ' + esc(s.numero_venda) + '</b> · ' + esc(s.plataforma_nome) +
+          '<div>Motivo: ' + esc(s.motivo) + '</div>' + (s.sku || s.produto ? '<div class="ac-peq">' + esc(s.sku || "") + (s.produto ? " · " + esc(s.produto) : "") + '</div>' : "") +
+          '<div class="ac-peq">Pedido por ' + esc(s.origem) + (s.pedido_por ? " (" + esc(s.pedido_por) + ")" : "") + ' · ' + tempo(s.horas_esperando) + '</div>' +
+          '<div class="ac-erro" hidden></div></div>' +
+          '<div class="ac-acoes"><button type="button" class="ok" data-a="aceitar" ' + (pode ? "" : "disabled") + '>Aceitar cancelamento</button>' +
+          '<button type="button" class="no" data-a="recusar" ' + (pode ? "" : "disabled") + '>Recusar</button></div></div>';
+      }).join("");
+    }
+    async function carregar() {
+      try {
+        var r = await fetch("/api/meus-aceites", { cache: "no-store" }); if (!r.ok) return; desenhar(await r.json());
+        if (window.atualizarBadgeAceites) window.atualizarBadgeAceites();
+      } catch (e) { console.error(e); }
+    }
+    async function enviar(id, acao, corpo) {
+      var r = await fetch("/api/meus-aceites/" + id + "/" + acao, { method: "POST", headers: { "Content-Type": "application/json" }, body: corpo ? JSON.stringify(corpo) : "{}" });
+      var j = {}; try { j = await r.json(); } catch (e) {}
+      if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Não consegui registrar agora (erro " + r.status + ").");
+    }
+    box.addEventListener("click", async function (e) {
+      var b = e.target.closest("button[data-a=aceitar], button[data-a=recusar]"); if (!b) return;
+      var item = b.closest(".ac-item"), id = item.dataset.id, erro = item.querySelector(".ac-erro"); erro.hidden = true;
+      try {
+        if (b.dataset.a === "aceitar") { b.disabled = true; await enviar(id, "aceitar"); await carregar(); return; }
+        // Recusar: abre o campo do motivo no próprio cartão (sem janela do navegador)
+        var area = item.querySelector(".ac-acoes");
+        area.innerHTML = '<input type="text" maxlength="300" placeholder="Motivo da recusa (ex.: já despachei)" aria-label="Motivo da recusa" />' +
+          '<button type="button" class="no" data-a="confirmar-recusa">Confirmar recusa</button><button type="button" data-a="voltar">Voltar</button>';
+        area.querySelector("input").focus();
+      } catch (err) { erro.hidden = false; erro.textContent = err.message; b.disabled = false; }
+    });
+    box.addEventListener("click", async function (e) {
+      var b = e.target.closest("button[data-a=confirmar-recusa], button[data-a=voltar]"); if (!b) return;
+      var item = b.closest(".ac-item"), id = item.dataset.id, erro = item.querySelector(".ac-erro"); erro.hidden = true;
+      if (b.dataset.a === "voltar") { carregar(); return; }
+      var motivo = item.querySelector("input").value.trim();
+      if (motivo.length < 3) { erro.hidden = false; erro.textContent = "Escreva o motivo da recusa."; return; }
+      b.disabled = true;
+      try { await enviar(id, "recusar", { motivo: motivo }); await carregar(); }
+      catch (err) { erro.hidden = false; erro.textContent = err.message; b.disabled = false; }
+    });
+    carregar(); setInterval(carregar, 60000);
+  })();
+  </script>

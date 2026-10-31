@@ -261,6 +261,7 @@
   </div>
 
   <div id="tela-formulario">
+  {% if seller_logado %}{% include "_aceites_seller.html" %}{% endif %}
     <div class="topo-form">
       <div>
         <h1 id="titulo-form">{% if logistica_logado %}Solicitar cancelamento{% else %}Nova solicitação{% endif %}</h1>

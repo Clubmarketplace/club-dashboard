@@ -128,6 +128,8 @@
       </header>
 
   <main>
+    {# 31/10: cancelamentos pedidos pelo galpão/equipe que esperam o ACEITE do seller (alerta + Aceitar/Recusar) #}
+    {% include "_aceites_seller.html" %}
     {% set cadastros_feitos = cadastros|selectattr("status", "equalto", "cadastrado")|list %}
     <div class="resumo">
       <div class="item"><div class="valor" id="resumo-total">{{ solicitacoes|length + cadastros|length }}</div><div class="rotulo">Total</div></div>
@@ -174,6 +176,8 @@
                 {% elif s.origem == "logistica" %}<span class="status-pendente">Retornou ao galpão, aguardando a equipe</span>
                 {% else %}<span class="status-pendente">Aguardando a equipe</span>{% endif %}
               {% elif s.confirmado_por %}<span class="status-confirmado">✓ {{ 'Resolvido' if reputacao else 'Cancelado' }}</span>
+              {% elif s.aceite_status == "aguardando" %}<span class="status-pendente" style="color:#8a4f00">⏳ Aguardando o seu aceite</span>
+              {% elif s.aceite_status == "recusado" %}<span class="status-pendente" style="color:#9b1c1c">✗ Você recusou</span>
               {% else %}<span class="status-pendente">Pendente</span>{% endif %}
               </div>
               <div class="sol-seta" aria-hidden="true">▸</div>
