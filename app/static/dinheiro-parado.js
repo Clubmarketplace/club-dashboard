@@ -42,8 +42,9 @@
   function relatorio(el, c, conta, geradoEm) {
     c = c || { galpao_valor: 0, fabrica_valor: 0, parado_total: 0, galpao_qtd: 0, galpao_garantia: 0, galpao_quebrado: 0, galpao_sem_custo: 0,
                fabrica_qtd: 0, analise_qtd: 0, analise_valor: 0, analise_sem_custo: 0, recuperado: 0, perdido: 0, itens: [] };
-    const mini = (cor, titulo, valor, sub) => `<div style="flex:1 1 150px;min-width:150px;background:#fff;border:1px solid #dfe5ec;border-top:4px solid ${cor};border-radius:10px;padding:10px 12px">
-      <div style="font-size:12px;color:${COR.suave}">${titulo}</div><div style="font-size:20px;font-weight:700;color:${COR.texto}">${valor}</div><div style="font-size:11.5px;color:${COR.suave}">${sub}</div></div>`;
+    // 31/10: a QUANTIDADE vem em destaque (número grande) ao lado do título; o valor logo abaixo.
+    const mini = (cor, titulo, valor, sub, qtd) => `<div style="flex:1 1 150px;min-width:150px;background:#fff;border:1px solid #dfe5ec;border-top:4px solid ${cor};border-radius:10px;padding:10px 12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><span style="font-size:12px;color:${COR.suave}">${titulo}</span><span style="font-size:24px;font-weight:800;line-height:1;color:${cor}" title="quantidade">${qtd}</span></div><div style="font-size:20px;font-weight:700;color:${COR.texto}">${valor}</div><div style="font-size:11.5px;color:${COR.suave}">${sub}</div></div>`;
     const semCusto = c.galpao_sem_custo ? `<div style="font-size:12px;color:#a83232;margin-top:6px">${c.galpao_sem_custo} item(ns) no galpão ainda sem custo cadastrado ficam de fora do valor.</div>` : "";
     const linhas = (c.itens || []).map(i => `<tr style="border-bottom:1px solid #e8edf2">
       <td style="padding:7px 8px"><span style="font-weight:600;color:${i.tipo_chave === "garantia" ? "#8a4b00" : "#a83232"}">${esc(i.tipo || "—")}</span></td>
@@ -57,17 +58,18 @@
       <div style="display:flex;flex-wrap:wrap;gap:14px;margin:12px 0;align-items:stretch">
         <div style="flex:2 1 300px;background:#fff;border:1px solid #dfe5ec;border-left:6px solid ${COR.galpao};border-radius:12px;padding:16px 18px">
           <div style="font-size:13px;color:${COR.suave}">Dinheiro parado no seu estoque</div>
-          <div style="font-size:34px;font-weight:800;color:#8a4b00;line-height:1.15">${brl(c.parado_total)}</div>
+          <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap"><div style="font-size:34px;font-weight:800;color:#8a4b00;line-height:1.15">${brl(c.parado_total)}</div>
+            <div style="background:#fdf1e0;border-radius:12px;padding:4px 14px;text-align:center"><div style="font-size:34px;font-weight:800;color:#8a4b00;line-height:1.1">${(c.galpao_qtd || 0) + (c.fabrica_qtd || 0)}</div><div style="font-size:11.5px;color:#8a4b00">${((c.galpao_qtd || 0) + (c.fabrica_qtd || 0)) === 1 ? "item parado" : "itens parados"}</div></div></div>
           <div style="font-size:13px;margin-top:4px">${brl(c.galpao_valor)} no galpão · ${brl(c.fabrica_valor)} aguardando a fábrica</div>
           <div style="font-size:12.5px;color:${COR.suave};margin-top:2px">${c.galpao_garantia} defeito de fábrica · ${c.galpao_quebrado} avariado/quebrado (no galpão) · ${c.fabrica_qtd} já enviados à fábrica</div>${semCusto}</div>
         <div style="flex:1 1 200px;background:#fff;border:1px solid #dfe5ec;border-radius:12px;padding:10px 14px">
           <div style="height:150px;position:relative"><canvas id="dp-rosca" role="img" aria-label="Divisão do dinheiro parado"></canvas></div></div></div>
       <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:12px">
-        ${mini(COR.analise, "Em análise pela equipe", brl(c.analise_valor), c.analise_qtd + " reverso(s) aguardando decisão" + (c.analise_sem_custo ? ` · ${c.analise_sem_custo} sem custo` : ""))}
-        ${mini(COR.galpao, "No galpão", brl(c.galpao_valor), c.galpao_qtd + " item(ns) sem poder vender")}
-        ${mini(COR.fabrica, "Aguardando a fábrica", brl(c.fabrica_valor), c.fabrica_qtd + " item(ns) enviados")}
-        ${mini(COR.ok, "Recuperado", brl(c.recuperado), "ressarcido, troca ou crédito")}
-        ${mini(COR.perdido, "Perdido", brl(c.perdido), "fábrica não substituiu")}</div>
+        ${mini(COR.analise, "Em análise pela equipe", brl(c.analise_valor), c.analise_qtd + " reverso(s) aguardando decisão" + (c.analise_sem_custo ? ` · ${c.analise_sem_custo} sem custo` : ""), c.analise_qtd)}
+        ${mini(COR.galpao, "No galpão", brl(c.galpao_valor), c.galpao_qtd + " item(ns) sem poder vender", c.galpao_qtd)}
+        ${mini(COR.fabrica, "Aguardando a fábrica", brl(c.fabrica_valor), c.fabrica_qtd + " item(ns) enviados", c.fabrica_qtd)}
+        ${mini(COR.ok, "Recuperado", brl(c.recuperado), "ressarcido, troca ou crédito", "")}
+        ${mini(COR.perdido, "Perdido", brl(c.perdido), "fábrica não substituiu", "")}</div>
       <div style="background:#fff;border:1px solid #dfe5ec;border-radius:12px;padding:12px 14px">
         <div style="font-weight:700;margin-bottom:6px">Produtos parados</div>
         <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -79,7 +81,7 @@
     const vQuebrado = gal.filter(i => i.tipo_chave !== "garantia").reduce((s, i) => s + (i.custo || 0), 0);
     if (cv && window.Chart && c.parado_total > 0) {
       novoGrafico(cv, { type: "doughnut",
-        data: { labels: ["Defeito de fábrica (galpão)", "Avariado/quebrado (galpão)", "Na fábrica"],
+        data: { labels: [`Defeito de fábrica (galpão) · ${c.galpao_garantia}`, `Avariado/quebrado (galpão) · ${c.galpao_quebrado}`, `Na fábrica · ${c.fabrica_qtd}`],
                 datasets: [{ data: [vGar, vQuebrado, c.fabrica_valor], backgroundColor: [COR.galpao, "#c24141", COR.fabrica] }] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%",
                    plugins: { legend: { position: "right", labels: { boxWidth: 10, font: { size: 11 } } }, tooltip: { callbacks: { label: it => `${it.label}: ${brl(it.raw)}` } } } } });
