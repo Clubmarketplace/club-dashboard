@@ -434,7 +434,7 @@ async def exigir_login(request: Request, call_next):
     _ROTAS_PERMITIDAS_PARA_SELLER = {
         "/dashboard",
         "/meus-cancelamentos", "/meus-cancelamentos/fotos", "/meus-cancelamentos/foto", "/logout",
-        "/meus-reversos", "/api/meus-reversos/painel", "/api/meus-reversos/garantias",  # painel de reversos da própria conta (31/10)
+        "/meus-reversos", "/api/meus-reversos/painel", "/api/meus-reversos/garantias", "/api/meus-reversos/reversos", "/api/meus-reversos/skus",  # painel de reversos da própria conta (31/10)
         "/minhas-mensagens",  # mensagens pós-venda da própria conta (28/10)
         "/solicitar-cancelamento", "/api/solicitacoes-cancelamento", "/api/solicitacoes-cancelamento/contas",
         "/reverso",  # avisar um reverso (26/10) -- a conta é sempre a do próprio seller
@@ -457,6 +457,8 @@ async def exigir_login(request: Request, call_next):
 
     _seller_liberado = (
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
+        or caminho.startswith("/api/meus-reversos/reversos/")  # corrigir SKU (o servidor confere a conta)
+        or caminho.startswith("/api/meus-reversos/garantias/")  # ajustar custo (idem)
         or caminho.startswith("/api/meu-pos-venda/")  # conversas de pós-venda: o servidor confere a conta em cada rota
         or caminho.startswith("/api/painel/custos/")
         or caminho.startswith("/api/painel/taxas")

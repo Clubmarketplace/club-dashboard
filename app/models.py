@@ -526,6 +526,12 @@ class SolicitacaoCancelamento(Base):
     custo_garantia_em = Column(DateTime, nullable=True)
     custo_garantia_sku = Column(String, nullable=True)
     custo_garantia_produto = Column(String, nullable=True)   # nome do produto no cadastro (para conferência)
+    custo_garantia_papel = Column(String, nullable=True)     # perfil de quem informou/gravou (admin, supervisor, seller...)
+    # Correção de SKU (31/10): o SKU original digitado fica guardado; quem corrigiu, com que perfil e quando.
+    sku_original = Column(String, nullable=True)
+    sku_corrigido_por = Column(String, nullable=True)
+    sku_corrigido_papel = Column(String, nullable=True)
+    sku_corrigido_em = Column(DateTime, nullable=True)
 
 
 class SolicitacaoEvento(Base):
@@ -1273,4 +1279,8 @@ class LogCustoReverso(Base):
     origem = Column(String, nullable=True)      # cadastro | manual
     usuario = Column(String, nullable=True)
     detalhe = Column(Text, nullable=True)
+    usuario_id = Column(Integer, nullable=True)  # quem estava logado
+    papel = Column(String, nullable=True)        # perfil dele (admin, supervisor, seller...)
+    sku_anterior = Column(String, nullable=True)  # só nas correções de SKU
+    sku_novo = Column(String, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)

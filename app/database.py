@@ -127,6 +127,17 @@ _COLUNAS_ADICIONAIS = {
         "custo_garantia_em": "TIMESTAMP",
         "custo_garantia_sku": "VARCHAR",
         "custo_garantia_produto": "VARCHAR",
+        "custo_garantia_papel": "VARCHAR",
+        "sku_original": "VARCHAR",
+        "sku_corrigido_por": "VARCHAR",
+        "sku_corrigido_papel": "VARCHAR",
+        "sku_corrigido_em": "TIMESTAMP",
+    },
+    "log_custos_reverso": {
+        "usuario_id": "INTEGER",
+        "papel": "VARCHAR",
+        "sku_anterior": "VARCHAR",
+        "sku_novo": "VARCHAR",
     },
     "variaveis_conta": {
         # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,
