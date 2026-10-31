@@ -353,8 +353,8 @@
         <div class="cartoes">
           <div class="cartao clicavel" data-grupo="recebidos" style="--cor:var(--rev)"><div class="valor" id="k-rec">—</div><div class="rotulo">Retornaram</div><div class="sub" id="k-rec-sub"></div><div class="var" id="v-rec"></div></div>
           <div class="cartao clicavel" data-grupo="voltaram" style="--cor:var(--voltou)"><div class="valor" id="k-volt">—</div><div class="rotulo">No estoque</div><div class="sub">a equipe liberou para venda</div><div class="var" id="v-volt"></div></div>
-          <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Foram para a fábrica</div><div class="sub">garantia + sem condição de venda</div><div class="var" id="v-gar"></div></div>
-          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Sem condição de venda</div><div class="sub">avariado, faltando peça etc. (fora garantia)</div><div class="var" id="v-nao"></div></div>
+          <div class="cartao clicavel" data-grupo="garantias" style="--cor:var(--gar)"><div class="valor" id="k-gar">—</div><div class="rotulo">Sem condição de venda</div><div class="sub">defeito de fábrica + avariado/quebrado</div><div class="var" id="v-gar"></div></div>
+          <div class="cartao clicavel" data-grupo="nao_voltaram" style="--cor:var(--nao)"><div class="valor" id="k-nao">—</div><div class="rotulo">Descartado / em negociação</div><div class="sub">não seguem para a fábrica</div><div class="var" id="v-nao"></div></div>
           <div class="cartao clicavel" data-grupo="aguardando" style="--cor:var(--aguarda)"><div class="valor" id="k-ag">—</div><div class="rotulo">Aguardando a equipe</div><div class="sub">dos recebidos no período</div></div>
           <div class="cartao" style="--cor:var(--voltou)"><div class="valor" id="k-pct">—</div><div class="rotulo">% que voltou ao estoque</div><div class="sub">dos já conferidos pela equipe</div></div>
           <div class="cartao" style="--cor:var(--rev)"><div class="valor" id="k-tempo">—</div><div class="rotulo">Tempo médio até a equipe decidir</div><div class="sub" id="k-tempo-sub">do recebimento à decisão</div></div>
@@ -495,7 +495,7 @@
     const $ = (id) => document.getElementById(id);
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
     const COR = { voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f", garantia:"#b45309" };
-    const COR_RESULTADO = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    const COR_RESULTADO = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#5b7083", outro:"#9aa5b1", aguardando:"#d98e2f" };
     let dias = 7, modoCustom = false, graficoDia = null, graficoRes = null;
     const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
     const dataBRano = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
@@ -523,8 +523,8 @@
         type: "bar",
         data: { labels: d.por_dia.map(x => dataBR(x.data)), datasets: [
           { label: "No estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: COR.voltou },
-          { label: "Foram para a fábrica", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
-          { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
+          { label: "Sem condição de venda", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: COR.garantia },
+          { label: "Descartado / em negociação", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: COR.nao },
           { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: COR.aguarda, borderRadius: 4 },
         ] },
         options: { responsive: true, maintainAspectRatio: false, animation: false, interaction: { mode: "index" },
@@ -827,8 +827,8 @@
       $("rg-numeros").innerHTML =
         cartaoRg('data-abrir="recebidos"', "var(--rev)", "Retornaram", A.ret, "no período · clique para ver")
         + cartaoRg('data-abrir="voltaram"', "var(--voltou)", "Voltaram ao estoque", A.vol, pct(A.vol, A.ret) + " dos retornos", "", "color:#1f6b45")
-        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Foram para a fábrica", A.gar, pct(A.gar, A.ret) + " dos retornos · " + A.fg + " garantia · " + A.fs + " sem condição de venda", "", "color:#8a4b00")
-        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total para a fábrica", brl(A.custo), "custo dos produtos (garantia + sem condição)", semCusto, din + ";color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Sem condição de venda", A.gar, pct(A.gar, A.ret) + " dos retornos · " + A.fg + " defeito de fábrica · " + A.fs + " avariado/quebrado", "", "color:#8a4b00")
+        + cartaoRg('data-abrir="garantias"', "var(--gar)", "Valor total sem condição de venda", brl(A.custo), "custo dos produtos (defeito + avariado/quebrado)", semCusto, din + ";color:#8a4b00")
         + cartaoRg('data-abrir="garantias"', "#8896a5", "Parado no galpão", brl(parValor), plural(parQtd, "garantia ainda não enviada", "garantias ainda não enviadas"), "", din)
         + cartaoRg('data-rem="todas"', "#7c5cbf", "Enviado para a fábrica", brl(custoEnv), plural(env, "item", "itens") + (A.custo > 0 ? " · " + pct(custoEnv, A.custo) + " do valor em garantia" : ""), "", din + ";color:#5b3fa0")
         + cartaoRg('data-rem="analise"', "#7c5cbf", "Em análise na fábrica", ag ? brl(ag.valor) : "—", ag ? plural(ag.remessas, "remessa", "remessas") + " · " + plural(ag.itens, "item", "itens") : "", "", din + ";color:#5b3fa0")
@@ -872,8 +872,8 @@
         // Cada fatia é clicável: abre a lista daqueles reversos (da conta escolhida). "Outros" foi separado em
         // "sem condição de venda" e "aguardando a equipe" para ficar claro o que são.
         const nao = c ? c.nao_voltaram || 0 : 0, agu = c ? c.aguardando || 0 : 0;
-        const fatias = [["No estoque", A.vol, COR.voltou, "voltaram"], ["Foram para a fábrica", A.gar, COR.garantia, "garantias"],
-                        ["Sem condição de venda", nao, COR.nao, "nao_voltaram"], ["Aguardando a equipe", agu, COR.aguarda, "aguardando"]].filter(f => f[1] > 0);
+        const fatias = [["No estoque", A.vol, COR.voltou, "voltaram"], ["Sem condição de venda", A.gar, COR.garantia, "garantias"],
+                        ["Descartado / em negociação", nao, COR.nao, "nao_voltaram"], ["Aguardando a equipe", agu, COR.aguarda, "aguardando"]].filter(f => f[1] > 0);
         $("rg-destino-tit").textContent = `Para onde foram os ${A.ret} retorno${A.ret === 1 ? "" : "s"} de ${garConta}`;
         $("rg-destino").innerHTML = fatias.map(f => `<div class="rg-link" data-abrir="${f[3]}" role="button" tabindex="0" style="flex:${f[1]} 1 0;background:${f[2]};cursor:pointer" title="${esc(f[0])}: ${f[1]} · clique para ver"></div>`).join("");
         $("rg-destino-leg").innerHTML = fatias.length

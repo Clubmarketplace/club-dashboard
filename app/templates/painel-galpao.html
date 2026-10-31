@@ -257,7 +257,7 @@
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
     const COR = { canc:"#5b6773", rev:"#0f766e", voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f" };
     // cor de cada resultado do reverso (voltou = verde, não voltou = tons de vermelho, aguardando = âmbar)
-    const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    const COR_RESULTADO = { voltou:"#2f9e63", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#5b7083", outro:"#9aa5b1", aguardando:"#d98e2f" };
     let dias = 7, graficoDia = null, graficoRes = null;
     // minutos -> "45 min", "3 h 20 min", "2 d 4 h" (igual ao Excel)
     function tempo(m) {

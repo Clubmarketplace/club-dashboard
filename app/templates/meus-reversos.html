@@ -153,7 +153,7 @@
       <h2>Meus reversos <span class="peq" id="gar-info"></span></h2>
       <div class="abas" id="abas" role="group" aria-label="Situação do reverso">
         <button type="button" data-s="todos" aria-pressed="true">Todos <span class="peq" data-c="todos"></span></button>
-        <button type="button" data-s="garantia" aria-pressed="false">Para a fábrica <span class="peq" data-c="garantia"></span></button>
+        <button type="button" data-s="garantia" aria-pressed="false">Sem condição de venda <span class="peq" data-c="garantia"></span></button>
         <button type="button" data-s="voltou" aria-pressed="false">Voltaram ao estoque <span class="peq" data-c="voltou"></span></button>
         <button type="button" data-s="outros" aria-pressed="false">Outros <span class="peq" data-c="outros"></span></button>
         <button type="button" data-s="aguardando" aria-pressed="false">Aguardando a equipe <span class="peq" data-c="aguardando"></span></button>
@@ -193,7 +193,7 @@
     const dCurto = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
     const nItens = (n) => n + (n === 1 ? " item" : " itens");
     const pct = (p) => p == null ? "—" : p + "%";
-    const COR_RES = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#6b3a3a", outro:"#9aa5b1", aguardando:"#d98e2f" };
+    const COR_RES = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#5b7083", outro:"#9aa5b1", aguardando:"#d98e2f" };
     const INICIO = "2026-10-01";   // começo do módulo de reversos ("Tudo")
     let dias = 7, gDia = null, gRes = null, gVal = null, gVr = null, vez = 0, abertas = new Set();
     const hojeBR = () => new Date().toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
@@ -221,8 +221,8 @@
       $("cartoes").innerHTML =
         cartao("#0f766e", c.retornaram, "Retornaram", "no período")
         + cartao("var(--voltou)", c.voltaram, "Voltaram ao estoque", pct(c.pct_voltaram) + " dos retornos")
-        + cartao("var(--gar)", c.garantias, "Foram para a fábrica", pct(c.pct_garantias) + " dos retornos · " + (c.fab_garantia || 0) + " garantia · " + (c.fab_sem_condicao || 0) + " sem condição")
-        + cartao("var(--gar)", brl(c.valor_garantia), "Valor total para a fábrica", "custo dos produtos (garantia + sem condição)", true)
+        + cartao("var(--gar)", c.garantias, "Sem condição de venda", pct(c.pct_garantias) + " dos retornos · " + (c.fab_garantia || 0) + " defeito de fábrica · " + (c.fab_sem_condicao || 0) + " avariado/quebrado")
+        + cartao("var(--gar)", brl(c.valor_garantia), "Valor total sem condição de venda", "custo dos produtos (defeito + avariado/quebrado)", true)
         + cartao("var(--galpao)", brl(c.parado_valor), "Parado no galpão", c.parado_qtd + " garantia" + (c.parado_qtd === 1 ? "" : "s") + " ainda não enviada" + (c.parado_qtd === 1 ? "" : "s"), true)
         + cartao("var(--fab)", brl(c.enviado_valor), "Enviado para a fábrica", nItens(c.enviado_itens) + " · " + pct(c.pct_enviado) + " do valor em garantia", true)
         + cartao("var(--fab)", brl(v.em_analise.valor), "Em análise na fábrica", v.em_analise.remessas + " remessa" + (v.em_analise.remessas === 1 ? "" : "s") + " · " + nItens(v.em_analise.itens), true)
@@ -234,14 +234,18 @@
         plugins: { legend: { position: "bottom" } } });
       nova("g-dia", "bar", { labels: d.por_dia.map(x => dCurto(x.data)), datasets: [
         { label: "Voltaram ao estoque", data: d.por_dia.map(x => x.voltou), backgroundColor: "#2f9e63" },
-        { label: "Foram para a fábrica", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: "#b45309" },
-        { label: "Sem condição de venda", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: "#c24141" },
-        { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: "#d98e2f" } ] }, opBase(true));
+        { label: "Sem condição de venda", data: d.por_dia.map(x => x.garantia || 0), backgroundColor: "#b45309" },
+        { label: "Descartado / em negociação", data: d.por_dia.map(x => x.nao_voltou), backgroundColor: "#c24141" },
+        { label: "Aguardando a equipe", data: d.por_dia.map(x => x.aguardando), backgroundColor: "#d98e2f" } ] },
+        Object.assign(opBase(true), { onClick: (_e, els) => { if (els.length) irParaAba(["voltou", "garantia", "outros", "aguardando"][els[0].datasetIndex]); },
+                                      onHover: (e, els) => { e.native.target.style.cursor = els.length ? "pointer" : "default"; } }));
       const res = d.resultado;
       if (res.length) {
         nova("g-res", "doughnut", { labels: res.map(x => x.nome), datasets: [{ data: res.map(x => x.quantidade), backgroundColor: res.map(x => COR_RES[x.chave] || "#9aa5b1"), borderWidth: 2, borderColor: "#fff" }] },
-          { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } } });
-        $("leg-res").innerHTML = res.map(x => `<div><i style="background:${COR_RES[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}<b>${x.quantidade}</b></div>`).join("");
+          { responsive: true, maintainAspectRatio: false, animation: false, cutout: "58%", plugins: { legend: { display: false } },
+            onClick: (_e, els) => { if (els.length) irParaAba(abaDaChave(res[els[0].index].chave)); },
+            onHover: (e, els) => { e.native.target.style.cursor = els.length ? "pointer" : "default"; } });
+        $("leg-res").innerHTML = res.map(x => `<div data-aba="${abaDaChave(x.chave)}" style="cursor:pointer" title="Clique para ver a lista"><i style="background:${COR_RES[x.chave] || "#9aa5b1"}"></i>${esc(x.nome)}<b>${x.quantidade}</b></div>`).join("");
       } else { if (gRes) { gRes.destroy(); gRes = null; } $("leg-res").innerHTML = '<div class="vazio">Nenhum reverso neste período.</div>'; }
 
       const moeda = Object.assign(opBase(true), { plugins: { legend: { position: "bottom" }, tooltip: { callbacks: { label: (x) => " " + x.dataset.label + ": " + brl(x.parsed.y) } } } });
@@ -277,6 +281,14 @@
       return r.json();
     }
     let aba = "todos";
+    // Gráficos clicáveis (31/10): levam para a tabela "Meus reversos" já filtrada na situação clicada.
+    const FABRICA = ["garantia", "avariado", "faltando_peca", "diferente", "outro"];
+    function abaDaChave(chave) { return chave === "voltou" ? "voltou" : chave === "aguardando" ? "aguardando" : FABRICA.includes(chave) ? "garantia" : "outros"; }
+    function irParaAba(a) {
+      if (!a) return; aba = a; carregar();
+      const alvo = $("abas"); if (alvo && alvo.scrollIntoView) alvo.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    document.addEventListener("click", (e) => { const el = e.target.closest("#leg-res [data-aba]"); if (el) irParaAba(el.dataset.aba); });
     async function carregar() {
       const minha = ++vez, p = paramsPeriodo();
       const pr = new URLSearchParams(p); pr.set("situacao", aba);
