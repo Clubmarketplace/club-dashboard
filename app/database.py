@@ -121,6 +121,12 @@ _COLUNAS_ADICIONAIS = {
         "liberado_em": "TIMESTAMP",
         "checklist_json": "TEXT",
         "observacao_resultado": "TEXT",
+        "custo_garantia": "DOUBLE PRECISION",
+        "custo_garantia_origem": "VARCHAR",
+        "custo_garantia_por": "VARCHAR",
+        "custo_garantia_em": "TIMESTAMP",
+        "custo_garantia_sku": "VARCHAR",
+        "custo_garantia_produto": "VARCHAR",
     },
     "variaveis_conta": {
         # Sobre qual valor o percentual é aplicado: "venda_bruta" (default,

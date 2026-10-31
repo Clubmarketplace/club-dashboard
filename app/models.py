@@ -518,6 +518,14 @@ class SolicitacaoCancelamento(Base):
     checklist_json = Column(Text, nullable=True)
     # Observação livre de quem concluiu (ex.: "ML ressarciu R$ 120 em 3 dias").
     observacao_resultado = Column(Text, nullable=True)
+    # Custo da garantia GRAVADO no reverso (31/10): foto do custo no momento em que a equipe marca "garantia",
+    # buscado no cadastro de Custos da PRÓPRIA conta do reverso. Origem: "cadastro" | "manual" (admin/supervisor).
+    custo_garantia = Column(Float, nullable=True)
+    custo_garantia_origem = Column(String, nullable=True)
+    custo_garantia_por = Column(String, nullable=True)
+    custo_garantia_em = Column(DateTime, nullable=True)
+    custo_garantia_sku = Column(String, nullable=True)
+    custo_garantia_produto = Column(String, nullable=True)   # nome do produto no cadastro (para conferência)
 
 
 class SolicitacaoEvento(Base):
@@ -1248,6 +1256,21 @@ class LogRemessaGarantia(Base):
     id = Column(Integer, primary_key=True, index=True)
     remessa_id = Column(Integer, nullable=False, index=True)
     acao = Column(String, nullable=False)       # criada | encerrada | reaberta | cancelada
+    usuario = Column(String, nullable=True)
+    detalhe = Column(Text, nullable=True)
+    criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LogCustoReverso(Base):
+    """Histórico (só recebe linhas novas) de cada custo gravado/alterado num reverso de garantia."""
+
+    __tablename__ = "log_custos_reverso"
+
+    id = Column(Integer, primary_key=True, index=True)
+    solicitacao_id = Column(Integer, nullable=False, index=True)
+    custo_anterior = Column(Float, nullable=True)
+    custo_novo = Column(Float, nullable=True)
+    origem = Column(String, nullable=True)      # cadastro | manual
     usuario = Column(String, nullable=True)
     detalhe = Column(Text, nullable=True)
     criado_em = Column(DateTime, default=datetime.utcnow, nullable=False)
