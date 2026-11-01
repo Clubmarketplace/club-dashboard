@@ -227,6 +227,19 @@
               <div class="grafico-legenda-meses" id="legenda-3meses" style="display:none;"></div>
             </div>
 
+            <!-- 31/10: painel de perguntas de pré-venda do seller (clique abre a janela grande e dá para responder) -->
+            <div class="cartao" id="cartao-perguntas" hidden role="button" tabindex="0" aria-label="Abrir o painel de perguntas de pré-venda">
+              <div class="pp-topo"><div><h2 style="margin:0">Perguntas de pré-venda</h2><p class="sub" style="margin:2px 0 0">Hoje · só a sua conta</p></div></div>
+              <div class="pp-pct" id="pp-c-pct" style="color:#1f9d63">—</div>
+              <div class="pp-sub" id="pp-c-sub"></div>
+              <div class="pp-barra" id="pp-c-barra"></div>
+              <div class="pp-leg" id="pp-c-leg"></div>
+              <div class="pp-aviso" id="pp-c-aviso" hidden></div>
+              <div class="pp-abrir">Abrir painel e responder →</div>
+            </div>
+          </div>
+
+          <div class="grid-2">
             <div class="cartao">
               <h2>Anúncios cadastrados</h2>
               <p class="sub">Status atual no Mercado Livre</p>
@@ -255,9 +268,8 @@
               </div>
               <p class="sub" id="anuncios-promocoes-nota" style="margin-top:14px; margin-bottom:0;"></p>
             </div>
-          </div>
 
-          <div class="grid-2">
+            <div>
             <div class="cartao">
               <h2>Mensagens respondidas</h2>
               <p class="sub">Pré-venda (perguntas) + pós-venda, dessa conta</p>
@@ -288,6 +300,7 @@
                   <div class="extra" id="val-cancel-mes-extra">0 pendente(s)</div>
                 </div>
               </div>
+            </div>
             </div>
           </div>
         </div>
@@ -630,5 +643,6 @@ carregarDashboard();
     })();
 </script>
 {% include "_aceites_modal.html" %}
+{% include "_perguntas_painel.html" %}
 </body>
 </html>

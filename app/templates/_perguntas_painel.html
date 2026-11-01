@@ -1,0 +1,228 @@
+{# Painel de perguntas de pré-venda do seller (31/10): preenche o cartão #cartao-perguntas do dashboard e abre, ao clicar,
+   uma janela grande com quem respondeu (IA do ML / nossa IA / equipe-você / pendente) e a lista para RESPONDER as pendentes.
+   Dados: /api/minhas-perguntas (só a conta do login). O evento "perguntas:mudou" é disparado depois de cada resposta enviada. #}
+<style>
+  .pp-cor-ml { --c:#8b5cf6; } .pp-cor-ia { --c:#34c98f; } .pp-cor-equipe { --c:#f5b83d; } .pp-cor-pendente { --c:#ef6a62; }
+  #cartao-perguntas { cursor:pointer; transition:border-color .15s; }
+  #cartao-perguntas:hover { border-color:#c9ced8; }
+  #cartao-perguntas .pp-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  #cartao-perguntas .pp-pct { font-size:34px; font-weight:700; line-height:1; margin:14px 0 2px; }
+  #cartao-perguntas .pp-sub { font-size:12.5px; color:var(--cmx-texto-suave); }
+  .pp-barra { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#eef1f4; margin:14px 0 8px; }
+  .pp-barra i { display:block; background:var(--c); }
+  .pp-leg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:#475569; }
+  .pp-leg b { font-weight:600; color:#111827; }
+  .pp-leg span::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--c); margin-right:5px; }
+  .pp-aviso { margin-top:12px; font-size:13px; font-weight:600; color:#c23b32; }
+  .pp-abrir { margin-top:10px; font-size:13px; font-weight:600; color:#2f6fe4; }
+
+  #dlg-perguntas { border:0; border-radius:16px; padding:0; width:min(1080px, calc(100vw - 24px)); box-shadow:0 24px 60px rgba(15,23,42,.25); color:#0f172a; }
+  #dlg-perguntas::backdrop { background:rgba(15,23,42,.4); }
+  #dlg-perguntas .pp-corpo { padding:20px 24px 22px; max-height:90vh; overflow:auto; background:#f7f8fa; }
+  #dlg-perguntas .pp-cab { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+  #dlg-perguntas h2 { margin:0; font-size:18px; font-weight:600; }
+  #dlg-perguntas .pp-seg button { font:inherit; font-size:13px; padding:6px 14px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; margin-left:-1px; }
+  #dlg-perguntas .pp-seg button.on { background:#111827; color:#fff; border-color:#111827; }
+  #dlg-perguntas .pp-x { border:0; background:none; font-size:20px; color:#94a3b8; cursor:pointer; padding:4px 8px; }
+  #dlg-perguntas .pp-card { background:#fff; border:1px solid #eceff3; border-radius:14px; padding:14px 18px; }
+  #dlg-perguntas .pp-kpis { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:12px; }
+  @media (max-width:760px) { #dlg-perguntas .pp-kpis { grid-template-columns:1fr 1fr; } }
+  #dlg-perguntas .pp-kpis small { font-size:12px; color:#64748b; }
+  #dlg-perguntas .pp-kpis b { display:block; font-size:28px; margin:4px 0 2px; }
+  #dlg-perguntas .pp-kpis span { font-size:12px; color:#94a3b8; }
+  #dlg-perguntas .pp-graficos { display:grid; grid-template-columns:1.8fr 1fr; gap:12px; margin-bottom:12px; }
+  @media (max-width:860px) { #dlg-perguntas .pp-graficos { grid-template-columns:1fr; } }
+  #dlg-perguntas h3 { margin:0 0 10px; font-size:14px; font-weight:600; }
+  #dlg-perguntas .pp-dica { font-weight:400; color:#94a3b8; font-size:12px; }
+  .pp-barras { display:flex; align-items:flex-end; gap:5px; height:160px; border-bottom:1px solid #e5e7eb; padding:0 4px; }
+  .pp-col { flex:1; min-width:0; display:flex; flex-direction:column-reverse; height:100%; justify-content:flex-start; cursor:pointer; position:relative; }
+  .pp-col i { display:block; background:var(--c); }
+  .pp-col i:last-child { border-radius:3px 3px 0 0; }
+  .pp-col:hover { opacity:.8; } .pp-col.sel { outline:2px solid #111827; outline-offset:1px; border-radius:3px; }
+  .pp-eixo { display:flex; gap:5px; padding:4px 4px 0; font-size:10.5px; color:#94a3b8; }
+  .pp-eixo span { flex:1; min-width:0; text-align:center; overflow:hidden; }
+  .pp-rosca { display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .pp-anel { width:140px; height:140px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; }
+  .pp-anel div { width:96px; height:96px; border-radius:50%; background:#fff; display:flex; flex-direction:column; align-items:center; justify-content:center; font-size:22px; font-weight:700; }
+  .pp-anel small { font-size:11px; font-weight:400; color:#64748b; }
+  .pp-itens { font-size:13px; display:flex; flex-direction:column; gap:4px; }
+  .pp-item { display:flex; align-items:center; gap:7px; padding:3px 6px; border-radius:6px; cursor:pointer; border:0; background:none; font:inherit; text-align:left; }
+  .pp-item:hover, .pp-item.sel { background:#eef1f4; }
+  .pp-item::before { content:""; width:9px; height:9px; border-radius:50%; background:var(--c); }
+  .pp-item b { margin-left:auto; padding-left:10px; }
+  .pp-lista-tit { display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; }
+  .pp-q { border:1px solid #e5e7eb; border-radius:12px; padding:12px 14px; margin-top:10px; background:#fff; }
+  .pp-q .t { font-size:14.5px; font-weight:600; }
+  .pp-q .m { font-size:12.5px; color:#64748b; margin-top:3px; }
+  .pp-q .esp { color:#c23b32; font-weight:600; }
+  .pp-q .resp { margin-top:8px; font-size:13px; background:#f6f7f9; border-radius:8px; padding:8px 10px; }
+  .pp-tag { display:inline-block; font-size:11.5px; font-weight:600; border-radius:6px; padding:1px 8px; margin-left:6px; background:color-mix(in srgb, var(--c) 18%, #fff); color:#334155; }
+  .pp-acoes { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; align-items:flex-start; flex-wrap:wrap; }
+  .pp-acoes textarea { flex:1 1 100%; font:inherit; font-size:14px; padding:9px 10px; border:1px solid #d1d5db; border-radius:8px; min-height:74px; resize:vertical; }
+  #dlg-perguntas button.pp-b { font:inherit; font-size:13px; font-weight:600; border-radius:8px; padding:8px 14px; cursor:pointer; min-height:36px; border:1px solid #d1d5db; background:#fff; color:#475569; }
+  #dlg-perguntas button.pp-b.ok { background:#1f9d63; border-color:#1f9d63; color:#fff; }
+  #dlg-perguntas button.pp-b:disabled { opacity:.5; cursor:not-allowed; }
+  .pp-erro { flex:1 1 100%; color:#9b1c1c; font-size:13px; }
+  .pp-vazio { text-align:center; padding:22px 10px; color:#64748b; font-size:13.5px; }
+</style>
+
+<dialog id="dlg-perguntas" aria-labelledby="pp-titulo">
+  <div class="pp-corpo">
+    <div class="pp-cab">
+      <h2 id="pp-titulo">Perguntas de pré-venda</h2>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div class="pp-seg" id="pp-seg"><button type="button" data-p="hoje" class="on">Hoje</button><button type="button" data-p="7">7 dias</button><button type="button" data-p="30">30 dias</button></div>
+        <button type="button" class="pp-x" id="pp-fechar" aria-label="Fechar">✕</button>
+      </div>
+    </div>
+    <div class="pp-kpis">
+      <div class="pp-card"><small>Resolvidas sem você</small><b id="pp-k-pct" style="color:#1f9d63">—</b><span id="pp-k-pct-sub"></span></div>
+      <div class="pp-card"><small>Perguntas no período</small><b id="pp-k-total">—</b><span id="pp-k-total-sub"></span></div>
+      <div class="pp-card"><small>Aguardando você</small><b id="pp-k-pend" style="color:#c23b32">—</b><span>agora</span></div>
+      <div class="pp-card"><small>Tempo médio da equipe</small><b id="pp-k-tempo">—</b><span id="pp-k-tempo-sub"></span></div>
+    </div>
+    <div class="pp-graficos">
+      <div class="pp-card"><h3 id="pp-graf-tit">Por hora — quem respondeu <span class="pp-dica">clique numa barra para ver as perguntas</span></h3>
+        <div class="pp-barras" id="pp-barras"></div><div class="pp-eixo" id="pp-eixo"></div></div>
+      <div class="pp-card"><h3>Quem respondeu <span class="pp-dica">clique numa cor</span></h3>
+        <div class="pp-rosca"><div class="pp-anel" id="pp-anel"><div><span id="pp-anel-pct">—</span><small>sem você</small></div></div><div class="pp-itens" id="pp-itens"></div></div></div>
+    </div>
+    <div class="pp-card">
+      <div class="pp-lista-tit"><h3 id="pp-lista-tit" style="margin:0">Aguardando você</h3><button type="button" class="pp-b" id="pp-ver-pend" style="display:none">← Voltar às pendentes</button></div>
+      <div id="pp-lista"></div>
+    </div>
+  </div>
+</dialog>
+
+<script>
+(function () {
+  var cartao = document.getElementById("cartao-perguntas"), dlg = document.getElementById("dlg-perguntas");
+  if (!cartao || !dlg || !dlg.showModal) return;
+  var GRUPOS = [["ml", "IA do ML / app"], ["ia", "Nossa IA"], ["equipe", "Equipe / você"], ["pendente", "Pendente"]];
+  var estado = { periodo: "hoje", dados: null, foco: null };
+  var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
+  var $ = function (id) { return document.getElementById(id); };
+  function dur(min) { if (min == null) return "—"; if (min < 60) return Math.round(min) + " min"; var h = min / 60; return h < 48 ? h.toFixed(h < 10 ? 1 : 0).replace(".", ",") + " h" : Math.floor(h / 24) + " dias"; }
+  function pct(v) { return v == null ? "—" : v + "%"; }
+  async function api(url, opts) {
+    var r = await fetch(url, Object.assign({ cache: "no-store" }, opts || {}));
+    var j = {}; try { j = await r.json(); } catch (e) {}
+    if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "Não consegui carregar agora (erro " + r.status + ").");
+    return j;
+  }
+
+  /* ---------- cartão do dashboard (sempre "Hoje") ---------- */
+  function desenharCartao(d) {
+    var dh = d.periodo_desfecho, total = GRUPOS.reduce(function (s, g) { return s + (dh[g[0]] || 0); }, 0) + (dh.outros || 0);
+    $("pp-c-pct").textContent = d.indicadores.sem_equipe_pct == null ? "—" : d.indicadores.sem_equipe_pct + "%";
+    $("pp-c-sub").textContent = total ? "das " + total + " perguntas de hoje resolvidas sem você" : "nenhuma pergunta hoje";
+    $("pp-c-barra").innerHTML = total ? GRUPOS.map(function (g) { return dh[g[0]] ? '<i class="pp-cor-' + g[0] + '" style="width:' + (100 * dh[g[0]] / total) + '%" title="' + g[1] + ': ' + dh[g[0]] + '"></i>' : ""; }).join("") : "";
+    $("pp-c-leg").innerHTML = GRUPOS.map(function (g) { return '<span class="pp-cor-' + g[0] + '">' + g[1] + ' <b>' + (dh[g[0]] || 0) + '</b></span>'; }).join("");
+    var p = d.indicadores.pendentes_agora || 0, av = $("pp-c-aviso");
+    av.hidden = !p; av.textContent = p === 1 ? "1 pergunta aguardando a sua resposta" : p + " perguntas aguardando a sua resposta";
+    cartao.hidden = false;
+  }
+  async function carregarCartao() {
+    try { var d = await api("/api/minhas-perguntas/resumo?periodo=hoje"); if (d.conectada) desenharCartao(d); else cartao.hidden = true; }
+    catch (e) { console.error(e); }
+  }
+
+  /* ---------- janela grande ---------- */
+  function desenharJanela(d) {
+    estado.dados = d;
+    var ind = d.indicadores, dh = d.periodo_desfecho, total = ind.perguntas_periodo || 0;
+    $("pp-titulo").textContent = "Perguntas de pré-venda · " + d.rotulo;
+    $("pp-k-pct").textContent = pct(ind.sem_equipe_pct);
+    $("pp-k-pct-sub").textContent = ind.sem_equipe_ml_pct == null ? "" : "IA do ML " + ind.sem_equipe_ml_pct + "% · Nossa IA " + (ind.sem_equipe_ia_pct || 0) + "%";
+    $("pp-k-total").textContent = total; $("pp-k-total-sub").textContent = d.rotulo.toLowerCase();
+    $("pp-k-pend").textContent = ind.pendentes_agora || 0;
+    $("pp-k-tempo").textContent = dur(ind.tempo_medio_equipe_min); $("pp-k-tempo-sub").textContent = ind.tempo_medio_equipe_min == null ? "sem respostas no período" : "para responder";
+    // rosca
+    var acum = 0, partes = [];
+    GRUPOS.forEach(function (g) { var n = dh[g[0]] || 0; if (!n || !total) return; var a = 100 * acum / total; acum += n; partes.push(corDe(g[0]) + " " + a + "% " + (100 * acum / total) + "%"); });
+    $("pp-anel").style.background = partes.length ? "conic-gradient(" + partes.join(",") + ")" : "#e5e7eb";
+    $("pp-anel-pct").textContent = pct(ind.sem_equipe_pct);
+    $("pp-itens").innerHTML = GRUPOS.map(function (g) { return '<button type="button" class="pp-item pp-cor-' + g[0] + (estado.foco === g[0] ? " sel" : "") + '" data-g="' + g[0] + '">' + g[1] + '<b>' + (dh[g[0]] || 0) + '</b></button>'; }).join("");
+    // barras: por hora (Hoje) ou por dia (7/30)
+    var hoje = d.periodo === "hoje", linhas = hoje ? d.por_hora_periodo : d.por_dia, max = 1;
+    linhas.forEach(function (l) { var s = GRUPOS.reduce(function (a, g) { return a + (l[g[0]] || 0); }, 0); if (s > max) max = s; });
+    $("pp-graf-tit").firstChild.textContent = (hoje ? "Por hora" : "Por dia") + " — quem respondeu ";
+    $("pp-barras").innerHTML = linhas.map(function (l, i) {
+      var s = GRUPOS.reduce(function (a, g) { return a + (l[g[0]] || 0); }, 0);
+      var chave = hoje ? l.hora : l.data;
+      var tip = (hoje ? l.hora + "h" : l.data.slice(8, 10) + "/" + l.data.slice(5, 7)) + ": " + s + " pergunta(s)";
+      return '<div class="pp-col" data-k="' + chave + '" title="' + tip + '" style="justify-content:flex-start">' +
+        GRUPOS.map(function (g) { return l[g[0]] ? '<i class="pp-cor-' + g[0] + '" style="height:' + (100 * l[g[0]] / max) + '%"></i>' : ""; }).join("") + '</div>';
+    }).join("");
+    $("pp-eixo").innerHTML = linhas.map(function (l, i) { var mostra = hoje ? (l.hora % 3 === 0) : (i % Math.ceil(linhas.length / 8) === 0); return "<span>" + (mostra ? (hoje ? l.hora + "h" : l.data.slice(8, 10) + "/" + l.data.slice(5, 7)) : "") + "</span>"; }).join("");
+  }
+  function corDe(g) { return { ml: "#8b5cf6", ia: "#34c98f", equipe: "#f5b83d", pendente: "#ef6a62" }[g]; }
+
+  function cartaoPergunta(p, pode) {
+    var tag = p.grupo ? '<span class="pp-tag pp-cor-' + p.grupo + '">' + ((GRUPOS.filter(function (g) { return g[0] === p.grupo; })[0] || [0, p.grupo])[1]) + (p.detalhe ? " · " + esc(p.detalhe) : "") + '</span>' : "";
+    var quando = p.recebida_em ? new Date(p.recebida_em).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "";
+    return '<div class="pp-q" data-id="' + p.id + '"><div class="t">' + esc(p.texto) + tag + '</div>' +
+      '<div class="m">' + esc(p.titulo || "") + (p.sku ? " · " + esc(p.sku) : (p.item_id ? " · " + esc(p.item_id) : "")) + (quando ? " · recebida " + quando : "") +
+      (p.espera_min != null ? ' · <span class="esp">esperando há ' + dur(p.espera_min) + '</span>' : "") + '</div>' +
+      (p.resposta ? '<div class="resp"><b>Resposta enviada:</b> ' + esc(p.resposta) + '</div>' : "") +
+      (p.respondivel && pode ? '<div class="pp-acoes"><button type="button" class="pp-b ok" data-a="abrir">Responder</button></div>' : "") + '</div>';
+  }
+  async function listar(url, titulo, voltar) {
+    $("pp-lista-tit").textContent = titulo; $("pp-ver-pend").style.display = voltar ? "" : "none";
+    $("pp-lista").innerHTML = '<div class="pp-vazio">Carregando…</div>';
+    try {
+      var d = await api(url), pode = estado.dados && estado.dados.pode_responder;
+      $("pp-lista-tit").textContent = titulo + " (" + d.total + ")";
+      $("pp-lista").innerHTML = d.perguntas.length ? d.perguntas.map(function (p) { return cartaoPergunta(p, pode); }).join("") +
+        (d.total > d.mostrando ? '<div class="pp-vazio">Mostrando as ' + d.mostrando + ' mais recentes de ' + d.total + '.</div>' : "") :
+        '<div class="pp-vazio">' + (voltar ? "Nenhuma pergunta neste recorte." : "Nenhuma pergunta aguardando você. 🎉") + '</div>';
+    } catch (e) { $("pp-lista").innerHTML = '<div class="pp-vazio" style="color:#9b1c1c">' + esc(e.message) + '</div>'; }
+  }
+  function verPendentes() { estado.foco = null; document.querySelectorAll("#pp-barras .sel").forEach(function (n) { n.classList.remove("sel"); }); listar("/api/minhas-perguntas/detalhe?escopo=pendentes_agora&periodo=" + estado.periodo, "Aguardando você", false); }
+  async function carregarJanela() {
+    try { desenharJanela(await api("/api/minhas-perguntas/resumo?periodo=" + estado.periodo)); } catch (e) { $("pp-lista").innerHTML = '<div class="pp-vazio" style="color:#9b1c1c">' + esc(e.message) + '</div>'; return; }
+    verPendentes();
+  }
+
+  // cliques: período, cor, barra, voltar
+  $("pp-seg").addEventListener("click", function (e) { var b = e.target.closest("button[data-p]"); if (!b) return; estado.periodo = b.dataset.p; estado.foco = null;
+    document.querySelectorAll("#pp-seg button").forEach(function (x) { x.classList.toggle("on", x === b); }); carregarJanela(); });
+  $("pp-itens").addEventListener("click", function (e) { var b = e.target.closest("[data-g]"); if (!b) return; estado.foco = b.dataset.g;
+    document.querySelectorAll("#pp-itens .pp-item").forEach(function (x) { x.classList.toggle("sel", x === b); });
+    listar("/api/minhas-perguntas/detalhe?escopo=periodo&grupo=" + b.dataset.g + "&periodo=" + estado.periodo, (GRUPOS.filter(function (g) { return g[0] === b.dataset.g; })[0] || [0, ""])[1], true); });
+  $("pp-barras").addEventListener("click", function (e) { var c = e.target.closest(".pp-col"); if (!c) return;
+    document.querySelectorAll("#pp-barras .sel").forEach(function (n) { n.classList.remove("sel"); }); c.classList.add("sel");
+    var hoje = estado.dados && estado.dados.periodo === "hoje";
+    listar("/api/minhas-perguntas/detalhe?escopo=" + (hoje ? "hora&hora=" : "dia&dia=") + c.dataset.k + "&periodo=" + estado.periodo, (hoje ? "Das " + c.dataset.k + "h às " + c.dataset.k + "h59" : "Dia " + c.dataset.k.slice(8, 10) + "/" + c.dataset.k.slice(5, 7)), true); });
+  $("pp-ver-pend").addEventListener("click", verPendentes);
+
+  // responder (editor dentro do cartão da pergunta)
+  $("pp-lista").addEventListener("click", async function (e) {
+    var b = e.target.closest("button[data-a]"); if (!b) return;
+    var q = b.closest(".pp-q"), id = q.dataset.id, area = q.querySelector(".pp-acoes"), a = b.dataset.a;
+    if (a === "abrir") {
+      area.innerHTML = '<textarea maxlength="2000" placeholder="Sua resposta (vai direto para o comprador no Mercado Livre)" aria-label="Sua resposta"></textarea><div class="pp-erro" hidden></div>' +
+        '<button type="button" class="pp-b" data-a="cancelar">Cancelar</button><button type="button" class="pp-b ok" data-a="enviar">Enviar resposta</button>';
+      area.querySelector("textarea").focus(); return;
+    }
+    if (a === "cancelar") { area.innerHTML = '<button type="button" class="pp-b ok" data-a="abrir">Responder</button>'; return; }
+    if (a === "enviar") {
+      var txt = area.querySelector("textarea").value.trim(), erro = area.querySelector(".pp-erro"); erro.hidden = true;
+      if (!txt) { erro.hidden = false; erro.textContent = "Digite a resposta."; return; }
+      b.disabled = true; b.textContent = "Enviando…";
+      try {
+        await api("/api/minhas-perguntas/" + id + "/responder", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ texto: txt }) });
+        await carregarJanela(); carregarCartao(); document.dispatchEvent(new Event("perguntas:mudou"));
+      } catch (err) { erro.hidden = false; erro.textContent = err.message; b.disabled = false; b.textContent = "Enviar resposta"; }
+    }
+  });
+
+  function abrir() { estado.periodo = "hoje"; estado.foco = null; document.querySelectorAll("#pp-seg button").forEach(function (x) { x.classList.toggle("on", x.dataset.p === "hoje"); }); dlg.showModal(); carregarJanela(); }
+  cartao.addEventListener("click", abrir);
+  cartao.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); } });
+  $("pp-fechar").addEventListener("click", function () { dlg.close(); });
+  dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
+  window.abrirPerguntas = abrir;
+  carregarCartao(); setInterval(function () { if (!dlg.open) carregarCartao(); }, 60000);
+})();
+</script>
