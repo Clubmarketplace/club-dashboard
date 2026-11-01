@@ -5,16 +5,30 @@
   .pp-cor-ml { --c:#8b5cf6; } .pp-cor-ia { --c:#34c98f; } .pp-cor-equipe { --c:#f5b83d; } .pp-cor-pendente { --c:#ef6a62; }
   #cartao-perguntas { cursor:pointer; transition:border-color .15s; }
   #cartao-perguntas:hover { border-color:#c9ced8; }
-  #cartao-perguntas .pp-topo { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-  #cartao-perguntas .pp-pct { font-size:34px; font-weight:700; line-height:1; margin:14px 0 2px; }
-  #cartao-perguntas .pp-sub { font-size:12.5px; color:var(--cmx-texto-suave); }
-  .pp-barra { display:flex; height:10px; border-radius:6px; overflow:hidden; background:#eef1f4; margin:14px 0 8px; }
+  #cartao-perguntas h2 { margin:0; font-size:17px; }
+  .pp-duplo { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px; }
+  @media (max-width:640px) { .pp-duplo { grid-template-columns:1fr; } }
+  .pp-bloco { border:1px solid #e5e7eb; border-left:4px solid #1f9d63; border-radius:12px; padding:14px 16px; background:#fcfcfd; }
+  .pp-bloco:hover { background:#f6f7f9; }
+  .pp-bloco.alerta { border-left-color:#d64545; background:#fff8f7; }
+  .pp-rot { font-size:15px; font-weight:700; letter-spacing:.06em; color:#334155; }
+  .pp-num { font-size:44px; font-weight:800; line-height:1.05; margin:8px 0 2px; color:#1f9d63; }
+  .pp-bloco.alerta .pp-num { color:#c23b32; }
+  .pp-txt { font-size:14.5px; font-weight:600; color:#1f2937; }
+  .pp-sub { font-size:12.5px; color:var(--cmx-texto-suave); margin-top:4px; }
+  .pp-barra { display:flex; height:9px; border-radius:6px; overflow:hidden; background:#eef1f4; margin:12px 0 6px; }
   .pp-barra i { display:block; background:var(--c); }
-  .pp-leg { display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:#475569; }
+  .pp-leg { display:flex; flex-wrap:wrap; gap:3px 12px; font-size:11.5px; color:#475569; }
   .pp-leg b { font-weight:600; color:#111827; }
   .pp-leg span::before { content:""; display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--c); margin-right:5px; }
-  .pp-aviso { margin-top:12px; font-size:13px; font-weight:600; color:#c23b32; }
-  .pp-abrir { margin-top:10px; font-size:13px; font-weight:600; color:#2f6fe4; }
+  .pp-abrir { margin-top:12px; font-size:13px; font-weight:600; color:#2f6fe4; }
+  #dlg-perguntas .pp-abas { display:flex; gap:6px; margin-bottom:14px; border-bottom:1px solid #e5e7eb; }
+  #dlg-perguntas .pp-abas button { font:inherit; font-size:15px; font-weight:700; padding:9px 18px; border:0; background:none; cursor:pointer; color:#64748b; border-bottom:3px solid transparent; margin-bottom:-1px; }
+  #dlg-perguntas .pp-abas button.on { color:#111827; border-bottom-color:#111827; }
+  #dlg-perguntas .pp-abas .n { display:inline-block; margin-left:6px; background:#d64545; color:#fff; font-size:11.5px; border-radius:99px; padding:1px 8px; }
+  #dlg-perguntas a.pp-link { color:#2f6fe4; font-weight:600; font-size:13px; text-decoration:none; }
+  #dlg-perguntas .pp-tag2 { display:inline-block; font-size:11.5px; font-weight:600; border-radius:6px; padding:1px 8px; margin-left:6px; background:#eef1f4; color:#334155; }
+  #dlg-perguntas .pp-tag2.verm { background:#fdeceb; color:#8a1f14; }
 
   #dlg-perguntas { border:0; border-radius:16px; padding:0; width:min(1080px, calc(100vw - 24px)); box-shadow:0 24px 60px rgba(15,23,42,.25); color:#0f172a; }
   #dlg-perguntas::backdrop { background:rgba(15,23,42,.4); }
@@ -61,6 +75,7 @@
   .pp-acoes textarea { flex:1 1 100%; font:inherit; font-size:14px; padding:9px 10px; border:1px solid #d1d5db; border-radius:8px; min-height:74px; resize:vertical; }
   #dlg-perguntas button.pp-b { font:inherit; font-size:13px; font-weight:600; border-radius:8px; padding:8px 14px; cursor:pointer; min-height:36px; border:1px solid #d1d5db; background:#fff; color:#475569; }
   #dlg-perguntas button.pp-b.ok { background:#1f9d63; border-color:#1f9d63; color:#fff; }
+  #dlg-perguntas a.pp-b.ok { background:#1f9d63; border-color:#1f9d63; color:#fff; font-size:13px; font-weight:600; border-radius:8px; padding:8px 14px; min-height:36px; }
   #dlg-perguntas button.pp-b:disabled { opacity:.5; cursor:not-allowed; }
   .pp-erro { flex:1 1 100%; color:#9b1c1c; font-size:13px; }
   .pp-vazio { text-align:center; padding:22px 10px; color:#64748b; font-size:13.5px; }
@@ -75,6 +90,11 @@
         <button type="button" class="pp-x" id="pp-fechar" aria-label="Fechar">✕</button>
       </div>
     </div>
+    <div class="pp-abas" id="pp-abas">
+      <button type="button" data-aba="pre" class="on">Pré-venda <span class="n" id="pp-aba-n-pre" hidden></span></button>
+      <button type="button" data-aba="pos">Pós-venda <span class="n" id="pp-aba-n-pos" hidden></span></button>
+    </div>
+    <div id="pp-aba-pre">
     <div class="pp-kpis">
       <div class="pp-card"><small>Resolvidas sem você</small><b id="pp-k-pct" style="color:#1f9d63">—</b><span id="pp-k-pct-sub"></span></div>
       <div class="pp-card"><small>Perguntas no período</small><b id="pp-k-total">—</b><span id="pp-k-total-sub"></span></div>
@@ -91,6 +111,23 @@
       <div class="pp-lista-tit"><h3 id="pp-lista-tit" style="margin:0">Aguardando você</h3><button type="button" class="pp-b" id="pp-ver-pend" style="display:none">← Voltar às pendentes</button></div>
       <div id="pp-lista"></div>
     </div>
+    </div>
+
+    <div id="pp-aba-pos" hidden>
+      <div class="pp-kpis" style="grid-template-columns:repeat(3,1fr)">
+        <div class="pp-card"><small>Mensagens aguardando você</small><b id="pp-p-msgs" style="color:#c23b32">—</b><span>pós-venda</span></div>
+        <div class="pp-card"><small>Reclamações que pedem ação</small><b id="pp-p-recl" style="color:#c23b32">—</b><span>Mercado Livre</span></div>
+        <div class="pp-card"><small>Respondidas (últimos dias)</small><b id="pp-p-resp" style="color:#1f9d63">—</b><span>mensagens</span></div>
+      </div>
+      <div class="pp-card" style="margin-bottom:12px">
+        <div class="pp-lista-tit"><h3 style="margin:0">Mensagens de compradores aguardando você</h3><a class="pp-link" href="/minhas-mensagens">Abrir Mensagens pós-venda e responder →</a></div>
+        <div id="pp-p-lista-msgs"></div>
+      </div>
+      <div class="pp-card">
+        <div class="pp-lista-tit"><h3 style="margin:0">Reclamações que precisam da sua ação</h3><a class="pp-link" href="/minhas-mensagens">Ver reclamações →</a></div>
+        <div id="pp-p-lista-recl"></div>
+      </div>
+    </div>
   </div>
 </dialog>
 
@@ -99,7 +136,7 @@
   var cartao = document.getElementById("cartao-perguntas"), dlg = document.getElementById("dlg-perguntas");
   if (!cartao || !dlg || !dlg.showModal) return;
   var GRUPOS = [["ml", "IA do ML / app"], ["ia", "Nossa IA"], ["equipe", "Equipe / você"], ["pendente", "Pendente"]];
-  var estado = { periodo: "hoje", dados: null, foco: null };
+  var estado = { periodo: "hoje", dados: null, foco: null, aba: "pre" };
   var esc = function (t) { return String(t == null ? "" : t).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); };
   var $ = function (id) { return document.getElementById(id); };
   function dur(min) { if (min == null) return "—"; if (min < 60) return Math.round(min) + " min"; var h = min / 60; return h < 48 ? h.toFixed(h < 10 ? 1 : 0).replace(".", ",") + " h" : Math.floor(h / 24) + " dias"; }
@@ -111,19 +148,33 @@
     return j;
   }
 
-  /* ---------- cartão do dashboard (sempre "Hoje") ---------- */
+  /* ---------- cartão do dashboard: Pré-venda + Pós-venda (sempre "Hoje") ---------- */
+  var pos = { msgs: 0, recl: 0 };
+  function plural(n, um, varios) { return n + " " + (n === 1 ? um : varios); }
   function desenharCartao(d) {
     var dh = d.periodo_desfecho, total = GRUPOS.reduce(function (s, g) { return s + (dh[g[0]] || 0); }, 0) + (dh.outros || 0);
-    $("pp-c-pct").textContent = d.indicadores.sem_equipe_pct == null ? "—" : d.indicadores.sem_equipe_pct + "%";
-    $("pp-c-sub").textContent = total ? "das " + total + " perguntas de hoje resolvidas sem você" : "nenhuma pergunta hoje";
+    var p = d.indicadores.pendentes_agora || 0, blocoPre = document.querySelector('#cartao-perguntas [data-aba="pre"]');
+    $("pp-c-pre-n").textContent = p;
+    $("pp-c-pre-t").textContent = p ? (p === 1 ? "pergunta aguardando você" : "perguntas aguardando você") : "tudo respondido";
+    $("pp-c-pre-sub").textContent = total ? (d.indicadores.sem_equipe_pct == null ? "" : d.indicadores.sem_equipe_pct + "% das " + total + " perguntas de hoje resolvidas sem você") : "nenhuma pergunta hoje";
     $("pp-c-barra").innerHTML = total ? GRUPOS.map(function (g) { return dh[g[0]] ? '<i class="pp-cor-' + g[0] + '" style="width:' + (100 * dh[g[0]] / total) + '%" title="' + g[1] + ': ' + dh[g[0]] + '"></i>' : ""; }).join("") : "";
     $("pp-c-leg").innerHTML = GRUPOS.map(function (g) { return '<span class="pp-cor-' + g[0] + '">' + g[1] + ' <b>' + (dh[g[0]] || 0) + '</b></span>'; }).join("");
-    var p = d.indicadores.pendentes_agora || 0, av = $("pp-c-aviso");
-    av.hidden = !p; av.textContent = p === 1 ? "1 pergunta aguardando a sua resposta" : p + " perguntas aguardando a sua resposta";
+    blocoPre.classList.toggle("alerta", p > 0);
+    var n = $("pp-aba-n-pre"); n.hidden = !p; n.textContent = p;
     cartao.hidden = false;
+  }
+  function desenharCartaoPos() {
+    var total = pos.msgs + pos.recl, bloco = document.querySelector('#cartao-perguntas [data-aba="pos"]');
+    $("pp-c-pos-n").textContent = total;
+    $("pp-c-pos-t").textContent = total ? "precisam da sua ação" : "tudo em dia";
+    $("pp-c-pos-sub").textContent = total ? plural(pos.msgs, "mensagem", "mensagens") + " · " + plural(pos.recl, "reclamação", "reclamações") : "sem mensagens nem reclamações pendentes";
+    bloco.classList.toggle("alerta", total > 0);
+    var n = $("pp-aba-n-pos"); n.hidden = !total; n.textContent = total;
   }
   async function carregarCartao() {
     try { var d = await api("/api/minhas-perguntas/resumo?periodo=hoje"); if (d.conectada) desenharCartao(d); else cartao.hidden = true; }
+    catch (e) { console.error(e); }
+    try { var r = await api("/api/meu-pos-venda/resumo"); pos.msgs = r.aguardando || 0; pos.recl = r.reclamacoes || 0; desenharCartaoPos(); if (cartao.hidden) cartao.hidden = false; }
     catch (e) { console.error(e); }
   }
 
@@ -217,9 +268,47 @@
     }
   });
 
-  function abrir() { estado.periodo = "hoje"; estado.foco = null; document.querySelectorAll("#pp-seg button").forEach(function (x) { x.classList.toggle("on", x.dataset.p === "hoje"); }); dlg.showModal(); carregarJanela(); }
-  cartao.addEventListener("click", abrir);
-  cartao.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir(); } });
+  /* ---------- aba Pós-venda (só leitura aqui; responder é em Mensagens pós-venda) ---------- */
+  function quandoTxt(iso) { return iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : ""; }
+  async function carregarPos() {
+    $("pp-titulo").textContent = "Pós-venda · mensagens e reclamações";
+    var lm = $("pp-p-lista-msgs"), lr = $("pp-p-lista-recl");
+    lm.innerHTML = lr.innerHTML = '<div class="pp-vazio">Carregando…</div>';
+    try {
+      var m = await api("/api/meu-pos-venda/lista"), itens = m.itens || [];
+      $("pp-p-msgs").textContent = itens.length; $("pp-p-resp").textContent = (m.respondidas || []).length;
+      lm.innerHTML = itens.length ? itens.map(function (i) {
+        return '<div class="pp-q"><div class="t">' + esc(i.comprador) + (i.pedido_cancelamento ? '<span class="pp-tag2 verm">pede cancelamento</span>' : "") + '</div>' +
+          '<div class="m">' + esc(i.produto || "") + (i.pedido ? " · pedido " + esc(i.pedido) : "") + " · recebida " + quandoTxt(i.recebida_em) + '</div>' +
+          '<div class="resp">' + esc(i.ultima) + '</div>' +
+          '<div class="pp-acoes"><a class="pp-b ok" style="text-decoration:none;display:inline-flex;align-items:center" href="/minhas-mensagens">Abrir conversa →</a></div></div>';
+      }).join("") : '<div class="pp-vazio">Nenhuma mensagem aguardando você. 🎉</div>';
+    } catch (e) { lm.innerHTML = '<div class="pp-vazio" style="color:#9b1c1c">' + esc(e.message) + '</div>'; }
+    try {
+      var r = await api("/api/meu-pos-venda/reclamacoes"), acao = (r.itens || []).filter(function (i) { return i.grupo === "acao"; });
+      $("pp-p-recl").textContent = acao.length;
+      lr.innerHTML = acao.length ? acao.map(function (i) {
+        return '<div class="pp-q"><div class="t">' + esc(i.tipo) + ' · ' + esc(i.motivo) + (i.afeta_texto ? '<span class="pp-tag2 verm">' + esc(i.afeta_texto) + '</span>' : "") + '</div>' +
+          '<div class="m">' + esc(i.produto || "") + (i.pedido ? " · pedido " + esc(i.pedido) : "") + " · " + esc(i.estado || "") + (i.prazo && i.prazo.texto ? ' · <span class="esp">' + esc(i.prazo.texto) + '</span>' : "") + '</div>' +
+          '<div class="pp-acoes"><a class="pp-link" href="' + esc(i.link_ml) + '" target="_blank" rel="noopener">Ver a venda no Mercado Livre →</a></div></div>';
+      }).join("") : '<div class="pp-vazio">Nenhuma reclamação aguardando você.</div>';
+    } catch (e) { lr.innerHTML = '<div class="pp-vazio" style="color:#9b1c1c">' + esc(e.message) + '</div>'; }
+  }
+  function irParaAba(aba) {
+    estado.aba = aba;
+    document.querySelectorAll("#pp-abas button").forEach(function (x) { x.classList.toggle("on", x.dataset.aba === aba); });
+    $("pp-aba-pre").hidden = aba !== "pre"; $("pp-aba-pos").hidden = aba !== "pos"; $("pp-seg").style.visibility = aba === "pre" ? "visible" : "hidden";
+    if (aba === "pre") carregarJanela(); else carregarPos();
+  }
+  $("pp-abas").addEventListener("click", function (e) { var b = e.target.closest("button[data-aba]"); if (b) irParaAba(b.dataset.aba); });
+
+  function abrir(aba) {
+    estado.periodo = "hoje"; estado.foco = null;
+    document.querySelectorAll("#pp-seg button").forEach(function (x) { x.classList.toggle("on", x.dataset.p === "hoje"); });
+    dlg.showModal(); irParaAba(aba === "pos" ? "pos" : "pre");
+  }
+  cartao.addEventListener("click", function (e) { var b = e.target.closest("[data-aba]"); abrir(b ? b.dataset.aba : "pre"); });
+  cartao.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); abrir("pre"); } });
   $("pp-fechar").addEventListener("click", function () { dlg.close(); });
   dlg.addEventListener("click", function (e) { if (e.target === dlg) dlg.close(); });
   window.abrirPerguntas = abrir;

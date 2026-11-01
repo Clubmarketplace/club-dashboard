@@ -128,12 +128,6 @@
             <span class="fx-txt"><b id="alerta-aceites-titulo">Cancelamentos aguardando o seu aceite</b> <span class="fx-sub" id="alerta-aceites-sub"></span></span>
             <button type="button" class="fx-link" id="alerta-aceites-abrir">Ver e decidir →</button>
           </div>
-          <!-- 2) mensagens pós-venda / reclamações -->
-          <div class="alerta-mensagens" id="alerta-mensagens" role="alert">
-            <span class="fx-ponto"></span>
-            <span class="fx-txt"><b id="alerta-mensagens-titulo">0 mensagens de compradores aguardando a sua resposta</b> <span class="fx-sub" id="alerta-mensagens-sub"></span></span>
-            <a href="/minhas-mensagens">Responder →</a>
-          </div>
           <div class="cartao-club">
             <h2>O que o Club fez pela sua conta este mês</h2>
             <div class="club-grid">
@@ -227,14 +221,26 @@
               <div class="grafico-legenda-meses" id="legenda-3meses" style="display:none;"></div>
             </div>
 
-            <!-- 31/10: painel de perguntas de pré-venda do seller (clique abre a janela grande e dá para responder) -->
-            <div class="cartao" id="cartao-perguntas" hidden role="button" tabindex="0" aria-label="Abrir o painel de perguntas de pré-venda">
-              <div class="pp-topo"><div><h2 style="margin:0">Perguntas de pré-venda</h2><p class="sub" style="margin:2px 0 0">Hoje · só a sua conta</p></div></div>
-              <div class="pp-pct" id="pp-c-pct" style="color:#1f9d63">—</div>
-              <div class="pp-sub" id="pp-c-sub"></div>
-              <div class="pp-barra" id="pp-c-barra"></div>
-              <div class="pp-leg" id="pp-c-leg"></div>
-              <div class="pp-aviso" id="pp-c-aviso" hidden></div>
+            <!-- 31/10: atendimento ao comprador = pré-venda (perguntas) + pós-venda (mensagens e reclamações); o clique abre a janela e dá para responder -->
+            <div class="cartao" id="cartao-perguntas" hidden role="button" tabindex="0" aria-label="Abrir o painel de atendimento ao comprador">
+              <h2>Atendimento ao comprador</h2>
+              <p class="sub" style="margin:2px 0 0">Hoje · só a sua conta</p>
+              <div class="pp-duplo">
+                <div class="pp-bloco" data-aba="pre">
+                  <div class="pp-rot">PRÉ-VENDA</div>
+                  <div class="pp-num" id="pp-c-pre-n">—</div>
+                  <div class="pp-txt" id="pp-c-pre-t"></div>
+                  <div class="pp-sub" id="pp-c-pre-sub"></div>
+                  <div class="pp-barra" id="pp-c-barra"></div>
+                  <div class="pp-leg" id="pp-c-leg"></div>
+                </div>
+                <div class="pp-bloco" data-aba="pos">
+                  <div class="pp-rot">PÓS-VENDA</div>
+                  <div class="pp-num" id="pp-c-pos-n">—</div>
+                  <div class="pp-txt" id="pp-c-pos-t"></div>
+                  <div class="pp-sub" id="pp-c-pos-sub"></div>
+                </div>
+              </div>
               <div class="pp-abrir">Abrir painel e responder →</div>
             </div>
           </div>
@@ -369,23 +375,7 @@ async function carregarDashboard() {
     document.getElementById("club-promocoes-sub").textContent = (pa.hoje || 0) + " hoje -- contribuindo para " + formatarReais(dados.mes.lucro_liquido) + " de lucro líquido no mês";
     document.getElementById("club-cancel-titulo").textContent = (cancelMes.confirmados || 0) + ((cancelMes.confirmados || 0) === 1 ? " cancelamento tratado" : " cancelamentos tratados");
 
-    // Mensagens pós-venda aguardando resposta (28/10): faixa de destaque no topo + item no bloco escuro. Só quando há.
-    const pv = dados.pos_venda || {};
-    const alerta = document.getElementById("alerta-mensagens");
-    if (pv.aguardando || pv.reclamacoes) {
-      const n = pv.aguardando || 0, rc = pv.reclamacoes || 0;
-      const partes = [];
-      if (n) partes.push(n + (n === 1 ? " mensagem de comprador aguardando" : " mensagens de compradores aguardando") + " a sua resposta");
-      if (rc) partes.push(rc + (rc === 1 ? " reclamação precisa" : " reclamações precisam") + " da sua ação");
-      document.getElementById("alerta-mensagens-titulo").textContent = partes.join(" · ");
-      const h = pv.mais_antiga_horas;
-      document.getElementById("alerta-mensagens-sub").textContent =
-        n && h != null ? "· a mais antiga espera há " + (h >= 24 ? Math.floor(h / 24) + " dia(s)" : Math.floor(h) + " h") : "";
-      alerta.classList.toggle("vermelho", n > 0 && h != null && h >= 24);
-      alerta.style.display = "flex";
-    } else {
-      alerta.style.display = "none";
-    }
+    // (31/10) As mensagens/reclamações aguardando agora aparecem no cartão "Atendimento ao comprador" (_perguntas_painel.html); a faixa laranja saiu.
 
     // Reversos (produto que voltou): chegou no galpão -> conferência da equipe -> voltou (ou não) para o estoque
     // ou resolvido com o ML. Só aparece se a conta teve algum reverso no mês.
