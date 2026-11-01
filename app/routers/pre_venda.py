@@ -134,26 +134,20 @@ def listar_resolvidas(db: Session = Depends(get_db), limite: int = 50):
     ]
 
 
-@router.post("/{pergunta_id}/responder")
-def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Request, db: Session = Depends(get_db)):
+def enviar_resposta_manual(db: Session, pergunta_id: int, texto: str, usuario, conta_id_exigida: int | None = None) -> dict:
     """
-    Envia a resposta digitada por um humano pro Mercado Livre, e marca
-    a pergunta como resolvida (sem camada automática associada).
-    Usada pela tela de Pré-venda e pelo Painel da Fila (clicando na pergunta).
-    Só admin, supervisor e atendente respondem (o perfil "tv" só olha).
+    Miolo de "responder uma pergunta da fila humana" (valida, confere se já foi respondida por fora, envia ao ML,
+    marca como respondida e ensina o banco validado). Usado pela tela da equipe e pela tela do seller
+    (esta passa conta_id_exigida: a pergunta tem que ser da conta dele).
     """
-    usuario = auth.usuario_atual(request, db)
-    if not auth.papel_permite(usuario, ("admin", "supervisor", "atendente")):
-        raise HTTPException(status_code=403, detail="Seu perfil não pode responder perguntas.")
-    texto_resposta = (corpo.texto or "").strip()
+    texto_resposta = (texto or "").strip()
     if not texto_resposta:
         raise HTTPException(status_code=400, detail="Digite a resposta.")
     if len(texto_resposta) > 2000:
         raise HTTPException(status_code=400, detail="Resposta muito longa (o Mercado Livre aceita até 2000 caracteres).")
-    corpo.texto = texto_resposta
     pergunta = db.query(Pergunta).filter(Pergunta.id == pergunta_id).first()
-    if pergunta is None:
-        raise HTTPException(status_code=404, detail="Pergunta não encontrada")
+    if pergunta is None or (conta_id_exigida is not None and pergunta.conta_id != conta_id_exigida):
+        raise HTTPException(status_code=404, detail="Pergunta não encontrada")   # de outra conta = 404, nunca revela
     if pergunta.status != "fila_humana":
         raise HTTPException(status_code=400, detail="Essa pergunta já foi respondida")
 
@@ -176,13 +170,17 @@ def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Requ
             db.commit()
             raise HTTPException(status_code=409, detail="Essa pergunta já foi respondida por outro canal (Mercado Livre não deixa responder de novo).")
 
-        enviar_resposta(access_token, pergunta.ml_question_id, corpo.texto)
+        enviar_resposta(access_token, pergunta.ml_question_id, texto_resposta)
     except (MLAuthError, MLApiError) as exc:
+        # (31/10) O ML não deixa responder pergunta de anúncio pausado/finalizado/sem estoque: explica em vez de mostrar o erro cru.
+        if "not_active_item" in str(exc) or "item must be active" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Este anúncio está inativo no Mercado Livre (pausado, finalizado ou sem estoque). "
+                                                        "O ML só deixa responder perguntas de anúncio ativo: reative o anúncio e responda de novo.") from exc
         raise HTTPException(status_code=502, detail=str(exc)) from exc
 
     pergunta.status = "respondida"
     pergunta.camada_resolvida = "manual"
-    pergunta.resposta_enviada = corpo.texto
+    pergunta.resposta_enviada = texto_resposta
     pergunta.respondida_em = datetime.utcnow()
     pergunta.respondida_por = getattr(usuario, "nome_exibicao", None)  # quem respondeu (mostrado nos painéis)
     db.add(AcaoRegistrada(
@@ -202,12 +200,26 @@ def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Requ
         db.add(RespostaValidadaSku(
             sku=chave,
             pergunta_exemplo=pergunta.texto,
-            resposta=corpo.texto,
+            resposta=texto_resposta,
         ))
 
     db.commit()
 
     return {"status": "respondida", "pergunta_id": pergunta.id}
+
+
+@router.post("/{pergunta_id}/responder")
+def responder_manualmente(pergunta_id: int, corpo: RespostaManual, request: Request, db: Session = Depends(get_db)):
+    """
+    Envia a resposta digitada por um humano pro Mercado Livre, e marca
+    a pergunta como resolvida (sem camada automática associada).
+    Usada pela tela de Pré-venda e pelo Painel da Fila (clicando na pergunta).
+    Só admin, supervisor e atendente respondem (o perfil "tv" só olha).
+    """
+    usuario = auth.usuario_atual(request, db)
+    if not auth.papel_permite(usuario, ("admin", "supervisor", "atendente")):
+        raise HTTPException(status_code=403, detail="Seu perfil não pode responder perguntas.")
+    return enviar_resposta_manual(db, pergunta_id, corpo.texto, usuario)
 
 
 @router.get("/painel-geral")
