@@ -11,7 +11,7 @@ from app.contas_util import chave_conta
 from sqlalchemy.orm import defer
 from app.fotos_armazenamento import listar_fotos, obter_bytes, solicitacao_da_foto
 from app.routers.solicitacoes_cancelamento import n_fotos_sql, PROBLEMAS_GALPAO, MOTIVOS_REVERSO, DETALHES_ENVIO_ERRADO, ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
-from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, remessas_garantia as remessas_garantia_rotas, meus_reversos as meus_reversos_rotas, aceite_cancelamento as aceite_cancelamento_rotas, conversas_pos_venda as conversas_pos_venda_rotas
+from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, remessas_garantia as remessas_garantia_rotas, meus_reversos as meus_reversos_rotas, aceite_cancelamento as aceite_cancelamento_rotas, minhas_perguntas as minhas_perguntas_rotas, conversas_pos_venda as conversas_pos_venda_rotas
 
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
@@ -459,6 +459,7 @@ async def exigir_login(request: Request, call_next):
     _seller_liberado = (
         caminho in _ROTAS_PERMITIDAS_PARA_SELLER
         or caminho.startswith("/api/meus-aceites/")  # aceitar/recusar: o servidor confere a conta e o papel
+        or caminho.startswith("/api/minhas-perguntas/")  # painel de perguntas + responder: o servidor usa SEMPRE a conta do login (31/10)
         or caminho.startswith("/api/meus-reversos/reversos/")  # corrigir SKU (o servidor confere a conta)
         or caminho.startswith("/api/meus-reversos/garantias/")  # ajustar custo (idem)
         or caminho.startswith("/api/meu-pos-venda/")  # conversas de pós-venda: o servidor confere a conta em cada rota
@@ -509,6 +510,7 @@ app.include_router(admin_painel_rotas.router)  # resumo de vendas de todas as co
 app.include_router(dashboard_painel_rotas.router)  # tela "Dashboard" do painel do seller (12/10)
 app.include_router(cadastro_produtos_rotas.router)  # produtos novos das notas do Operador Logístico, pra tela "Cadastro" (13/10)
 app.include_router(painel_galpao_rotas.router)  # números e relatório do galpão (26/10)
+app.include_router(minhas_perguntas_rotas.router)  # painel de perguntas de pré-venda só da conta do seller + responder (31/10)
 app.include_router(aceite_cancelamento_rotas.router)  # seller aceita/recusa cancelamento pedido pelo galpão/equipe (31/10)
 app.include_router(meus_reversos_rotas.router)  # painel do seller com os reversos/garantias da própria conta (31/10)
 app.include_router(remessas_garantia_rotas.router)  # remessas de garantia p/ a fábrica (31/10) -- ANTES do reversos_gestor só por organização
