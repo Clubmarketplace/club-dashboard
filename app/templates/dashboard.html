@@ -128,6 +128,9 @@
     .promo-destaque-grande { font-size:38px; }
     .promo-nota-hoje { font-size:14px; font-weight:600; color:var(--cmx-texto); }
     .promo-contas-destaque { font-size:17px; font-weight:700; color:var(--cmx-texto); }
+    /* 03/11: filtro de período do card (Geral / Por mês + seletor de mês). */
+    .promo-filtro { display:flex; gap:6px; margin:6px 0 2px; flex-wrap:wrap; }
+    .promo-filtro select { font-size:12px; padding:3px 6px; border:1px solid var(--cmx-borda); border-radius:6px; background:var(--cmx-papel); color:var(--cmx-texto); font-family:inherit; }
 
     /* --- Redesign 15/10: Vendas (totais + gráfico lado a lado), Setores
        em grade e Financeiro por setor. Mobile-first porque o diretor
@@ -339,12 +342,19 @@
             <div class="adm-setor-card">
               <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
               <p class="sub">Aderidas automaticamente pelo Precificador</p>
-              <div class="adm-setor-destaque promo-destaque-grande" id="adm-promocoes-mes">0</div>
+              <div class="promo-filtro">
+  <select id="adm-promocoes-modo" aria-label="Período">
+    <option value="mes" selected>Por mês</option>
+    <option value="geral">Geral</option>
+  </select>
+  <select id="adm-promocoes-mes-sel" aria-label="Mês"><option value="">Mês atual</option></select>
+</div>
+<div class="adm-setor-destaque promo-destaque-grande" id="adm-promocoes-mes">0</div>
               <div class="nota promo-nota-hoje" style="margin:2px 0 10px;" id="adm-promocoes-mes-nota"></div>
-              <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="adm-promocoes-lucro-mes">R$ 0,00</span></div>
-              <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="adm-promocoes-lucro-hoje">R$ 0,00</span></div>
-              <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-usando">0</span></div>
-              <div class="adm-setor-linha"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-ja">0</span></div>
+              <div class="adm-setor-linha"><span id="adm-lbl-lucro">Lucro líquido (mês)</span><span class="r" id="adm-promocoes-lucro-mes">R$ 0,00</span></div>
+              <div class="adm-setor-linha" id="adm-linha-lucro-hoje"><span>Lucro hoje</span><span class="r" id="adm-promocoes-lucro-hoje">R$ 0,00</span></div>
+              <div class="adm-setor-linha"><span id="adm-lbl-usando">Contas usando (mês)</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-usando">0</span></div>
+              <div class="adm-setor-linha" id="adm-linha-contas-ja"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="adm-promocoes-contas-ja">0</span></div>
               <button type="button" class="adm-ver-ranking" id="adm-promocoes-ver-ranking">Ranking das contas ▾</button>
             </div>
 
@@ -482,12 +492,19 @@
           <div class="adm-setor-card">
             <h3><span class="adm-chip-setor db-icone verde">🧩</span>Promoções aderidas pelo sistema de precificação</h3>
             <p class="sub">Aderidas automaticamente pelo Precificador</p>
-            <div class="adm-setor-destaque promo-destaque-grande" id="sup-promocoes-mes">0</div>
+            <div class="promo-filtro">
+  <select id="sup-promocoes-modo" aria-label="Período">
+    <option value="mes" selected>Por mês</option>
+    <option value="geral">Geral</option>
+  </select>
+  <select id="sup-promocoes-mes-sel" aria-label="Mês"><option value="">Mês atual</option></select>
+</div>
+<div class="adm-setor-destaque promo-destaque-grande" id="sup-promocoes-mes">0</div>
             <div class="nota promo-nota-hoje" style="margin:2px 0 10px;" id="sup-promocoes-mes-nota"></div>
-            <div class="adm-setor-linha"><span>Lucro líquido (mês)</span><span class="r" id="sup-promocoes-lucro-mes">R$ 0,00</span></div>
-            <div class="adm-setor-linha"><span>Lucro hoje</span><span class="r" id="sup-promocoes-lucro-hoje">R$ 0,00</span></div>
-            <div class="adm-setor-linha"><span>Contas usando (mês)</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-usando">0</span></div>
-            <div class="adm-setor-linha"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-ja">0</span></div>
+            <div class="adm-setor-linha"><span id="sup-lbl-lucro">Lucro líquido (mês)</span><span class="r" id="sup-promocoes-lucro-mes">R$ 0,00</span></div>
+            <div class="adm-setor-linha" id="sup-linha-lucro-hoje"><span>Lucro hoje</span><span class="r" id="sup-promocoes-lucro-hoje">R$ 0,00</span></div>
+            <div class="adm-setor-linha"><span id="sup-lbl-usando">Contas usando (mês)</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-usando">0</span></div>
+            <div class="adm-setor-linha" id="sup-linha-contas-ja"><span>Contas que já usaram</span><span class="r promo-contas-destaque" id="sup-promocoes-contas-ja">0</span></div>
             <button type="button" class="adm-ver-ranking" id="sup-promocoes-ver-ranking">Ranking das contas ▾</button>
           </div>
         </div>
@@ -501,8 +518,19 @@
           }
           let _supPromocoesRanking = [];
           let _supPromocoesMes = 0;
+          let _supPromocoesRotulo = "no mês";
           document.getElementById("sup-promocoes-ver-ranking").addEventListener("click", function () {
-            abrirModalRankingPromocoes(_supPromocoesRanking, "Nenhuma conta aderiu nada pela extensão ainda no mês.", _supPromocoesMes);
+            abrirModalRankingPromocoes(_supPromocoesRanking, null, _supPromocoesMes, _supPromocoesRotulo);
+          });
+          // 03/11: filtro de período. A função compartilhada só existe depois
+          // que a página inteira carrega (script fica após </main>), então
+          // a ligação espera o DOMContentLoaded.
+          document.addEventListener("DOMContentLoaded", function () {
+            montarFiltroPromocoes("sup", function (d, rotulo) {
+              _supPromocoesRanking = d.ranking || [];
+              _supPromocoesMes = d.mes || 0;
+              _supPromocoesRotulo = rotulo;
+            });
           });
           (async function () {
             try {
@@ -543,7 +571,7 @@
   <div class="promo-modal-fundo" id="promo-modal-fundo">
     <div class="promo-modal-caixa">
       <h3>Promoções aderidas pelo sistema de precificação</h3>
-      <p class="sub">Ranking das contas no mês, da que mais pra que menos aderiu</p>
+      <p class="sub" id="promo-modal-sub">Ranking das contas no mês, da que mais pra que menos aderiu</p>
       <div class="promo-modal-lista" id="promo-modal-lista"></div>
       <button type="button" class="promo-modal-fechar" id="promo-modal-fechar">Fechar</button>
     </div>
@@ -560,17 +588,23 @@
       fundo.addEventListener("click", function (e) {
         if (e.target === fundo) fundo.classList.remove("aberto");
       });
-      window.abrirModalRankingPromocoes = function (ranking, textoVazio, totalMes) {
+      window.abrirModalRankingPromocoes = function (ranking, textoVazio, totalMes, rotulo) {
+        // 03/11: `rotulo` = "no mês" (padrão), "no total" (Geral) ou "em 10/2026".
+        rotulo = rotulo || "no mês";
+        document.getElementById("promo-modal-sub").textContent =
+          "Ranking das contas " + rotulo + ", da que mais pra que menos aderiu";
         if (!ranking || !ranking.length) {
-          lista.innerHTML = '<p class="sub" style="margin:0;">' + (textoVazio || "Nenhuma conta aderiu nada pela extensão ainda no mês.") + "</p>";
+          lista.innerHTML = '<p class="sub" style="margin:0;">' + (textoVazio || "Nenhuma conta aderiu nada pela extensão " + rotulo + ".") + "</p>";
         } else {
           // Rodapé com o total (soma de todas as contas) -- confere com o
           // número grande no topo do card, só que explícito aqui também.
           const soma = ranking.reduce(function (acc, r) { return acc + (r.quantidade || 0); }, 0);
           lista.innerHTML = "<ol>" + ranking.map(function (r) {
+            // quantidade_hoje vem null fora do mês atual -> some o trecho "hoje".
+            const temHoje = r.quantidade_hoje !== null && r.quantidade_hoje !== undefined;
             const qtdHoje = r.quantidade_hoje || 0;
-            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + (r.quantidade === 1 ? " adesão no mês" : " adesões no mês") +
-              " · " + qtdHoje + (qtdHoje === 1 ? " adesão hoje" : " adesões hoje") +
+            return "<li>" + r.nome + " <span class='adm-ranking-qtd'>-- " + r.quantidade + (r.quantidade === 1 ? " adesão " : " adesões ") + rotulo +
+              (temHoje ? " · " + qtdHoje + (qtdHoje === 1 ? " adesão hoje" : " adesões hoje") : "") +
               (r.ultimo_uso ? " (última em " + r.ultimo_uso + ")" : "") + "</span></li>";
           }).join("") + "</ol>" +
           "<div class='promo-modal-total'><span>Total (soma de todas as contas)</span><span>" + (totalMes != null ? totalMes : soma) + "</span></div>";
@@ -578,6 +612,73 @@
         fundo.classList.add("aberto");
       };
     })();
+
+    // 03/11: filtro de período do card "Promoções aderidas" -- COMPARTILHADO
+    // entre admin ("adm") e supervisor ("sup"). `p` = prefixo dos ids do
+    // card; `aoAtualizar(d, rotulo)` guarda ranking/total pro botão
+    // "Ranking das contas" de cada perfil. O carregamento inicial (mês
+    // atual) continua sendo feito pelo código de cada perfil; isto só
+    // entra em ação quando o usuário troca o filtro.
+    window.montarFiltroPromocoes = function (p, aoAtualizar) {
+      const NOMES = ["janeiro","fevereiro","março","abril","maio","junho","julho","agosto","setembro","outubro","novembro","dezembro"];
+      const el = function (id) { return document.getElementById(p + "-" + id); };
+      const selModo = el("promocoes-modo");
+      const selMes = el("promocoes-mes-sel");
+      if (!selModo || !selMes) return;
+      const brl = function (v) {
+        return "R$ " + Number(v || 0).toLocaleString("pt-BR", {minimumFractionDigits: 2, maximumFractionDigits: 2});
+      };
+      let seq = 0; // descarta resposta antiga se o usuário trocar o filtro rápido
+
+      // Meses com adesão. Se falhar, o seletor fica só com "Mês atual".
+      fetch("/api/painel/admin/promocoes-aderidas/meses").then(function (r) {
+        if (!r.ok) throw new Error("falha");
+        return r.json();
+      }).then(function (j) {
+        const meses = j.meses || [];
+        selMes.innerHTML = meses.map(function (m, i) {
+          const nome = NOMES[parseInt(m.slice(5, 7), 10) - 1] + "/" + m.slice(0, 4);
+          return '<option value="' + m + '">' + nome + (i === 0 ? " (atual)" : "") + "</option>";
+        }).join("") || '<option value="">Mês atual</option>';
+      }).catch(function () { /* mantém "Mês atual" */ });
+
+      async function aplicar() {
+        const geral = selModo.value === "geral";
+        selMes.style.display = geral ? "none" : "";
+        const periodo = geral ? "geral" : (selMes.value || "");
+        const meu = ++seq;
+        try {
+          const resp = await fetch("/api/painel/admin/promocoes-aderidas" + (periodo ? "?mes=" + encodeURIComponent(periodo) : ""));
+          if (!resp.ok) throw new Error("falha");
+          const d = await resp.json();
+          if (meu !== seq) return;
+          const ehAtual = d.hoje !== null && d.hoje !== undefined;
+          let rotulo = "no mês", nota = (d.hoje || 0) + " adesões hoje";
+          if (d.periodo === "geral") { rotulo = "no total"; nota = ""; }
+          else if (!ehAtual) {
+            rotulo = "em " + d.periodo.slice(5, 7) + "/" + d.periodo.slice(0, 4);
+            nota = (d.mes === 1 ? "adesão " : "adesões ") + rotulo;
+          }
+          const sufixo = d.periodo === "geral" ? "(geral)" : "(mês)";
+          el("promocoes-mes").textContent = d.mes || 0;
+          el("promocoes-mes-nota").textContent = nota;
+          el("lbl-lucro").textContent = "Lucro líquido " + sufixo;
+          el("lbl-usando").textContent = "Contas usando " + sufixo;
+          el("promocoes-lucro-mes").textContent = brl(d.lucro_mes);
+          el("promocoes-lucro-hoje").textContent = brl(d.lucro_hoje);
+          el("promocoes-contas-usando").textContent = d.contas_usando || 0;
+          el("promocoes-contas-ja").textContent = d.contas_usando_ja || 0;
+          el("linha-lucro-hoje").style.display = ehAtual ? "" : "none";
+          // "Contas que já usaram" repete "Contas usando" no Geral -> esconde.
+          el("linha-contas-ja").style.display = d.periodo === "geral" ? "none" : "";
+          aoAtualizar(d, rotulo);
+        } catch (e) {
+          if (meu === seq) el("promocoes-mes-nota").textContent = "Não consegui carregar agora.";
+        }
+      }
+      selModo.addEventListener("change", aplicar);
+      selMes.addEventListener("change", aplicar);
+    };
   </script>
   <script src="/static/menu-celular.js?v=1"></script>
   {% if eh_admin %}
@@ -821,8 +922,15 @@
 
   // Promoções aderidas -- tela suspensa (modal) em vez de expandir no
   // card, que ficava alto demais com muita conta na lista (20/10).
+  // 03/11: filtro de período (Geral / Por mês) do card de promoções.
+  window._admPromocoesRotulo = "no mês";
+  montarFiltroPromocoes("adm", function (d, rotulo) {
+    window._admPromocoesRanking = d.ranking || [];
+    window._admPromocoesMes = d.mes || 0;
+    window._admPromocoesRotulo = rotulo;
+  });
   document.getElementById("adm-promocoes-ver-ranking").addEventListener("click", function () {
-    abrirModalRankingPromocoes(window._admPromocoesRanking, "Nenhuma conta aderiu nada pela extensão ainda no mês.", window._admPromocoesMes);
+    abrirModalRankingPromocoes(window._admPromocoesRanking, null, window._admPromocoesMes, window._admPromocoesRotulo);
   });
 
   function formatarEixoReais(v) {
