@@ -18,7 +18,21 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=connect_args)
+# Pool de conexões (Postgres). O padrão do SQLAlchemy (5 + 10 de reserva) esgotava
+# com vários sellers com o painel aberto ao mesmo tempo ("QueuePool limit ...
+# reached"), deixando o site sem abrir. Valores abaixo (30 + 30 = até 60 conexões) ficam abaixo do limite
+# do Postgres do Railway (100 conexões) e podem ser trocados por variável de ambiente.
+# pool_pre_ping descarta conexão morta antes de usar; pool_recycle renova as antigas.
+_opcoes_pool = {}
+if not DATABASE_URL.startswith("sqlite"):
+    _opcoes_pool = dict(
+        pool_size=int(os.getenv("DB_POOL_SIZE", "30")),
+        max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "30")),
+        pool_timeout=int(os.getenv("DB_POOL_TIMEOUT", "30")),
+        pool_recycle=1800,
+        pool_pre_ping=True,
+    )
+engine = create_engine(DATABASE_URL, connect_args=connect_args, **_opcoes_pool)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
