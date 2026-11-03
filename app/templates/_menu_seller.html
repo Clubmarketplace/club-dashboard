@@ -76,7 +76,7 @@
           if (j.aguardando > 0) { b.textContent = j.aguardando; b.style.display = "inline-block"; } else { b.style.display = "none"; }
         }).catch(function () {});
       }
-      window.atualizarBadgeAceites = atualizar; atualizar(); setInterval(atualizar, 60000);
+      window.atualizarBadgeAceites = atualizar; atualizar(); setInterval(function () { if (!document.hidden) atualizar(); }, 60000);
       var bd = document.getElementById("menu-aceites-badge");
       if (bd) bd.addEventListener("click", function (e) { if (window.abrirAceites) { e.preventDefault(); e.stopPropagation(); window.abrirAceites(); } });
     })();

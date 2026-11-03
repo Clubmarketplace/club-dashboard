@@ -629,7 +629,7 @@ carregarDashboard();
       }
       document.getElementById("alerta-aceites-abrir").addEventListener("click", function () { if (window.abrirAceites) window.abrirAceites(); else window.location.href = "/meus-cancelamentos"; });
       document.addEventListener("aceites:mudou", atualizar);
-      atualizar(); setInterval(atualizar, 60000);
+      atualizar(); setInterval(function () { if (!document.hidden) atualizar(); }, 60000);
     })();
 </script>
 {% include "_aceites_modal.html" %}

@@ -77,6 +77,6 @@
       try { await enviar(id, "recusar", { motivo: motivo }); await carregar(); }
       catch (err) { erro.hidden = false; erro.textContent = err.message; b.disabled = false; }
     });
-    carregar(); setInterval(carregar, 60000);
+    carregar(); setInterval(function () { if (!document.hidden) carregar(); }, 60000);
   })();
   </script>
