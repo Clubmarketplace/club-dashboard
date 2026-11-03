@@ -17,9 +17,11 @@ estiver vinculada ao usuário dele (mesma regra de UsuarioConta que vale
 pra seller/suporte). Aqui é só o resumo simples (valor vendido), de
 todas as contas de uma vez, sem depender de vínculo.
 """
+import re
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -302,12 +304,15 @@ def _contas_usando_ja_alguma_vez(db: Session) -> int:
     return db.query(EventoAdesaoCmx.conta_id).filter(EventoAdesaoCmx.sucesso.is_(True)).distinct().count()
 
 
-def _lucro_adesoes(db: Session, inicio_utc: datetime) -> float:
-    linhas = (
-        db.query(EventoAdesaoCmx.lucro_liquido)
-        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
-        .all()
+def _lucro_adesoes(db: Session, inicio_utc: datetime, fim_utc: Optional[datetime] = None) -> float:
+    # fim_utc (03/11): limite SUPERIOR opcional (exclusivo), usado pelo
+    # filtro de período do card. Sem ele, comportamento antigo.
+    consulta = db.query(EventoAdesaoCmx.lucro_liquido).filter(
+        EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc
     )
+    if fim_utc is not None:
+        consulta = consulta.filter(EventoAdesaoCmx.data_adesao < fim_utc)
+    linhas = consulta.all()
     return round(sum(l[0] or 0 for l in linhas), 2)
 
 
@@ -315,40 +320,54 @@ def _lucro_adesoes(db: Session, inicio_utc: datetime) -> float:
 # resumo_contas) pra poderem ser chamadas também pelo endpoint
 # /promocoes-aderidas, que o supervisor acessa além do admin -- ver
 # docstring de _admin_ou_supervisor_logado logo abaixo.
-def _promocoes_aderidas(db: Session, inicio_utc: datetime) -> int:
-    return (
-        db.query(EventoAdesaoCmx)
-        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc)
-        .count()
+def _promocoes_aderidas(db: Session, inicio_utc: datetime, fim_utc: Optional[datetime] = None) -> int:
+    consulta = db.query(EventoAdesaoCmx).filter(
+        EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_utc
     )
+    if fim_utc is not None:
+        consulta = consulta.filter(EventoAdesaoCmx.data_adesao < fim_utc)
+    return consulta.count()
 
 
-def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_mes_utc: datetime, inicio_dia_utc: datetime) -> dict:
-    linhas = (
-        db.query(
+def _promocoes_aderidas_detalhe(
+    db: Session,
+    contas: list,
+    inicio_mes_utc: datetime,
+    inicio_dia_utc: Optional[datetime],
+    fim_utc: Optional[datetime] = None,
+) -> dict:
+    # 03/11: fim_utc = limite superior (exclusivo) do período; None = sem
+    # limite. inicio_dia_utc=None = período que NÃO é o mês atual (mês
+    # passado/Geral): "adesões hoje" não faz sentido, então nem consulta
+    # e devolve quantidade_hoje=None (a tela esconde).
+    consulta_periodo = db.query(
             EventoAdesaoCmx.conta_id,
             EventoAdesaoCmx.usuario,
             EventoAdesaoCmx.maquina,
             func.count(EventoAdesaoCmx.id).label("quantidade"),
             func.max(EventoAdesaoCmx.data_adesao).label("ultimo_uso"),
-        )
-        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_mes_utc)
-        .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
-        .all()
-    )
+        ).filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_mes_utc)
+    if fim_utc is not None:
+        consulta_periodo = consulta_periodo.filter(EventoAdesaoCmx.data_adesao < fim_utc)
+    linhas = consulta_periodo.group_by(
+        EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina
+    ).all()
     # a20/10: contagem de HOJE por conta/usuário, pedida à parte do total
     # do mês -- mesmo agrupamento, mas filtrando só desde o início do dia.
-    linhas_hoje = (
-        db.query(
-            EventoAdesaoCmx.conta_id,
-            EventoAdesaoCmx.usuario,
-            EventoAdesaoCmx.maquina,
-            func.count(EventoAdesaoCmx.id).label("quantidade_hoje"),
+    # 03/11: só roda quando o período é o mês atual (inicio_dia_utc != None).
+    linhas_hoje = []
+    if inicio_dia_utc is not None:
+        linhas_hoje = (
+            db.query(
+                EventoAdesaoCmx.conta_id,
+                EventoAdesaoCmx.usuario,
+                EventoAdesaoCmx.maquina,
+                func.count(EventoAdesaoCmx.id).label("quantidade_hoje"),
+            )
+            .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_dia_utc)
+            .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
+            .all()
         )
-        .filter(EventoAdesaoCmx.sucesso.is_(True), EventoAdesaoCmx.data_adesao >= inicio_dia_utc)
-        .group_by(EventoAdesaoCmx.conta_id, EventoAdesaoCmx.usuario, EventoAdesaoCmx.maquina)
-        .all()
-    )
     qtd_hoje_por_chave = {
         (conta_id, usuario, maquina): quantidade_hoje
         for conta_id, usuario, maquina, quantidade_hoje in linhas_hoje
@@ -368,7 +387,9 @@ def _promocoes_aderidas_detalhe(db: Session, contas: list, inicio_mes_utc: datet
         ranking.append({
             "nome": f"{apelido} — {quem}",
             "quantidade": quantidade,
-            "quantidade_hoje": qtd_hoje_por_chave.get((conta_id, usuario, maquina), 0),
+            "quantidade_hoje": (
+                qtd_hoje_por_chave.get((conta_id, usuario, maquina), 0) if inicio_dia_utc is not None else None
+            ),
             "ultimo_uso": ultimo_uso_br.strftime("%d/%m/%Y %H:%M") if ultimo_uso_br else None,
         })
     ranking.sort(key=lambda r: r["quantidade"], reverse=True)
@@ -519,9 +540,26 @@ def resumo_contas(usuario: Usuario = Depends(_admin_logado), db: Session = Depen
     }
 
 
+_MES_REGEX = re.compile(r"^(\d{4})-(0[1-9]|1[0-2])$")
+
+
+def _limites_do_mes_em_utc(ano: int, mes: int) -> tuple[datetime, datetime]:
+    """03/11: [início, fim) do mês `ano`/`mes` no calendário de Brasília,
+    convertidos pro UTC "cru" que `EventoAdesaoCmx.data_adesao` usa."""
+    inicio_br = datetime(ano, mes, 1, tzinfo=_FUSO_BR)
+    prox_ano, prox_mes = (ano + 1, 1) if mes == 12 else (ano, mes + 1)
+    fim_br = datetime(prox_ano, prox_mes, 1, tzinfo=_FUSO_BR)
+    return (
+        inicio_br.astimezone(timezone.utc).replace(tzinfo=None),
+        fim_br.astimezone(timezone.utc).replace(tzinfo=None),
+    )
+
+
 @router.get("/promocoes-aderidas")
 def promocoes_aderidas(
-    usuario: Usuario = Depends(_admin_ou_supervisor_logado), db: Session = Depends(get_db)
+    mes: Optional[str] = Query(None, description="'geral' ou 'AAAA-MM'; omitido = mês atual"),
+    usuario: Usuario = Depends(_admin_ou_supervisor_logado),
+    db: Session = Depends(get_db),
 ):
     """
     Card "Promoções aderidas pelo sistema de precificação" pro painel do
@@ -529,18 +567,72 @@ def promocoes_aderidas(
     expõe contagem, lucro e ranking de uso do Precificador/CMX, nunca o
     valor vendido por conta (esse continua só pro admin, ver
     _admin_logado acima e a docstring do módulo).
+
+    03/11: filtro de período. `mes` omitido ou igual ao mês atual =
+    comportamento de sempre (com "hoje"). `mes=AAAA-MM` = só aquele mês.
+    `mes=geral` = tudo desde a primeira adesão. Fora do mês atual, os
+    campos "hoje"/"lucro_hoje" voltam None (a tela os esconde).
     """
     inicio_dia_utc, inicio_mes_utc = _inicio_do_dia_e_do_mes_em_utc()
+    agora_br = datetime.now(_FUSO_BR)
+    mes_atual_str = f"{agora_br.year:04d}-{agora_br.month:02d}"
+
+    periodo = mes_atual_str if not mes else mes.strip().lower()
+    if periodo != "geral" and not _MES_REGEX.match(periodo):
+        raise HTTPException(status_code=400, detail="Parâmetro 'mes' inválido (use 'geral' ou AAAA-MM).")
+
     contas = (
         db.query(Conta)
         .filter(Conta.ativa.is_(True), Conta.inativa_em.is_(None))
         .all()
     )
+
+    if periodo == mes_atual_str:
+        # Mês atual: idêntico ao comportamento anterior (com "hoje").
+        inicio_utc, fim_utc, dia_utc = inicio_mes_utc, None, inicio_dia_utc
+    elif periodo == "geral":
+        inicio_utc, fim_utc, dia_utc = datetime(1970, 1, 1), None, None
+    else:
+        ano, mes_num = int(periodo[:4]), int(periodo[5:7])
+        inicio_utc, fim_utc = _limites_do_mes_em_utc(ano, mes_num)
+        dia_utc = None
+
     return {
-        "hoje": _promocoes_aderidas(db, inicio_dia_utc),
-        "mes": _promocoes_aderidas(db, inicio_mes_utc),
-        "lucro_hoje": _lucro_adesoes(db, inicio_dia_utc),
-        "lucro_mes": _lucro_adesoes(db, inicio_mes_utc),
+        "periodo": periodo,
+        "hoje": _promocoes_aderidas(db, dia_utc) if dia_utc is not None else None,
+        "mes": _promocoes_aderidas(db, inicio_utc, fim_utc),
+        "lucro_hoje": _lucro_adesoes(db, dia_utc) if dia_utc is not None else None,
+        "lucro_mes": _lucro_adesoes(db, inicio_utc, fim_utc),
         "contas_usando_ja": _contas_usando_ja_alguma_vez(db),
-        **_promocoes_aderidas_detalhe(db, contas, inicio_mes_utc, inicio_dia_utc),
+        **_promocoes_aderidas_detalhe(db, contas, inicio_utc, dia_utc, fim_utc),
     }
+
+
+@router.get("/promocoes-aderidas/meses")
+def promocoes_aderidas_meses(
+    usuario: Usuario = Depends(_admin_ou_supervisor_logado), db: Session = Depends(get_db)
+):
+    """
+    03/11: meses (AAAA-MM, calendário de Brasília) que têm pelo menos 1
+    adesão com sucesso -- alimenta o seletor de mês do card. Mais recente
+    primeiro; o mês atual sempre entra, mesmo sem adesão. Feito em Python
+    (um `exists` por mês) pra não depender de função de data específica de
+    SQLite/Postgres.
+    """
+    agora_br = datetime.now(_FUSO_BR)
+    mes_atual = (agora_br.year, agora_br.month)
+    primeira = (
+        db.query(func.min(EventoAdesaoCmx.data_adesao))
+        .filter(EventoAdesaoCmx.sucesso.is_(True))
+        .scalar()
+    )
+    meses = {mes_atual}
+    if primeira:
+        primeira_br = primeira.replace(tzinfo=timezone.utc).astimezone(_FUSO_BR)
+        ano, mes_num = primeira_br.year, primeira_br.month
+        while (ano, mes_num) < mes_atual:
+            ini, fim = _limites_do_mes_em_utc(ano, mes_num)
+            if _promocoes_aderidas(db, ini, fim) > 0:
+                meses.add((ano, mes_num))
+            ano, mes_num = (ano + 1, 1) if mes_num == 12 else (ano, mes_num + 1)
+    return {"meses": [f"{a:04d}-{m:02d}" for a, m in sorted(meses, reverse=True)]}
