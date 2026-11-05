@@ -633,7 +633,14 @@ def criar_solicitacoes(corpo: NovaSolicitacaoLote, request: Request, tarefas: Ba
     # --- Origem, conta e galpão decididos pelo servidor ---
     galpao = None
     if papel == "seller" and usuario.conta_vinculada:
-        origem = "seller"
+        # 05/11: seller NÃO pede mais cancelamento nem reputação (só cadastro,
+        # que usa outra rota -- /cadastro-seller). Trava no servidor: esconder
+        # a tela não basta, a rota é chamável direto.
+        raise HTTPException(
+            status_code=403,
+            detail="Pedidos de cancelamento e reputação são feitos pela equipe. Você pode solicitar cadastro de produto em Cadastro.",
+        )
+        origem = "seller"  # (inalcançável de propósito; mantido p/ reativar fácil)
         conta_digitada = usuario.conta_vinculada  # seller nunca pede por outra conta
     elif papel == "logistica":
         origem = "logistica"
