@@ -779,6 +779,11 @@ def pagina_solicitar_cancelamento(request: Request):
     with SessionLocal() as db:
         usuario = auth.usuario_atual(request, db)
         conta_pre_preenchida = _conta_logada_de(usuario)
+        # 05/11: seller só pode pedir CADASTRO -- cancelamento e reputação
+        # saíram dessa tela pra ele (a trava de verdade está no POST de
+        # /api/solicitacoes-cancelamento). Link antigo/favorito cai no cadastro.
+        if conta_pre_preenchida and usuario.papel == "seller":
+            return RedirectResponse("/cadastro-seller", status_code=303)
         logistica_logado = bool(usuario and usuario.papel == "logistica")
         # Equipe: abre dentro do sistema (menu à esquerda) e lança por qualquer conta.
         equipe_logado = bool(usuario and usuario.papel in ("admin", "supervisor", "atendente"))
