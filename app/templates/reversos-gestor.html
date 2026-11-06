@@ -236,8 +236,8 @@
         <div class="barra">
           <div class="periodos" id="periodos" role="group" aria-label="Período">
             <button type="button" data-d="1" aria-pressed="false">Hoje</button>
-            <button type="button" data-d="7" aria-pressed="true">7 dias</button>
-            <button type="button" data-d="15" aria-pressed="false">15 dias</button>
+            <!-- 06/11: botão "7 dias" removido; o padrão ao abrir a tela passou a ser 15 dias -->
+            <button type="button" data-d="15" aria-pressed="true">15 dias</button>
             <button type="button" data-d="30" aria-pressed="false">30 dias</button>
             <!-- 30/10: "Tudo até a data" = desde o início dos reversos até a data do campo "até" (hoje, se vazio) -->
             <button type="button" id="btn-tudo" aria-pressed="false" title="Desde o início até a data do campo &quot;até&quot; (hoje, se estiver vazio)">Tudo</button>
@@ -513,7 +513,8 @@
     const esc = (t) => String(t ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
     const COR = { voltou:"#2f9e63", nao:"#c24141", aguarda:"#d98e2f", garantia:"#b45309" };
     const COR_RESULTADO = { voltou:"#2f9e63", garantia:"#b45309", avariado:"#c24141", faltando_peca:"#e07b5f", diferente:"#a64d79", negociacao_ml:"#7b6fd0", descartado:"#5b7083", outro:"#9aa5b1", aguardando:"#d98e2f" };
-    let dias = 7, modoCustom = false, graficoDia = null, graficoRes = null;
+    // 06/11: padrão = 15 dias (o filtro de 7 dias saiu da tela)
+    let dias = 15, modoCustom = false, graficoDia = null, graficoRes = null;
     const dataBR = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7);
     const dataBRano = (iso) => iso.slice(8, 10) + "/" + iso.slice(5, 7) + "/" + iso.slice(0, 4);
     // minutos -> "45 min", "3 h 20 min", "2 d 4 h" (igual ao Excel)
@@ -1379,7 +1380,7 @@
       } catch (e) { console.error(e); $("t-gar").innerHTML = '<tr><td colspan="9" class="vazio">Não consegui carregar as garantias agora. Tente de novo em instantes.</td></tr>'; }
     }
 
-    // Hoje / 7 / 15 / 30 dias
+    // Hoje / 15 / 30 dias
     $("periodos").addEventListener("click", (e) => {
       const b = e.target.closest("button"); if (!b || b.id === "btn-tudo") return;   // "Tudo" tem tratamento próprio (abaixo)
       dias = +b.dataset.d; modoCustom = false; if (sel) delete sel.dia;
