@@ -13,8 +13,6 @@ from app.fotos_armazenamento import listar_fotos, obter_bytes, solicitacao_da_fo
 from app.routers.solicitacoes_cancelamento import n_fotos_sql, PROBLEMAS_GALPAO, MOTIVOS_REVERSO, DETALHES_ENVIO_ERRADO, ESTADOS_CHEGADA, CHECKLIST_REVERSO, GALPOES, MAX_FOTOS_REVERSO, MOTIVOS_NAO_VOLTOU, PLATAFORMAS, RESULTADOS_REVERSO, itens_do_checklist
 from app.routers import devolucoes, relatorio_conta, auth_ml, webhook_ml, pre_venda, manuais, pos_venda, cancelamentos, eventos_webhook, solicitacoes_cancelamento, diagnostico_sku, reputacao as reputacao_rotas, respostas_padrao as respostas_padrao_rotas, calibrar_ia as calibrar_ia_rotas, cmx as cmx_rotas, custos_painel as custos_painel_rotas, produtos as produtos_rotas, vendas as vendas_rotas, taxas as taxas_rotas, historico_adesoes_painel as historico_adesoes_painel_rotas, admin_painel as admin_painel_rotas, dashboard_painel as dashboard_painel_rotas, cadastro_produtos as cadastro_produtos_rotas, cadastro_seller as cadastro_seller_rotas, painel_galpao as painel_galpao_rotas, reversos_gestor as reversos_gestor_rotas, remessas_garantia as remessas_garantia_rotas, meus_reversos as meus_reversos_rotas, aceite_cancelamento as aceite_cancelamento_rotas, minhas_perguntas as minhas_perguntas_rotas, conversas_pos_venda as conversas_pos_venda_rotas
 
-# teste de commit
-
 # Cria as tabelas no banco se ainda não existirem (em produção, o ideal
 # é usar uma ferramenta de migração como Alembic, mas isso é suficiente
 # pra essa fase inicial).
